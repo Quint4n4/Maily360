@@ -40,6 +40,10 @@ COPY . .
 # Instalar el proyecto
 RUN poetry install --only=main
 
+# Agregar el venv al PATH también en el stage builder
+# (necesario cuando docker-compose usa target: builder en dev)
+ENV PATH="/app/.venv/bin:$PATH"
+
 
 # ---- Stage 2: runtime ----
 FROM python:3.12-slim AS runtime

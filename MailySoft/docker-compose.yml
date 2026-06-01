@@ -3,8 +3,6 @@
 # Variables sensibles en ./backend/.env.dev (NO commitear)
 # =============================================================================
 
-version: "3.9"
-
 services:
 
   # ---------------------------------------------------------------------------
@@ -59,6 +57,7 @@ services:
              python manage.py runserver 0.0.0.0:8000"
     volumes:
       - ./backend:/app        # mount del código para hot-reload
+      - /app/.venv            # ★ preservar el venv del contenedor (NO sobreescribir)
       - static_files:/app/staticfiles
       - media_files:/app/media
     ports:
@@ -88,9 +87,10 @@ services:
       dockerfile: Dockerfile
       target: builder
     restart: unless-stopped
-    command: celery -A config.celery worker -l INFO -c 2
+    command: python -m celery -A config.celery worker -l INFO -c 2
     volumes:
       - ./backend:/app
+      - /app/.venv            # ★ preservar el venv del contenedor
     env_file:
       - ./backend/.env.dev
     environment:
@@ -110,9 +110,10 @@ services:
       dockerfile: Dockerfile
       target: builder
     restart: unless-stopped
-    command: celery -A config.celery beat -l INFO
+    command: python -m celery -A config.celery beat -l INFO
     volumes:
       - ./backend:/app
+      - /app/.venv            # ★ preservar el venv del contenedor
     env_file:
       - ./backend/.env.dev
     environment:
