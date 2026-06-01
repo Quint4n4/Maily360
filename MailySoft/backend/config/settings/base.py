@@ -1,0 +1,345 @@
+"""
+Configuración base de Django para Maily Soft.
+
+Todas las variables sensibles se leen desde entorno via django-environ.
+NUNCA agregar secretos hardcodeados aquí.
+"""
+
+from datetime import timedelta
+from pathlib import Path
+
+import environ
+
+# ---------------------------------------------------------------------------
+# Rutas
+# ---------------------------------------------------------------------------
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# ---------------------------------------------------------------------------
+# environ
+# ---------------------------------------------------------------------------
+
+env = environ.Env()
+
+# Lee .env solo si existe (en dev se carga desde docker-compose o .env.dev)
+environ.Env.read_env(BASE_DIR / ".env", overwrite=False)
+
+# ---------------------------------------------------------------------------
+# Seguridad
+# ---------------------------------------------------------------------------
+
+SECRET_KEY: str = env("DJANGO_SECRET_KEY")
+
+DEBUG: bool = env.bool("DJANGO_DEBUG", default=False)
+
+ALLOWED_HOSTS: list[str] = env.list("DJANGO_ALLOWED_HOSTS", default=[])
+
+# ---------------------------------------------------------------------------
+# Aplicaciones instaladas
+# ---------------------------------------------------------------------------
+
+DJANGO_APPS: list[str] = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+]
+
+THIRD_PARTY_APPS: list[str] = [
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "channels",
+    "drf_spectacular",
+    "corsheaders",
+]
+
+LOCAL_APPS: list[str] = [
+    "apps.core",
+]
+
+INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+
+MIDDLEWARE: list[str] = [
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+ROOT_URLCONF: str = "config.urls"
+
+WSGI_APPLICATION: str = "config.wsgi.application"
+ASGI_APPLICATION: str = "config.asgi.application"
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+# ---------------------------------------------------------------------------
+# Base de datos
+# ---------------------------------------------------------------------------
+
+DATABASES = {
+    "default": env.db("DATABASE_URL"),
+}
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=60)
+DATABASES["default"]["OPTIONS"] = {
+    "connect_timeout": 10,
+}
+
+DEFAULT_AUTO_FIELD: str = "django.db.models.BigAutoField"
+
+# ---------------------------------------------------------------------------
+# Cache (Redis)
+# ---------------------------------------------------------------------------
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": env("REDIS_URL", default="redis://localhost:6379/1"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+        },
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Django REST Framework
+# ---------------------------------------------------------------------------
+
+REST_FRAMEWORK: dict = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": env.int("DRF_PAGE_SIZE", default=25),
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": env("DRF_THROTTLE_ANON", default="60/minute"),
+        "user": env("DRF_THROTTLE_USER", default="300/minute"),
+    },
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
+}
+
+# ---------------------------------------------------------------------------
+# drf-spectacular (OpenAPI)
+# ---------------------------------------------------------------------------
+
+SPECTACULAR_SETTINGS: dict = {
+    "TITLE": "Maily Soft API",
+    "DESCRIPTION": "API REST para la plataforma de gestión clínica Maily Soft",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+}
+
+# ---------------------------------------------------------------------------
+# SimpleJWT
+# ---------------------------------------------------------------------------
+
+SIMPLE_JWT: dict = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env.int("JWT_ACCESS_MINUTES", default=15)),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=env.int("JWT_REFRESH_DAYS", default=7)),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
+
+# ---------------------------------------------------------------------------
+# Celery
+# ---------------------------------------------------------------------------
+
+CELERY_BROKER_URL: str = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND: str = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0")
+CELERY_ACCEPT_CONTENT: list[str] = ["json"]
+CELERY_TASK_SERIALIZER: str = "json"
+CELERY_RESULT_SERIALIZER: str = "json"
+CELERY_TIMEZONE: str = "America/Mexico_City"
+CELERY_TASK_TRACK_STARTED: bool = True
+CELERY_TASK_TIME_LIMIT: int = 30 * 60  # 30 minutos hard limit
+CELERY_TASK_SOFT_TIME_LIMIT: int = 25 * 60  # 25 minutos soft limit
+
+# ---------------------------------------------------------------------------
+# Channels (WebSockets)
+# ---------------------------------------------------------------------------
+
+CHANNEL_LAYERS: dict = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [env("REDIS_URL", default="redis://localhost:6379/2")],
+        },
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Archivos estáticos y media
+# ---------------------------------------------------------------------------
+
+STATIC_URL: str = "/static/"
+STATIC_ROOT: Path = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE: str = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+MEDIA_URL: str = "/media/"
+MEDIA_ROOT: Path = BASE_DIR / "media"
+
+# ---------------------------------------------------------------------------
+# Almacenamiento (S3/MinIO en prod, local en dev)
+# ---------------------------------------------------------------------------
+
+DEFAULT_FILE_STORAGE: str = env(
+    "DJANGO_DEFAULT_FILE_STORAGE",
+    default="django.core.files.storage.FileSystemStorage",
+)
+
+AWS_ACCESS_KEY_ID: str = env("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY: str = env("AWS_SECRET_ACCESS_KEY", default="")
+AWS_STORAGE_BUCKET_NAME: str = env("AWS_STORAGE_BUCKET_NAME", default="")
+AWS_S3_REGION_NAME: str = env("AWS_S3_REGION_NAME", default="us-east-1")
+AWS_S3_CUSTOM_DOMAIN: str = env("AWS_S3_CUSTOM_DOMAIN", default="")
+AWS_DEFAULT_ACL: str = "private"
+AWS_S3_FILE_OVERWRITE: bool = False
+
+# ---------------------------------------------------------------------------
+# Email
+# ---------------------------------------------------------------------------
+
+EMAIL_BACKEND: str = env(
+    "DJANGO_EMAIL_BACKEND",
+    default="django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST: str = env("EMAIL_HOST", default="localhost")
+EMAIL_PORT: int = env.int("EMAIL_PORT", default=25)
+EMAIL_USE_TLS: bool = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_HOST_USER: str = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD: str = env("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL: str = env("DEFAULT_FROM_EMAIL", default="noreply@mailysoft.mx")
+
+# ---------------------------------------------------------------------------
+# Autenticación
+# ---------------------------------------------------------------------------
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
+# ---------------------------------------------------------------------------
+# Internacionalización
+# ---------------------------------------------------------------------------
+
+LANGUAGE_CODE: str = "es-mx"
+TIME_ZONE: str = "America/Mexico_City"
+USE_I18N: bool = True
+USE_TZ: bool = True
+
+# ---------------------------------------------------------------------------
+# Logging (formato JSON-friendly para agregadores como Datadog/Loki)
+# ---------------------------------------------------------------------------
+
+LOGGING: dict = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {
+            "()": "logging.Formatter",
+            "fmt": '{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
+            "datefmt": "%Y-%m-%dT%H:%M:%S",
+        },
+        "verbose": {
+            "format": "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
+            "datefmt": "%Y-%m-%dT%H:%M:%S",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": env("DJANGO_LOG_LEVEL", default="INFO"),
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": env("DJANGO_LOG_LEVEL", default="INFO"),
+            "propagate": False,
+        },
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": env("DB_LOG_LEVEL", default="WARNING"),
+            "propagate": False,
+        },
+        "apps": {
+            "handlers": ["console"],
+            "level": env("APP_LOG_LEVEL", default="DEBUG"),
+            "propagate": False,
+        },
+    },
+}
+
+# ---------------------------------------------------------------------------
+# CORS (ajustar orígenes según frontend)
+# ---------------------------------------------------------------------------
+
+CORS_ALLOWED_ORIGINS: list[str] = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOW_CREDENTIALS: bool = True
+
+# ---------------------------------------------------------------------------
+# Sentry (opcional, activar con SENTRY_DSN)
+# ---------------------------------------------------------------------------
+
+SENTRY_DSN: str = env("SENTRY_DSN", default="")

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily Soft — Maqueta de Pantallas (Prototipo)</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --primary:#0F4C5C;--primary2:#1C7293;--light:#5EB1BF;--ink:#0F1B2D;--body:#334155;
+  --muted:#64748B;--border:#E2E8F0;--bg:#F1F5F9;--card:#FFFFFF;
+  --danger:#D7263D;--warn:#F4A261;--ok:#2A9D8F;--accent:#FFB703;--sidebar:#0F2A33;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--body);font-size:14px;line-height:1.5;}
+button{font-family:inherit;cursor:pointer;border:none;}
+.demo-banner{position:fixed;top:0;left:0;right:0;height:30px;background:var(--accent);color:#0F1B2D;
+  font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:1000;letter-spacing:.5px;}
+
+/* ===== LOGIN ===== */
+#loginView{position:fixed;inset:0;top:30px;background:linear-gradient(135deg,#0F4C5C,#0F2A33);
+  display:flex;align-items:center;justify-content:center;z-index:500;}
+.login-card{background:#fff;border-radius:18px;padding:42px 40px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.login-card .logo{font-family:'Playfair Display';font-size:30px;font-weight:800;color:var(--primary);text-align:center;}
+.login-card .logo span{color:var(--accent);}
+.login-card .sub{text-align:center;color:var(--muted);font-size:13px;margin:4px 0 26px;}
+.login-card label{display:block;font-size:12px;font-weight:600;color:var(--ink);margin:14px 0 6px;}
+.login-card input{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;}
+.login-card .btn{width:100%;margin-top:22px;background:var(--primary);color:#fff;padding:12px;border-radius:10px;font-weight:700;font-size:15px;}
+.login-card .btn:hover{background:var(--primary2);}
+.login-card .foot{text-align:center;font-size:12px;color:var(--muted);margin-top:16px;}
+
+/* ===== APP SHELL ===== */
+#app{display:none;min-height:100vh;padding-top:30px;}
+.shell{display:flex;min-height:calc(100vh - 30px);}
+.sidebar{width:240px;background:var(--sidebar);color:#fff;flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:30px;height:calc(100vh - 30px);}
+.sidebar .brand{font-family:'Playfair Display';font-size:22px;font-weight:800;padding:22px 22px 6px;}
+.sidebar .brand span{color:var(--accent);}
+.sidebar .clinic{font-size:11px;color:var(--light);padding:0 22px 18px;border-bottom:1px solid rgba(255,255,255,.1);}
+.nav{padding:14px 12px;flex:1;overflow-y:auto;}
+.nav .navlabel{font-size:10px;letter-spacing:1.5px;color:#5b7782;margin:14px 12px 6px;font-weight:700;}
+.navitem{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:#cbd5e1;font-size:13.5px;font-weight:500;cursor:pointer;margin-bottom:2px;}
+.navitem:hover{background:rgba(255,255,255,.07);color:#fff;}
+.navitem.active{background:var(--primary2);color:#fff;font-weight:600;}
+.navitem .ic{font-size:16px;width:20px;text-align:center;}
+.sidebar .userbox{padding:14px 18px;border-top:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:10px;font-size:12px;}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#0F1B2D;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0;}
+
+.maincol{flex:1;display:flex;flex-direction:column;min-width:0;}
+.topbar{height:62px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 26px;position:sticky;top:30px;z-index:50;}
+.topbar .search{flex:1;max-width:420px;}
+.topbar .search input{width:100%;padding:9px 14px;border:1px solid var(--border);border-radius:20px;background:var(--bg);font-size:13px;}
+.topbar .clinic-switch{margin-left:auto;font-size:13px;font-weight:600;color:var(--ink);background:var(--bg);padding:8px 14px;border-radius:9px;}
+.topbar .bell{font-size:18px;}
+.content{padding:26px;flex:1;}
+
+/* ===== SCREENS ===== */
+.screen{display:none;}
+.screen.show{display:block;animation:fade .2s;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.pagehead{margin-bottom:18px;}
+.pagehead h1{font-family:'Playfair Display';font-size:26px;color:var(--ink);font-weight:800;}
+.pagehead p{color:var(--muted);font-size:13px;margin-top:2px;}
+.btn-primary{background:var(--primary);color:#fff;padding:9px 16px;border-radius:9px;font-weight:600;font-size:13px;}
+.btn-primary:hover{background:var(--primary2);}
+.btn-ghost{background:#fff;color:var(--primary);border:1px solid var(--border);padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px;}
+.row{display:flex;gap:16px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(15,27,45,.04);}
+
+/* KPI cards */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px;}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+.kpi .lbl{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px;}
+.kpi .val{font-family:'Playfair Display';font-size:30px;font-weight:800;color:var(--ink);margin-top:6px;}
+.kpi .delta{font-size:11px;font-weight:600;margin-top:2px;}
+.kpi .up{color:var(--ok);}.kpi .down{color:var(--danger);}
+.kpi .ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+
+h3.block{font-size:15px;color:var(--ink);font-weight:700;margin-bottom:12px;}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+table.tbl th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border);}
+table.tbl td{padding:11px 12px;border-bottom:1px solid var(--border);}
+table.tbl tr:last-child td{border-bottom:none;}
+table.tbl tr:hover td{background:#F8FAFC;}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+.tag.green{background:#DCFCE7;color:#166534;}.tag.amber{background:#FEF3C7;color:#854D0E;}
+.tag.red{background:#FEE2E2;color:#991B1B;}.tag.blue{background:#DBEAFE;color:#1E40AF;}.tag.teal{background:#CCFBF1;color:#115E59;}.tag.gray{background:#F1F5F9;color:#475569;}
+.mini-avatar{width:28px;height:28px;border-radius:50%;background:var(--light);color:#0F2A33;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;margin-right:8px;vertical-align:middle;}
+
+/* bar chart mock */
+.barchart{display:flex;align-items:flex-end;gap:10px;height:130px;padding-top:10px;}
+.barchart .bar{flex:1;background:linear-gradient(var(--light),var(--primary2));border-radius:6px 6px 0 0;position:relative;}
+.barchart .bar span{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted);}
+
+/* agenda */
+.cal{display:grid;grid-template-columns:56px repeat(5,1fr);border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;font-size:12px;}
+.cal .ch{background:#F8FAFC;padding:10px;text-align:center;font-weight:700;color:var(--ink);border-bottom:1px solid var(--border);border-left:1px solid var(--border);}
+.cal .ch:first-child{border-left:none;}
+.cal .tcell{padding:8px;color:var(--muted);font-size:10px;text-align:right;border-bottom:1px solid #f1f5f9;}
+.cal .cell{border-left:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;padding:3px;min-height:46px;}
+.appt{border-radius:6px;padding:4px 6px;font-size:10.5px;font-weight:600;margin-bottom:2px;color:#fff;line-height:1.25;}
+.appt.a1{background:var(--primary2);}.appt.a2{background:var(--ok);}.appt.a3{background:var(--accent);color:#0F1B2D;}.appt.a4{background:var(--danger);}
+
+/* patient file */
+.phead{display:flex;align-items:center;gap:18px;}
+.phead .pic{width:72px;height:72px;border-radius:16px;background:linear-gradient(135deg,var(--primary2),var(--light));color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;}
+.phead h2{font-family:'Playfair Display';font-size:22px;color:var(--ink);}
+.tabs{display:flex;gap:6px;margin:18px 0;border-bottom:1px solid var(--border);}
+.tab{padding:9px 16px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
+.field input,.field textarea,.field select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:#fff;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.vital{background:var(--bg);border-radius:10px;padding:12px;text-align:center;}
+.vital .vv{font-size:20px;font-weight:800;color:var(--ink);}.vital .vl{font-size:10px;color:var(--muted);text-transform:uppercase;}
+
+/* timeline */
+.tl{border-left:2px solid var(--border);margin-left:8px;padding-left:18px;}
+.tl .item{position:relative;margin-bottom:16px;}
+.tl .item::before{content:"";position:absolute;left:-25px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--primary2);border:2px solid #fff;}
+.tl .item .d{font-size:11px;color:var(--muted);}
+.tl .item .t{font-weight:600;color:var(--ink);font-size:13px;}
+
+/* caso multidisciplinario */
+.case-flow{display:flex;align-items:center;gap:8px;margin:12px 0;flex-wrap:wrap;}
+.case-step{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;background:#F1F5F9;color:var(--muted);}
+.case-step.done{background:var(--ok);color:#fff;}.case-step.active{background:var(--primary);color:#fff;}
+.case-arrow{color:var(--muted);}
+.spec-card{border-left:4px solid var(--primary2);}
+.spec-card.nut{border-left-color:var(--ok);}.spec-card.fis{border-left-color:var(--accent);}.spec-card.med{border-left-color:var(--primary);}
+
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;}
+.sw{width:38px;height:22px;border-radius:20px;background:var(--ok);position:relative;}
+.sw.off{background:#cbd5e1;}
+.sw::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:2px;right:2px;}
+.sw.off::after{right:auto;left:2px;}
+.note{font-size:12px;color:var(--muted);font-style:italic;margin-top:8px;}
+.legend{font-size:11px;color:var(--muted);margin-top:14px;}
+@media(max-width:860px){.kpis,.grid4{grid-template-columns:repeat(2,1fr);}.sidebar{display:none;}}
+</style>
+</head>
+<body>
+
+<div class="demo-banner">🖥️ PROTOTIPO — Maily Soft · Datos de demostración · Clínica de ejemplo: especializada en medicina regenerativa</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginView">
+  <div class="login-card">
+    <div class="logo">Maily<span>Soft</span></div>
+    <div class="sub">Plataforma de gestión clínica</div>
+    <label>Correo electrónico</label>
+    <input type="email" value="dra.perez@vitalis.mx" />
+    <label>Contraseña</label>
+    <input type="password" value="••••••••••" />
+    <button class="btn" onclick="login()">Entrar</button>
+    <div class="foot">¿Olvidaste tu contraseña? · Soporte</div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <div class="shell">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">Maily<span>Soft</span></div>
+      <div class="clinic">🏥 Clínica Regenerativa Vitalis</div>
+      <nav class="nav">
+        <div class="navlabel">PRINCIPAL</div>
+        <div class="navitem active" data-screen="dashboard" onclick="show('dashboard')"><span class="ic">🏠</span> Dashboard</div>
+        <div class="navitem" data-screen="agenda" onclick="show('agenda')"><span class="ic">📅</span> Agenda</div>
+        <div class="navitem" data-screen="pacientes" onclick="show('pacientes')"><span class="ic">👥</span> Pacientes</div>
+        <div class="navlabel">CLÍNICO</div>
+        <div class="navitem" data-screen="ficha" onclick="show('ficha')"><span class="ic">📋</span> Ficha del paciente</div>
+        <div class="navitem" data-screen="consulta" onclick="show('consulta')"><span class="ic">🩺</span> Consulta</div>
+        <div class="navitem" data-screen="caso" onclick="show('caso')"><span class="ic">🔬</span> Casos multidisciplinarios</div>
+        <div class="navitem" data-screen="nutricion" onclick="show('nutricion')"><span class="ic">🥗</span> Hoja de especialidad</div>
+        <div class="navlabel">ADMINISTRACIÓN</div>
+        <div class="navitem" data-screen="personal" onclick="show('personal')"><span class="ic">👤</span> Personal y roles</div>
+        <div class="navitem" data-screen="config" onclick="show('config')"><span class="ic">⚙️</span> Configuración</div>
+      </nav>
+      <div class="userbox">
+        <div class="avatar">LP</div>
+        <div><div style="color:#fff;font-weight:600;">Dra. Laura Pérez</div><div style="color:#5b7782;">Médico · Med. Regenerativa</div></div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="maincol">
+      <div class="topbar">
+        <div class="search"><input placeholder="🔍  Buscar paciente, cita, expediente..." /></div>
+        <div class="clinic-switch">🏥 Clínica Regenerativa Vitalis ▾</div>
+        <div class="bell">🔔</div>
+        <div class="avatar" style="width:34px;height:34px;">LP</div>
+      </div>
+      <div class="content">
+
+        <!-- ===== DASHBOARD ===== -->
+        <section id="dashboard" class="screen show">
+          <div class="pagehead"><h1>Buenos días, Dra. Pérez 👋</h1><p>Resumen de hoy — martes 26 de mayo, 2026</p></div>
+          <div class="kpis">
+            <div class="kpi"><div class="lbl"><span class="ico" style="background:#DBEAFE;">📅</span> Citas de hoy</div><div class="val">12</div><div class="delta up">▲ 3 vs ayer</div></div>
+            <div class="kpi"><div class="lbl"><span class="ico" style="background:#CCFBF1;">👥</span> Pacientes activos</div><div class="val">1,248</div><div class="delta up">▲ 18 este mes</div></div>
+            <div class="kpi"><div class="lbl"><span class="ico" style="background:#FEF3C7;">💰</span> Ingresos del mes</div><div class="val">$142K</div><div class="delta up">▲ 12% vs mayo</div></div>
+            <div class="kpi"><div class="lbl"><span class="ico" style="background:#FEE2E2;">📉</span> Tasa de no-show</div><div class="val">8%</div><div class="delta down">▼ 2% (meta &lt;10%)</div></div>
+          </div>
+          <div class="row">
+            <div class="card" style="flex:2;">
+              <h3 class="block">Citas por día (esta semana)</h3>
+              <div class="barchart">
+                <div class="bar" style="height:55%;"><span>Lun</span></div>
+                <div class="bar" style="height:80%;"><span>Mar</span></div>
+                <div class="bar" style="height:65%;"><span>Mié</span></div>
+                <div class="bar" style="height:90%;"><span>Jue</span></div>
+                <div class="bar" style="height:70%;"><span>Vie</span></div>
+                <div class="bar" style="height:30%;"><span>Sáb</span></div>
+              </div>
+            </div>
+            <div class="card" style="flex:1.3;">
+              <h3 class="block">Próximas citas</h3>
+              <div style="font-size:13px;">
+                <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);"><span><span class="mini-avatar">JH</span>Juan Hernández</span><span class="tag teal">10:00</span></div>
+                <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);"><span><span class="mini-avatar">MG</span>María González</span><span class="tag teal">10:30</span></div>
+                <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);"><span><span class="mini-avatar">CR</span>Carlos Ramírez</span><span class="tag teal">11:15</span></div>
+                <div style="display:flex;justify-content:space-between;padding:9px 0;"><span><span class="mini-avatar">AL</span>Ana López</span><span class="tag amber">12:00</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h3 class="block">🔬 Casos multidisciplinarios activos</h3>
+            <table class="tbl">
+              <tr><th>Paciente</th><th>Caso</th><th>Coordinador</th><th>Especialistas</th><th>Estado</th></tr>
+              <tr><td>Juan Hernández</td><td>Lesión de rodilla — terapia regenerativa</td><td>Dra. Pérez</td><td>Nutrición · Fisio · Médico</td><td><span class="tag blue">En evaluación</span></td></tr>
+              <tr><td>Sofía Mendoza</td><td>Recuperación post-quirúrgica de hombro</td><td>Lic. Díaz</td><td>Fisio · Médico</td><td><span class="tag amber">En tratamiento</span></td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===== AGENDA ===== -->
+        <section id="agenda" class="screen">
+          <div class="pagehead" style="display:flex;justify-content:space-between;align-items:center;">
+            <div><h1>Agenda</h1><p>Semana del 25 al 31 de mayo · Filtro: Todos los médicos</p></div>
+            <button class="btn-primary">+ Nueva cita</button>
+          </div>
+          <div class="cal">
+            <div class="ch"></div><div class="ch">Lun 25</div><div class="ch">Mar 26</div><div class="ch">Mié 27</div><div class="ch">Jue 28</div><div class="ch">Vie 29</div>
+            <div class="tcell">09:00</div>
+            <div class="cell"><div class="appt a1">J. Hernández<br>Consulta</div></div>
+            <div class="cell"></div>
+            <div class="cell"><div class="appt a2">Nutrición<br>R. Soto</div></div>
+            <div class="cell"></div>
+            <div class="cell"><div class="appt a1">P. Vega</div></div>
+            <div class="tcell">10:00</div>
+            <div class="cell"><div class="appt a2">M. González</div></div>
+            <div class="cell"><div class="appt a1">J. Hernández<br>Caso rodilla</div></div>
+            <div class="cell"><div class="appt a3">Fisio<br>S. Mendoza</div></div>
+            <div class="cell"><div class="appt a1">C. Ruiz</div></div>
+            <div class="cell"></div>
+            <div class="tcell">11:00</div>
+            <div class="cell"></div>
+            <div class="cell"><div class="appt a1">C. Ramírez</div></div>
+            <div class="cell"><div class="appt a2">Nutrición<br>A. López</div></div>
+            <div class="cell"></div>
+            <div class="cell"><div class="appt a4">Cancelada</div></div>
+            <div class="tcell">12:00</div>
+            <div class="cell"><div class="appt a3">Fisio<br>L. Mora</div></div>
+            <div class="cell"><div class="appt a1">A. López</div></div>
+            <div class="cell"></div>
+            <div class="cell"><div class="appt a1">D. Cano</div></div>
+            <div class="cell"><div class="appt a2">N. Pat</div></div>
+          </div>
+          <div class="legend">🟦 Med. General/Regenerativa &nbsp; 🟩 Nutrición &nbsp; 🟨 Fisioterapia &nbsp; 🟥 Cancelada &nbsp;·&nbsp; Arrastra una cita para reagendar.</div>
+        </section>
+
+        <!-- ===== PACIENTES ===== -->
+        <section id="pacientes" class="screen">
+          <div class="pagehead" style="display:flex;justify-content:space-between;align-items:center;">
+            <div><h1>Pacientes</h1><p>1,248 pacientes registrados</p></div>
+            <button class="btn-primary">+ Nuevo paciente</button>
+          </div>
+          <div class="card" style="margin-bottom:14px;"><input style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:9px;" placeholder="🔍  Buscar por nombre, teléfono o número de expediente..." /></div>
+          <div class="card" style="padding:0;">
+            <table class="tbl">
+              <tr><th>Paciente</th><th>Exp.</th><th>Edad</th><th>Teléfono</th><th>Última visita</th><th>Médico</th><th>Estado</th></tr>
+              <tr><td><span class="mini-avatar">JH</span>Juan Hernández</td><td>EXP-1042</td><td>54</td><td>442 118 2290</td><td>26 may 2026</td><td>Dra. Pérez</td><td><span class="tag green">Activo</span></td></tr>
+              <tr><td><span class="mini-avatar">MG</span>María González</td><td>EXP-1043</td><td>38</td><td>442 553 1180</td><td>26 may 2026</td><td>Dra. Pérez</td><td><span class="tag green">Activo</span></td></tr>
+              <tr><td><span class="mini-avatar">CR</span>Carlos Ramírez</td><td>EXP-0987</td><td>61</td><td>442 209 7741</td><td>20 may 2026</td><td>Lic. Díaz</td><td><span class="tag green">Activo</span></td></tr>
+              <tr><td><span class="mini-avatar">AL</span>Ana López</td><td>EXP-1101</td><td>29</td><td>442 880 3325</td><td>18 may 2026</td><td>Lic. Torres</td><td><span class="tag amber">Seguimiento</span></td></tr>
+              <tr><td><span class="mini-avatar">SM</span>Sofía Mendoza</td><td>EXP-0912</td><td>47</td><td>442 661 4408</td><td>15 may 2026</td><td>Lic. Díaz</td><td><span class="tag green">Activo</span></td></tr>
+              <tr><td><span class="mini-avatar">DP</span>Diego Pacheco</td><td>EXP-1120</td><td>33</td><td>442 477 9012</td><td>02 may 2026</td><td>Dra. Pérez</td><td><span class="tag gray">Inactivo</span></td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===== FICHA DEL PACIENTE ===== -->
+        <section id="ficha" class="screen">
+          <div class="card">
+            <div class="phead">
+              <div class="pic">JH</div>
+              <div style="flex:1;">
+                <h2>Juan Hernández García</h2>
+                <div style="color:var(--muted);font-size:13px;">EXP-1042 · 54 años · M · CURP: HEGJ720115HQTRRN08</div>
+                <div style="margin-top:6px;"><span class="tag red">⚠ Alergia: Penicilina</span> <span class="tag amber">Hipertensión</span> <span class="tag teal">O+</span></div>
+              </div>
+              <div style="text-align:right;"><div style="font-size:12px;color:var(--muted);">📞 442 118 2290</div><div style="font-size:12px;color:var(--muted);">✉ juan.h@email.com</div><button class="btn-primary" style="margin-top:8px;" onclick="show('consulta')">Iniciar consulta</button></div>
+            </div>
+            <div class="tabs">
+              <div class="tab active">Resumen</div><div class="tab">Historia clínica</div><div class="tab">Consultas</div><div class="tab">Estudios</div><div class="tab" onclick="show('caso')">Casos</div>
+            </div>
+            <div class="row">
+              <div style="flex:1.2;">
+                <h3 class="block">Signos vitales recientes</h3>
+                <div class="grid4">
+                  <div class="vital"><div class="vv">128/82</div><div class="vl">T/A mmHg</div></div>
+                  <div class="vital"><div class="vv">74</div><div class="vl">FC lpm</div></div>
+                  <div class="vital"><div class="vv">36.6°</div><div class="vl">Temp</div></div>
+                  <div class="vital"><div class="vv">27.4</div><div class="vl">IMC</div></div>
+                </div>
+                <h3 class="block" style="margin-top:18px;">Historial de consultas</h3>
+                <div class="tl">
+                  <div class="item"><div class="d">26 may 2026 · Dra. Pérez</div><div class="t">Evaluación inicial — caso rodilla derecha</div></div>
+                  <div class="item"><div class="d">12 may 2026 · Dra. Pérez</div><div class="t">Consulta de control · TA controlada</div></div>
+                  <div class="item"><div class="d">28 abr 2026 · Lic. Torres</div><div class="t">Valoración nutricional inicial</div></div>
+                </div>
+              </div>
+              <div style="flex:1;">
+                <h3 class="block">Próximas citas</h3>
+                <div class="card" style="background:var(--bg);margin-bottom:10px;"><b>Mar 26 may · 10:00</b><br><span style="color:var(--muted);font-size:12px;">Caso rodilla — Dra. Pérez</span></div>
+                <div class="card" style="background:var(--bg);"><b>Vie 29 may · 09:00</b><br><span style="color:var(--muted);font-size:12px;">Fisioterapia — Lic. Díaz</span></div>
+                <h3 class="block" style="margin-top:18px;">Medicación actual</h3>
+                <div style="font-size:13px;"><div style="padding:7px 0;border-bottom:1px solid var(--border);">Losartán 50mg — 1 c/24h</div><div style="padding:7px 0;">Omega 3 — 1 c/12h</div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== CONSULTA / SOAP ===== -->
+        <section id="consulta" class="screen">
+          <div class="pagehead"><h1>Nueva consulta · Juan Hernández</h1><p>Medicina Regenerativa · 26 may 2026, 10:00 · Dra. Laura Pérez</p></div>
+          <div class="row">
+            <div class="card" style="flex:1;">
+              <h3 class="block">Signos vitales</h3>
+              <div class="grid3">
+                <div class="field"><label>T/A (mmHg)</label><input value="128/82" /></div>
+                <div class="field"><label>FC (lpm)</label><input value="74" /></div>
+                <div class="field"><label>Temp (°C)</label><input value="36.6" /></div>
+                <div class="field"><label>Peso (kg)</label><input value="84" /></div>
+                <div class="field"><label>Talla (cm)</label><input value="175" /></div>
+                <div class="field"><label>IMC</label><input value="27.4" disabled style="background:var(--bg);" /></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h3 class="block">Nota de evolución (SOAP)</h3>
+            <div class="field"><label>S · Subjetivo (motivo / síntomas)</label><textarea rows="2">Refiere dolor en rodilla derecha de 3 meses, aumenta al subir escaleras. EVA 6/10.</textarea></div>
+            <div class="field"><label>O · Objetivo (exploración)</label><textarea rows="2">Rodilla derecha con crepitación, dolor a la flexión &gt;90°. Sin edema. Rango de movilidad limitado.</textarea></div>
+            <div class="grid2">
+              <div class="field"><label>A · Análisis / Diagnóstico</label><textarea rows="2">Gonartrosis grado II rodilla derecha.</textarea></div>
+              <div class="field"><label>Diagnóstico CIE-10</label><input value="M17.1 — Gonartrosis primaria, unilateral" /></div>
+            </div>
+            <div class="field"><label>P · Plan</label><textarea rows="2">Abrir caso multidisciplinario: valoración de nutrición + fisioterapia. Considerar terapia regenerativa (PRP).</textarea></div>
+            <div style="display:flex;gap:10px;margin-top:8px;"><button class="btn-primary">Guardar consulta</button><button class="btn-ghost" onclick="show('caso')">+ Abrir caso multidisciplinario</button></div>
+          </div>
+        </section>
+
+        <!-- ===== CASO MULTIDISCIPLINARIO ===== -->
+        <section id="caso" class="screen">
+          <div class="pagehead"><h1>🔬 Caso: Lesión de rodilla — terapia regenerativa</h1><p>Paciente: Juan Hernández · Coordinador: Dra. Pérez · Abierto: 26 may 2026</p></div>
+          <div class="card">
+            <div class="case-flow">
+              <span class="case-step done">✓ Caso abierto</span><span class="case-arrow">→</span>
+              <span class="case-step active">Evaluación de especialistas</span><span class="case-arrow">→</span>
+              <span class="case-step">Protocolo definido</span><span class="case-arrow">→</span>
+              <span class="case-step">En tratamiento</span><span class="case-arrow">→</span>
+              <span class="case-step">Alta</span>
+            </div>
+            <p class="note">Cada especialista llena su propia hoja. El coordinador ve todas y define el protocolo.</p>
+          </div>
+          <div class="grid3" style="margin-top:16px;">
+            <div class="card spec-card nut"><h3 class="block">🥗 Nutrición · Lic. Torres <span class="tag green" style="float:right;">Completada</span></h3>
+              <div style="font-size:12.5px;color:var(--body);">Peso: 84 kg · % grasa: 28% · IMC: 27.4<br>Marcadores de inflamación elevados.<br><b>Plan:</b> dieta antiinflamatoria, -500 kcal/día.</div></div>
+            <div class="card spec-card fis"><h3 class="block">🤸 Fisioterapia · Lic. Díaz <span class="tag amber" style="float:right;">En proceso</span></h3>
+              <div style="font-size:12.5px;color:var(--body);">Rango movilidad: 0-95° · Fuerza cuádriceps: 3/5<br>Dolor EVA: 6/10.<br><b>Plan:</b> rehabilitación 3x/semana.</div></div>
+            <div class="card spec-card med"><h3 class="block">🩺 Médico · Dra. Pérez <span class="tag green" style="float:right;">Completada</span></h3>
+              <div style="font-size:12.5px;color:var(--body);">Dx: Gonartrosis grado II.<br>Estudios: RX + RM solicitadas.<br><b>Indicación:</b> evaluar 2 sesiones de PRP.</div></div>
+          </div>
+          <div class="card" style="margin-top:16px;border:2px solid var(--accent);">
+            <h3 class="block">⭐ Protocolo consensuado</h3>
+            <div style="font-size:13px;">Plan integral: <b>dieta antiinflamatoria</b> (Nutrición) + <b>fisioterapia 3x/semana</b> (Fisio) + <b>2 sesiones de PRP</b> (Médico). Revisión del caso en 6 semanas.</div>
+            <button class="btn-primary" style="margin-top:12px;">Confirmar protocolo y pasar a tratamiento</button>
+          </div>
+        </section>
+
+        <!-- ===== HOJA DE ESPECIALIDAD (NUTRICIÓN) ===== -->
+        <section id="nutricion" class="screen">
+          <div class="pagehead"><h1>🥗 Hoja de Nutrición · Ana López</h1><p>Esta hoja se genera automáticamente según la especialidad. Cada especialidad tiene la suya.</p></div>
+          <div class="row">
+            <div class="card" style="flex:1;">
+              <h3 class="block">Composición corporal</h3>
+              <div class="grid3">
+                <div class="field"><label>Peso (kg)</label><input value="68.5" /></div>
+                <div class="field"><label>% Grasa corporal</label><input value="31.2" /></div>
+                <div class="field"><label>Masa muscular (kg)</label><input value="42.1" /></div>
+                <div class="field"><label>Cintura (cm)</label><input value="86" /></div>
+                <div class="field"><label>Cadera (cm)</label><input value="102" /></div>
+                <div class="field"><label>Índice C/C</label><input value="0.84" disabled style="background:var(--bg);" /></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h3 class="block">Plan alimenticio</h3>
+            <div class="grid2">
+              <div class="field"><label>Kcal objetivo / día</label><input value="1,650" /></div>
+              <div class="field"><label>Distribución macros</label><input value="40% CHO · 30% PROT · 30% LIP" /></div>
+            </div>
+            <div class="field"><label>Plan / indicaciones</label><textarea rows="3">Dieta antiinflamatoria. 5 tiempos de comida. Aumentar proteína magra y omega-3. Reducir ultraprocesados y azúcares simples. Hidratación 2.5 L/día.</textarea></div>
+            <button class="btn-primary">Guardar hoja de nutrición</button>
+          </div>
+          <p class="note">💡 Si la clínica activara "Ginecología" o "Psicología", aquí aparecería la hoja de esa especialidad, con sus propios campos — sin reprogramar el sistema.</p>
+        </section>
+
+        <!-- ===== PERSONAL Y ROLES ===== -->
+        <section id="personal" class="screen">
+          <div class="pagehead" style="display:flex;justify-content:space-between;align-items:center;">
+            <div><h1>Personal y roles</h1><p>5 miembros del equipo</p></div>
+            <button class="btn-primary">+ Invitar usuario</button>
+          </div>
+          <div class="card" style="padding:0;">
+            <table class="tbl">
+              <tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Especialidad</th><th>Estado</th></tr>
+              <tr><td><span class="mini-avatar">LP</span>Dra. Laura Pérez</td><td>dra.perez@vitalis.mx</td><td><span class="tag blue">Owner</span></td><td>Med. Regenerativa</td><td><span class="tag green">Activo</span></td></tr>
+              <tr><td><span class="mini-avatar">RD</span>Lic. Roberto Díaz</td><td>r.diaz@vitalis.mx</td><td><span class="tag teal">Médico</span></td><td>Fisioterapia</td><td><span class="tag green">Activo</span></td></tr>
+              <tr><td><span class="mini-avatar">AT</span>Lic. Ana Torres</td><td>a.torres@vitalis.mx</td><td><span class="tag teal">Médico</span></td><td>Nutrición</td><td><span class="tag green">Activo</span></td></tr>
+              <tr><td><span class="mini-avatar">SC</span>Sara Cano</td><td>recepcion@vitalis.mx</td><td><span class="tag amber">Recepción</span></td><td>—</td><td><span class="tag green">Activo</span></td></tr>
+              <tr><td><span class="mini-avatar">MA</span>Mario Anaya</td><td>admin@vitalis.mx</td><td><span class="tag gray">Admin</span></td><td>—</td><td><span class="tag amber">Invitación pendiente</span></td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===== CONFIGURACIÓN ===== -->
+        <section id="config" class="screen">
+          <div class="pagehead"><h1>Configuración de la clínica</h1><p>Datos, especialidades activas y suscripción</p></div>
+          <div class="row">
+            <div class="card" style="flex:1;">
+              <h3 class="block">Datos de la clínica</h3>
+              <div class="field"><label>Razón social</label><input value="Clínica Regenerativa Vitalis S.A. de C.V." /></div>
+              <div class="grid2">
+                <div class="field"><label>RFC</label><input value="CRV220815AB1" /></div>
+                <div class="field"><label>Teléfono</label><input value="442 100 2000" /></div>
+              </div>
+              <div class="field"><label>Sucursales</label><input value="Querétaro Centro · Juriquilla" /></div>
+            </div>
+            <div class="card" style="flex:1;">
+              <h3 class="block">Especialidades activas (add-ons)</h3>
+              <div style="font-size:13px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">Medicina General <span class="toggle"><span class="sw"></span> Incluida</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">Medicina Regenerativa <span class="toggle"><span class="sw"></span> Activa</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">Nutrición <span class="toggle"><span class="sw"></span> Activa</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">Fisioterapia <span class="toggle"><span class="sw"></span> Activa</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;">Ginecología <span class="toggle"><span class="sw off"></span> Activar (+$XXX/mes)</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px;background:linear-gradient(135deg,#0F4C5C,#1C7293);color:#fff;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div><div style="font-size:12px;color:var(--light);">PLAN ACTUAL</div><div style="font-family:'Playfair Display';font-size:24px;font-weight:800;">Plus Anual</div><div style="font-size:12px;color:#cbd5e1;">Renovación: 14 de marzo, 2027 · 3 usuarios · 2 consultorios</div></div>
+              <button class="btn-ghost">Gestionar plan</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function login(){
+  document.getElementById('loginView').style.display='none';
+  document.getElementById('app').style.display='block';
+  show('dashboard');
+}
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
+  var el=document.getElementById(id); if(el) el.classList.add('show');
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  var nav=document.querySelector('.navitem[data-screen="'+id+'"]'); if(nav) nav.classList.add('active');
+  document.querySelector('.content').scrollTo(0,0); window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>

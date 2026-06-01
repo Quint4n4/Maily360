@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily Platform — Documento de Arquitectura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --primary:#0F4C5C; --primary2:#1C7293; --light:#5EB1BF; --cream:#F8FAFC;
+  --card:#FFFFFF; --ink:#0F1B2D; --body:#334155; --muted:#64748B; --border:#E2E8F0;
+  --danger:#D7263D; --warn:#F4A261; --ok:#2A9D8F; --accent:#FFB703;
+  --code-bg:#0F1B2D; --code-fg:#E2E8F0;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'Inter',sans-serif;color:var(--body);background:var(--cream);line-height:1.65;font-size:15px;}
+
+/* ---- Layout ---- */
+.wrap{display:flex;max-width:1400px;margin:0 auto;}
+nav.toc{position:sticky;top:0;align-self:flex-start;width:280px;height:100vh;overflow-y:auto;
+  background:var(--primary);color:#fff;padding:28px 20px;flex-shrink:0;}
+nav.toc .brand{font-family:'Playfair Display',serif;font-size:22px;font-weight:800;margin-bottom:4px;}
+nav.toc .brand small{display:block;font-family:'Inter';font-size:11px;font-weight:400;color:var(--light);letter-spacing:2px;margin-top:4px;}
+nav.toc .ver{font-size:11px;color:var(--light);margin:14px 0 20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.15);}
+nav.toc a{display:block;color:#CBD5E1;text-decoration:none;font-size:13px;padding:6px 10px;border-radius:6px;margin-bottom:2px;transition:.15s;}
+nav.toc a:hover{background:rgba(255,255,255,.1);color:#fff;}
+nav.toc a.sub{padding-left:22px;font-size:12px;color:#94A3B8;}
+main{flex:1;padding:48px 56px;max-width:1080px;}
+
+/* ---- Typography ---- */
+h1{font-family:'Playfair Display',serif;font-size:40px;color:var(--ink);font-weight:800;line-height:1.15;margin-bottom:8px;}
+h2{font-family:'Playfair Display',serif;font-size:27px;color:var(--primary);font-weight:700;margin:46px 0 16px;padding-top:12px;}
+h3{font-size:19px;color:var(--ink);font-weight:700;margin:30px 0 10px;}
+h4{font-size:15px;color:var(--primary2);font-weight:700;margin:20px 0 8px;text-transform:uppercase;letter-spacing:1px;}
+p{margin-bottom:14px;}
+ul,ol{margin:0 0 14px 22px;}
+li{margin-bottom:6px;}
+strong{color:var(--ink);font-weight:700;}
+code{font-family:'JetBrains Mono',monospace;background:#EEF2F6;color:var(--primary);padding:2px 6px;border-radius:4px;font-size:13px;}
+a.inline{color:var(--primary2);}
+
+/* ---- Hero ---- */
+.hero{background:var(--primary);color:#fff;border-radius:16px;padding:44px 40px;margin-bottom:32px;position:relative;overflow:hidden;}
+.hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,183,3,.12);}
+.hero .eyebrow{font-size:12px;letter-spacing:4px;color:var(--light);font-weight:700;margin-bottom:10px;}
+.hero h1{color:#fff;font-size:46px;}
+.hero p{font-size:17px;color:#CBD5E1;margin-top:10px;max-width:680px;}
+.hero .meta{margin-top:22px;display:flex;gap:28px;flex-wrap:wrap;font-size:13px;color:var(--light);}
+.hero .meta b{color:#fff;display:block;font-size:15px;}
+
+/* ---- Diagram blocks ---- */
+pre.diagram{background:var(--code-bg);color:var(--code-fg);font-family:'JetBrains Mono',monospace;
+  font-size:12px;line-height:1.45;padding:22px 24px;border-radius:12px;overflow-x:auto;margin:18px 0;
+  border:1px solid #1e2d44;box-shadow:0 6px 24px rgba(15,27,45,.12);}
+pre.code{background:var(--code-bg);color:#cbd5e1;font-family:'JetBrains Mono',monospace;font-size:12.5px;
+  line-height:1.55;padding:20px 22px;border-radius:12px;overflow-x:auto;margin:16px 0;}
+pre.code .k{color:#7dd3fc;} pre.code .s{color:#fcd34d;} pre.code .c{color:#64748b;font-style:italic;} pre.code .r{color:#fb7185;}
+
+/* ---- Tables ---- */
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:13.5px;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(15,27,45,.06);}
+th{background:var(--primary);color:#fff;text-align:left;padding:11px 14px;font-weight:600;font-size:13px;}
+td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+tr:nth-child(even) td{background:#F8FAFC;}
+.center{text-align:center;}
+
+/* ---- Callouts ---- */
+.callout{border-radius:10px;padding:16px 20px;margin:18px 0;border-left:5px solid;font-size:14px;}
+.callout.info{background:#EFF6FF;border-color:var(--primary2);}
+.callout.warn{background:#FFF7ED;border-color:var(--warn);}
+.callout.danger{background:#FEF2F2;border-color:var(--danger);}
+.callout.ok{background:#F0FDFA;border-color:var(--ok);}
+.callout b{display:block;margin-bottom:4px;color:var(--ink);}
+
+/* ---- Cards / pills ---- */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0;}
+.cards.two{grid-template-columns:repeat(2,1fr);}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:0 2px 10px rgba(15,27,45,.05);}
+.card .ic{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;color:#fff;}
+.card h4{margin:0 0 6px;color:var(--ink);text-transform:none;letter-spacing:0;font-size:15px;}
+.card p{font-size:13px;color:var(--muted);margin:0;}
+.pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.5px;}
+
+.section-tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:3px;color:var(--primary2);margin-bottom:4px;}
+.divider{height:1px;background:var(--border);margin:40px 0;}
+.footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+
+.printbtn{position:fixed;bottom:24px;right:24px;background:var(--primary);color:#fff;border:none;
+  padding:13px 20px;border-radius:30px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(15,76,92,.35);font-family:'Inter';z-index:99;}
+.printbtn:hover{background:var(--primary2);}
+
+@media print{
+  nav.toc{display:none;} .printbtn{display:none;} main{padding:0;max-width:100%;}
+  body{font-size:11px;} pre.diagram{font-size:8.5px;box-shadow:none;} .hero{break-inside:avoid;}
+  h2{break-after:avoid;} table,pre,.callout,.cards{break-inside:avoid;}
+}
+@media(max-width:900px){.wrap{flex-direction:column;}nav.toc{width:100%;height:auto;position:relative;}main{padding:24px;}.cards,.cards.two{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===================== NAV / TOC ===================== -->
+<nav class="toc">
+  <div class="brand">Maily Platform<small>DOCUMENTO DE ARQUITECTURA</small></div>
+  <div class="ver">v0.1 · Borrador de trabajo · 2026</div>
+  <a href="#resumen">1. Resumen ejecutivo</a>
+  <a href="#piezas">2. Las 3 piezas del producto</a>
+  <a href="#decisiones">3. Decisiones tomadas</a>
+  <a href="#arquitectura">4. Arquitectura completa</a>
+  <a href="#multitenant">5. Multi-tenant</a>
+  <a href="#roles">6. Árbol de roles</a>
+  <a href="#paciente">7. Identidad global del paciente</a>
+  <a href="#especialidades">8. Especialidades (núcleo + verticales)</a>
+  <a href="#monetizacion">9. Modelo de negocio (SaaS)</a>
+  <a href="#datos">10. Modelo de datos</a>
+  <a href="#comunicacion">11. Comunicación back ↔ front</a>
+  <a href="#flujos">12. Flujos de ejemplo</a>
+  <a href="#estructura">13. Estructura del proyecto</a>
+  <a href="#stack">14. Stack tecnológico</a>
+  <a href="#glosario">15. Glosario</a>
+  <a href="#siguientes">16. Próximos pasos</a>
+</nav>
+
+<!-- ===================== MAIN ===================== -->
+<main>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="eyebrow">PLATAFORMA SaaS PARA GESTIÓN CLÍNICA + APP DEL PACIENTE</div>
+  <h1>Maily Platform</h1>
+  <p>Documento de arquitectura que reúne todas las decisiones tomadas hasta el momento: cómo se estructura el sistema, cómo se conectan Maily&nbsp;Soft (clínica) y Maily&nbsp;te&nbsp;cuida (paciente), cómo se manejan los roles, las suscripciones y las especialidades médicas.</p>
+  <div class="meta">
+    <div><b>Maily Soft</b>App del doctor (React)</div>
+    <div><b>Maily te cuida</b>App del paciente (Flutter)</div>
+    <div><b>Panel Plataforma</b>Tu vista de dueño SaaS</div>
+    <div><b>Backend único</b>Django + DRF + PostgreSQL</div>
+  </div>
+</div>
+
+<!-- 1. RESUMEN -->
+<section id="resumen">
+<span class="section-tag">SECCIÓN 1</span>
+<h2>Resumen ejecutivo</h2>
+<p>Estamos transformando un sistema legacy de gestión de clínicas (escrito en PHP) en una <strong>plataforma SaaS moderna y multi-tenant</strong>. La plataforma da servicio a tres tipos de usuarios desde <strong>un solo backend</strong>:</p>
+<ul>
+  <li><strong>El doctor y su personal</strong> → trabajan en <em>Maily Soft</em> (la app web de la clínica).</li>
+  <li><strong>El paciente</strong> → usa <em>Maily te cuida</em> (app móvil): ve su expediente, chatea con su doctor, recibe recordatorios, guarda estudios, gana recompensas y puede preguntar a una IA a qué especialista acudir según sus síntomas.</li>
+  <li><strong>Tú, el dueño del SaaS</strong> → tienes un <em>Panel de Plataforma</em> con métricas de todo: ingresos, suscripciones, clínicas activas, adopción de funciones, etc.</li>
+</ul>
+<div class="callout ok">
+  <b>La idea central</b>
+  No son tres sistemas separados, son <strong>tres caras de la misma plataforma</strong>. Comparten la misma base de datos y el mismo "cerebro", por eso el expediente que escribe el doctor es exactamente el que ve el paciente, sin desincronización.
+</div>
+</section>
+
+<!-- 2. PIEZAS -->
+<section id="piezas">
+<span class="section-tag">SECCIÓN 2</span>
+<h2>Las 3 piezas del producto</h2>
+<div class="cards">
+  <div class="card">
+    <div class="ic" style="background:#1C7293;">🩺</div>
+    <h4>Maily Soft</h4>
+    <p>La app del doctor y la clínica. Agenda, expediente clínico, recetas, finanzas, inventario, módulos por especialidad. Hecha en <strong>React</strong>.</p>
+  </div>
+  <div class="card">
+    <div class="ic" style="background:#2A9D8F;">📱</div>
+    <h4>Maily te cuida</h4>
+    <p>La app del paciente. Su expediente, chat con el doctor, recetas, recordatorios, estudios, gamificación y triage con IA. Hecha en <strong>Flutter</strong>.</p>
+  </div>
+  <div class="card">
+    <div class="ic" style="background:#0F4C5C;">📊</div>
+    <h4>Panel Plataforma</h4>
+    <p>Tu vista como dueño del SaaS. Métricas de ingresos, clínicas, suscripciones, soporte y control de funciones. Hecha en <strong>React</strong>.</p>
+  </div>
+</div>
+</section>
+
+<!-- 3. DECISIONES -->
+<section id="decisiones">
+<span class="section-tag">SECCIÓN 3</span>
+<h2>Decisiones de arquitectura tomadas</h2>
+<table>
+<tr><th>Tema</th><th>Decisión final</th><th>Por qué</th></tr>
+<tr><td><b>Backend</b></td><td>Uno solo (Maily Platform) sirviendo a las 3 apps</td><td>El paciente y el doctor comparten datos clínicos; separarlos crearía inconsistencias y bloquearía el triage con IA.</td></tr>
+<tr><td><b>Maily te cuida</b></td><td>Se construye dentro de la plataforma única desde el día 1</td><td>Aún está en planeación, estamos a tiempo de no fragmentar.</td></tr>
+<tr><td><b>Identidad del paciente</b></td><td>Global a la plataforma (patrón Master Patient Index)</td><td>El paciente puede ir con cualquier clínica del catálogo; es una sola persona aunque visite varias clínicas.</td></tr>
+<tr><td><b>Datos clínicos</b></td><td>Aislados por clínica (multi-tenant), con compartición controlada por el paciente</td><td>Cada clínica solo ve lo suyo; el paciente decide si comparte su historial entre clínicas.</td></tr>
+<tr><td><b>Especialidades</b></td><td>Núcleo común + módulos "enchufables" por especialidad</td><td>El 85-90% del sistema es igual para todas; solo varía la hoja clínica.</td></tr>
+<tr><td><b>Primera especialidad</b></td><td>Medicina General (la del repositorio) → luego Nutrición</td><td>Medicina General sirve de referencia del patrón; Nutrición valida que funcione con una segunda.</td></tr>
+<tr><td><b>Cobro</b></td><td>Suscripción <strong>anual</strong> (con prueba gratis) + add-ons cobrables por función/especialidad</td><td>Ingresos predecibles y mejor flujo de caja. Cada clínica solo carga, ve y paga lo que usa; el sistema no se vuelve pesado para el cliente.</td></tr>
+</table>
+</section>
+
+<!-- 4. ARQUITECTURA -->
+<section id="arquitectura">
+<span class="section-tag">SECCIÓN 4</span>
+<h2>Arquitectura completa (vista de sistema)</h2>
+<p>Así se conectan los usuarios, las apps (frontend), el backend, los datos y los servicios externos. Léelo de arriba (usuarios) hacia abajo (datos):</p>
+<pre class="diagram">                              ════ USUARIOS ════
+        👨‍⚕️ DOCTOR              🧑 PACIENTE              👔 DUEÑO SaaS
+           │                       │                        │
+  ═════════│═══════════════════════│════════════════════════│═══════ FRONTENDS
+  ┌────────▼─────────┐  ┌──────────▼──────────┐  ┌───────────▼─────────┐
+  │   MAILY SOFT     │  │  MAILY TE CUIDA     │  │  PANEL PLATAFORMA   │
+  │   React + Vite   │  │  Flutter            │  │  React + Vite       │
+  │   (web doctor)   │  │  (iOS/Android)      │  │  (web admin SaaS)   │
+  │                  │  │                     │  │                     │
+  │ • agenda         │  │ • mi expediente     │  │ • MRR / churn       │
+  │ • expediente     │  │ • chat con doctor   │  │ • tenants           │
+  │ • recetas        │  │ • recetas/recordat. │  │ • features/billing  │
+  │ • nutrición      │  │ • triage IA síntomas│  │ • impersonate       │
+  │ • finanzas       │  │ • gamificación      │  │ • métricas globales │
+  └────────┬─────────┘  └──────────┬──────────┘  └───────────┬─────────┘
+           │ HTTPS REST            │ HTTPS REST              │ HTTPS REST
+           │ + WebSocket (chat)    │ + WebSocket (chat)      │
+           └───────────────────────┼─────────────────────────┘
+                                   │   (clientes generados desde OpenAPI)
+  ═════════════════════════════════│═══════════════════════════════════ BACKEND
+  ┌────────────────────────────────▼────────────────────────────────┐
+  │                    API GATEWAY  (Django + DRF)                   │
+  │   JWT auth · rate-limit · versionado /api/v1 · OpenAPI schema    │
+  └────────────────────────────────┬────────────────────────────────┘
+                                   │
+  ┌────────────────────────────────▼────────────────────────────────┐
+  │   CAPA DE APLICACIÓN  —  Django apps por bounded context         │
+  │                                                                  │
+  │  IDENTIDAD     COMERCIAL      OPERACIÓN       REGISTRO CLÍNICO    │
+  │  authn         billing        agenda          encounters (núcleo)│
+  │  tenancy       metrics        pacientes       templates (schemas)│
+  │  rbac                         personal        recetas, archivos  │
+  │                                                                  │
+  │  ESPECIALIDADES (plugins)     ENGAGEMENT (Maily te cuida)        │
+  │  general_medicine ◄ repo      chat · reminders · gamification     │
+  │  nutrition        ◄ 2da       health_records · studies           │
+  │  [gineco, psico, fisio...]    triage IA · directory              │
+  └────────────────────────────────┬────────────────────────────────┘
+                                   │
+  ┌────────────────────────────────▼────────────────────────────────┐
+  │   SERVICIOS DE DOMINIO + SEÑALES (sync) + CELERY (async)         │
+  └────────────────────────────────┬────────────────────────────────┘
+                                   │
+  ═════════════════════════════════│═══════════════════════════════════ DATOS
+        ┌──────────────────────────┼──────────────────────────┐
+        ▼                          ▼                          ▼
+  ┌────────────┐           ┌────────────┐            ┌────────────────┐
+  │ PostgreSQL │           │   Redis    │            │   S3 (cifrado) │
+  │ • global   │           │ • cache    │            │ • estudios     │
+  │ • tenant   │           │ • colas    │            │ • imágenes     │
+  │   (RLS)    │           │ • realtime │            │ • PDFs recetas │
+  └────────────┘           └────────────┘            └────────────────┘
+                                   │
+  ═════════════════════════════════│═══════════════════════════════════ EXTERNOS
+     ┌──────────┬──────────┬────────┼────────┬──────────┬──────────┐
+     ▼          ▼          ▼        ▼        ▼          ▼          ▼
+  WhatsApp   Stripe/   Claude    CFDI     Daily.co   Push       Email
+  Cloud API  MercadoP. (IA tri.) (Facturama) (video)  (FCM)     (Resend)</pre>
+<div class="callout info">
+  <b>En palabras simples</b>
+  Las tres apps "llaman" al mismo backend por internet (HTTPS). El backend está dividido en módulos por área (identidad, comercial, operación, clínico, especialidades, paciente). Abajo guarda todo en una base de datos PostgreSQL, archivos en S3, y se conecta a servicios externos como WhatsApp, Stripe y la IA de Claude.
+</div>
+</section>
+
+<!-- 5. MULTITENANT -->
+<section id="multitenant">
+<span class="section-tag">SECCIÓN 5</span>
+<h2>Multi-tenant: la columna vertebral</h2>
+<p><strong>Multi-tenant</strong> significa que <em>muchas clínicas distintas (los "tenants") viven en el mismo sistema, pero cada una está totalmente aislada de las demás</em>. Es como un edificio de departamentos: misma estructura, pero nadie entra al departamento de otro.</p>
+<p>Hay dos niveles claramente separados:</p>
+<pre class="diagram">🌐 GLOBAL (nivel plataforma, SIN dueño-clínica) — solo 3 cosas:
+   • PatientAccount   ← la persona (su cuenta de Maily te cuida)
+   • Doctor           ← identidad profesional (puede trabajar en varias clínicas)
+   • Specialty        ← catálogo de especialidades
+
+🏥 TENANT (por clínica, con aislamiento garantizado por la base de datos):
+   • Clinic, suscripción, billing
+   • Owner / Admin / Médico / Enfermería / Recepción ... (el árbol de roles)
+   • ClinicPatientLink  ← el vínculo paciente ↔ esta clínica
+   • ClinicalEncounter  ← las consultas (cada clínica ve SOLO las suyas)
+   • Recetas, agenda, finanzas, inventario, archivos...</pre>
+<div class="callout ok">
+  <b>Garantía técnica: Row Level Security (RLS)</b>
+  PostgreSQL aplica un candado automático: aunque un programador se equivoque, la base de datos <strong>solo devuelve las filas de la clínica del usuario que pregunta</strong>. Es imposible que la Clínica A vea datos de la Clínica B.
+</div>
+</section>
+
+<!-- 6. ROLES -->
+<section id="roles">
+<span class="section-tag">SECCIÓN 6</span>
+<h2>Árbol de roles</h2>
+<p>Existen <strong>3 categorías de identidad</strong> que nunca se mezclan: tu equipo (plataforma), el personal de cada clínica (tenant), y los pacientes (global).</p>
+<pre class="diagram">                ┌──────────────────────────────────┐
+                │      🌐 NIVEL PLATAFORMA          │
+                │   (TÚ — el dueño SaaS)            │
+                └──────────────────────────────────┘
+                              │
+        ┌──────────────────────┼────────────────────┐
+        │                      │                    │
+   ┌─────────┐         ┌──────────────┐      ┌────────────┐
+   │ Super   │         │   Customer   │      │ Engineering│
+   │ Admin   │         │   Success    │      │  (devs)    │
+   └─────────┘         └──────────────┘      └────────────┘
+   Tú + cofund.        Soporte/ventas         Acceso técnico
+
+   Acceso a:
+   - Panel /platform/
+   - Métricas globales (MRR, churn)
+   - TODOS los tenants (lectura o escritura según rol)
+   - Activar/suspender clínicas
+   - Asignar features manuales
+   - Reembolsos
+
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                ┌──────────────────────────────────┐
+                │      🏥 NIVEL TENANT (clínica)    │
+                │   (uno por cada clínica cliente)  │
+                └──────────────────────────────────┘
+                              │
+   ┌──────────────────────────┼──────────────────────────┐
+   │                          │                          │
+┌──────────┐         ┌──────────────┐         ┌─────────────────┐
+│  OWNER   │         │    ADMIN     │         │ Roles operativos│
+│ (1 por   │         │  (delegado   │         │                 │
+│ clínica) │         │  del owner)  │         │                 │
+└──────────┘         └──────────────┘         └─────────────────┘
+Dueño legal          Administrador          Personal del día a día
+de la clínica        (lo que diga el owner)
+                                                      │
+                          ┌───────────────┬───────────┼───────────┬─────────┐
+                          │               │           │           │         │
+                     ┌─────────┐  ┌──────────┐  ┌──────────┐ ┌────────┐ ┌──────┐
+                     │ MÉDICO  │  │Enfermería│  │Recepción │ │Finanzas│ │ Solo │
+                     │         │  │          │  │          │ │        │ │lectura│
+                     └─────────┘  └──────────┘  └──────────┘ └────────┘ └──────┘
+                     Atiende      Triage,       Agenda y      Cobros,   Auditor
+                     pacientes    signos        cobros        CFDI      externo
+
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                ┌──────────────────────────────────┐
+                │      🧑 NIVEL PACIENTE (global)   │
+                │   No pertenece a ninguna clínica  │
+                └──────────────────────────────────┘
+   Usa Maily te cuida. Se "conecta" a las clínicas del catálogo.
+   Es dueño de su propia cuenta y de su perfil de salud.</pre>
+
+<h3>Matriz de permisos por rol (clínica)</h3>
+<p>Cada acción se asigna a uno o más roles. El Owner siempre puede todo; los demás roles son ajustables por el Owner de cada clínica.</p>
+<table>
+<tr><th>Acción / Permiso</th><th class="center">Owner</th><th class="center">Admin</th><th class="center">Médico</th><th class="center">Enferm.</th><th class="center">Recep.</th><th class="center">Finanzas</th><th class="center">Lectura</th></tr>
+<tr><td>Cambiar plan / suscripción</td><td class="center">✓</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">—</td></tr>
+<tr><td>Invitar / quitar usuarios</td><td class="center">✓</td><td class="center">✓</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">—</td></tr>
+<tr><td>Ver lista de pacientes</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td></tr>
+<tr><td>Ver / editar expediente clínico</td><td class="center">✓</td><td class="center">config.</td><td class="center">✓</td><td class="center">parcial</td><td class="center">—</td><td class="center">—</td><td class="center">✓ ver</td></tr>
+<tr><td>Crear / mover citas</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td><td class="center">—</td><td class="center">✓</td><td class="center">—</td><td class="center">—</td></tr>
+<tr><td>Emitir receta</td><td class="center">—</td><td class="center">—</td><td class="center">✓</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">—</td></tr>
+<tr><td>Ver finanzas / emitir CFDI</td><td class="center">✓</td><td class="center">✓</td><td class="center">—</td><td class="center">—</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓ ver</td></tr>
+<tr><td>Movimientos de inventario</td><td class="center">✓</td><td class="center">✓</td><td class="center">—</td><td class="center">✓</td><td class="center">—</td><td class="center">—</td><td class="center">—</td></tr>
+</table>
+
+<h3>Importante: "rol" y "especialidad" son dos cosas distintas</h3>
+<p>Una persona del personal tiene <strong>dos atributos independientes</strong> que no se deben confundir:</p>
+<ul>
+  <li><strong>Rol</strong> = qué <em>puede hacer</em> en el sistema (sus permisos). Ej: Médico, Enfermería, Recepción.</li>
+  <li><strong>Especialidad</strong> = qué <em>evalúa</em> y qué hoja clínica llena. Ej: Nutrición, Fisioterapia, Medicina Regenerativa.</li>
+</ul>
+<p>Por eso un mismo usuario puede ser, a la vez, <code>Rol: Médico</code> + <code>Especialidad: Nutrición</code>. En una clínica con varias especialidades, cada especialista entra con su propio rol <em>y</em> su propia especialidad:</p>
+<pre class="diagram">Ana López     →  Rol: Médico         +  Especialidad: Nutrición
+Beto Ruiz     →  Rol: Médico         +  Especialidad: Fisioterapia
+Dra. Pérez    →  Rol: Médico/Owner   +  Especialidad: Medicina Regenerativa
+Recep. Sara   →  Rol: Recepción      +  (sin especialidad)</pre>
+<div class="callout info">
+  <b>Por qué se separan</b>
+  Los permisos (rol) cambian poco; las especialidades varían mucho y se cobran como add-on. Mantenerlas separadas permite que una clínica agregue una especialidad nueva sin rehacer todo el esquema de permisos.
+</div>
+</section>
+
+<!-- 7. PACIENTE -->
+<section id="paciente">
+<span class="section-tag">SECCIÓN 7</span>
+<h2>Identidad global del paciente (Master Patient Index)</h2>
+<p>El paciente <strong>no pertenece a una clínica</strong>: es dueño de su cuenta y se "conecta" a las clínicas o especialistas que quiera, siempre del <strong>catálogo de Maily Soft</strong>.</p>
+<pre class="diagram">         NIVEL PLATAFORMA (global)
+   ┌──────────────────────────────────────────────────┐
+   │  👤 PatientAccount  (el ser humano)               │
+   │     • login de Maily te cuida                     │
+   │     • CURP  ← llave natural anti-duplicados       │
+   │     • perfil de salud global (alergias, tipo      │
+   │       de sangre, crónicos) — PROPIEDAD del paciente│
+   │     • puntos de gamificación (globales)           │
+   └───────────────────┬──────────────────────────────┘
+                       │ "se conecta a" (1 a muchas)
+       ┌───────────────┼───────────────┐
+       ▼               ▼               ▼
+   ┌────────┐     ┌────────┐     ┌────────┐   NIVEL TENANT (por clínica)
+   │Clínica │     │Clínica │     │Clínica │
+   │   A    │     │   B    │     │   C    │
+   │(gineco)│     │(nutri) │     │(general│
+   └───┬────┘     └───┬────┘     └───┬────┘
+       │              │              │
+   ClinicPatientLink (uno por clínica a la que se conecta)
+       │              │              │
+   Encounters      Encounters     Encounters
+   (de esa clínica) (de esa)      (de esa)</pre>
+<h4>Las 3 reglas que esto impone</h4>
+<ol>
+  <li><strong>El paciente ve TODO su historial</strong> (de todas las clínicas) en Maily te cuida, porque es dueño de su cuenta.</li>
+  <li><strong>Cada clínica ve SOLO sus propios encounters</strong> por defecto (aislamiento multi-tenant).</li>
+  <li><strong>El paciente puede COMPARTIR</strong> su historial de una clínica con otra mediante un consentimiento explícito (<code>SharingGrant</code>).</li>
+</ol>
+<div class="callout info">
+  <b>CURP = llave anti-duplicados</b>
+  Si una clínica da de alta manualmente a "Juan Pérez" y Juan ya tiene cuenta en Maily te cuida, el sistema los vincula por CURP en vez de crear dos pacientes distintos.
+</div>
+</section>
+
+<!-- 8. ESPECIALIDADES -->
+<section id="especialidades">
+<span class="section-tag">SECCIÓN 8</span>
+<h2>Especialidades: núcleo común + verticales</h2>
+<p>El gran reto: ginecología, nutrición, psicología y fisioterapia capturan datos distintos. La solución <strong>no</strong> es hacer un software por especialidad (duplicaría el 85% común), sino un <strong>núcleo compartido con módulos enchufables</strong>.</p>
+<pre class="diagram">┌──────────────────────────────────────────────────────────┐
+│  IDÉNTICO PARA TODAS LAS ESPECIALIDADES (85-90%)         │
+│  auth · tenancy · billing · agenda · pacientes ·          │
+│  recetas · finanzas · CFDI · WhatsApp · chat · archivos · │
+│  directorio · triage IA · gamificación · reportes         │
+└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  VARÍA POR ESPECIALIDAD (10-15%)                          │
+│  • La hoja de evolución / encounter (qué campos captura)  │
+│  • Plantillas de exploración física                       │
+│  • Catálogos propios (ej. músculos en fisio)              │
+│  • Algunos reportes específicos                           │
+└──────────────────────────────────────────────────────────┘</pre>
+
+<h3>Cómo se guardan los datos de cada especialidad (3 niveles)</h3>
+<pre class="diagram">┌─────────────────────────────────────────────────────────┐
+│ NIVEL 1 — NÚCLEO TIPADO (común a TODA la medicina)       │
+│ Tabla: clinical_encounters                               │
+│   id, tenant_id, patient_id, doctor_id, fecha,           │
+│   motivo_consulta, signos_vitales (TA, FC, temp, peso),  │
+│   diagnostico_cie10, plan, especialidad_id               │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ NIVEL 2 — EXTENSIÓN POR ESPECIALIDAD (JSONB validado)    │
+│ Columna: specialty_data  JSONB                           │
+│   gineco → { fum, gestas, papanicolau, ... }             │
+│   nutri  → { pliegues, masa_grasa, kcal_dia, ... }       │
+│   Validado contra un JSON Schema registrado por          │
+│   especialidad. Postgres lo indexa con GIN.              │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ NIVEL 3 — MÓDULOS DEDICADOS (para las TOP especialidades)│
+│ Las 4-5 especialidades prioritarias tienen su propia     │
+│ Django app con modelos tipados ricos cuando lo amerita   │
+└─────────────────────────────────────────────────────────┘</pre>
+<div class="callout ok">
+  <b>El beneficio comercial</b>
+  Cada especialidad es un <strong>add-on cobrable</strong>. Una clínica solo carga, ve y paga las especialidades que usa. El sistema no se hace pesado para el cliente, aunque por dentro sea una sola base de código.
+</div>
+
+<h3>El "contrato" de especialidad (ejemplo en código)</h3>
+<p>Cada especialidad implementa un mismo contrato. Agregar una nueva especialidad <strong>no requiere tocar el núcleo</strong>.</p>
+<pre class="code"><span class="c"># Medicina General — la del REPOSITORIO, primera (referencia)</span>
+<span class="k">class</span> GeneralMedicinePlugin(SpecialtyPlugin):
+    code = <span class="s">'general_medicine'</span>
+    name = <span class="s">'Medicina General'</span>
+    <span class="k">def</span> encounter_schema(self):
+        <span class="k">return</span> {}   <span class="c"># solo usa el núcleo tipado, sin campos extra</span>
+
+<span class="c"># Nutrición — la SEGUNDA, de prueba</span>
+<span class="k">class</span> NutritionPlugin(SpecialtyPlugin):
+    code = <span class="s">'nutrition'</span>
+    name = <span class="s">'Nutrición'</span>
+    <span class="k">def</span> encounter_schema(self):
+        <span class="k">return</span> {  <span class="c"># JSON Schema → valida datos y genera el formulario solo</span>
+            <span class="s">"type"</span>: <span class="s">"object"</span>,
+            <span class="s">"properties"</span>: {
+                <span class="s">"peso_kg"</span>:           {<span class="s">"type"</span>: <span class="s">"number"</span>},
+                <span class="s">"porcentaje_grasa"</span>:  {<span class="s">"type"</span>: <span class="s">"number"</span>},
+                <span class="s">"masa_muscular_kg"</span>:  {<span class="s">"type"</span>: <span class="s">"number"</span>},
+                <span class="s">"kcal_objetivo"</span>:     {<span class="s">"type"</span>: <span class="s">"integer"</span>},
+                <span class="s">"plan_alimenticio"</span>:  {<span class="s">"type"</span>: <span class="s">"string"</span>},
+            },
+            <span class="s">"required"</span>: [<span class="s">"peso_kg"</span>]
+        }</pre>
+
+<h3>Caso real: varios especialistas evaluando al MISMO paciente en la MISMA clínica</h3>
+<div class="callout warn">
+  <b>Esto es opcional y aditivo — el plan de una sola especialidad sigue igual</b>
+  La mayoría de las clínicas contratan <strong>una sola especialidad</strong> (ej. un consultorio de nutrición o de ginecología) y operan con la hoja simple de esa especialidad: <em>nunca ven el concepto de "Caso"</em>. La colaboración multidisciplinaria que se describe abajo solo se activa cuando una clínica tiene <strong>2 o más especialidades</strong> (cada una contratada como add-on). Es la misma plataforma; solo se "encienden" más especialidades.
+</div>
+<p>Hay clínicas (por ejemplo, de <strong>medicina regenerativa</strong>) donde un mismo paciente es evaluado por <strong>nutrición, fisioterapia y el médico tratante</strong>, y todas esas evaluaciones se juntan para decidir el <strong>protocolo de tratamiento</strong>. Esto pasa <em>dentro de una sola clínica</em> (un solo tenant), con varios especialistas colaborando.</p>
+<p>Tu intuición es correcta: <strong>cada especialista llena su propia "hoja de especialidad"</strong> — que no es más que el formulario que se genera solo desde el JSON Schema de su especialidad. Encima de eso, agregamos una pieza que lo amarra todo: el <strong>"Caso" (o Episodio)</strong>, que agrupa las hojas de todos los especialistas y produce la decisión consensuada.</p>
+<pre class="diagram">🏥 CLÍNICA REGENERATIVA  (1 tenant · varias especialidades activadas)
+│
+└── 🧑 Paciente Juan  (ClinicPatientLink)
+       │
+       └── 📋 CASO: "Lesión de rodilla — terapia regenerativa"
+              coordinador: Dra. Pérez (Medicina Regenerativa)
+              estado: EN EVALUACIÓN → PROTOCOLO DEFINIDO → EN TRATAMIENTO → ALTA
+              │
+              ├── 🥗 Hoja de NUTRICIÓN        → Lic. Ana
+              │      peso, % grasa, marcadores de inflamación,
+              │      plan alimenticio antiinflamatorio...
+              │
+              ├── 🤸 Hoja de FISIOTERAPIA     → Lic. Beto
+              │      rango de movilidad, fuerza, escala de dolor,
+              │      plan de ejercicios...
+              │
+              ├── 🩺 Hoja MÉDICA REGENERATIVA → Dra. Pérez
+              │      diagnóstico, estudios de imagen,
+              │      indicación de terapia celular / PRP...
+              │
+              └── ⭐ PROTOCOLO CONSENSUADO  (junta TODAS las evaluaciones)
+                     "Plan integral: dieta antiinflamatoria + fisio 3x/sem
+                      + 2 sesiones de PRP. Revisión del caso en 6 semanas."</pre>
+<div class="callout ok">
+  <b>Cómo se resuelve, en simple</b>
+  Cada especialista solo llena <strong>su</strong> hoja (la de su especialidad, ni más ni menos). El sistema las junta automáticamente bajo un mismo <strong>Caso</strong> ligado al paciente. El médico coordinador ve todas las hojas en un solo lugar y captura el <strong>protocolo</strong>. Así la decisión multidisciplinaria queda registrada y trazable: se sabe quién evaluó qué y por qué se eligió ese tratamiento.
+</div>
+<table>
+<tr><th>Pieza</th><th>Qué es</th><th>Quién la llena</th></tr>
+<tr><td><b>Caso / Episodio</b></td><td>El "expediente del tratamiento": agrupa todas las evaluaciones de un mismo objetivo clínico.</td><td>Lo abre el médico coordinador (o recepción).</td></tr>
+<tr><td><b>Hoja de especialidad</b></td><td>La evaluación de cada especialista (formulario propio de su especialidad). Técnicamente es un <em>encounter</em> ligado al caso.</td><td>Cada especialista la suya.</td></tr>
+<tr><td><b>Protocolo</b></td><td>La decisión final consensuada a partir de todas las hojas.</td><td>El médico coordinador.</td></tr>
+</table>
+<div class="callout info">
+  <b>Lo mejor: no requiere nada "especial" de programación</b>
+  Esto reusa exactamente lo que ya teníamos (especialidades como plugins + hojas por JSON Schema). Solo agregamos la entidad <strong>Caso</strong> que las agrupa. Sirve igual para una clínica regenerativa, un equipo de rehabilitación, o un comité médico (tumor board en oncología). Es un patrón estándar: <em>atención multidisciplinaria</em>.
+</div>
+</section>
+
+<!-- 9. MONETIZACION -->
+<section id="monetizacion">
+<span class="section-tag">SECCIÓN 9</span>
+<h2>Modelo de negocio (cómo se cobra)</h2>
+<div class="callout info">
+  <b>Modelo de negocio: suscripción ANUAL</b>
+  No hay mensualidad. La clínica contrata por <strong>un año completo</strong> (un solo cobro), precedido de un <strong>periodo de prueba gratis</strong> para que conozca el sistema antes de pagar. Esto da ingresos predecibles, reduce la cancelación mes a mes y mejora el flujo de caja.
+</div>
+<p>El cobro funciona en <strong>3 capas que conviven</strong>: un plan base anual, add-ons opcionales, y un control manual tuyo para casos especiales.</p>
+<pre class="diagram">┌─────────────────────────────────────────────────────────────────┐
+│  CAPA 1: PLAN BASE ANUAL (lo que todos compran)                 │
+│  Starter / Plus / VIP — contrato por 12 meses + prueba gratis   │
+└─────────────────────────────────────────────────────────────────┘
+                              +
+┌─────────────────────────────────────────────────────────────────┐
+│  CAPA 2: ADD-ONS (módulos comprados individualmente)            │
+│  IA Scribe, CFDI, especialidades, WhatsApp extra, usuarios...   │
+└─────────────────────────────────────────────────────────────────┘
+                              +
+┌─────────────────────────────────────────────────────────────────┐
+│  CAPA 3: FEATURE FLAGS MANUALES (control fino del dueño SaaS)   │
+│  Beta privadas, regalos a partners, descuentos por contrato     │
+└─────────────────────────────────────────────────────────────────┘</pre>
+
+<h3>Planes anuales (propuesta)</h3>
+<p>Precios en MXN + IVA, <strong>cobrados una sola vez al año</strong>. El equivalente mensual se muestra solo de referencia (el cliente no paga por mes).</p>
+<table>
+<tr><th>Función</th><th class="center">Starter<br>$6,990/año</th><th class="center">Plus ⭐<br>$13,990/año</th><th class="center">VIP<br>$22,990/año</th></tr>
+<tr><td><em>Equivalente mensual (referencia)</em></td><td class="center"><em>~$582</em></td><td class="center"><em>~$1,166</em></td><td class="center"><em>~$1,916</em></td></tr>
+<tr><td>Usuarios</td><td class="center">1</td><td class="center">3</td><td class="center">10</td></tr>
+<tr><td>Consultorios</td><td class="center">1</td><td class="center">2</td><td class="center">5</td></tr>
+<tr><td>Agenda + Pacientes + Recetas básicas</td><td class="center">✓</td><td class="center">✓</td><td class="center">✓</td></tr>
+<tr><td>Expediente completo + Constancias</td><td class="center">—</td><td class="center">✓</td><td class="center">✓</td></tr>
+<tr><td>WhatsApp recordatorios (cuota mensual)</td><td class="center">100</td><td class="center">500</td><td class="center">2,000</td></tr>
+<tr><td>Telemedicina</td><td class="center">—</td><td class="center">✓</td><td class="center">✓</td></tr>
+<tr><td>Reportes avanzados</td><td class="center">—</td><td class="center">—</td><td class="center">✓</td></tr>
+</table>
+
+<h3>Periodo de prueba — 4 propuestas a elegir</h3>
+<p>Esta es la decisión a tomar: <strong>cómo regalas los primeros meses</strong> para que la clínica entre. Cada propuesta tiene un perfil distinto de adopción vs. margen.</p>
+<table>
+<tr><th>Propuesta</th><th>Cómo funciona</th><th>A favor</th><th>En contra</th></tr>
+<tr><td><b>A · Prueba corta universal</b><br><span class="pill" style="background:var(--primary2);">1 mes gratis</span></td><td>30 días gratis para todos, sin tarjeta. Al terminar, contrato anual.</td><td>Bajo riesgo, fácil de entender, sin fricción para probar.</td><td>1 mes puede no bastar para migrar datos y "enamorarse".</td></tr>
+<tr><td><b>B · Anual con meses bonus</b><br><span class="pill" style="background:var(--ok);">paga 10, usa 12</span></td><td>Paga el año completo y los primeros 2 meses son gratis (12 meses de servicio al precio de 10).</td><td>Empuja el pago anual de entrada; mejor flujo de caja.</td><td>Requiere compromiso de pago desde el inicio.</td></tr>
+<tr><td><b>C · Clínicas fundadoras</b><br><span class="pill" style="background:var(--accent);color:#0F1B2D;">3 meses gratis</span></td><td>Las primeras 20–30 clínicas: 3 meses gratis + <strong>precio congelado de por vida</strong>.</td><td>Acelera adopción inicial, genera testimonios y casos de éxito.</td><td>Sacrificas margen al inicio; precio fijo a largo plazo.</td></tr>
+<tr><td><b>D · Freemium acotado</b><br><span class="pill" style="background:var(--muted);">gratis siempre, limitado</span></td><td>Plan gratis permanente: 1 usuario + agenda + pacientes. Para lo demás, upgrade anual.</td><td>Máxima adopción y viralidad vía pacientes (Maily te cuida).</td><td>Costo de soportar usuarios que tal vez nunca paguen.</td></tr>
+</table>
+<div class="callout ok">
+  <b>Recomendación del arquitecto</b>
+  Combinar <strong>C al lanzamiento</strong> (clínicas fundadoras, para arrancar con tracción y testimonios) y luego operar en estable con <strong>B</strong> (anual con 2 meses bonus). Dejar <strong>A</strong> como opción para quien dude, y evaluar <strong>D</strong> solo si el objetivo es crecer la base de pacientes muy rápido.
+</div>
+
+<h3>Add-ons (propuesta — se compran encima del plan)</h3>
+<table>
+<tr><th>Add-on</th><th>Precio</th><th>Para quién</th></tr>
+<tr><td>🧠 IA Scribe (llena el expediente por voz)</td><td>$299/usuario/mes</td><td>Médicos que quieren documentar más rápido</td></tr>
+<tr><td>🧾 CFDI 4.0 nativo</td><td>$199/mes</td><td>Quien factura formal</td></tr>
+<tr><td>🩺 Especialidad (gineco, nutrición…)</td><td>$XXX/mes</td><td>Clínicas que ofrecen esa especialidad</td></tr>
+<tr><td>📲 WhatsApp extra (cada 1,000)</td><td>$399/mes</td><td>Clínicas con mucho volumen</td></tr>
+<tr><td>👤 Usuario adicional</td><td>$199/mes c/u</td><td>Equipos que crecen</td></tr>
+</table>
+
+<h3>Tu panel de dueño SaaS</h3>
+<pre class="diagram">╔════════════════════════════════════════════════════════════════╗
+║  📊 MÉTRICAS GLOBALES (modelo anual)                           ║
+║  ARR actual:        $5.1M MXN    ↑18% vs año anterior          ║
+║  Contratos activos: 213          (+18 nuevos, -5 no renovaron) ║
+║  Renovación anual:  89%          (objetivo &gt;85%)               ║
+║  Prueba → anual:    42%          (conversión de pruebas)       ║
+║  Ticket promedio:   $27,400 MXN/año                            ║
+╠════════════════════════════════════════════════════════════════╣
+║  💰 INGRESOS POR PLAN (anualizados)                           ║
+║  Starter   ▓▓▓░░░░░░░░░░░░  87 contratos · $608K MXN/año      ║
+║  Plus      ▓▓▓▓▓▓▓▓▓▓░░░░░ 102 contratos · $1.43M MXN/año ⭐  ║
+║  VIP       ▓▓▓▓▓░░░░░░░░░░  24 contratos · $552K MXN/año      ║
+║  Add-ons:  $2.5M MXN/año (43% del ARR)                         ║
+╠════════════════════════════════════════════════════════════════╣
+║  🚨 ALERTAS                                                    ║
+║  • 7 renovaciones vencen este mes (contactar con tiempo)       ║
+║  • 12 pruebas terminan esta semana (campaña de conversión)     ║
+║  • Adopción "IA Scribe" 14% en VIP (esperado 30%)              ║
+╚════════════════════════════════════════════════════════════════╝</pre>
+</section>
+
+<!-- 10. DATOS -->
+<section id="datos">
+<span class="section-tag">SECCIÓN 10</span>
+<h2>Modelo de datos (entidades principales)</h2>
+<p>Estas son las "tablas" clave del sistema, separadas por nivel. Lo global no tiene dueño-clínica; lo tenant sí.</p>
+<pre class="code"><span class="c"># ══════ NIVEL PLATAFORMA — GLOBAL (sin tenant_id) ══════</span>
+
+<span class="k">class</span> PatientAccount:        <span class="c"># el ser humano + login de Maily te cuida</span>
+    curp, first_name, last_name, birth_date, email, phone
+    blood_type, allergies, chronic_conditions   <span class="c"># perfil de salud propio</span>
+    points, level                               <span class="c"># gamificación</span>
+
+<span class="k">class</span> Doctor:                <span class="c"># identidad profesional (multi-clínica)</span>
+    user, cedula, full_name, specialties[], is_in_catalog
+
+<span class="k">class</span> Specialty:             <span class="c"># catálogo: general_medicine, nutrition...</span>
+    code, name, plugin_class, is_billable
+
+<span class="c"># ══════ NIVEL TENANT — POR CLÍNICA (con tenant_id + RLS) ══════</span>
+
+<span class="k">class</span> Clinic:                <span class="c"># = Tenant</span>
+    name, slug, specialties[]
+
+<span class="k">class</span> ClinicPatientLink:     <span class="c"># vincula paciente global ↔ clínica</span>
+    patient, numero_expediente, fecha_alta, origen, estado
+
+<span class="k">class</span> StaffSpecialty:         <span class="c"># qué especialidad(es) ejerce un miembro</span>
+    membership, specialty       <span class="c"># Ana = Médico + Nutrición</span>
+
+<span class="k">class</span> TreatmentCase:          <span class="c"># "Caso/Episodio" multidisciplinario</span>
+    patient_link, titulo        <span class="c"># "Lesión de rodilla — regenerativa"</span>
+    coordinator                 <span class="c"># médico que lidera el caso</span>
+    status                      <span class="c"># evaluacion/protocolo/tratamiento/alta</span>
+    protocolo                   <span class="c"># decisión consensuada (texto/JSON)</span>
+
+<span class="k">class</span> ClinicalEncounter:     <span class="c"># la consulta = "hoja de especialidad"</span>
+    patient_link, doctor, specialty, fecha
+    case                        <span class="c"># ← a qué Caso pertenece (puede ser null)</span>
+    motivo_consulta, signos_vitales, diagnostico_cie10, plan  <span class="c"># núcleo</span>
+    specialty_data  <span class="c"># JSONB validado por especialidad</span>
+
+<span class="c"># ══════ CONTROLADO POR EL PACIENTE ══════</span>
+
+<span class="k">class</span> SharingGrant:          <span class="c"># el paciente comparte historial entre clínicas</span>
+    patient, source_clinic, grant_to_clinic, expires_at, revoked_at</pre>
+</section>
+
+<!-- 11. COMUNICACION -->
+<section id="comunicacion">
+<span class="section-tag">SECCIÓN 11</span>
+<h2>Cómo se comunican backend y frontend</h2>
+<p>Las tres apps hablan con el mismo backend, cada una con su <strong>alcance de permisos</strong>:</p>
+<table>
+<tr><th>App (frontend)</th><th>Quién entra</th><th>Qué puede ver</th></tr>
+<tr><td>Maily Soft (React)</td><td>Doctor / staff</td><td>Solo SU clínica (tenant)</td></tr>
+<tr><td>Maily te cuida (Flutter)</td><td>Paciente</td><td>Solo SUS datos (de todas sus clínicas)</td></tr>
+<tr><td>Panel Plataforma (React)</td><td>Dueño SaaS</td><td>TODA la plataforma</td></tr>
+</table>
+<h4>Truco clave: un solo contrato alimenta a las 3 apps</h4>
+<pre class="diagram">   Django + drf-spectacular
+            │
+            ├─► genera  openapi.yaml  (el "contrato" de la API)
+            │
+   ┌────────┼──────────────────────┐
+   ▼        ▼                       ▼
+ SDK TS    SDK TS                 SDK Dart
+ (Soft)    (Plataforma)           (te cuida)
+   │         │                      │
+   React     React                  Flutter</pre>
+<p>Cambias un campo en el backend → se regeneran los SDKs → las 3 apps se enteran del cambio y dejan de compilar si algo no cuadra. <strong>Imposible que la app del paciente se desincronice del expediente del doctor.</strong></p>
+</section>
+
+<!-- 12. FLUJOS -->
+<section id="flujos">
+<span class="section-tag">SECCIÓN 12</span>
+<h2>Flujos de ejemplo (cómo viajan los datos)</h2>
+
+<h3>Flujo A — El paciente usa el triage con IA y se conecta a una clínica</h3>
+<pre class="diagram">1. Paciente (Flutter): "me duele el bajo vientre, tengo retraso"
+        │ POST /api/v1/triage/analyze
+        ▼
+2. apps/triage  →  Claude clasifica → especialidad = "ginecología"
+        ▼
+3. apps/directory  →  busca (global) doctores con specialty=gineco,
+                      en el catálogo, con cupo en agenda
+        ▼
+4. Respuesta: "Sugerimos Ginecología. Dra. X (Clínica A) tiene
+              cita mañana 10am"   [orientación, NO diagnóstico ⚠]
+        │ paciente acepta
+        ▼
+5. POST /api/v1/me/connect-clinic { clinic_id, doctor_id }
+        ▼
+6. apps/patients  →  crea ClinicPatientLink (vincula por CURP)
+        ▼
+7. apps/agenda  →  crea cita  →  señal "cita.creada"
+        ├─► Celery: WhatsApp de confirmación al paciente
+        └─► WebSocket: notifica a la clínica en Maily Soft</pre>
+
+<h3>Flujo B — El doctor de nutrición registra una consulta</h3>
+<pre class="diagram">1. Doctor (React): abre expediente, pestaña "Nutrición"
+        │ GET /api/v1/specialties/nutrition/schema
+        ▼
+2. Backend devuelve el JSON Schema → React PINTA EL FORMULARIO solo
+   (peso, % grasa, pliegues, kcal objetivo...)
+        │ doctor llena y guarda
+        ▼
+3. POST /api/v1/encounters { specialty: nutrition, signos_vitales,
+                             specialty_data: {peso_kg, grasa, ...} }
+        ▼
+4. apps/clinical  →  valida specialty_data CONTRA el schema de nutrición
+                     →  guarda en clinical_encounters (tenant = Clínica B)
+        ├─► señal "encounter.creado" → bitácora (NOM-024)
+        └─► el paciente lo ve al instante en Maily te cuida</pre>
+
+<h3>Flujo C — El paciente comparte su historial entre clínicas</h3>
+<pre class="diagram">La nutrióloga (Clínica B) quiere ver qué recetó la ginecóloga (Clínica A)
+        ▼
+1. Paciente (Flutter): "Compartir mi historial de Clínica A con Clínica B"
+        │ POST /api/v1/me/sharing-grants { source: A, grant_to: B }
+        ▼
+2. apps/sharing  →  crea SharingGrant
+        ▼
+3. Ahora la nutrióloga ve los encounters de Clínica A SOLO porque
+   existe el permiso. Sin permiso → no los ve.</pre>
+</section>
+
+<!-- 13. ESTRUCTURA -->
+<section id="estructura">
+<span class="section-tag">SECCIÓN 13</span>
+<h2>Estructura del proyecto</h2>
+<p>Un <strong>monorepo</strong> (un solo repositorio de git) con el backend y las apps:</p>
+<pre class="diagram">maily-platform/                          ← monorepo
+│
+├── backend/                             ← Django + DRF (UN backend para todo)
+│   ├── config/                          ← settings, urls, celery, channels
+│   ├── apps/
+│   │   ├── authn/  tenancy/  rbac/         ← IDENTIDAD & ACCESO
+│   │   ├── billing/  platform_metrics/     ← COMERCIAL
+│   │   ├── agenda/  pacientes/  personal/   ← OPERACIÓN CLÍNICA
+│   │   │   consultorio/  inventario/  finanzas/
+│   │   ├── clinical/                        ← REGISTRO CLÍNICO
+│   │   │   ├── encounters/   (núcleo común)
+│   │   │   ├── templates/    (JSON Schemas)
+│   │   │   └── catalog/      (CIE-10, síntomas→especialidad)
+│   │   ├── recetas/  constancias/  archivos_clinicos/
+│   │   ├── specialties/                     ← ESPECIALIDADES (plugins)
+│   │   │   ├── base/             (contrato SpecialtyPlugin)
+│   │   │   ├── general_medicine/ ◄ repo (1ra)
+│   │   │   ├── nutrition/        ◄ 2da
+│   │   │   └── generic/          (motor JSONB para el resto)
+│   │   ├── patient_app/                     ← MAILY TE CUIDA
+│   │   │   ├── chat/  reminders/  gamification/
+│   │   │   └── health_records/  studies/
+│   │   ├── triage/  directory/              ← IA + catálogo de doctores
+│   │   └── core/                            ← BaseModel, tenant, RLS
+│   ├── adapters/    ← whatsapp, email, stripe/mercadopago, cfdi, ai
+│   ├── workers/     ← Celery (recordatorios, triage async, reportes)
+│   └── tests/
+│
+├── web-soft/                            ← React (Vite) — app del doctor
+├── mobile-tecuida/                      ← Flutter — app del paciente
+├── web-platform/                        ← React — panel del dueño SaaS
+│
+├── infra/        docs/        .github/workflows/</pre>
+</section>
+
+<!-- 14. STACK -->
+<section id="stack">
+<span class="section-tag">SECCIÓN 14</span>
+<h2>Stack tecnológico</h2>
+<table>
+<tr><th>Capa</th><th>Tecnología</th><th>Para qué sirve (en simple)</th></tr>
+<tr><td>Backend / API</td><td>Django 5 + Django REST Framework</td><td>El "cerebro" central. Una sola pieza sirve a las 3 apps.</td></tr>
+<tr><td>Web del doctor</td><td>React + Vite + TypeScript</td><td>La pantalla que usa la clínica.</td></tr>
+<tr><td>App del paciente</td><td>Flutter</td><td>La app móvil (ya en construcción).</td></tr>
+<tr><td>Panel SaaS</td><td>React + Vite</td><td>Tu vista de dueño con métricas.</td></tr>
+<tr><td>Base de datos</td><td>PostgreSQL 16</td><td>Donde se guarda todo, con aislamiento por clínica.</td></tr>
+<tr><td>Tareas en segundo plano</td><td>Celery + Redis</td><td>Mandar WhatsApp, generar PDFs, llamar a la IA sin trabar al usuario.</td></tr>
+<tr><td>Tiempo real</td><td>Django Channels (WebSockets)</td><td>Chat y notificaciones al instante.</td></tr>
+<tr><td>Archivos</td><td>Amazon S3 (cifrado)</td><td>Estudios, imágenes, recetas en PDF.</td></tr>
+<tr><td>Pagos</td><td>Stripe + MercadoPago</td><td>Cobrar suscripciones y consultas.</td></tr>
+<tr><td>IA</td><td>Claude (Anthropic)</td><td>Triage de síntomas y resúmenes clínicos.</td></tr>
+<tr><td>Mensajería</td><td>WhatsApp Business API + Email (Resend)</td><td>Recordatorios y comunicación.</td></tr>
+<tr><td>Hosting</td><td>AWS región México (Querétaro)</td><td>Datos en México (cumple NOM-024).</td></tr>
+</table>
+</section>
+
+<!-- 15. GLOSARIO -->
+<section id="glosario">
+<span class="section-tag">SECCIÓN 15</span>
+<h2>Glosario (para entender los términos)</h2>
+<table>
+<tr><th>Término</th><th>Qué significa en simple</th></tr>
+<tr><td><b>SaaS</b></td><td>"Software como Servicio". Vendes el uso del software por suscripción mensual, no una licencia.</td></tr>
+<tr><td><b>Multi-tenant</b></td><td>Muchas clínicas usan el mismo sistema pero cada una está aislada, como departamentos en un edificio.</td></tr>
+<tr><td><b>Tenant</b></td><td>Cada clínica cliente. Su "departamento" privado dentro del sistema.</td></tr>
+<tr><td><b>RLS (Row Level Security)</b></td><td>Candado de la base de datos que garantiza que una clínica solo vea sus propias filas.</td></tr>
+<tr><td><b>Master Patient Index (MPI)</b></td><td>El paciente es una sola identidad global aunque visite varias clínicas.</td></tr>
+<tr><td><b>Backend</b></td><td>El "cerebro" del sistema: lógica y base de datos. No se ve, pero hace todo.</td></tr>
+<tr><td><b>Frontend</b></td><td>Las pantallas que el usuario ve y toca (web o app).</td></tr>
+<tr><td><b>API</b></td><td>El "menú" de funciones que el backend ofrece a las apps para pedir o guardar datos.</td></tr>
+<tr><td><b>Bounded context</b></td><td>Un área de negocio bien delimitada (ej. "finanzas", "agenda") con su propia lógica.</td></tr>
+<tr><td><b>JSONB</b></td><td>Una columna flexible de la base de datos que guarda datos con estructura variable (ideal para especialidades).</td></tr>
+<tr><td><b>Plugin / vertical</b></td><td>Un módulo "enchufable" que agrega una especialidad sin tocar el núcleo.</td></tr>
+<tr><td><b>Add-on</b></td><td>Función extra que se compra encima del plan base.</td></tr>
+<tr><td><b>Feature flag</b></td><td>Un "switch" para encender o apagar una función a clientes específicos.</td></tr>
+<tr><td><b>MRR / ARR</b></td><td>Ingreso recurrente mensual / anual. La métrica más importante de un SaaS.</td></tr>
+<tr><td><b>Churn</b></td><td>Porcentaje de clientes que cancelan. Mientras más bajo, mejor.</td></tr>
+<tr><td><b>Triage</b></td><td>Clasificar al paciente según sus síntomas para mandarlo al especialista correcto.</td></tr>
+<tr><td><b>NOM-024</b></td><td>Norma mexicana que regula el expediente clínico electrónico.</td></tr>
+<tr><td><b>CURP</b></td><td>Clave única de población en México. Sirve para no duplicar pacientes.</td></tr>
+</table>
+</section>
+
+<!-- 16. SIGUIENTES -->
+<section id="siguientes">
+<span class="section-tag">SECCIÓN 16</span>
+<h2>Próximos pasos</h2>
+<div class="cards">
+  <div class="card">
+    <span class="pill" style="background:var(--primary);">PASO 1</span>
+    <h4 style="margin-top:10px;">Modelo de datos completo</h4>
+    <p>Diagrama entidad-relación (ERD) visual + los modelos Django listos para arrancar el desarrollo.</p>
+  </div>
+  <div class="card">
+    <span class="pill" style="background:var(--primary2);">PASO 2</span>
+    <h4 style="margin-top:10px;">Servicio de Triage IA</h4>
+    <p>Diseño detallado: taxonomía síntoma→especialidad, prompt para Claude y manejo legal de "orientación vs diagnóstico".</p>
+  </div>
+  <div class="card">
+    <span class="pill" style="background:var(--ok);">PASO 3</span>
+    <h4 style="margin-top:10px;">Plan de sprints (3 meses)</h4>
+    <p>Qué se construye primero: núcleo + medicina general + identidad global + primera app.</p>
+  </div>
+</div>
+<div class="callout warn" style="margin-top:24px;">
+  <b>Nota legal importante</b>
+  El triage con IA debe presentarse siempre como <strong>orientación, no diagnóstico</strong>, tanto en la interfaz como en el aviso legal, para no entrar en la regulación de dispositivo médico. Además, el manejo de datos clínicos exige cumplir NOM-024 y la Ley de Protección de Datos (LFPDPPP).
+</div>
+</section>
+
+<div class="footer">
+  <strong>Maily Platform — Documento de Arquitectura v0.1</strong> · Borrador de trabajo · 2026<br>
+  Documento confidencial. Refleja las decisiones tomadas hasta el momento y puede evolucionar conforme avance el diseño.
+</div>
+
+</main>
+</div>
+
+<button class="printbtn" onclick="window.print()">📄 Exportar a PDF</button>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily — Cómo funcionará tu sistema</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{--teal:#0F8B8D;--teal-dark:#0F4C5C;--mint:#7FD1C1;--sky:#3FA7D6;--sun:#FFB703;--coral:#FF785A;--ink:#1B2B34;--body:#3D5560;--muted:#7A8C95;--cream:#FBFAF6;--soft:#EAF6F5;}
+.reveal{font-family:'Nunito',sans-serif;font-size:24px;color:var(--body);}
+.reveal .slides{text-align:center;}
+.reveal h1,.reveal h2{font-family:'Poppins',sans-serif;color:var(--ink);font-weight:800;text-transform:none;letter-spacing:0;margin:0 0 12px;}
+.reveal h1{font-size:1.8em;}
+.reveal h2{font-size:1.35em;}
+.reveal p{font-size:.72em;line-height:1.5;color:var(--body);}
+.eyebrow{font-size:.5em;letter-spacing:3px;color:var(--teal);font-weight:700;text-transform:uppercase;margin-bottom:8px;}
+.lead{font-size:.78em;color:var(--muted);max-width:760px;margin:0 auto 18px;}
+.big{font-size:.9em;}
+
+/* badges (emoji as friendly images) */
+.badge{width:118px;height:118px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:54px;margin:0 auto 12px;box-shadow:0 10px 26px rgba(15,76,92,.16);}
+.badge.sm{width:84px;height:84px;font-size:38px;}
+.bg-teal{background:linear-gradient(135deg,#0F8B8D,#0F4C5C);}.bg-mint{background:linear-gradient(135deg,#7FD1C1,#0F8B8D);}.bg-sky{background:linear-gradient(135deg,#3FA7D6,#1C7293);}.bg-sun{background:linear-gradient(135deg,#FFB703,#FB8B24);}.bg-coral{background:linear-gradient(135deg,#FF785A,#E0503B);}
+
+.three{display:flex;gap:30px;justify-content:center;align-items:flex-start;margin-top:18px;}
+.three .col{flex:1;max-width:300px;}
+.three h3{font-family:'Poppins';font-size:.62em;color:var(--ink);font-weight:700;margin-bottom:6px;}
+.three p{font-size:.6em;color:var(--muted);}
+
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:14px;text-align:left;}
+.card{background:#fff;border-radius:18px;padding:20px 22px;box-shadow:0 6px 20px rgba(15,76,92,.08);display:flex;gap:16px;align-items:center;}
+.card .em{font-size:40px;flex-shrink:0;width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:var(--soft);}
+.card h3{font-family:'Poppins';font-size:.6em;color:var(--ink);font-weight:700;margin:0 0 3px;}
+.card p{font-size:.52em;color:var(--muted);margin:0;}
+
+/* day timeline */
+.timeline{display:flex;justify-content:center;gap:6px;align-items:stretch;margin-top:20px;}
+.step{flex:1;max-width:200px;}
+.step .em{font-size:42px;}
+.step .t{font-family:'Poppins';font-size:.5em;font-weight:700;color:var(--ink);margin-top:6px;}
+.step .d{font-size:.42em;color:var(--muted);margin-top:2px;}
+.tarrow{display:flex;align-items:center;color:var(--mint);font-size:1.4em;font-weight:800;}
+
+/* phone */
+.phonecombo{display:flex;gap:40px;align-items:center;justify-content:center;margin-top:10px;}
+.phone{width:230px;background:#1B2B34;border-radius:34px;padding:10px;box-shadow:0 20px 44px rgba(0,0,0,.22);flex-shrink:0;}
+.phone .scr{background:var(--soft);border-radius:26px;overflow:hidden;height:430px;display:flex;flex-direction:column;}
+.phone .ph-top{background:linear-gradient(135deg,#0F8B8D,#0F4C5C);color:#fff;padding:18px 16px 14px;text-align:left;}
+.phone .ph-top .hi{font-size:11px;opacity:.8;}
+.phone .ph-top .nm{font-family:'Poppins';font-size:17px;font-weight:700;}
+.phone .ph-body{padding:12px;text-align:left;overflow:hidden;}
+.ph-card{background:#fff;border-radius:12px;padding:10px 12px;margin-bottom:9px;font-size:12px;color:var(--ink);box-shadow:0 2px 6px rgba(0,0,0,.05);}
+.ph-card b{font-family:'Poppins';}
+.ph-card small{color:var(--muted);}
+.benefit-list{text-align:left;max-width:380px;}
+.benefit-list .bl{display:flex;gap:12px;align-items:center;margin-bottom:14px;font-size:.62em;color:var(--ink);font-weight:600;}
+.benefit-list .bl .e{font-size:28px;width:46px;height:46px;border-radius:12px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+/* connected */
+.conn{display:flex;align-items:center;justify-content:center;gap:24px;margin-top:18px;}
+.conn .side{background:#fff;border-radius:20px;padding:22px;width:300px;box-shadow:0 6px 20px rgba(15,76,92,.1);text-align:center;}
+.conn .side .em{font-size:50px;}
+.conn .side h3{font-family:'Poppins';font-size:.62em;color:var(--ink);margin:6px 0;}
+.conn .side ul{list-style:none;padding:0;margin:0;font-size:.5em;color:var(--muted);text-align:left;}
+.conn .side li{padding:4px 0;}.conn .side li::before{content:"• ";color:var(--teal);font-weight:800;}
+.conn .mid{font-size:50px;color:var(--mint);}
+.analogy{display:inline-block;background:var(--sun);color:#5a3d00;border-radius:30px;padding:8px 20px;font-weight:700;font-size:.58em;font-family:'Poppins';margin-top:6px;}
+
+/* specialty chips */
+.spec{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:18px;}
+.spec .s{background:#fff;border-radius:18px;padding:18px 14px;width:180px;box-shadow:0 6px 18px rgba(15,76,92,.08);}
+.spec .s .em{font-size:42px;}
+.spec .s .t{font-family:'Poppins';font-weight:700;font-size:.56em;color:var(--ink);margin-top:6px;}
+.spec .s .d{font-size:.44em;color:var(--muted);margin-top:3px;}
+
+/* steps to start */
+.startsteps{display:flex;gap:18px;justify-content:center;margin-top:20px;}
+.ss{background:#fff;border-radius:20px;padding:24px 18px;width:250px;box-shadow:0 6px 20px rgba(15,76,92,.1);position:relative;}
+.ss .n{position:absolute;top:-18px;left:50%;transform:translateX(-50%);width:40px;height:40px;border-radius:50%;background:var(--teal);color:#fff;font-family:'Poppins';font-weight:800;display:flex;align-items:center;justify-content:center;font-size:.7em;}
+.ss .em{font-size:40px;margin-top:10px;}
+.ss .t{font-family:'Poppins';font-weight:700;font-size:.56em;color:var(--ink);margin-top:8px;}
+.ss .d{font-size:.46em;color:var(--muted);margin-top:4px;}
+.freebadge{display:inline-block;margin-top:18px;background:var(--mint);color:#0F4C5C;border-radius:30px;padding:9px 22px;font-family:'Poppins';font-weight:800;font-size:.6em;}
+
+/* hero */
+.hero{height:100%;background:linear-gradient(150deg,#0F8B8D 0%,#0F4C5C 100%);color:#fff;border-radius:10px;padding:70px 60px;display:flex;flex-direction:column;justify-content:center;align-items:center;}
+.hero h1{color:#fff;font-size:2.4em;}
+.hero .eyebrow{color:var(--mint);}
+.hero p{color:#d7eeec;font-size:.8em;max-width:680px;}
+.hero .scene{font-size:64px;margin:20px 0;letter-spacing:14px;}
+.hero .tagdoc{margin-top:18px;font-family:'Poppins';font-weight:700;font-size:.7em;color:var(--sun);}
+.reveal .slide-number{font-size:14px;}
+.note{font-size:.5em;color:var(--muted);font-style:italic;margin-top:16px;}
+</style>
+</head>
+<body>
+<div class="reveal"><div class="slides">
+
+<!-- 1 PORTADA -->
+<section data-background-color="#0F4C5C">
+  <div class="hero">
+    <div class="eyebrow">CÓMO FUNCIONARÁ TU SISTEMA</div>
+    <h1>Maily</h1>
+    <div class="scene">👨‍⚕️ 💛 📱</div>
+    <p>El sistema que organiza tu clínica y te mantiene conectado con tus pacientes — sin complicaciones.</p>
+    <div class="tagdoc">Hecho para ti, doctor.</div>
+  </div>
+</section>
+
+<!-- 2 QUE ES -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">EN SIMPLE</div>
+  <h2>¿Qué es Maily?</h2>
+  <p class="lead">Imagina un <b>asistente digital</b> para tu consultorio: organiza tus citas, guarda el historial de cada paciente y los mantiene en contacto contigo. Todo en un solo lugar.</p>
+  <div class="three">
+    <div class="col"><div class="badge bg-teal">🩺</div><h3>Organiza tu clínica</h3><p>Agenda, pacientes y expedientes ordenados.</p></div>
+    <div class="col"><div class="badge bg-sky">📱</div><h3>Conecta a tus pacientes</h3><p>Ellos ven sus citas y recetas en su celular.</p></div>
+    <div class="col"><div class="badge bg-mint">🔒</div><h3>Tu información, segura</h3><p>Protegida, respaldada y solo para ti.</p></div>
+  </div>
+</section>
+
+<!-- 3 UN DIA -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">UN DÍA EN TU CONSULTORIO</div>
+  <h2>Así sería tu día con Maily</h2>
+  <div class="timeline">
+    <div class="step"><div class="em">📅</div><div class="t">Revisas tu agenda</div><div class="d">Ves a quién atiendes hoy.</div></div>
+    <div class="tarrow">→</div>
+    <div class="step"><div class="em">🤝</div><div class="t">Llega tu paciente</div><div class="d">Ya está registrado, sin papeleo.</div></div>
+    <div class="tarrow">→</div>
+    <div class="step"><div class="em">🩺</div><div class="t">Lo atiendes</div><div class="d">Anotas todo en su expediente.</div></div>
+    <div class="tarrow">→</div>
+    <div class="step"><div class="em">💊</div><div class="t">Le das su receta</div><div class="d">Le llega a su celular al instante.</div></div>
+    <div class="tarrow">→</div>
+    <div class="step"><div class="em">😊</div><div class="t">Se va tranquilo</div><div class="d">Con cita, receta y recordatorios.</div></div>
+  </div>
+  <p class="note">Menos papeleo, menos tiempo perdido. Tú te concentras en tu paciente.</p>
+</section>
+
+<!-- 4 PARA EL DOCTOR -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">LO QUE TÚ TIENES</div>
+  <h2>Tu clínica, en orden</h2>
+  <div class="cards">
+    <div class="card"><div class="em">📅</div><div><h3>Tu agenda</h3><p>Todas tus citas en un calendario. Reagenda con un clic, sin empalmes.</p></div></div>
+    <div class="card"><div class="em">📋</div><div><h3>Expediente digital</h3><p>El historial completo de cada paciente, siempre a la mano.</p></div></div>
+    <div class="card"><div class="em">💊</div><div><h3>Recetas digitales</h3><p>Con código de verificación, listas para enviar al paciente.</p></div></div>
+    <div class="card"><div class="em">📊</div><div><h3>Tu clínica en números</h3><p>Cuántos pacientes ves, tus ingresos, todo claro y al día.</p></div></div>
+  </div>
+</section>
+
+<!-- 5 PARA EL PACIENTE -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">LO QUE TU PACIENTE TIENE</div>
+  <h2>Una app para tus pacientes: <span style="color:var(--teal);">Maily te cuida</span></h2>
+  <div class="phonecombo">
+    <div class="phone"><div class="scr">
+      <div class="ph-top"><div class="hi">Hola,</div><div class="nm">Juan 👋</div></div>
+      <div class="ph-body">
+        <div class="ph-card"><b>📅 Tu próxima cita</b><br><small>Mar 26 · 10:00 · contigo</small></div>
+        <div class="ph-card"><b>💊 Recordatorio</b><br><small>Tomar Losartán a las 8:00 ✓</small></div>
+        <div class="ph-card"><b>⭐ Tus premios</b><br><small>1,250 puntos · Nivel 3</small></div>
+      </div>
+    </div></div>
+    <div class="benefit-list">
+      <div class="bl"><span class="e">📅</span> Ve sus citas contigo</div>
+      <div class="bl"><span class="e">💊</span> Sus recetas y recordatorios de medicina</div>
+      <div class="bl"><span class="e">💬</span> Te puede escribir si tiene dudas</div>
+      <div class="bl"><span class="e">🤖</span> Si se siente mal, la app lo orienta a quién acudir</div>
+      <div class="bl"><span class="e">🎁</span> Gana premios por cuidar su salud</div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 CONECTADOS -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">SIEMPRE EN CONTACTO</div>
+  <h2>Tú y tu paciente, conectados</h2>
+  <div class="analogy">📲 Como WhatsApp, pero para la salud</div>
+  <div class="conn">
+    <div class="side"><div class="em">👨‍⚕️</div><h3>Tú le envías</h3><ul><li>Sus citas</li><li>Sus recetas</li><li>Indicaciones</li><li>Resultados</li></ul></div>
+    <div class="mid">⇄</div>
+    <div class="side"><div class="em">🧑</div><h3>Él te comparte</h3><ul><li>Cómo se siente</li><li>Sus síntomas</li><li>Si tomó su medicina</li><li>Sus dudas</li></ul></div>
+  </div>
+  <p class="note">Lo que tú anotas, tu paciente lo ve al instante. Lo que él reporta, te llega a ti.</p>
+</section>
+
+<!-- 7 ESPECIALIDAD -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">A LA MEDIDA DE LO QUE HACES</div>
+  <h2>Se adapta a tu especialidad</h2>
+  <p class="lead">El sistema se acomoda a tu forma de trabajar. Cada especialidad tiene su propia hoja, con justo lo que <b>tú</b> necesitas anotar.</p>
+  <div class="spec">
+    <div class="s"><div class="em">🩺</div><div class="t">Medicina General</div><div class="d">Consulta y signos vitales</div></div>
+    <div class="s"><div class="em">🥗</div><div class="t">Nutrición</div><div class="d">Peso, grasa, plan de comidas</div></div>
+    <div class="s"><div class="em">🤸</div><div class="t">Fisioterapia</div><div class="d">Movilidad, fuerza, ejercicios</div></div>
+    <div class="s"><div class="em">🧠</div><div class="t">Y más…</div><div class="d">Tu especialidad, tu hoja</div></div>
+  </div>
+  <p class="note">Si trabajas con varios especialistas, todos ven al mismo paciente y suman su evaluación.</p>
+</section>
+
+<!-- 8 SEGURIDAD -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">TRANQUILIDAD</div>
+  <h2>La información de tus pacientes, protegida</h2>
+  <div class="cards">
+    <div class="card"><div class="em">🔒</div><div><h3>Privada</h3><p>Solo tú y tu equipo ven la información de tu clínica. Nadie más.</p></div></div>
+    <div class="card"><div class="em">☁️</div><div><h3>Respaldada</h3><p>Todo se guarda seguro en internet. No se pierde, aunque se dañe tu computadora.</p></div></div>
+    <div class="card"><div class="em">🇲🇽</div><div><h3>Cumple la ley</h3><p>Sigue las normas de salud y de protección de datos de México.</p></div></div>
+    <div class="card"><div class="em">📲</div><div><h3>Sin instalar nada</h3><p>Funciona desde tu navegador y tu celular. Entras y listo.</p></div></div>
+  </div>
+</section>
+
+<!-- 9 EMPEZAR -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">EMPEZAR ES FÁCIL</div>
+  <h2>En minutos, tu clínica está lista</h2>
+  <div class="startsteps">
+    <div class="ss"><div class="n">1</div><div class="em">📝</div><div class="t">Eliges tu plan</div><div class="d">Según el tamaño de tu clínica.</div></div>
+    <div class="ss"><div class="n">2</div><div class="em">🤸</div><div class="t">Activamos tu especialidad</div><div class="d">El sistema se acomoda a ti.</div></div>
+    <div class="ss"><div class="n">3</div><div class="em">🚀</div><div class="t">A trabajar</div><div class="d">Listo en minutos, no en semanas.</div></div>
+  </div>
+  <div class="freebadge">🎁 2 meses de prueba gratis</div>
+</section>
+
+<!-- 10 CIERRE -->
+<section data-background-color="#0F4C5C">
+  <div class="hero">
+    <div class="scene">👨‍⚕️ ➕ 💛</div>
+    <h1 style="font-size:1.7em;">Tú dedícate a tus pacientes.</h1>
+    <p style="font-size:.95em;color:#d7eeec;">De la tecnología, nos encargamos nosotros.</p>
+    <div class="tagdoc">Maily · contigo y con tus pacientes</div>
+  </div>
+</section>
+
+</div></div>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>Reveal.initialize({width:1240,height:760,margin:0.04,minScale:0.2,maxScale:1.6,hash:true,slideNumber:'c/t',transition:'slide'});</script>
+</body>
+</html>

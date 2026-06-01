@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily — Cómo funciona tu negocio SaaS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{--teal:#0F8B8D;--teal-dark:#0F4C5C;--mint:#7FD1C1;--sky:#3FA7D6;--sun:#FFB703;--coral:#FF785A;--ink:#1B2B34;--body:#3D5560;--muted:#7A8C95;--cream:#FBFAF6;--soft:#EAF6F5;--gold:#E0A100;}
+.reveal{font-family:'Nunito',sans-serif;font-size:24px;color:var(--body);}
+.reveal .slides{text-align:center;}
+.reveal h1,.reveal h2{font-family:'Poppins',sans-serif;color:var(--ink);font-weight:800;text-transform:none;letter-spacing:0;margin:0 0 12px;}
+.reveal h1{font-size:1.8em;}.reveal h2{font-size:1.3em;}
+.reveal p{font-size:.7em;line-height:1.5;color:var(--body);}
+.eyebrow{font-size:.5em;letter-spacing:3px;color:var(--teal);font-weight:700;text-transform:uppercase;margin-bottom:8px;}
+.lead{font-size:.74em;color:var(--muted);max-width:780px;margin:0 auto 16px;}
+
+.badge{width:108px;height:108px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:50px;margin:0 auto 12px;box-shadow:0 10px 26px rgba(15,76,92,.16);}
+.bg-teal{background:linear-gradient(135deg,#0F8B8D,#0F4C5C);}.bg-mint{background:linear-gradient(135deg,#7FD1C1,#0F8B8D);}.bg-sky{background:linear-gradient(135deg,#3FA7D6,#1C7293);}.bg-sun{background:linear-gradient(135deg,#FFB703,#FB8B24);}.bg-coral{background:linear-gradient(135deg,#FF785A,#E0503B);}
+
+.three{display:flex;gap:26px;justify-content:center;align-items:flex-start;margin-top:14px;}
+.three .col{flex:1;max-width:300px;}
+.three h3{font-family:'Poppins';font-size:.6em;color:var(--ink);font-weight:700;margin-bottom:6px;}
+.three p{font-size:.56em;color:var(--muted);}
+
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:12px;text-align:left;}
+.card{background:#fff;border-radius:16px;padding:18px 20px;box-shadow:0 6px 20px rgba(15,76,92,.08);display:flex;gap:14px;align-items:center;}
+.card .em{font-size:34px;flex-shrink:0;width:58px;height:58px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:var(--soft);}
+.card h3{font-family:'Poppins';font-size:.56em;color:var(--ink);font-weight:700;margin:0 0 3px;}
+.card p{font-size:.5em;color:var(--muted);margin:0;}
+
+/* flow */
+.flow{display:flex;justify-content:center;gap:5px;align-items:stretch;margin-top:16px;}
+.fstep{flex:1;max-width:185px;background:#fff;border-radius:16px;padding:16px 10px;box-shadow:0 5px 16px rgba(15,76,92,.08);position:relative;}
+.fstep .n{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:30px;height:30px;border-radius:50%;background:var(--teal);color:#fff;font-family:'Poppins';font-weight:800;display:flex;align-items:center;justify-content:center;font-size:.5em;}
+.fstep .em{font-size:36px;margin-top:8px;}
+.fstep .t{font-family:'Poppins';font-size:.46em;font-weight:700;color:var(--ink);margin-top:6px;}
+.fstep .d{font-size:.4em;color:var(--muted);margin-top:2px;}
+.farrow{display:flex;align-items:center;color:var(--mint);font-size:1.1em;font-weight:800;}
+.callouts{display:flex;gap:14px;justify-content:center;margin-top:16px;}
+.co{background:var(--soft);border-radius:14px;padding:10px 18px;font-size:.5em;font-weight:700;color:var(--teal-dark);font-family:'Poppins';}
+.co b{color:var(--teal);}
+
+/* platform serves clinics */
+.fan{display:flex;align-items:center;justify-content:center;gap:30px;margin-top:18px;}
+.fan .hub{background:linear-gradient(135deg,#0F8B8D,#0F4C5C);color:#fff;border-radius:20px;padding:24px 26px;font-family:'Poppins';font-weight:700;box-shadow:0 12px 30px rgba(15,76,92,.25);}
+.fan .hub .em{font-size:44px;}
+.fan .hub .t{font-size:.5em;margin-top:6px;}
+.fan .lines{font-size:2em;color:var(--mint);}
+.fan .clinics{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+.clinic{background:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 4px 14px rgba(15,76,92,.08);font-size:.46em;color:var(--ink);font-weight:600;text-align:left;}
+.clinic small{display:block;color:var(--muted);font-weight:400;font-size:.92em;}
+
+/* roles two teams */
+.teams{display:flex;gap:28px;justify-content:center;align-items:stretch;margin-top:16px;}
+.team{flex:1;max-width:490px;background:#fff;border-radius:22px;padding:28px 30px;box-shadow:0 6px 20px rgba(15,76,92,.1);text-align:left;}
+.team.you{border-top:6px solid var(--gold);}
+.team.clinic{border-top:6px solid var(--teal);}
+.team h3{font-family:'Poppins';font-size:.84em;color:var(--ink);margin:0 0 5px;}
+.team .sub{font-size:.58em;color:var(--muted);margin-bottom:18px;}
+.role{display:flex;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid #eef3f2;}
+.role:last-child{border:none;}
+.role .e{font-size:30px;width:54px;height:54px;border-radius:13px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.role .rt{font-family:'Poppins';font-size:.62em;font-weight:700;color:var(--ink);line-height:1.2;}
+.role .rd{font-size:.52em;color:var(--muted);font-weight:400;line-height:1.35;margin-top:3px;}
+
+/* specialties scenarios */
+.scen{display:flex;gap:24px;justify-content:center;margin-top:14px;}
+.scard{flex:1;max-width:420px;background:#fff;border-radius:20px;padding:22px;box-shadow:0 6px 20px rgba(15,76,92,.1);text-align:left;}
+.scard.one{border-top:5px solid var(--sky);}
+.scard.multi{border-top:5px solid var(--coral);}
+.scard .top{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.scard .top .em{font-size:36px;}
+.scard h3{font-family:'Poppins';font-size:.6em;color:var(--ink);margin:0;}
+.scard .ex{font-size:.46em;color:var(--muted);}
+.specrow{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+.schip{background:var(--soft);border-radius:20px;padding:4px 12px;font-size:.44em;font-weight:700;color:var(--teal-dark);font-family:'Poppins';}
+.pricetag{margin-top:8px;font-size:.5em;font-weight:800;color:var(--teal);font-family:'Poppins';}
+.switch-note{background:var(--sun);color:#5a3d00;border-radius:14px;padding:12px 18px;font-size:.5em;font-weight:700;font-family:'Poppins';margin-top:16px;display:inline-block;}
+
+/* money streams */
+.money{display:flex;flex-direction:column;gap:10px;max-width:620px;margin:14px auto 0;}
+.stream{display:flex;align-items:center;gap:14px;background:#fff;border-radius:14px;padding:12px 18px;box-shadow:0 4px 14px rgba(15,76,92,.07);text-align:left;}
+.stream .em{font-size:30px;width:50px;height:50px;border-radius:12px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.stream .txt{flex:1;}
+.stream h3{font-family:'Poppins';font-size:.54em;color:var(--ink);margin:0;}
+.stream p{font-size:.46em;color:var(--muted);margin:0;}
+.stream .amt{font-family:'Poppins';font-weight:800;color:var(--teal);font-size:.55em;}
+
+/* dashboard preview */
+.dash{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px;}
+.dcard{background:#fff;border-radius:16px;padding:18px;box-shadow:0 6px 18px rgba(15,76,92,.08);}
+.dcard .dl{font-size:.46em;color:var(--muted);}
+.dcard .dv{font-family:'Poppins';font-size:1.1em;font-weight:800;color:var(--ink);margin-top:4px;}
+.dcard .dd{font-size:.4em;color:var(--teal);font-weight:700;margin-top:2px;}
+.controls{display:flex;gap:12px;justify-content:center;margin-top:14px;}
+.ctrl{background:var(--soft);border-radius:12px;padding:10px 16px;font-size:.46em;font-weight:700;color:var(--teal-dark);font-family:'Poppins';}
+
+.scalecompare{display:flex;gap:30px;justify-content:center;align-items:center;margin-top:18px;}
+.sc{background:#fff;border-radius:18px;padding:22px 26px;box-shadow:0 6px 20px rgba(15,76,92,.1);}
+.sc .em{font-size:40px;}
+.sc .big{font-family:'Poppins';font-size:1.1em;font-weight:800;color:var(--ink);margin-top:6px;}
+.sc .d{font-size:.46em;color:var(--muted);}
+
+.note{font-size:.5em;color:var(--muted);font-style:italic;margin-top:16px;}
+.hero{height:100%;background:linear-gradient(150deg,#0F8B8D 0%,#0F4C5C 100%);color:#fff;border-radius:10px;padding:70px 60px;display:flex;flex-direction:column;justify-content:center;align-items:center;}
+.hero h1{color:#fff;font-size:2.2em;}.hero .eyebrow{color:var(--mint);}.hero p{color:#d7eeec;font-size:.8em;max-width:700px;}
+.hero .scene{font-size:60px;margin:18px 0;letter-spacing:10px;}
+.hero .tagdoc{margin-top:16px;font-family:'Poppins';font-weight:700;font-size:.66em;color:var(--sun);}
+.reveal .slide-number{font-size:14px;}
+</style>
+</head>
+<body>
+<div class="reveal"><div class="slides">
+
+<!-- 1 PORTADA -->
+<section data-background-color="#0F4C5C">
+  <div class="hero">
+    <div class="eyebrow">TU NEGOCIO SaaS · VISIÓN COMPLETA</div>
+    <h1>Maily Platform</h1>
+    <div class="scene">🏢 → 🏥🏥🏥</div>
+    <p>Cómo funciona tu negocio por dentro: vendes un mismo software a muchas clínicas y cobras año con año.</p>
+    <div class="tagdoc">Para el dueño de la plataforma.</div>
+  </div>
+</section>
+
+<!-- 2 MODELO EN UNA VISTA -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">EL MODELO DE NEGOCIO</div>
+  <h2>Un software. Muchas clínicas. Ingreso cada año.</h2>
+  <p class="lead">Construyes la plataforma <b>una sola vez</b> y la vendes como licencia a muchas clínicas. Cada una paga una <b>suscripción anual</b>, y puedes sumarle extras (especialidades, almacenamiento) que aumentan lo que cobras.</p>
+  <div class="fan">
+    <div class="hub"><div class="em">⚙️</div><div class="t">Maily Platform<br>(tu software)</div></div>
+    <div class="lines">⇒</div>
+    <div class="clinics">
+      <div class="clinic">🏥 Clínica Vitalis<small>Plus · $13,990/año</small></div>
+      <div class="clinic">🏥 Consultorio Dr. G<small>Starter · $6,990/año</small></div>
+      <div class="clinic">🏥 Centro CAMSA<small>VIP · $22,990/año</small></div>
+      <div class="clinic">🏥 Nutrición MX<small>Plus + add-ons</small></div>
+    </div>
+  </div>
+  <p class="note">Tu ingreso crece con cada clínica nueva y con cada extra que activan — sin volver a construir nada.</p>
+</section>
+
+<!-- 3 QUE PASA AL COMPRAR -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">PREGUNTA 1</div>
+  <h2>¿Qué pasa cuando alguien compra una licencia?</h2>
+  <div class="flow">
+    <div class="fstep"><div class="n">1</div><div class="em">🧾</div><div class="t">Elige su plan</div><div class="d">Starter, Plus o VIP (anual).</div></div>
+    <div class="farrow">→</div>
+    <div class="fstep"><div class="n">2</div><div class="em">💳</div><div class="t">Paga / prueba</div><div class="d">Suscripción anual o 2 meses gratis.</div></div>
+    <div class="farrow">→</div>
+    <div class="fstep"><div class="n">3</div><div class="em">🏠</div><div class="t">Se crea su clínica</div><div class="d">Un espacio propio y aislado, automático.</div></div>
+    <div class="farrow">→</div>
+    <div class="fstep"><div class="n">4</div><div class="em">🤸</div><div class="t">Activa su especialidad</div><div class="d">El sistema se acomoda a ella.</div></div>
+    <div class="farrow">→</div>
+    <div class="fstep"><div class="n">5</div><div class="em">🚀</div><div class="t">Opera</div><div class="d">Lista en minutos.</div></div>
+  </div>
+  <div class="callouts">
+    <div class="co">⏱️ En <b>minutos</b>, no semanas</div>
+    <div class="co">💸 Sumar un cliente nuevo <b>casi no te cuesta</b></div>
+    <div class="co">🔁 Todo <b>automático</b>, sin que toques código</div>
+  </div>
+</section>
+
+<!-- 4 QUE RECIBE CADA CLINICA -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">POR DETRÁS DE CADA VENTA</div>
+  <h2>Cada clínica vendida recibe su espacio privado</h2>
+  <p class="lead">Piensa en un <b>edificio de departamentos</b>: todas las clínicas viven en el mismo edificio (tu plataforma), pero cada una tiene su <b>departamento con llave</b>. Nadie entra al de otro.</p>
+  <div class="cards">
+    <div class="card"><div class="em">🔑</div><div><h3>Su propio acceso</h3><p>Usuarios y contraseñas exclusivos de esa clínica.</p></div></div>
+    <div class="card"><div class="em">🗂️</div><div><h3>Sus propios datos</h3><p>Pacientes y expedientes solo visibles para ellos.</p></div></div>
+    <div class="card"><div class="em">👥</div><div><h3>Sus propios roles</h3><p>Dueño, médicos, recepción… los que la clínica necesite.</p></div></div>
+    <div class="card"><div class="em">💳</div><div><h3>Su propia suscripción</h3><p>Su plan, sus extras y su fecha de renovación.</p></div></div>
+  </div>
+  <p class="note">Una clínica jamás ve la información de otra. Esa es la base de un SaaS serio en salud.</p>
+</section>
+
+<!-- 5 ROLES: DOS EQUIPOS -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">PREGUNTA 2 · LOS ROLES</div>
+  <h2>Dos equipos: el tuyo y el de cada clínica</h2>
+  <div class="teams">
+    <div class="team you">
+      <h3>🏢 TU equipo (la plataforma)</h3>
+      <div class="sub">Ven y controlan TODAS las clínicas.</div>
+      <div class="role"><span class="e">👔</span><div><div class="rt">Súper Admin (tú)</div><div class="rd">Ve todo el negocio: ingresos, clínicas, control total.</div></div></div>
+      <div class="role"><span class="e">💼</span><div><div class="rt">Ventas / Éxito</div><div class="rd">Cambian precios y promociones, dan seguimiento a clientes.</div></div></div>
+      <div class="role"><span class="e">⚙️</span><div><div class="rt">Desarrollo</div><div class="rd">Mantienen y mejoran el sistema.</div></div></div>
+    </div>
+    <div class="team clinic">
+      <h3>🏥 Cada clínica vendida</h3>
+      <div class="sub">Solo ven SU propia clínica.</div>
+      <div class="role"><span class="e">👑</span><div><div class="rt">Dueño de la clínica</div><div class="rd">Administra su clínica, invita a su equipo, ve sus finanzas.</div></div></div>
+      <div class="role"><span class="e">🩺</span><div><div class="rt">Médico / Especialista</div><div class="rd">Atiende pacientes y llena expedientes.</div></div></div>
+      <div class="role"><span class="e">📞</span><div><div class="rt">Recepción</div><div class="rd">Agenda citas y registra pacientes.</div></div></div>
+      <div class="role"><span class="e">💰</span><div><div class="rt">Finanzas / Admin</div><div class="rd">Cobros y facturación.</div></div></div>
+    </div>
+  </div>
+  <p class="note">Tú configuras todo "por detrás"; cada clínica solo administra lo suyo.</p>
+</section>
+
+<!-- 6 UNA O VARIAS ESPECIALIDADES -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">PREGUNTA 3 · ESPECIALIDADES</div>
+  <h2>¿Una clínica puede tener varias especialidades?</h2>
+  <p class="lead"><b>Sí — las dos cosas funcionan.</b> Una clínica puede ser de una sola especialidad o de varias. Tú decides qué le activas.</p>
+  <div class="scen">
+    <div class="scard one">
+      <div class="top"><span class="em">🥗</span><div><h3>Clínica de UNA especialidad</h3><div class="ex">Ej. consultorio de nutrición</div></div></div>
+      <div class="specrow"><span class="schip">Nutrición</span></div>
+      <p style="font-size:.5em;color:var(--muted);margin:6px 0;">Solo usa y ve lo de su especialidad. Sencillo y económico.</p>
+      <div class="pricetag">Plan + 1 especialidad</div>
+    </div>
+    <div class="scard multi">
+      <div class="top"><span class="em">🏥</span><div><h3>Clínica de VARIAS especialidades</h3><div class="ex">Ej. clínica regenerativa</div></div></div>
+      <div class="specrow"><span class="schip">Medicina</span><span class="schip">Nutrición</span><span class="schip">Fisioterapia</span></div>
+      <p style="font-size:.5em;color:var(--muted);margin:6px 0;">Varios especialistas atienden al mismo paciente y suman su evaluación.</p>
+      <div class="pricetag">Plan + 3 especialidades = más ingreso 💰</div>
+    </div>
+  </div>
+  <div class="switch-note">🔌 Las especialidades son "interruptores" que enciendes por clínica. Cada una que activas = un cobro extra recurrente para ti.</div>
+</section>
+
+<!-- 7 COMO GANAS DINERO -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">TUS FUENTES DE INGRESO</div>
+  <h2>Cómo ganas dinero</h2>
+  <div class="money">
+    <div class="stream"><span class="em">📅</span><div class="txt"><h3>Suscripción anual (base)</h3><p>Cada clínica paga su plan año con año.</p></div><span class="amt">$6,990 – $22,990</span></div>
+    <div class="stream"><span class="em">🤸</span><div class="txt"><h3>Especialidades (add-ons)</h3><p>Cada especialidad activa suma un cobro recurrente.</p></div><span class="amt">+ $199 – $299/mes</span></div>
+    <div class="stream"><span class="em">🧠</span><div class="txt"><h3>Extras premium</h3><p>IA, almacenamiento, WhatsApp, facturación…</p></div><span class="amt">+ variable</span></div>
+    <div class="stream"><span class="em">📱</span><div class="txt"><h3>Premium del paciente (opcional)</h3><p>Funciones avanzadas en la app del paciente.</p></div><span class="amt">+ extra</span></div>
+  </div>
+  <p class="note">Vendes una vez y cobras cada año. Mientras más especialidades y extras activa una clínica, más ganas — con el mismo software.</p>
+</section>
+
+<!-- 8 PANEL DUENO -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">TU CENTRO DE CONTROL</div>
+  <h2>Todo tu negocio, en un panel</h2>
+  <p class="lead">Como dueño, ves y controlas el negocio completo desde un solo lugar.</p>
+  <div class="dash">
+    <div class="dcard"><div class="dl">💰 Ingreso anual</div><div class="dv">$5.1M</div><div class="dd">▲ 18% vs año pasado</div></div>
+    <div class="dcard"><div class="dl">🏥 Clínicas activas</div><div class="dv">213</div><div class="dd">▲ 18 nuevas este mes</div></div>
+    <div class="dcard"><div class="dl">🔄 Renovación</div><div class="dv">89%</div><div class="dd">de las clínicas renuevan</div></div>
+  </div>
+  <div class="controls">
+    <div class="ctrl">👀 Ver todas las clínicas que compraron</div>
+    <div class="ctrl">💲 Cambiar precios y planes</div>
+    <div class="ctrl">🎁 Crear promociones</div>
+    <div class="ctrl">⏸️ Activar / suspender clínicas</div>
+  </div>
+</section>
+
+<!-- 9 POR QUE ESCALA -->
+<section data-background-color="#FBFAF6">
+  <div class="eyebrow">LO MEJOR DEL MODELO</div>
+  <h2>Crece sin que tu costo se dispare</h2>
+  <div class="scalecompare">
+    <div class="sc"><div class="em">🏥</div><div class="big">10 clínicas</div><div class="d">el mismo sistema</div></div>
+    <div style="font-size:2em;color:var(--mint);font-weight:800;">→</div>
+    <div class="sc"><div class="em">🏥🏥🏥</div><div class="big">1,000 clínicas</div><div class="d">el MISMO sistema</div></div>
+  </div>
+  <p class="lead" style="margin-top:20px;">Es un solo software para todas. Vender a una clínica nueva es "encender un interruptor": <b>tu costo casi no sube, pero tu ingreso sí</b>. Por eso un SaaS es tan rentable.</p>
+</section>
+
+<!-- 10 CIERRE -->
+<section data-background-color="#0F4C5C">
+  <div class="hero">
+    <div class="scene">⚙️ → 💰</div>
+    <h1 style="font-size:1.7em;">Constrúyelo una vez.<br>Véndelo muchas veces.</h1>
+    <p style="font-size:.92em;color:#d7eeec;">Un software, muchas clínicas, ingreso que se repite cada año — y crece con cada especialidad que se activa.</p>
+    <div class="tagdoc">Maily Platform · tu negocio SaaS</div>
+  </div>
+</section>
+
+</div></div>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>Reveal.initialize({width:1240,height:760,margin:0.04,minScale:0.2,maxScale:1.6,hash:true,slideNumber:'c/t',transition:'slide'});</script>
+</body>
+</html>

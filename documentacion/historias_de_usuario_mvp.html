@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily Soft — Historias de Usuario (MVP Clínico)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{--primary:#0F4C5C;--primary2:#1C7293;--light:#5EB1BF;--cream:#F8FAFC;--card:#FFFFFF;--ink:#0F1B2D;--body:#334155;--muted:#64748B;--border:#E2E8F0;--danger:#D7263D;--warn:#F4A261;--ok:#2A9D8F;--accent:#FFB703;--code-bg:#0F1B2D;--code-fg:#E2E8F0;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'Inter',sans-serif;color:var(--body);background:var(--cream);line-height:1.6;font-size:15px;}
+.wrap{display:flex;max-width:1400px;margin:0 auto;}
+nav.toc{position:sticky;top:0;align-self:flex-start;width:280px;height:100vh;overflow-y:auto;background:var(--primary);color:#fff;padding:28px 20px;flex-shrink:0;}
+nav.toc .brand{font-family:'Playfair Display',serif;font-size:20px;font-weight:800;}
+nav.toc .brand small{display:block;font-family:'Inter';font-size:10px;font-weight:400;color:var(--light);letter-spacing:1.3px;margin-top:4px;}
+nav.toc .ver{font-size:11px;color:var(--light);margin:14px 0 18px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.15);}
+nav.toc a{display:block;color:#CBD5E1;text-decoration:none;font-size:12.5px;padding:6px 10px;border-radius:6px;margin-bottom:2px;}
+nav.toc a:hover{background:rgba(255,255,255,.1);color:#fff;}
+nav.toc .step{font-size:10px;color:var(--accent);letter-spacing:1px;margin:14px 0 6px 10px;font-weight:700;}
+main{flex:1;padding:48px 56px;max-width:1080px;}
+h1{font-family:'Playfair Display',serif;font-size:38px;color:var(--ink);font-weight:800;line-height:1.15;margin-bottom:8px;}
+h2{font-family:'Playfair Display',serif;font-size:25px;color:var(--primary);font-weight:700;margin:42px 0 8px;padding-top:10px;}
+h2 .epicid{font-family:'JetBrains Mono';font-size:14px;color:var(--primary2);background:#EEF2F6;padding:3px 9px;border-radius:6px;vertical-align:middle;margin-right:8px;}
+p{margin-bottom:13px;}
+ul{margin:0 0 13px 20px;}li{margin-bottom:5px;}
+strong{color:var(--ink);font-weight:700;}
+code{font-family:'JetBrains Mono',monospace;background:#EEF2F6;color:var(--primary);padding:2px 6px;border-radius:4px;font-size:13px;}
+.hero{background:var(--primary);color:#fff;border-radius:16px;padding:40px;margin-bottom:28px;position:relative;overflow:hidden;}
+.hero::after{content:"";position:absolute;right:-60px;top:-60px;width:230px;height:230px;border-radius:50%;background:rgba(255,183,3,.12);}
+.hero .eyebrow{font-size:12px;letter-spacing:4px;color:var(--light);font-weight:700;margin-bottom:10px;}
+.hero h1{color:#fff;font-size:38px;}
+.hero p{font-size:16px;color:#CBD5E1;margin-top:10px;max-width:700px;}
+.steps{display:flex;gap:10px;margin-top:22px;}
+.steps .s{flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:12px;font-size:12px;}
+.steps .s b{display:block;color:#fff;font-size:13px;margin-bottom:3px;}
+.steps .s.active{background:var(--accent);color:#0F1B2D;border-color:var(--accent);}
+.steps .s.active b{color:#0F1B2D;}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(15,27,45,.06);}
+th{background:var(--primary);color:#fff;text-align:left;padding:10px 12px;font-weight:600;font-size:12px;}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+tr:nth-child(even) td{background:#F8FAFC;}
+.center{text-align:center;}
+.callout{border-radius:10px;padding:15px 18px;margin:16px 0;border-left:5px solid;font-size:13.5px;}
+.callout.info{background:#EFF6FF;border-color:var(--primary2);}.callout.ok{background:#F0FDFA;border-color:var(--ok);}.callout.warn{background:#FFF7ED;border-color:var(--warn);}
+.callout b{display:block;margin-bottom:4px;color:var(--ink);}
+.section-tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:3px;color:var(--primary2);margin-bottom:4px;}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;box-shadow:0 2px 10px rgba(15,27,45,.05);}
+.card .em{font-size:26px;}.card h4{margin:6px 0 3px;color:var(--ink);font-size:14px;}.card p{font-size:11.5px;color:var(--muted);margin:0;}
+.pts{font-family:'JetBrains Mono';font-weight:700;color:var(--primary);text-align:center;}
+.mo{display:inline-block;padding:2px 8px;border-radius:5px;font-size:10.5px;font-weight:700;}
+.must{background:#FEE2E2;color:#991B1B;}.should{background:#FEF9C3;color:#854D0E;}.could{background:#DCFCE7;color:#166534;}
+.crit{font-size:12px;color:var(--body);}
+.footer{margin-top:44px;padding-top:22px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+.printbtn{position:fixed;bottom:24px;right:24px;background:var(--primary);color:#fff;border:none;padding:13px 20px;border-radius:30px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(15,76,92,.35);font-family:'Inter';z-index:99;}
+@media print{nav.toc{display:none;}.printbtn{display:none;}main{padding:0;max-width:100%;}body{font-size:10.5px;}.hero{break-inside:avoid;}h2{break-after:avoid;}table,.callout,.cards{break-inside:avoid;}}
+@media(max-width:900px){.wrap{flex-direction:column;}nav.toc{width:100%;height:auto;position:relative;}main{padding:24px;}.cards{grid-template-columns:repeat(2,1fr);}.steps{flex-direction:column;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <div class="brand">Maily Soft<small>HISTORIAS DE USUARIO · MVP</small></div>
+  <div class="ver">v0.1 · Scrum · 2026</div>
+  <a href="#contexto">1. Contexto del MVP</a>
+  <a href="#personas">2. Personas</a>
+  <a href="#epicas">3. Mapa de épicas</a>
+  <div class="step">BACKLOG POR ÉPICA</div>
+  <a href="#e0">E0 · Fundamentos técnicos</a>
+  <a href="#e1">E1 · Acceso y cuenta</a>
+  <a href="#e2">E2 · Personal y roles</a>
+  <a href="#e3">E3 · Pacientes</a>
+  <a href="#e4">E4 · Agenda</a>
+  <a href="#e5">E5 · Expediente (Med. General)</a>
+  <a href="#e6">E6 · Auditoría y seguridad</a>
+  <div class="step">CIERRE</div>
+  <a href="#resumen">4. Resumen y estimación</a>
+  <a href="#siguiente">5. Siguiente paso</a>
+</nav>
+<main>
+
+<div class="hero">
+  <div class="eyebrow">PASO 1 DE 3 · PLANEACIÓN ÁGIL</div>
+  <h1>Historias de Usuario — MVP Clínico</h1>
+  <p>El backlog del producto mínimo viable de Maily Soft: lo que un médico y su clínica necesitan para operar el día a día. Cada historia está estimada en puntos y priorizada (MoSCoW), lista para repartirse en sprints.</p>
+  <div class="steps">
+    <div class="s active"><b>1 · Historias de usuario</b>Este documento</div>
+    <div class="s"><b>2 · Base de datos</b>Modelo / ERD</div>
+    <div class="s"><b>3 · Sprints</b>Plan Scrum</div>
+  </div>
+</div>
+
+<!-- 1 -->
+<section id="contexto">
+<span class="section-tag">SECCIÓN 1</span>
+<h2>Contexto del MVP</h2>
+<table>
+<tr><th>Parámetro</th><th>Valor</th></tr>
+<tr><td>Producto</td><td>Maily Soft — la app web de la clínica (React + Django/DRF)</td></tr>
+<tr><td>Alcance del MVP</td><td>Auth + multi-tenant + agenda + pacientes + expediente clínico de <strong>Medicina General</strong></td></tr>
+<tr><td>Especialidad inicial</td><td>Medicina General (la del repositorio legacy) — referencia del sistema de especialidades</td></tr>
+<tr><td>Equipo</td><td>2-3 desarrolladores</td></tr>
+<tr><td>Sprint</td><td>2 semanas</td></tr>
+<tr><td>Estrategia</td><td>Vertical slices: cada historia entrega API + UI funcionando de punta a punta</td></tr>
+<tr><td>Fuera de alcance (por ahora)</td><td>Finanzas/CFDI, recetas avanzadas, inventario, telemedicina, app del paciente (Maily te cuida), IA scribe</td></tr>
+</table>
+<div class="callout info">
+  <b>Objetivo del MVP</b>
+  Que una clínica de medicina general pueda <strong>registrar pacientes, agendar citas y documentar consultas</strong> de forma segura y multi-tenant. Es lo mínimo para poner 2-3 clínicas piloto a usarlo de verdad.
+</div>
+</section>
+
+<!-- 2 -->
+<section id="personas">
+<span class="section-tag">SECCIÓN 2</span>
+<h2>Personas (quién usa el sistema)</h2>
+<div class="cards">
+  <div class="card"><div class="em">👑</div><h4>Dueño / Admin</h4><p>Da de alta la clínica, invita al equipo, configura. (Owner / Admin)</p></div>
+  <div class="card"><div class="em">🩺</div><h4>Médico</h4><p>Atiende pacientes, documenta consultas, ve su agenda.</p></div>
+  <div class="card"><div class="em">📞</div><h4>Recepcionista</h4><p>Registra pacientes, agenda y reagenda citas.</p></div>
+  <div class="card"><div class="em">🔧</div><h4>Súper Admin (SaaS)</h4><p>Tú: das de alta clínicas y supervisas la plataforma.</p></div>
+</div>
+</section>
+
+<!-- 3 -->
+<section id="epicas">
+<span class="section-tag">SECCIÓN 3</span>
+<h2>Mapa de épicas</h2>
+<table>
+<tr><th>Épica</th><th>De qué trata</th><th>Historias</th><th>Puntos</th></tr>
+<tr><td><b>E0 · Fundamentos técnicos</b></td><td>Cimientos: scaffolding, multi-tenant, auth base</td><td class="center">3</td><td class="pts">21</td></tr>
+<tr><td><b>E1 · Acceso y cuenta</b></td><td>Registro de clínica, login, recuperación, invitaciones</td><td class="center">4</td><td class="pts">16</td></tr>
+<tr><td><b>E2 · Personal y roles</b></td><td>Gestión de usuarios y permisos por rol</td><td class="center">2</td><td class="pts">8</td></tr>
+<tr><td><b>E3 · Pacientes</b></td><td>Alta, búsqueda, ficha 360, anti-duplicados</td><td class="center">4</td><td class="pts">16</td></tr>
+<tr><td><b>E4 · Agenda</b></td><td>Calendario, crear/mover/cancelar citas</td><td class="center">5</td><td class="pts">20</td></tr>
+<tr><td><b>E5 · Expediente (Med. General)</b></td><td>Historia clínica, evolución, signos, diagnóstico</td><td class="center">5</td><td class="pts">22</td></tr>
+<tr><td><b>E6 · Auditoría y seguridad</b></td><td>Bitácora NOM-024, aislamiento entre clínicas</td><td class="center">2</td><td class="pts">8</td></tr>
+<tr style="font-weight:700;"><td colspan="2">TOTAL MVP</td><td class="center">25</td><td class="pts">111</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted);">Prioridad: <span class="mo must">MUST</span> imprescindible · <span class="mo should">SHOULD</span> importante · <span class="mo could">COULD</span> deseable. Estimación en puntos (Fibonacci: 1, 2, 3, 5, 8, 13).</p>
+</section>
+
+<!-- E0 -->
+<section id="e0">
+<h2><span class="epicid">E0</span>Fundamentos técnicos</h2>
+<p style="font-size:13px;color:var(--muted);">Historias técnicas (enablers) sin las que nada más puede construirse. Se hacen en el Sprint 0/1.</p>
+<table>
+<tr><th style="width:60px;">ID</th><th>Historia</th><th>Criterios de aceptación clave</th><th style="width:45px;">Pts</th><th style="width:70px;">Prior.</th></tr>
+<tr><td>US-0.1</td><td>Como <b>equipo</b>, quiero el <b>scaffolding del proyecto</b> (monorepo Django+DRF + React, settings split, Docker, CI/CD) para empezar a construir sobre una base sólida.</td><td class="crit">Repo monorepo creado · settings dev/prod separados · CI corre lint+mypy+tests · `docker-compose up` levanta el entorno.</td><td class="pts">8</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-0.2</td><td>Como <b>plataforma</b>, quiero un <b>modelo base multi-tenant</b> (TenantAwareModel + RLS) para que cada clínica esté aislada desde el día 1.</td><td class="crit">`TenantAwareModel` con tenant_id/UUID/timestamps · manager filtra por tenant · RLS activo en Postgres · test que prueba que una clínica no ve datos de otra.</td><td class="pts">8</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-0.3</td><td>Como <b>plataforma</b>, quiero <b>autenticación JWT base</b> para emitir y validar tokens de forma segura.</td><td class="crit">Emisión/refresh de JWT · middleware fija el tenant del request · contraseñas hasheadas · endpoints protegidos por defecto.</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+</table>
+</section>
+
+<!-- E1 -->
+<section id="e1">
+<h2><span class="epicid">E1</span>Acceso y cuenta</h2>
+<table>
+<tr><th style="width:60px;">ID</th><th>Historia</th><th>Criterios de aceptación clave</th><th style="width:45px;">Pts</th><th style="width:70px;">Prior.</th></tr>
+<tr><td>US-1.1</td><td>Como <b>dueño de clínica</b>, quiero <b>registrar mi clínica</b> (crear el tenant) para empezar a usar el sistema.</td><td class="crit">Formulario de alta (razón social, datos básicos) · se crea el tenant + el usuario Owner · queda en estado "prueba".</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-1.2</td><td>Como <b>usuario</b>, quiero <b>iniciar sesión</b> de forma segura para acceder a mi clínica.</td><td class="crit">Login con email+contraseña · JWT emitido · bloqueo tras N intentos fallidos · sesión expira.</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-1.3</td><td>Como <b>usuario</b>, quiero <b>recuperar mi contraseña</b> si la olvido.</td><td class="crit">Solicitud por email · enlace con token temporal · cambio de contraseña · invalidación del token al usarse.</td><td class="pts">3</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-1.4</td><td>Como <b>dueño/admin</b>, quiero <b>invitar a mi equipo</b> y asignarle un rol para que trabajen en la clínica.</td><td class="crit">Invitación por email · el invitado fija su contraseña · se le asigna rol (médico/recepción) · queda ligado al tenant.</td><td class="pts">3</td><td><span class="mo must">MUST</span></td></tr>
+</table>
+</section>
+
+<!-- E2 -->
+<section id="e2">
+<h2><span class="epicid">E2</span>Personal y roles</h2>
+<table>
+<tr><th style="width:60px;">ID</th><th>Historia</th><th>Criterios de aceptación clave</th><th style="width:45px;">Pts</th><th style="width:70px;">Prior.</th></tr>
+<tr><td>US-2.1</td><td>Como <b>admin</b>, quiero <b>gestionar a los usuarios</b> de mi clínica (alta, edición de rol, baja) para mantener el equipo al día.</td><td class="crit">Listado de usuarios · cambiar rol · desactivar usuario (no borrar) · no puede dejar la clínica sin Owner.</td><td class="pts">3</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-2.2</td><td>Como <b>clínica</b>, quiero que <b>cada rol vea solo lo que le corresponde</b> para proteger la información.</td><td class="crit">Médico ve expediente; recepción ve agenda y datos de contacto, no clínicos · permisos verificados en API · 403/404 correctos.</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+</table>
+</section>
+
+<!-- E3 -->
+<section id="e3">
+<h2><span class="epicid">E3</span>Pacientes</h2>
+<table>
+<tr><th style="width:60px;">ID</th><th>Historia</th><th>Criterios de aceptación clave</th><th style="width:45px;">Pts</th><th style="width:70px;">Prior.</th></tr>
+<tr><td>US-3.1</td><td>Como <b>recepción/médico</b>, quiero <b>registrar un paciente nuevo</b> con sus datos para abrir su expediente.</td><td class="crit">Datos demográficos + contacto · validaciones (email, teléfono, fecha) · queda ligado al tenant · número de expediente automático.</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-3.2</td><td>Como <b>usuario</b>, quiero <b>buscar pacientes</b> rápido (por nombre, teléfono, expediente) para no perder tiempo.</td><td class="crit">Búsqueda con resultados paginados · filtra solo pacientes de la clínica · respuesta &lt;1s.</td><td class="pts">3</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-3.3</td><td>Como <b>médico</b>, quiero ver la <b>ficha 360 del paciente</b> (datos + resumen clínico) en un solo lugar.</td><td class="crit">Vista con datos, alergias, últimas consultas, próximas citas · acceso registrado en bitácora.</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-3.4</td><td>Como <b>sistema</b>, quiero <b>evitar pacientes duplicados</b> usando CURP para mantener limpio el padrón.</td><td class="crit">Al registrar, si la CURP ya existe en la clínica, avisa y ofrece abrir el existente.</td><td class="pts">3</td><td><span class="mo should">SHOULD</span></td></tr>
+</table>
+</section>
+
+<!-- E4 -->
+<section id="e4">
+<h2><span class="epicid">E4</span>Agenda</h2>
+<table>
+<tr><th style="width:60px;">ID</th><th>Historia</th><th>Criterios de aceptación clave</th><th style="width:45px;">Pts</th><th style="width:70px;">Prior.</th></tr>
+<tr><td>US-4.1</td><td>Como <b>recepción</b>, quiero ver el <b>calendario</b> por médico, día y semana para organizar la operación.</td><td class="crit">Vistas día/semana · filtro por médico/consultorio · solo citas de la clínica.</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-4.2</td><td>Como <b>recepción</b>, quiero <b>crear una cita</b> para un paciente con un médico en un horario.</td><td class="crit">Selección paciente+médico+horario · valida que el horario esté libre (no traslape) · estado "agendada".</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-4.3</td><td>Como <b>recepción</b>, quiero <b>mover/reagendar</b> una cita (arrastrar) para ajustar la agenda fácilmente.</td><td class="crit">Drag &amp; drop o edición · re-valida traslape · conserva historial del cambio.</td><td class="pts">5</td><td><span class="mo should">SHOULD</span></td></tr>
+<tr><td>US-4.4</td><td>Como <b>recepción</b>, quiero <b>cancelar una cita</b> con un motivo para llevar control.</td><td class="crit">Cambia estado a "cancelada" + motivo · queda registrada · libera el horario.</td><td class="pts">3</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-4.5</td><td>Como <b>médico</b>, quiero ver <b>mis citas del día</b> para saber a quién atiendo.</td><td class="crit">Lista del día del médico logueado · acceso directo a la ficha del paciente y a iniciar consulta.</td><td class="pts">2</td><td><span class="mo must">MUST</span></td></tr>
+</table>
+</section>
+
+<!-- E5 -->
+<section id="e5">
+<h2><span class="epicid">E5</span>Expediente clínico — Medicina General</h2>
+<table>
+<tr><th style="width:60px;">ID</th><th>Historia</th><th>Criterios de aceptación clave</th><th style="width:45px;">Pts</th><th style="width:70px;">Prior.</th></tr>
+<tr><td>US-5.1</td><td>Como <b>médico</b>, quiero registrar la <b>historia clínica</b> del paciente (antecedentes) una vez.</td><td class="crit">Antecedentes heredofamiliares, personales, alergias · editable · versión/fecha de actualización.</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-5.2</td><td>Como <b>médico</b>, quiero crear una <b>nota de evolución</b> (SOAP) en cada consulta para documentar la atención.</td><td class="crit">Campos motivo/subjetivo/objetivo/análisis/plan · ligada a la cita y al paciente · se guarda con fecha y autor · inmutable tras cierre.</td><td class="pts">8</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-5.3</td><td>Como <b>médico</b>, quiero registrar <b>signos vitales</b> en la consulta.</td><td class="crit">TA, FC, FR, temp, peso, talla, IMC calculado · validaciones de rango · guardado en la consulta.</td><td class="pts">3</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-5.4</td><td>Como <b>médico</b>, quiero ver el <b>historial de consultas</b> del paciente para dar seguimiento.</td><td class="crit">Lista cronológica de consultas · abrir cada nota · filtros por fecha.</td><td class="pts">3</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-5.5</td><td>Como <b>médico</b>, quiero registrar el <b>diagnóstico con CIE-10</b> para estandarizar.</td><td class="crit">Buscador de catálogo CIE-10 · uno o más diagnósticos por consulta · queda en la nota.</td><td class="pts">3</td><td><span class="mo should">SHOULD</span></td></tr>
+</table>
+</section>
+
+<!-- E6 -->
+<section id="e6">
+<h2><span class="epicid">E6</span>Auditoría y seguridad</h2>
+<table>
+<tr><th style="width:60px;">ID</th><th>Historia</th><th>Criterios de aceptación clave</th><th style="width:45px;">Pts</th><th style="width:70px;">Prior.</th></tr>
+<tr><td>US-6.1</td><td>Como <b>plataforma</b>, quiero una <b>bitácora de auditoría</b> de accesos y cambios a expedientes (NOM-024).</td><td class="crit">Registro inmutable: quién, qué, cuándo, sobre qué paciente · consultable por admin · no almacena datos sensibles del cuerpo.</td><td class="pts">5</td><td><span class="mo must">MUST</span></td></tr>
+<tr><td>US-6.2</td><td>Como <b>dueño SaaS</b>, quiero garantizar que <b>una clínica nunca vea datos de otra</b>.</td><td class="crit">Pruebas automáticas de aislamiento por tenant en cada endpoint · RLS verificado · intento de acceso cruzado da 404.</td><td class="pts">3</td><td><span class="mo must">MUST</span></td></tr>
+</table>
+</section>
+
+<!-- 4 -->
+<section id="resumen">
+<span class="section-tag">SECCIÓN 4</span>
+<h2>Resumen y estimación</h2>
+<div class="cards">
+  <div class="card"><div class="em">📋</div><h4>25 historias</h4><p>7 épicas</p></div>
+  <div class="card"><div class="em">🎯</div><h4>111 puntos</h4><p>esfuerzo total estimado</p></div>
+  <div class="card"><div class="em">⚡</div><h4>~22 pts/sprint</h4><p>velocidad estimada (2-3 devs)</p></div>
+  <div class="card"><div class="em">📅</div><h4>~5-6 sprints</h4><p>≈ 10-12 semanas al MVP</p></div>
+</div>
+<div class="callout warn">
+  <b>Nota sobre la velocidad</b>
+  22 pts/sprint es una <strong>estimación inicial conservadora</strong> para un equipo de 2-3 que apenas arranca (incluye curva de aprendizaje, setup y ceremonias). La velocidad real se calibra después del Sprint 1-2 con datos reales — así funciona Scrum.
+</div>
+<div class="callout info">
+  <b>Cómo leer la prioridad (MoSCoW)</b>
+  Las <span class="mo must">MUST</span> forman el MVP irreductible. Las <span class="mo should">SHOULD</span> (reagendar drag&amp;drop, CIE-10, anti-duplicados) entran si hay holgura; si un sprint se aprieta, son las primeras en moverse al siguiente sin romper el MVP.
+</div>
+</section>
+
+<!-- 5 -->
+<section id="siguiente">
+<span class="section-tag">SECCIÓN 5</span>
+<h2>Siguiente paso</h2>
+<p>Con el backlog definido, seguimos con el <strong>Paso 2: el panorama de la base de datos</strong> — el modelo de datos (entidades, relaciones, ERD) que soporta estas 25 historias. Y de ahí, el <strong>Paso 3: el plan de sprints</strong> que reparte estas historias en los ~5-6 sprints de 2 semanas.</p>
+<div class="callout ok">
+  <b>Antes de avanzar</b>
+  Revisa este backlog: ¿falta alguna historia que consideres imprescindible para el MVP? ¿alguna sobra? ¿cambiarías una prioridad? Ajustamos aquí antes de modelar la base de datos, porque la BD se diseña a partir de estas historias.
+</div>
+</section>
+
+<div class="footer">
+  <strong>Maily Soft — Historias de Usuario (MVP Clínico) v0.1</strong> · Planeación ágil (Scrum) · 2026<br>
+  Documento vivo. Las estimaciones en puntos son relativas y se recalibran con la velocidad real del equipo tras los primeros sprints.
+</div>
+</main>
+</div>
+<button class="printbtn" onclick="window.print()">📄 Exportar a PDF</button>
+</body>
+</html>

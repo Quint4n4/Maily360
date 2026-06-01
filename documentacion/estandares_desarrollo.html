@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily Platform — Estándares de Desarrollo (Django + DRF)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{--primary:#0F4C5C;--primary2:#1C7293;--light:#5EB1BF;--cream:#F8FAFC;--card:#FFFFFF;--ink:#0F1B2D;--body:#334155;--muted:#64748B;--border:#E2E8F0;--danger:#D7263D;--warn:#F4A261;--ok:#2A9D8F;--accent:#FFB703;--code-bg:#0F1B2D;--code-fg:#E2E8F0;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'Inter',sans-serif;color:var(--body);background:var(--cream);line-height:1.65;font-size:15px;}
+.wrap{display:flex;max-width:1400px;margin:0 auto;}
+nav.toc{position:sticky;top:0;align-self:flex-start;width:290px;height:100vh;overflow-y:auto;background:var(--primary);color:#fff;padding:28px 20px;flex-shrink:0;}
+nav.toc .brand{font-family:'Playfair Display',serif;font-size:21px;font-weight:800;margin-bottom:4px;}
+nav.toc .brand small{display:block;font-family:'Inter';font-size:10px;font-weight:400;color:var(--light);letter-spacing:1.5px;margin-top:4px;}
+nav.toc .ver{font-size:11px;color:var(--light);margin:14px 0 20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.15);}
+nav.toc a{display:block;color:#CBD5E1;text-decoration:none;font-size:13px;padding:6px 10px;border-radius:6px;margin-bottom:2px;transition:.15s;}
+nav.toc a:hover{background:rgba(255,255,255,.1);color:#fff;}
+main{flex:1;padding:48px 56px;max-width:1080px;}
+h1{font-family:'Playfair Display',serif;font-size:40px;color:var(--ink);font-weight:800;line-height:1.15;margin-bottom:8px;}
+h2{font-family:'Playfair Display',serif;font-size:27px;color:var(--primary);font-weight:700;margin:46px 0 16px;padding-top:12px;}
+h3{font-size:19px;color:var(--ink);font-weight:700;margin:30px 0 10px;}
+h4{font-size:14px;color:var(--primary2);font-weight:700;margin:20px 0 8px;text-transform:uppercase;letter-spacing:1px;}
+p{margin-bottom:14px;}
+ul,ol{margin:0 0 14px 22px;}
+li{margin-bottom:6px;}
+strong{color:var(--ink);font-weight:700;}
+code{font-family:'JetBrains Mono',monospace;background:#EEF2F6;color:var(--primary);padding:2px 6px;border-radius:4px;font-size:13px;}
+.hero{background:var(--primary);color:#fff;border-radius:16px;padding:44px 40px;margin-bottom:32px;position:relative;overflow:hidden;}
+.hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,183,3,.12);}
+.hero .eyebrow{font-size:12px;letter-spacing:4px;color:var(--light);font-weight:700;margin-bottom:10px;}
+.hero h1{color:#fff;font-size:42px;}
+.hero p{font-size:17px;color:#CBD5E1;margin-top:10px;max-width:700px;}
+pre.diagram{background:var(--code-bg);color:var(--code-fg);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.45;padding:22px 24px;border-radius:12px;overflow-x:auto;margin:18px 0;border:1px solid #1e2d44;box-shadow:0 6px 24px rgba(15,27,45,.12);}
+pre.code{background:var(--code-bg);color:#cbd5e1;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.55;padding:20px 22px;border-radius:12px;overflow-x:auto;margin:16px 0;}
+pre.code .k{color:#7dd3fc;}pre.code .s{color:#fcd34d;}pre.code .c{color:#64748b;font-style:italic;}pre.code .r{color:#fb7185;}pre.code .g{color:#86efac;}
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:13.5px;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(15,27,45,.06);}
+th{background:var(--primary);color:#fff;text-align:left;padding:11px 14px;font-weight:600;font-size:13px;}
+td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+tr:nth-child(even) td{background:#F8FAFC;}
+.center{text-align:center;}
+.callout{border-radius:10px;padding:16px 20px;margin:18px 0;border-left:5px solid;font-size:14px;}
+.callout.info{background:#EFF6FF;border-color:var(--primary2);}
+.callout.warn{background:#FFF7ED;border-color:var(--warn);}
+.callout.danger{background:#FEF2F2;border-color:var(--danger);}
+.callout.ok{background:#F0FDFA;border-color:var(--ok);}
+.callout b{display:block;margin-bottom:4px;color:var(--ink);}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0;}
+.cards.two{grid-template-columns:repeat(2,1fr);}
+.cards.four{grid-template-columns:repeat(4,1fr);}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:0 2px 10px rgba(15,27,45,.05);}
+.card .ic{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px;color:#fff;}
+.card h4{margin:0 0 6px;color:var(--ink);text-transform:none;letter-spacing:0;font-size:15px;}
+.card p{font-size:13px;color:var(--muted);margin:0;}
+.pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.5px;}
+.section-tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:3px;color:var(--primary2);margin-bottom:4px;}
+.footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+.footer a{color:var(--primary2);}
+.printbtn{position:fixed;bottom:24px;right:24px;background:var(--primary);color:#fff;border:none;padding:13px 20px;border-radius:30px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(15,76,92,.35);font-family:'Inter';z-index:99;}
+.printbtn:hover{background:var(--primary2);}
+.bad{color:var(--danger);font-weight:700;} .good{color:var(--ok);font-weight:700;}
+@media print{nav.toc{display:none;}.printbtn{display:none;}main{padding:0;max-width:100%;}body{font-size:11px;}pre.diagram,pre.code{font-size:9px;box-shadow:none;}.hero{break-inside:avoid;}h2{break-after:avoid;}table,pre,.callout,.cards{break-inside:avoid;}}
+@media(max-width:900px){.wrap{flex-direction:column;}nav.toc{width:100%;height:auto;position:relative;}main{padding:24px;}.cards,.cards.two,.cards.four{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <div class="brand">Maily Platform<small>ESTÁNDARES DE DESARROLLO</small></div>
+  <div class="ver">v0.1 · Django + DRF + Python · 2026</div>
+  <a href="#filosofia">1. Filosofía y principios</a>
+  <a href="#arquitectura">2. Arquitectura de capas</a>
+  <a href="#estructura">3. Estructura de carpetas</a>
+  <a href="#convenciones">4. Convenciones de código</a>
+  <a href="#tipado">5. Tipado obligatorio</a>
+  <a href="#drf">6. Reglas de DRF</a>
+  <a href="#secretos">7. Secretos y configuración</a>
+  <a href="#seguridad">8. Seguridad (OWASP)</a>
+  <a href="#testing">9. Testing profesional</a>
+  <a href="#git">10. Git y CI/CD</a>
+  <a href="#dod">11. Definition of Done</a>
+  <a href="#herramientas">12. Herramientas: skill + agentes</a>
+</nav>
+<main>
+
+<div class="hero">
+  <div class="eyebrow">EL MODELO DE PROGRAMACIÓN QUE TODOS SEGUIMOS</div>
+  <h1>Estándares de Desarrollo</h1>
+  <p>Las reglas obligatorias para escribir código en Maily Platform con Django REST Framework y Python: arquitectura limpia, tipado fuerte, cero secretos en el código, seguridad y pruebas profesionales. Aplica al equipo interno y a cualquier desarrollador o cliente que extienda la plataforma.</p>
+</div>
+
+<!-- 1 -->
+<section id="filosofia">
+<span class="section-tag">SECCIÓN 1</span>
+<h2>Filosofía y principios</h2>
+<p>Escribimos código pensando en quien lo mantendrá dentro de 2 años (que probablemente no seremos nosotros). Estos son los principios no negociables:</p>
+<div class="cards">
+  <div class="card"><div class="ic" style="background:var(--danger);">🔑</div><h4>Cero secretos en el código</h4><p>Ninguna contraseña, llave o token vive en el código ni en git. Todo en variables de entorno o gestor de secretos.</p></div>
+  <div class="card"><div class="ic" style="background:var(--primary2);">🏷️</div><h4>Todo tipado</h4><p>Type hints obligatorios en funciones. mypy en CI. Nada de tipos "any" que se rompen después.</p></div>
+  <div class="card"><div class="ic" style="background:var(--ok);">🧱</div><h4>Capas separadas</h4><p>Cada cosa en su lugar: modelos, servicios, serializers, vistas. Vistas delgadas, lógica en servicios.</p></div>
+  <div class="card"><div class="ic" style="background:var(--primary);">✅</div><h4>Probado o no existe</h4><p>Toda lógica de negocio tiene pruebas. Sin tests, el PR no se aprueba.</p></div>
+  <div class="card"><div class="ic" style="background:var(--warn);">📏</div><h4>Formato automático</h4><p>Black + Ruff formatean e inspeccionan. No discutimos estilo: lo hace la máquina.</p></div>
+  <div class="card"><div class="ic" style="background:var(--accent);color:#0F1B2D;">📖</div><h4>Explícito > implícito</h4><p>Nombres claros, funciones cortas, una responsabilidad cada una. Si necesita comentario para entenderse, se reescribe.</p></div>
+</div>
+<div class="callout danger">
+  <b>Las 3 reglas que nunca se rompen</b>
+  1. <strong>Jamás</strong> un secreto en el código o en git. &nbsp; 2. <strong>Jamás</strong> SQL armado a mano con datos del usuario (siempre el ORM). &nbsp; 3. <strong>Jamás</strong> lógica de negocio dentro de una vista o un serializer.
+</div>
+</section>
+
+<!-- 2 -->
+<section id="arquitectura">
+<span class="section-tag">SECCIÓN 2</span>
+<h2>Arquitectura de capas</h2>
+<p>Seguimos una arquitectura de capas inspirada en el <em>Django Styleguide</em> de HackSoft (el estándar de oro en la comunidad). Cada capa tiene un único trabajo y solo puede hablar con la capa de abajo:</p>
+<pre class="diagram">  PETICIÓN HTTP
+       │
+       ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │ URLs        →  ruteo (qué endpoint llama a qué vista)         │
+  ├─────────────────────────────────────────────────────────────┤
+  │ VIEWS       →  DELGADAS. Reciben request, llaman al servicio  │
+  │ (DRF)          o selector, devuelven respuesta. SIN lógica.   │
+  ├─────────────────────────────────────────────────────────────┤
+  │ SERIALIZERS →  validan ENTRADA y dan forma a la SALIDA.       │
+  │                NO contienen lógica de negocio.                │
+  ├─────────────────────────────────────────────────────────────┤
+  │ SERVICES    →  ESCRIBEN. Toda la lógica de negocio (casos de  │
+  │                uso): crear cita, registrar consulta, cobrar.  │
+  │ SELECTORS   →  LEEN. Consultas complejas (queries) a la BD.   │
+  ├─────────────────────────────────────────────────────────────┤
+  │ MODELS      →  datos + validación propia (clean). Managers    │
+  │                para queries reutilizables. SIN casos de uso.  │
+  └─────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  PostgreSQL</pre>
+<table>
+<tr><th>Capa</th><th>SÍ hace</th><th>NO hace</th></tr>
+<tr><td><b>View / ViewSet</b></td><td>Parsear request, llamar a 1 servicio/selector, devolver respuesta y código HTTP</td><td><span class="bad">No</span> consultas a BD, <span class="bad">no</span> reglas de negocio, <span class="bad">no</span> cálculos</td></tr>
+<tr><td><b>Serializer</b></td><td>Validar formato de entrada, dar forma a la salida (JSON)</td><td><span class="bad">No</span> guardar en BD, <span class="bad">no</span> lógica de negocio, <span class="bad">no</span> efectos secundarios</td></tr>
+<tr><td><b>Service</b></td><td>Casos de uso que <em>modifican</em> datos: crear, actualizar, procesos</td><td><span class="bad">No</span> tocar el request HTTP, <span class="bad">no</span> serializar</td></tr>
+<tr><td><b>Selector</b></td><td>Consultas de <em>lectura</em> complejas, con filtros y permisos</td><td><span class="bad">No</span> modificar datos</td></tr>
+<tr><td><b>Model</b></td><td>Definir datos, validación propia (<code>clean()</code>), propiedades simples</td><td><span class="bad">No</span> casos de uso completos, <span class="bad">no</span> llamadas a servicios externos</td></tr>
+</table>
+<h3>Ejemplo: crear una cita (el flujo correcto)</h3>
+<pre class="code"><span class="c"># views.py — DELGADA</span>
+<span class="k">class</span> <span class="g">AppointmentCreateApi</span>(APIView):
+    <span class="k">class</span> <span class="g">InputSerializer</span>(serializers.Serializer):
+        patient_id = serializers.UUIDField()
+        starts_at  = serializers.DateTimeField()
+
+    <span class="k">def</span> post(self, request) -> Response:
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=<span class="k">True</span>)
+        appointment = appointment_create(            <span class="c"># ← delega al servicio</span>
+            tenant=request.tenant, user=request.user, **s.validated_data
+        )
+        <span class="k">return</span> Response(AppointmentSerializer(appointment).data, status=201)
+
+<span class="c"># services.py — la lógica vive aquí</span>
+<span class="k">def</span> appointment_create(*, tenant: Clinic, user: User,
+                       patient_id: UUID, starts_at: datetime) -> Appointment:
+    patient = patient_get(patient_id=patient_id)        <span class="c"># selector</span>
+    <span class="k">if</span> _slot_taken(tenant, starts_at):
+        <span class="k">raise</span> ValidationError(<span class="s">"Ese horario ya está ocupado"</span>)
+    appointment = Appointment.objects.create(
+        tenant=tenant, patient=patient, starts_at=starts_at, created_by=user,
+    )
+    appointment_created.send(sender=Appointment, appointment=appointment)  <span class="c"># señal</span>
+    <span class="k">return</span> appointment</pre>
+</section>
+
+<!-- 3 -->
+<section id="estructura">
+<span class="section-tag">SECCIÓN 3</span>
+<h2>Estructura de carpetas</h2>
+<p>Settings separados por ambiente, apps por dominio de negocio (no por tabla), cada app autocontenida y "enchufable".</p>
+<pre class="diagram">backend/
+├── pyproject.toml          ← deps (Poetry) + config de black, ruff, mypy, pytest
+├── manage.py
+├── .env.example            ← plantilla de variables (SIN valores reales)
+│
+├── config/                 ← el "proyecto" Django
+│   ├── settings/
+│   │   ├── base.py         ← común
+│   │   ├── dev.py          ← desarrollo
+│   │   ├── staging.py
+│   │   └── prod.py         ← producción (DEBUG=False)
+│   ├── urls.py
+│   ├── celery.py
+│   └── asgi.py / wsgi.py
+│
+├── apps/                   ← una carpeta por DOMINIO de negocio
+│   ├── core/               ← BaseModel, mixins, multi-tenant, utilidades
+│   ├── authn/
+│   ├── agenda/
+│   │   ├── models.py       ← datos + managers
+│   │   ├── selectors.py    ← lecturas (queries)
+│   │   ├── services.py     ← escrituras (casos de uso)
+│   │   ├── serializers.py  ← entrada/salida JSON
+│   │   ├── views.py        ← endpoints DRF (delgados)
+│   │   ├── urls.py
+│   │   ├── permissions.py
+│   │   ├── signals.py
+│   │   ├── tasks.py        ← Celery
+│   │   └── tests/
+│   │       ├── test_services.py
+│   │       ├── test_selectors.py
+│   │       └── test_apis.py
+│   └── ...
+│
+├── adapters/               ← integraciones externas (whatsapp, stripe, ai...)
+└── tests/                  ← fixtures y configuración global de pytest</pre>
+<div class="callout info">
+  <b>Regla de apps</b>
+  Cada app = un dominio (agenda, pacientes, finanzas), <strong>no</strong> una tabla. Una app debe poder explicarse en una frase ("maneja todo lo de la agenda"). Si no, está mal dividida.
+</div>
+</section>
+
+<!-- 4 -->
+<section id="convenciones">
+<span class="section-tag">SECCIÓN 4</span>
+<h2>Convenciones de código</h2>
+<table>
+<tr><th>Tema</th><th>Regla</th></tr>
+<tr><td>Formateo</td><td><b>Black</b> (formato automático) + <b>Ruff</b> (linter rápido). Corren en pre-commit y CI. No se discute estilo.</td></tr>
+<tr><td>Imports</td><td>Ordenados por Ruff/isort: stdlib → terceros → locales. Sin imports sin usar.</td></tr>
+<tr><td>Nombres</td><td>Variables y funciones en <code>snake_case</code>; clases en <code>PascalCase</code>; constantes en <code>MAYÚSCULAS</code>. En inglés, descriptivos.</td></tr>
+<tr><td>Servicios</td><td>Funciones nombradas como acción: <code>appointment_create</code>, <code>patient_update</code>. Argumentos por nombre (keyword-only con <code>*</code>).</td></tr>
+<tr><td>Funciones</td><td>Cortas y con una responsabilidad. Si pasa de ~40 líneas o tiene varios niveles de anidación, se parte.</td></tr>
+<tr><td>Docstrings</td><td>En servicios y funciones públicas no triviales: qué hace, qué recibe, qué devuelve, qué excepciones lanza.</td></tr>
+<tr><td>Comentarios</td><td>Explican el <em>porqué</em>, no el <em>qué</em>. Si el código necesita un comentario para entender qué hace, se reescribe.</td></tr>
+<tr><td>Errores</td><td>Excepciones específicas (<code>ValidationError</code>, <code>PermissionDenied</code>), nunca <code>except:</code> a secas.</td></tr>
+</table>
+</section>
+
+<!-- 5 -->
+<section id="tipado">
+<span class="section-tag">SECCIÓN 5</span>
+<h2>Tipado obligatorio</h2>
+<p>Esto resuelve tu preocupación de "tipado feo que se rompe después". Reglas:</p>
+<ul>
+  <li><strong>Type hints obligatorios en TODA firma de función</strong> (argumentos y retorno). Los locales se infieren, no se anotan salvo que sea ambiguo.</li>
+  <li><strong>django-stubs + mypy</strong> con plugin de Django, corriendo en CI. Un PR con errores de tipo no se mergea.</li>
+  <li>Activamos los checks valiosos sin volver loco al equipo: <code>disallow_untyped_defs</code>, <code>disallow_any_generics</code>, <code>warn_return_any</code>, <code>warn_unused_ignores</code>.</li>
+  <li>Prohibido <code>Any</code> "por flojera". Si de verdad se necesita, se justifica en el PR.</li>
+</ul>
+<pre class="code"><span class="c"># ❌ MAL — sin tipos, devuelve cualquier cosa</span>
+<span class="k">def</span> get_patient(id):
+    <span class="k">return</span> Patient.objects.get(pk=id)
+
+<span class="c"># ✅ BIEN — tipado explícito y claro</span>
+<span class="k">def</span> patient_get(*, patient_id: UUID) -> Patient:
+    <span class="k">return</span> Patient.objects.get(id=patient_id)
+
+<span class="c"># pyproject.toml — config de mypy</span>
+[tool.mypy]
+plugins = [<span class="s">"mypy_django_plugin.main"</span>]
+disallow_untyped_defs = <span class="k">true</span>
+disallow_any_generics = <span class="k">true</span>
+warn_return_any = <span class="k">true</span>
+warn_unused_ignores = <span class="k">true</span></pre>
+</section>
+
+<!-- 6 -->
+<section id="drf">
+<span class="section-tag">SECCIÓN 6</span>
+<h2>Reglas de Django REST Framework</h2>
+<table>
+<tr><th>Tema</th><th>Regla</th></tr>
+<tr><td>Serializers de entrada y salida separados</td><td>Un <code>InputSerializer</code> para validar lo que llega y otro <code>OutputSerializer</code> para dar forma a lo que sale. No reusar el mismo para todo.</td></tr>
+<tr><td>Serializers delgados</td><td>Solo validan y dan forma. <span class="bad">Nada</span> de <code>create()</code>/<code>update()</code> con lógica de negocio — eso va a servicios.</td></tr>
+<tr><td>Campos mínimos</td><td>Incluir solo los campos necesarios en la salida (payloads ligeros, mejor para móvil).</td></tr>
+<tr><td>Autenticación</td><td><b>JWT</b> con <code>djangorestframework-simplejwt</code>. Stateless, escala horizontal.</td></tr>
+<tr><td>Permisos</td><td>Clases de permiso por endpoint. Multi-tenant + rol. <strong>Devolver 404 (no 403)</strong> cuando el recurso existe pero no es del usuario (no revelar su existencia).</td></tr>
+<tr><td>Consultas eficientes</td><td><code>select_related</code> / <code>prefetch_related</code> siempre que haya relaciones. Cero queries N+1.</td></tr>
+<tr><td>Paginación</td><td>Obligatoria en todo listado. Nunca devolver "todo".</td></tr>
+<tr><td>Throttling</td><td>Límite de peticiones por usuario/IP para proteger la API.</td></tr>
+<tr><td>Versionado</td><td>Rutas con versión: <code>/api/v1/...</code>. Romper compatibilidad = nueva versión.</td></tr>
+<tr><td>Documentación</td><td><code>drf-spectacular</code> genera el OpenAPI automático (del que salen los SDK de React y Flutter).</td></tr>
+</table>
+</section>
+
+<!-- 7 -->
+<section id="secretos">
+<span class="section-tag">SECCIÓN 7</span>
+<h2>Secretos y configuración</h2>
+<p>Esta sección resuelve directamente tu requisito de "nada hardcodeado". Es la regla #1.</p>
+<pre class="code"><span class="c"># ❌ PROHIBIDO — el error del sistema legacy</span>
+SECRET_KEY = <span class="r">"m@1LYmx2o2oo6o1"</span>
+DATABASES = {<span class="s">"default"</span>: {<span class="s">"PASSWORD"</span>: <span class="r">"clave123"</span>}}
+
+<span class="c"># ✅ CORRECTO — leído del entorno, nunca en git</span>
+<span class="k">import</span> environ
+env = environ.Env()
+SECRET_KEY = env(<span class="s">"DJANGO_SECRET_KEY"</span>)          <span class="c"># 50+ caracteres aleatorios</span>
+DATABASES = {<span class="s">"default"</span>: env.db(<span class="s">"DATABASE_URL"</span>)}
+DEBUG = env.bool(<span class="s">"DJANGO_DEBUG"</span>, default=<span class="k">False</span>)</pre>
+<table>
+<tr><th>Regla</th><th>Detalle</th></tr>
+<tr><td>Nada de secretos en código ni en git</td><td>Ni en repos privados. Si un secreto se filtra, se rota de inmediato.</td></tr>
+<tr><td>Variables de entorno</td><td>Con <code>django-environ</code>. En local: archivo <code>.env</code> (ignorado por git). Se versiona solo <code>.env.example</code> con nombres, sin valores.</td></tr>
+<tr><td>Gestor de secretos en producción</td><td>AWS Secrets Manager (o Vault). Rotación automática, auditoría y acceso controlado.</td></tr>
+<tr><td>SECRET_KEY</td><td>Mínimo 50 caracteres aleatorios, generado con <code>get_random_secret_key()</code>.</td></tr>
+<tr><td>git-secrets / pre-commit</td><td>Hook que <strong>bloquea el commit</strong> si detecta algo que parezca una credencial.</td></tr>
+</table>
+</section>
+
+<!-- 8 -->
+<section id="seguridad">
+<span class="section-tag">SECCIÓN 8</span>
+<h2>Seguridad (checklist OWASP)</h2>
+<p>Basado en el OWASP Django Security Cheat Sheet. Es obligatorio antes de cualquier despliegue a producción:</p>
+<table>
+<tr><th>Control</th><th>Regla</th></tr>
+<tr><td><code>DEBUG = False</code> en producción</td><td>No negociable. En debug se filtran trazas y datos sensibles.</td></tr>
+<tr><td><code>ALLOWED_HOSTS</code> explícito</td><td>Solo los dominios reales, para evitar ataques de Host header.</td></tr>
+<tr><td>HTTPS + HSTS</td><td><code>SECURE_HSTS_SECONDS &gt; 0</code>, cookies <code>Secure</code> + <code>HttpOnly</code> + <code>SameSite</code>.</td></tr>
+<tr><td>SQL: siempre el ORM</td><td>Nunca concatenar datos del usuario en SQL. (Lo que rompió al legacy.)</td></tr>
+<tr><td>Contraseñas hasheadas</td><td>El hasher de Django (Argon2/PBKDF2). <span class="bad">Jamás</span> cifrado reversible.</td></tr>
+<tr><td>Multi-tenant + RLS</td><td>Cada query filtra por tenant; doble barrera con Row Level Security en Postgres.</td></tr>
+<tr><td>Bitácora de auditoría</td><td>Registro inmutable de accesos y cambios a expedientes (NOM-024).</td></tr>
+<tr><td>Permisos por defecto: denegar</td><td><code>DEFAULT_PERMISSION_CLASSES = [IsAuthenticated]</code>. Lo abierto se abre a propósito.</td></tr>
+<tr><td>Dependencias auditadas</td><td><code>pip-audit</code> / Dependabot en CI para detectar librerías con vulnerabilidades.</td></tr>
+<tr><td>Validación de entrada</td><td>Toda entrada se valida en el serializer antes de tocar la lógica.</td></tr>
+</table>
+</section>
+
+<!-- 9 -->
+<section id="testing">
+<span class="section-tag">SECCIÓN 9</span>
+<h2>Testing profesional</h2>
+<p>"Probado o no existe." Toda lógica de negocio (servicios y selectors) tiene pruebas. Stack: <strong>pytest + pytest-django + factory_boy</strong>.</p>
+<table>
+<tr><th>Qué se prueba</th><th>Cómo</th></tr>
+<tr><td><b>Servicios</b> (prioridad #1)</td><td>Cada caso de uso: camino feliz + casos de error + reglas de negocio.</td></tr>
+<tr><td><b>Selectors</b></td><td>Que filtren bien por tenant y permisos (que NO se filtren datos de otra clínica).</td></tr>
+<tr><td><b>APIs</b></td><td>Códigos HTTP correctos, validación de entrada, permisos (401/403/404).</td></tr>
+<tr><td><b>Modelos</b></td><td>Validaciones propias (<code>clean()</code>) y métodos.</td></tr>
+</table>
+<ul>
+  <li><strong>Cobertura mínima: 80%</strong> en código de negocio (servicios/selectors), medida en CI. El PR que la baje no se mergea.</li>
+  <li>Patrón <strong>AAA</strong> (Arrange-Act-Assert): preparar datos, ejecutar, verificar.</li>
+  <li><code>factory_boy</code> para crear datos de prueba (no fixtures gigantes a mano).</li>
+  <li>Las pruebas son rápidas y aisladas (no dependen del orden ni de internet).</li>
+</ul>
+<pre class="code"><span class="c"># test_services.py</span>
+<span class="k">def</span> test_appointment_create_rejects_double_booking(db):
+    <span class="c"># Arrange</span>
+    clinic = ClinicFactory()
+    AppointmentFactory(tenant=clinic, starts_at=<span class="s">"2026-06-01T10:00Z"</span>)
+    <span class="c"># Act + Assert</span>
+    <span class="k">with</span> pytest.raises(ValidationError):
+        appointment_create(tenant=clinic, user=UserFactory(),
+                           patient_id=PatientFactory().id,
+                           starts_at=<span class="s">"2026-06-01T10:00Z"</span>)</pre>
+</section>
+
+<!-- 10 -->
+<section id="git">
+<span class="section-tag">SECCIÓN 10</span>
+<h2>Git y CI/CD</h2>
+<table>
+<tr><th>Tema</th><th>Regla</th></tr>
+<tr><td>Ramas</td><td><code>main</code> siempre desplegable. Trabajo en ramas <code>feature/...</code>, <code>fix/...</code>. Nada se sube directo a main.</td></tr>
+<tr><td>Commits</td><td><b>Conventional Commits</b>: <code>feat:</code>, <code>fix:</code>, <code>refactor:</code>, <code>test:</code>, <code>docs:</code>.</td></tr>
+<tr><td>Pull Requests</td><td>Pequeños y enfocados. Descripción de qué y por qué. Mínimo 1 revisión aprobada.</td></tr>
+<tr><td>pre-commit hooks</td><td>Antes de cada commit corren: Black, Ruff, mypy, detección de secretos. Si fallan, no hay commit.</td></tr>
+<tr><td>Pipeline CI (GitHub Actions)</td><td>En cada PR: lint → mypy → tests → cobertura → pip-audit. Todo verde o no se mergea.</td></tr>
+<tr><td>Migraciones</td><td>Revisadas en el PR. Reversibles. Nunca editar una migración ya aplicada en producción.</td></tr>
+</table>
+</section>
+
+<!-- 11 -->
+<section id="dod">
+<span class="section-tag">SECCIÓN 11</span>
+<h2>Definition of Done (checklist de PR)</h2>
+<p>Un cambio está "terminado" solo si cumple TODO esto. Es la lista que revisan los agentes antes de aprobar:</p>
+<pre class="diagram">  ☐ La lógica de negocio está en services/selectors, no en views ni serializers
+  ☐ Todas las funciones tienen type hints; mypy pasa sin errores
+  ☐ Black + Ruff pasan; sin imports ni código muerto
+  ☐ Cero secretos en el código (lo verifica el hook)
+  ☐ Serializers de entrada/salida separados y delgados
+  ☐ Queries optimizadas (select_related/prefetch_related); sin N+1
+  ☐ Permisos y filtrado por tenant verificados (no se fugan datos)
+  ☐ Pruebas para los casos de uso nuevos; cobertura ≥ 80% en negocio
+  ☐ Migraciones reversibles y revisadas
+  ☐ Pasa el checklist OWASP relevante
+  ☐ PR pequeño, con descripción de qué y por qué
+  ☐ CI 100% verde</pre>
+</section>
+
+<!-- 12 -->
+<section id="herramientas">
+<span class="section-tag">SECCIÓN 12</span>
+<h2>Herramientas: skill + agentes</h2>
+<p>Para que estos estándares se cumplan <em>solos</em> y no dependan de la memoria de cada quien, creamos herramientas en Claude Code que los aplican automáticamente:</p>
+<div class="cards two">
+  <div class="card"><div class="ic" style="background:var(--primary);">📚</div><h4>Skill: django-clean-architecture</h4><p>La "fuente de verdad" de estos estándares en formato que Claude usa al programar. Se activa sola al tocar código Django.</p></div>
+  <div class="card"><div class="ic" style="background:var(--primary2);">🤖</div><h4>4 agentes especializados</h4><p>Cada uno experto en su rol, aplicando este documento.</p></div>
+</div>
+<table>
+<tr><th>Agente</th><th>Qué hace</th><th>Cuándo se usa</th></tr>
+<tr><td><b>django-engineer</b></td><td>Escribe código Django/DRF siguiendo esta arquitectura: tipado, capas, sin secretos.</td><td>Al implementar una feature o módulo nuevo.</td></tr>
+<tr><td><b>django-reviewer</b></td><td>Revisa que el código cumpla TODO este documento (la Definition of Done).</td><td>Antes de aprobar un PR.</td></tr>
+<tr><td><b>django-tester</b></td><td>Escribe pruebas profesionales (pytest + factory_boy), busca cobertura y casos borde.</td><td>Después de implementar, o cuando falta cobertura.</td></tr>
+<tr><td><b>django-security</b></td><td>Audita seguridad: secretos, inyección, permisos, OWASP, multi-tenant.</td><td>Antes de mergear y antes de desplegar.</td></tr>
+</table>
+<div class="callout ok">
+  <b>Cómo se usan (flujo recomendado)</b>
+  1. <strong>django-engineer</strong> implementa → 2. <strong>django-tester</strong> agrega pruebas → 3. <strong>django-reviewer</strong> revisa contra el checklist → 4. <strong>django-security</strong> audita seguridad. Solo si los cuatro dan visto bueno, el código se mergea.
+</div>
+<div class="callout info">
+  <b>Dónde viven</b>
+  La skill y los agentes están instalados en <code>~/.claude/</code> (disponibles en cualquier proyecto de tu máquina). Cuando se cree el repositorio de Maily Platform, se copiarán a <code>.claude/</code> del proyecto para que todo el equipo los use igual.
+</div>
+</section>
+
+<div class="footer">
+  <strong>Maily Platform — Estándares de Desarrollo v0.1</strong> · Django + DRF + Python · 2026<br>
+  Documento vivo: evoluciona con el proyecto. Aplica a equipo interno y a todo desarrollador o cliente que extienda la plataforma.<br>
+  Fuentes: <a href="https://cheatsheetseries.owasp.org/cheatsheets/Django_Security_Cheat_Sheet.html">OWASP Django Cheat Sheet</a> · <a href="https://cheatsheetseries.owasp.org/cheatsheets/Django_REST_Framework_Cheat_Sheet.html">OWASP DRF Cheat Sheet</a> · HackSoft Django Styleguide · django-stubs/mypy.
+</div>
+</main>
+</div>
+<button class="printbtn" onclick="window.print()">📄 Exportar a PDF</button>
+</body>
+</html>

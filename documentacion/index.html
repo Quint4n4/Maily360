@@ -1,0 +1,2094 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>app.maily.mx — Análisis ejecutivo 2026</title>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+<!-- Font Awesome 6 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" />
+
+<!-- reveal.js v5 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" id="theme" />
+
+<style>
+/* ============================================================================
+   PALETA & VARIABLES
+============================================================================ */
+:root {
+  --primary:  #0F4C5C;
+  --primary2: #1C7293;
+  --light:    #5EB1BF;
+  --cream:    #F8FAFC;
+  --card:     #FFFFFF;
+  --ink:      #0F1B2D;
+  --body:     #334155;
+  --muted:    #64748B;
+  --border:   #E2E8F0;
+  --danger:   #D7263D;
+  --warn:     #F4A261;
+  --ok:       #2A9D8F;
+  --accent:   #FFB703;
+  --code-bg:  #0F1B2D;
+  --code-fg:  #F8FAFC;
+  --code-red: #FB7185;
+  --code-yel: #FCD34D;
+  --whatsapp: #25D366;
+  --shadow:   0 6px 18px rgba(15, 27, 45, 0.08);
+  --shadow-lg:0 12px 32px rgba(15, 27, 45, 0.14);
+}
+
+/* ============================================================================
+   RESET REVEAL DEFAULTS
+============================================================================ */
+.reveal {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+  color: var(--body);
+  font-size: 22px;
+}
+.reveal .slides {
+  text-align: left;
+}
+.reveal .slides section {
+  padding: 0 !important;
+  height: 100%;
+  box-sizing: border-box;
+}
+.reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+  font-family: 'Playfair Display', Georgia, serif;
+  color: var(--ink);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-shadow: none;
+}
+.reveal p { margin: 0; line-height: 1.5; }
+.reveal ul, .reveal ol { margin: 0; padding: 0; list-style: none; }
+
+/* Slide background defaults */
+.reveal .slides > section {
+  background: var(--cream);
+}
+
+/* ============================================================================
+   LAYOUT SLIDE BASE (16:9 1280x720)
+============================================================================ */
+.slide {
+  width: 100%;
+  height: 100%;
+  padding: 48px 64px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--cream);
+}
+.slide.dark {
+  background: linear-gradient(135deg, #0F4C5C 0%, #103D4A 100%);
+  color: #ffffff;
+}
+.slide.dark h1, .slide.dark h2 {
+  color: #ffffff;
+}
+
+/* Decorative side band on dark slides */
+.side-band {
+  position: absolute;
+  top: 0; left: 0;
+  width: 8px; height: 100%;
+  background: var(--accent);
+}
+.side-band-thin {
+  position: absolute;
+  top: 0; left: 0;
+  width: 6px; height: 100%;
+  background: var(--primary);
+}
+
+/* ============================================================================
+   HEADER (slides de contenido)
+============================================================================ */
+.eyebrow {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--primary2);
+  margin-bottom: 8px;
+}
+.slide-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 38px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.1;
+  margin-bottom: 28px;
+}
+.slide.dark .eyebrow { color: var(--light); }
+.slide.dark .slide-title { color: #fff; }
+
+.slide-footer {
+  position: absolute;
+  bottom: 32px;
+  left: 64px;
+  right: 64px;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--muted);
+}
+.slide.dark .slide-footer { color: var(--accent); }
+
+/* ============================================================================
+   SLIDE 1 — PORTADA
+============================================================================ */
+.cover-eyebrow {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--light);
+  margin-bottom: 12px;
+}
+.cover-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 92px;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.cover-subtitle {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 30px;
+  color: var(--light);
+  margin: 18px 0 56px;
+  font-weight: 400;
+}
+.cover-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  margin-bottom: auto;
+}
+.cover-stat {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(94, 177, 191, 0.35);
+  border-radius: 10px;
+  padding: 28px 24px;
+  text-align: center;
+  backdrop-filter: blur(4px);
+}
+.cover-stat-n {
+  font-family: 'Playfair Display', serif;
+  font-size: 60px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.cover-stat-l {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  color: #ffffff;
+  line-height: 1.4;
+}
+.cover-footer {
+  position: absolute;
+  bottom: 32px;
+  left: 64px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--light);
+  letter-spacing: 0.05em;
+}
+
+/* ============================================================================
+   CARD (genérico)
+============================================================================ */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 22px 24px;
+  position: relative;
+  overflow: hidden;
+}
+.card.bordered-left { padding-left: 30px; }
+.card.bordered-left::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 8px; height: 100%;
+}
+.card.left-danger::before  { background: var(--danger); }
+.card.left-warn::before    { background: var(--warn); }
+.card.left-ok::before      { background: var(--ok); }
+.card.left-primary::before { background: var(--primary); }
+.card.left-primary2::before{ background: var(--primary2); }
+
+/* Iconos circulares */
+.icon-circle {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.icon-circle.lg { width: 56px; height: 56px; font-size: 24px; }
+.icon-circle.sm { width: 36px; height: 36px; font-size: 15px; }
+.bg-danger   { background: var(--danger); }
+.bg-warn     { background: var(--warn); }
+.bg-ok       { background: var(--ok); }
+.bg-primary  { background: var(--primary); }
+.bg-primary2 { background: var(--primary2); }
+.bg-light    { background: var(--light); }
+.bg-accent   { background: var(--accent); }
+.bg-whatsapp { background: var(--whatsapp); }
+.bg-muted    { background: var(--muted); }
+
+/* ============================================================================
+   SLIDE 2 — RESUMEN EJECUTIVO
+============================================================================ */
+.exec-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+.exec-row {
+  display: grid;
+  grid-template-columns: 64px 280px 1fr;
+  gap: 22px;
+  align-items: center;
+}
+.exec-big {
+  font-family: 'Playfair Display', serif;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.exec-lbl {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+}
+.exec-txt { font-size: 16px; color: var(--body); line-height: 1.5; }
+.exec-big.danger { color: var(--danger); }
+.exec-big.warn { color: var(--warn); }
+.exec-big.ok { color: var(--ok); }
+
+/* ============================================================================
+   SLIDE 3 — DOS COLUMNAS
+============================================================================ */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  flex: 1;
+}
+.desc-card h3 {
+  font-size: 22px;
+  margin-bottom: 14px;
+}
+.desc-card p {
+  font-size: 16px;
+  color: var(--body);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.facts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+}
+.fact-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.fact-n {
+  font-family: 'Playfair Display', serif;
+  font-size: 46px;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: 14px;
+}
+.fact-t {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.text-danger { color: var(--danger); }
+.text-ok { color: var(--ok); }
+.text-primary { color: var(--primary); }
+.text-primary2 { color: var(--primary2); }
+.text-warn { color: var(--warn); }
+
+/* ============================================================================
+   SLIDE 4 — DIAGRAMA REPO
+============================================================================ */
+.repo-diagram {
+  display: grid;
+  grid-template-columns: 1fr 200px 1fr;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  padding: 20px 0;
+}
+.repo-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.repo-trunk {
+  background: var(--primary);
+  color: #fff;
+  border-radius: 10px;
+  padding: 18px 14px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+.repo-trunk .filename {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 18px;
+  font-weight: 700;
+}
+.repo-trunk .sublabel {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--light);
+  margin-top: 6px;
+}
+.repo-branch {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  padding: 10px 12px 10px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.repo-branch::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 5px; height: 100%;
+}
+.repo-branch.b-primary2::before { background: var(--primary2); }
+.repo-branch.b-danger::before { background: var(--danger); }
+.repo-branch.b-warn::before { background: var(--warn); }
+.repo-branch .bname {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.repo-branch .bdesc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+/* ============================================================================
+   SLIDE 5 — LISTA PROBLEMAS
+============================================================================ */
+.problems-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+.prob-row {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: 56px 1fr 120px;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 22px 14px 22px;
+  position: relative;
+  overflow: hidden;
+}
+.prob-row::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 6px; height: 100%;
+}
+.prob-row.sev-danger::before { background: var(--danger); }
+.prob-row.sev-warn::before { background: var(--warn); }
+.prob-info .prob-t {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+.prob-info .prob-d {
+  font-size: 13px;
+  color: var(--body);
+  line-height: 1.4;
+}
+.sev-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  padding: 6px 10px;
+  border-radius: 14px;
+  letter-spacing: 0.1em;
+}
+.sev-pill.danger { background: var(--danger); }
+.sev-pill.warn { background: var(--warn); }
+
+/* ============================================================================
+   SLIDE 6 — EVIDENCIA CÓDIGO
+============================================================================ */
+.code-blocks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.code-block {
+  background: var(--code-bg);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  overflow: hidden;
+}
+.code-filename {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--code-yel);
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.code-block pre {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 13px;
+  color: var(--code-fg);
+  line-height: 1.55;
+  margin: 0;
+  white-space: pre-wrap;
+}
+.code-red { color: var(--code-red); font-weight: 700; }
+
+.impact-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 18px 24px 18px 32px;
+  position: relative;
+  overflow: hidden;
+}
+.impact-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 8px; height: 100%;
+  background: var(--danger);
+}
+.impact-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.impact-head h3 { font-size: 18px; }
+.impact-list {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--body);
+}
+.impact-list .num {
+  color: var(--danger);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+/* ============================================================================
+   SLIDE 7 — RIESGO GRID 2x2
+============================================================================ */
+.risk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 18px;
+  flex: 1;
+}
+.risk-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 20px 24px 20px 32px;
+  position: relative;
+  overflow: hidden;
+}
+.risk-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 8px; height: 100%;
+}
+.risk-card.danger::before { background: var(--danger); }
+.risk-card.warn::before   { background: var(--warn); }
+.risk-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.risk-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.risk-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 4px 0 12px;
+}
+.risk-card.danger .risk-value { color: var(--danger); }
+.risk-card.warn .risk-value   { color: var(--warn); }
+.risk-desc {
+  font-size: 14px;
+  color: var(--body);
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   SLIDE 8 — TABLA COMPETENCIA
+============================================================================ */
+.comp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.comp-table thead th {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 14px 10px;
+  text-align: center;
+}
+.comp-table thead th:first-child { text-align: left; padding-left: 18px; }
+.comp-table tbody td {
+  padding: 11px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+.comp-table tbody td:first-child {
+  text-align: left;
+  padding-left: 18px;
+  font-weight: 600;
+  color: var(--body);
+}
+.comp-table tbody tr:nth-child(even) td { background: #F1F5F9; }
+.comp-table tbody tr:nth-child(odd) td { background: #FFFFFF; }
+.comp-table tbody td.maily {
+  background: #FEF2F2 !important;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* ============================================================================
+   SLIDE 9 — GRID 4x2 FEATURES
+============================================================================ */
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+  flex: 1;
+}
+.feat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.feat-t {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.25;
+}
+.feat-d {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* ============================================================================
+   SLIDE 10 — STACK
+============================================================================ */
+.stack-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+  flex: 1;
+}
+.stack-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.stack-layer {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 20px 14px 28px;
+  position: relative;
+  overflow: hidden;
+}
+.stack-layer::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 6px; height: 100%;
+}
+.stack-layer.l1::before { background: var(--primary); }
+.stack-layer.l2::before { background: var(--primary2); }
+.stack-layer.l3::before { background: var(--light); }
+.stack-layer.l4::before { background: var(--ok); }
+.stack-layer .layer-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.15em;
+}
+.stack-layer .layer-prod {
+  font-family: 'Playfair Display', serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 3px 0;
+}
+.stack-layer .layer-desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.integ-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.integ-head {
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  padding: 10px 12px;
+  letter-spacing: 0.18em;
+}
+.integ-list {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+.integ-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--body);
+}
+
+/* ============================================================================
+   SLIDE 11 — MODULAR MONOLITH
+============================================================================ */
+.mono-outer {
+  border: 2px dashed var(--primary2);
+  background: #F1F5F9;
+  border-radius: 10px;
+  padding: 18px 24px 22px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.mono-head {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary2);
+  letter-spacing: 0.22em;
+  margin-bottom: 14px;
+}
+.mono-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr 1fr;
+  gap: 14px;
+  flex: 1;
+}
+.mono-mod {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.mono-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mono-checks {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ok);
+  font-weight: 600;
+}
+.mono-checks span { margin: 0 12px; }
+
+/* ============================================================================
+   SLIDE 12 — STRANGLER FIG TIMELINE
+============================================================================ */
+.timeline {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding-top: 12px;
+}
+.timeline-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.timeline-track::before {
+  content: "";
+  position: absolute;
+  top: 36px; left: 9%; right: 9%;
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+.tl-phase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+.tl-circle {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 12px rgba(15, 27, 45, 0.18);
+}
+.tl-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  width: 100%;
+  padding: 14px 12px;
+  text-align: center;
+}
+.tl-card .tlt {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.tl-card .tld {
+  font-size: 12px;
+  color: var(--body);
+  line-height: 1.4;
+}
+.timeline-band {
+  background: var(--primary);
+  color: #fff;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-style: italic;
+  font-size: 14px;
+  text-align: center;
+  margin-top: auto;
+}
+
+/* ============================================================================
+   SLIDE 13 — 3 COLUMNAS MMA
+============================================================================ */
+.mma-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  flex: 1;
+}
+.mma-col {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.mma-head {
+  color: #fff;
+  text-align: center;
+  padding: 16px 12px 12px;
+}
+.mma-head .t {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+.mma-head .s {
+  font-size: 12px;
+  font-style: italic;
+  margin-top: 2px;
+  opacity: 0.95;
+}
+.mma-col.ok .mma-head { background: var(--ok); }
+.mma-col.warn .mma-head { background: var(--warn); }
+.mma-col.danger .mma-head { background: var(--danger); }
+.mma-list {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--body);
+}
+.mma-list li {
+  position: relative;
+  padding-left: 18px;
+}
+.mma-list li::before {
+  content: "●";
+  position: absolute;
+  left: 0;
+  font-size: 10px;
+  top: 4px;
+  color: var(--muted);
+}
+
+/* ============================================================================
+   SLIDE 14 — ROADMAP 4 MESES
+============================================================================ */
+.months-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  flex: 1;
+}
+.month-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.month-badge {
+  color: #fff;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.month-card.m1 .month-badge { background: var(--primary); }
+.month-card.m2 .month-badge { background: var(--primary2); }
+.month-card.m3 .month-badge { background: var(--ok); }
+.month-card.m4 .month-badge { background: var(--accent); color: var(--ink); }
+.month-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  padding: 14px 10px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.month-items {
+  padding: 14px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--body);
+}
+.month-items li {
+  position: relative;
+  padding-left: 16px;
+}
+.month-items li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+}
+
+/* ============================================================================
+   SLIDE 15 — GANTT 18 MESES
+============================================================================ */
+.gantt {
+  flex: 1;
+  position: relative;
+  padding: 30px 0 60px;
+}
+.gantt-row {
+  position: relative;
+  height: 56px;
+  margin-bottom: 14px;
+}
+.gantt-bar {
+  position: absolute;
+  height: 56px;
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: #fff;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.gantt-bar .gtt {
+  font-size: 14px;
+  font-weight: 700;
+}
+.gantt-bar .gtd {
+  font-size: 11px;
+  line-height: 1.35;
+  margin-top: 2px;
+  opacity: 0.95;
+}
+.gantt-axis {
+  position: relative;
+  margin-top: 14px;
+  border-top: 1px solid var(--muted);
+  height: 24px;
+}
+.gantt-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 6px;
+}
+.gantt-tick::before {
+  content: "";
+  position: absolute;
+  top: -4px; left: 50%;
+  width: 1px; height: 4px;
+  background: var(--muted);
+}
+.gantt-notes {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 6px;
+  line-height: 1.55;
+}
+
+/* ============================================================================
+   SLIDE 16 — INVERSIÓN BARRAS
+============================================================================ */
+.invest-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.invest-head {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.18em;
+  margin-bottom: 6px;
+}
+.invest-row {
+  display: grid;
+  grid-template-columns: 240px 1fr 220px;
+  align-items: center;
+  gap: 18px;
+}
+.invest-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.invest-bar-wrap {
+  position: relative;
+  height: 26px;
+  background: #EEF2F6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.invest-bar-max {
+  position: absolute;
+  top: 0; left: 0;
+  height: 100%;
+  opacity: 0.4;
+  border-radius: 4px;
+}
+.invest-bar-min {
+  position: absolute;
+  top: 0; left: 0;
+  height: 100%;
+  border-radius: 4px;
+}
+.bar-ok { background: var(--ok); }
+.bar-warn { background: var(--warn); }
+.bar-primary2 { background: var(--primary2); }
+.bar-primary { background: var(--primary); }
+.invest-val {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: right;
+}
+
+/* ============================================================================
+   SLIDE 17 — SIGUIENTES PASOS (DARK)
+============================================================================ */
+.steps-eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--light);
+  letter-spacing: 0.28em;
+  margin-bottom: 14px;
+}
+.steps-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 56px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  margin-bottom: 36px;
+}
+.steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+}
+.step-row {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(94, 177, 191, 0.35);
+  border-radius: 10px;
+  padding: 22px 28px;
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 22px;
+  align-items: center;
+}
+.step-n {
+  font-family: 'Playfair Display', serif;
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+}
+.step-n.danger { color: var(--danger); }
+.step-n.warn   { color: var(--warn); }
+.step-n.ok     { color: var(--ok); }
+.step-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  padding: 5px 14px;
+  border-radius: 14px;
+  letter-spacing: 0.16em;
+  margin-bottom: 8px;
+}
+.step-pill.danger { background: var(--danger); }
+.step-pill.warn   { background: var(--warn); }
+.step-pill.ok     { background: var(--ok); }
+.step-t {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+.step-d {
+  font-size: 14px;
+  color: var(--light);
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   BOTÓN FLOTANTE IMPRIMIR
+============================================================================ */
+#print-btn {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  z-index: 9999;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 30px;
+  padding: 12px 22px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(15, 76, 92, 0.35);
+  transition: transform 0.15s, background 0.15s;
+}
+#print-btn:hover {
+  background: var(--primary2);
+  transform: translateY(-2px);
+}
+#print-btn i { margin-right: 8px; }
+@media print {
+  #print-btn { display: none !important; }
+}
+
+/* ============================================================================
+   PROGRESS DOTS reveal override (sutil)
+============================================================================ */
+.reveal .progress {
+  color: var(--primary2);
+  height: 4px;
+}
+.reveal .controls {
+  color: var(--primary2);
+}
+</style>
+</head>
+
+<body>
+
+<button id="print-btn" onclick="window.print()" title="Imprimir o exportar a PDF">
+  <i class="fa-solid fa-file-pdf"></i>Imprimir PDF
+</button>
+
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================================
+SLIDE 1 — PORTADA
+============================================================================ -->
+<section data-background-color="#0F4C5C">
+  <div class="slide dark">
+    <div class="side-band"></div>
+    <div style="margin-top: 18px;">
+      <div class="cover-eyebrow">ANÁLISIS EJECUTIVO · 2026</div>
+      <h1 class="cover-title">app.maily.mx</h1>
+      <div class="cover-subtitle">Diagnóstico crítico y propuesta de modernización</div>
+    </div>
+    <div class="cover-stats">
+      <div class="cover-stat">
+        <div class="cover-stat-n">73</div>
+        <div class="cover-stat-l">módulos PHP<br/>sin framework</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-n">10+</div>
+        <div class="cover-stat-l">años de<br/>deuda técnica</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-n">$300K</div>
+        <div class="cover-stat-l">MXN para un<br/>MVP moderno</div>
+      </div>
+    </div>
+    <div class="cover-footer">Preparado para la dirección · Confidencial</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 2 — RESUMEN EJECUTIVO
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">EN 60 SEGUNDOS</div>
+    <h2 class="slide-title">Resumen ejecutivo</h2>
+
+    <div class="exec-grid">
+      <div class="card bordered-left left-danger">
+        <div class="exec-row">
+          <div class="icon-circle lg bg-danger"><i class="fa-solid fa-shield-halved"></i></div>
+          <div>
+            <div class="exec-big danger">ALTO</div>
+            <div class="exec-lbl">Riesgo de seguridad</div>
+          </div>
+          <div class="exec-txt">Contraseñas de producción expuestas en GitHub e inyecciones SQL vía cookies. Multa LFPDPPP: hasta $30.8M MXN.</div>
+        </div>
+      </div>
+
+      <div class="card bordered-left left-warn">
+        <div class="exec-row">
+          <div class="icon-circle lg bg-warn"><i class="fa-solid fa-gears"></i></div>
+          <div>
+            <div class="exec-big warn">73 módulos</div>
+            <div class="exec-lbl">Sin arquitectura moderna</div>
+          </div>
+          <div class="exec-txt">PHP procedural sin framework, sin tests, sin CI/CD. Costo de cambio: 5–10× más que un stack actual.</div>
+        </div>
+      </div>
+
+      <div class="card bordered-left left-ok">
+        <div class="exec-row">
+          <div class="icon-circle lg bg-ok"><i class="fa-solid fa-chart-line"></i></div>
+          <div>
+            <div class="exec-big ok">$300K–$700K</div>
+            <div class="exec-lbl">Costo del MVP nuevo (MXN)</div>
+          </div>
+          <div class="exec-txt">Reescritura modular en 4 meses con Next.js + NestJS. Competitivo con Doctoralia/Nimbo-X en 18 meses.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Decisión clave: parchar el legacy ($) o reescribir gradualmente ($$$ pero negocio escalable).</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 3 — QUÉ ES MAILY HOY
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">QUÉ TIENES HOY</div>
+    <h2 class="slide-title">app.maily.mx en una página</h2>
+
+    <div class="two-col">
+      <div class="card desc-card">
+        <h3>Software clínico web</h3>
+        <p>Aplicación PHP monolítica para consultorios privados.</p>
+        <p>Gestiona pacientes, agenda, expediente, recetas, finanzas, telemedicina y promoción.</p>
+        <p>Base de datos MySQL remota en servidor maily.mx. Frontend con Bootstrap 3 y jQuery.</p>
+      </div>
+
+      <div class="facts-grid">
+        <div class="fact-card">
+          <div class="icon-circle bg-primary2"><i class="fa-solid fa-folder-open"></i></div>
+          <div>
+            <div class="fact-n text-primary2">73</div>
+            <div class="fact-t">módulos en /mod</div>
+          </div>
+        </div>
+        <div class="fact-card">
+          <div class="icon-circle bg-danger"><i class="fa-solid fa-code"></i></div>
+          <div>
+            <div class="fact-n text-danger">0</div>
+            <div class="fact-t">frameworks</div>
+          </div>
+        </div>
+        <div class="fact-card">
+          <div class="icon-circle bg-danger"><i class="fa-solid fa-flask"></i></div>
+          <div>
+            <div class="fact-n text-danger">0</div>
+            <div class="fact-t">tests automáticos</div>
+          </div>
+        </div>
+        <div class="fact-card">
+          <div class="icon-circle bg-ok"><i class="fa-solid fa-user-doctor"></i></div>
+          <div>
+            <div class="fact-n text-ok">10+</div>
+            <div class="fact-t">años en producción</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Es un sistema funcional… pero construido con técnicas de 2010. La continuidad del negocio depende de él.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 4 — ANATOMÍA DEL REPO
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">CÓMO ESTÁ ORGANIZADO</div>
+    <h2 class="slide-title">Anatomía del repositorio</h2>
+
+    <div class="repo-diagram">
+      <div class="repo-side">
+        <div class="repo-branch b-primary2">
+          <div class="bname">mod/</div>
+          <div class="bdesc">73 módulos clínicos (agenda, ficha, recetas…)</div>
+        </div>
+        <div class="repo-branch b-primary2">
+          <div class="bname">class/</div>
+          <div class="bdesc">Conexión MySQL + librerías PHPExcel, FPDF, PHPMailer</div>
+        </div>
+        <div class="repo-branch b-primary2">
+          <div class="bname">componentes/</div>
+          <div class="bdesc">Includes globales: head, menú, funciones</div>
+        </div>
+      </div>
+
+      <div class="repo-trunk">
+        <div class="filename">index.php</div>
+        <div class="sublabel">punto de entrada</div>
+      </div>
+
+      <div class="repo-side">
+        <div class="repo-branch b-danger">
+          <div class="bname">mercadopago/</div>
+          <div class="bdesc">Apunta a una app Laravel ¡FUERA del repo!</div>
+        </div>
+        <div class="repo-branch b-warn">
+          <div class="bname">mailyPush/</div>
+          <div class="bdesc">Firebase Cloud Messaging (Composer aislado)</div>
+        </div>
+        <div class="repo-branch b-danger">
+          <div class="bname">backup/</div>
+          <div class="bdesc">Scripts dump BD · no debería estar en git</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Reutilización por include manual. 748+ ocurrencias del mismo patrón. Sin autoload, sin namespaces.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 5 — 5 PROBLEMAS CRÍTICOS
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">DIAGNÓSTICO</div>
+    <h2 class="slide-title">5 problemas críticos</h2>
+
+    <div class="problems-list">
+      <div class="prob-row sev-danger">
+        <div class="icon-circle bg-danger"><i class="fa-solid fa-key"></i></div>
+        <div class="prob-info">
+          <div class="prob-t">Credenciales en GitHub</div>
+          <div class="prob-d">Usuario, host y password de la BD de producción están versionados en class/config.php.</div>
+        </div>
+        <div class="sev-pill danger">CRÍTICO</div>
+      </div>
+
+      <div class="prob-row sev-danger">
+        <div class="icon-circle bg-danger"><i class="fa-solid fa-bug"></i></div>
+        <div class="prob-info">
+          <div class="prob-t">SQL Injection vía cookies</div>
+          <div class="prob-d">El código concatena $_COOKIE en queries — un atacante edita su cookie y entra a otra empresa.</div>
+        </div>
+        <div class="sev-pill danger">CRÍTICO</div>
+      </div>
+
+      <div class="prob-row sev-danger">
+        <div class="icon-circle bg-danger"><i class="fa-solid fa-user-secret"></i></div>
+        <div class="prob-info">
+          <div class="prob-t">Sesión sin firmar</div>
+          <div class="prob-d">La identidad del usuario viaja en cookies cliente sin firma criptográfica ni $_SESSION.</div>
+        </div>
+        <div class="sev-pill danger">CRÍTICO</div>
+      </div>
+
+      <div class="prob-row sev-warn">
+        <div class="icon-circle bg-warn"><i class="fa-solid fa-copy"></i></div>
+        <div class="prob-info">
+          <div class="prob-t">Módulos duplicados/legacy</div>
+          <div class="prob-d">ficha, fichaAE, fichaContacto, _acceso, __agenda… código abandonado conviviendo con el vivo.</div>
+        </div>
+        <div class="sev-pill warn">ALTO</div>
+      </div>
+
+      <div class="prob-row sev-warn">
+        <div class="icon-circle bg-warn"><i class="fa-solid fa-vial"></i></div>
+        <div class="prob-info">
+          <div class="prob-t">Sin tests, CI ni documentación</div>
+          <div class="prob-d">0 pruebas automatizadas, 0 README, 0 pipelines. Cada cambio es manual y a ciegas.</div>
+        </div>
+        <div class="sev-pill warn">ALTO</div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Detalle técnico con file:line disponible en el reporte adjunto.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 6 — EVIDENCIA CÓDIGO
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">EVIDENCIA</div>
+    <h2 class="slide-title">Esto es lo que hay en el código</h2>
+
+    <div class="code-blocks">
+      <div class="code-block">
+        <div class="code-filename">class/config.php — línea 5</div>
+<pre>define("host", "mysql:host=maily.mx;
+        dbname=mailymx_maily");
+define("usuario", "mailymx_maily");
+define("clave",   <span class="code-red">"m@1LYmx2o2oo6o1"</span>);</pre>
+      </div>
+      <div class="code-block">
+        <div class="code-filename">mod/recetaFicha/index.php — línea 15</div>
+<pre>$sql = "select … from acceso
+  where a.idacceso='".<span class="code-red">$_COOKIE['mc_idusuario']</span>."'
+  order by m.fecha_fin desc";</pre>
+      </div>
+    </div>
+
+    <div class="impact-card">
+      <div class="impact-head">
+        <div class="icon-circle bg-danger"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <h3>¿Qué significa esto para el negocio?</h3>
+      </div>
+      <div class="impact-list">
+        <div><span class="num">1.</span> Cualquiera con acceso al repositorio en GitHub tiene la contraseña real de MySQL.</div>
+        <div><span class="num">2.</span> Un usuario válido puede editar su cookie en el navegador y leer datos de OTRA empresa.</div>
+        <div><span class="num">3.</span> La contraseña de cada login se guarda en texto plano en la tabla de actividad.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 7 — RIESGO DE NEGOCIO
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">TRADUCCIÓN A NEGOCIO</div>
+    <h2 class="slide-title">Lo que está en juego</h2>
+
+    <div class="risk-grid">
+      <div class="risk-card danger">
+        <div class="risk-head">
+          <div class="icon-circle lg bg-danger"><i class="fa-solid fa-gavel"></i></div>
+          <div class="risk-label">Multa LFPDPPP</div>
+        </div>
+        <div class="risk-value">hasta $30.8M MXN</div>
+        <div class="risk-desc">Datos de salud = sensibles. Una fuga reportable expone a la sanción máxima del INAI.</div>
+      </div>
+      <div class="risk-card danger">
+        <div class="risk-head">
+          <div class="icon-circle lg bg-danger"><i class="fa-solid fa-heart-crack"></i></div>
+          <div class="risk-label">Reputación</div>
+        </div>
+        <div class="risk-value">ruta de 1 vía</div>
+        <div class="risk-desc">Las clínicas confían el expediente de sus pacientes. Una sola fuga = pérdida masiva de cuentas.</div>
+      </div>
+      <div class="risk-card warn">
+        <div class="risk-head">
+          <div class="icon-circle lg bg-warn"><i class="fa-solid fa-snowflake"></i></div>
+          <div class="risk-label">Imposible escalar</div>
+        </div>
+        <div class="risk-value">5×–10× costo</div>
+        <div class="risk-desc">Cualquier cambio se replica en docenas de archivos. Onboarding de un dev nuevo: meses.</div>
+      </div>
+      <div class="risk-card warn">
+        <div class="risk-head">
+          <div class="icon-circle lg bg-warn"><i class="fa-solid fa-clock"></i></div>
+          <div class="risk-label">Velocidad de cambio</div>
+        </div>
+        <div class="risk-value">3–6 meses por feature</div>
+        <div class="risk-desc">Mientras Doctoralia y Nimbo-X lanzan IA scribe, Maily tarda trimestres en mover un botón.</div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Cada mes que pasa sin actuar es deuda compuesta — técnica, legal y comercial.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 8 — COMPETENCIA
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">EL MERCADO</div>
+    <h2 class="slide-title">Tu competencia ya está aquí</h2>
+
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Doctoralia</th>
+          <th>Nimbo-X</th>
+          <th>Huli</th>
+          <th>SimplePractice</th>
+          <th>Maily hoy</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Origen</td><td>Polonia</td><td>México</td><td>MX/CO</td><td>EE.UU.</td><td class="maily">México</td></tr>
+        <tr><td>Agenda online</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td class="maily">✓</td></tr>
+        <tr><td>Expediente NOM-024</td><td>ligero</td><td>✓ cert.</td><td>✓ cert.</td><td>—</td><td class="maily">no cert.</td></tr>
+        <tr><td>WhatsApp nativo</td><td>Plus+</td><td>✓</td><td>✓</td><td>—</td><td class="maily">—</td></tr>
+        <tr><td>IA scribe (notas)</td><td>$200/mes</td><td>✓</td><td>$400/mes</td><td>—</td><td class="maily">—</td></tr>
+        <tr><td>App móvil paciente</td><td>marketplace</td><td>✓</td><td>✓</td><td>✓</td><td class="maily">—</td></tr>
+        <tr><td>Precio MXN/mes</td><td>$1,230+</td><td>modular</td><td>$590+</td><td>≈$840</td><td class="maily">interno</td></tr>
+      </tbody>
+    </table>
+
+    <div class="slide-footer">Doctoralia gana en marketing y reseñas. Nimbo-X / Huli ganan en producto clínico certificado e IA.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 9 — BRECHA DE FUNCIONALIDAD
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">DÓNDE ESTÁ LA BRECHA</div>
+    <h2 class="slide-title">Lo que la competencia tiene y Maily no</h2>
+
+    <div class="feat-grid">
+      <div class="feat-card">
+        <div class="icon-circle lg bg-whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
+        <div class="feat-t">Recordatorios por WhatsApp</div>
+        <div class="feat-d">Reduce hasta 35% el no-show.</div>
+      </div>
+      <div class="feat-card">
+        <div class="icon-circle lg bg-primary2"><i class="fa-solid fa-microphone"></i></div>
+        <div class="feat-t">Ambient AI scribe</div>
+        <div class="feat-d">El doctor habla, la app llena el expediente sola.</div>
+      </div>
+      <div class="feat-card">
+        <div class="icon-circle lg bg-primary2"><i class="fa-solid fa-mobile-screen"></i></div>
+        <div class="feat-t">App móvil del paciente</div>
+        <div class="feat-d">Citas, recetas, recordatorios, pagos.</div>
+      </div>
+      <div class="feat-card">
+        <div class="icon-circle lg bg-primary2"><i class="fa-solid fa-video"></i></div>
+        <div class="feat-t">Telemedicina embebida</div>
+        <div class="feat-d">Videoconsulta nativa sin Zoom externo.</div>
+      </div>
+      <div class="feat-card">
+        <div class="icon-circle lg bg-ok"><i class="fa-solid fa-credit-card"></i></div>
+        <div class="feat-t">Pagos integrados</div>
+        <div class="feat-d">MercadoPago + Stripe en el flujo de cita.</div>
+      </div>
+      <div class="feat-card">
+        <div class="icon-circle lg bg-warn"><i class="fa-solid fa-certificate"></i></div>
+        <div class="feat-t">Certificación NOM-024</div>
+        <div class="feat-d">Requerida para vender a hospitales privados.</div>
+      </div>
+      <div class="feat-card">
+        <div class="icon-circle lg bg-ok"><i class="fa-solid fa-file-invoice"></i></div>
+        <div class="feat-t">Facturación CFDI 4.0</div>
+        <div class="feat-d">Emisión nativa al cobrar la consulta.</div>
+      </div>
+      <div class="feat-card">
+        <div class="icon-circle lg bg-primary2"><i class="fa-solid fa-chart-pie"></i></div>
+        <div class="feat-t">Dashboard analítico real</div>
+        <div class="feat-d">No-show rate, LTV, ticket promedio.</div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Cada feature de arriba es un motivo por el que un doctor cambia a Doctoralia, Nimbo-X o Huli.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 10 — STACK MODERNO
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">LA PROPUESTA</div>
+    <h2 class="slide-title">Stack moderno 2026</h2>
+
+    <div class="stack-grid">
+      <div class="stack-layers">
+        <div class="stack-layer l1">
+          <div class="icon-circle lg bg-primary"><i class="fa-solid fa-laptop-code"></i></div>
+          <div>
+            <div class="layer-tag">FRONTEND WEB</div>
+            <div class="layer-prod">Next.js 15 + Tailwind</div>
+            <div class="layer-desc">Web rápido, SEO, App Router</div>
+          </div>
+        </div>
+        <div class="stack-layer l2">
+          <div class="icon-circle lg bg-primary2"><i class="fa-solid fa-mobile-screen"></i></div>
+          <div>
+            <div class="layer-tag">APP MÓVIL</div>
+            <div class="layer-prod">React Native (Expo)</div>
+            <div class="layer-desc">iOS + Android compartiendo código TypeScript</div>
+          </div>
+        </div>
+        <div class="stack-layer l3">
+          <div class="icon-circle lg bg-light"><i class="fa-solid fa-server"></i></div>
+          <div>
+            <div class="layer-tag">BACKEND API</div>
+            <div class="layer-prod">NestJS (TypeScript)</div>
+            <div class="layer-desc">Modular, multi-tenant, escalable</div>
+          </div>
+        </div>
+        <div class="stack-layer l4">
+          <div class="icon-circle lg bg-ok"><i class="fa-solid fa-database"></i></div>
+          <div>
+            <div class="layer-tag">DATOS</div>
+            <div class="layer-prod">PostgreSQL + Redis + S3</div>
+            <div class="layer-desc">Cifrado, residencia MX (AWS Querétaro)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="integ-card">
+        <div class="integ-head">INTEGRACIONES</div>
+        <div class="integ-list">
+          <div class="integ-item"><div class="icon-circle sm bg-whatsapp"><i class="fa-brands fa-whatsapp"></i></div>WhatsApp Cloud API</div>
+          <div class="integ-item"><div class="icon-circle sm bg-ok"><i class="fa-solid fa-credit-card"></i></div>MercadoPago + Stripe</div>
+          <div class="integ-item"><div class="icon-circle sm bg-primary2"><i class="fa-solid fa-brain"></i></div>Claude / OpenAI (BAA)</div>
+          <div class="integ-item"><div class="icon-circle sm bg-primary"><i class="fa-solid fa-video"></i></div>Daily.co videoconsulta</div>
+          <div class="integ-item"><div class="icon-circle sm bg-accent"><i class="fa-solid fa-file-invoice-dollar"></i></div>CFDI 4.0</div>
+          <div class="integ-item"><div class="icon-circle sm bg-danger"><i class="fa-solid fa-shield-halved"></i></div>Auth.js + 2FA</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Mismo lenguaje (TypeScript) en web, móvil y servidor. Equipo más chico hace más.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 11 — MODULAR MONOLITH
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">ARQUITECTURA</div>
+    <h2 class="slide-title">Modular Monolith con DDD</h2>
+
+    <div class="mono-outer">
+      <div class="mono-head">API GATEWAY + AUTH</div>
+      <div class="mono-grid">
+        <div class="mono-mod"><div class="icon-circle lg bg-primary"><i class="fa-solid fa-calendar-days"></i></div><div class="mono-name">Agenda</div></div>
+        <div class="mono-mod"><div class="icon-circle lg bg-primary"><i class="fa-solid fa-user-injured"></i></div><div class="mono-name">Pacientes</div></div>
+        <div class="mono-mod"><div class="icon-circle lg bg-primary"><i class="fa-solid fa-notes-medical"></i></div><div class="mono-name">Expediente</div></div>
+        <div class="mono-mod"><div class="icon-circle lg bg-primary"><i class="fa-solid fa-prescription"></i></div><div class="mono-name">Recetas</div></div>
+        <div class="mono-mod"><div class="icon-circle lg bg-whatsapp"><i class="fa-brands fa-whatsapp"></i></div><div class="mono-name">Mensajería</div></div>
+        <div class="mono-mod"><div class="icon-circle lg bg-primary2"><i class="fa-solid fa-brain"></i></div><div class="mono-name">IA Scribe</div></div>
+        <div class="mono-mod"><div class="icon-circle lg bg-ok"><i class="fa-solid fa-credit-card"></i></div><div class="mono-name">Pagos</div></div>
+        <div class="mono-mod"><div class="icon-circle lg bg-accent"><i class="fa-solid fa-chart-column"></i></div><div class="mono-name">Analítica</div></div>
+      </div>
+      <div class="mono-checks">
+        <span>✓ Un solo despliegue</span>
+        <span>✓ Módulos aislados con contratos claros</span>
+        <span>✓ Extraíbles a microservicios cuando escale</span>
+      </div>
+    </div>
+
+    <div class="slide-footer" style="text-align: center;">Cuando seas 30+ devs y no antes, se extrae cada caja a su propio servicio.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 12 — STRANGLER FIG
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">CÓMO MIGRAR SIN PARAR EL NEGOCIO</div>
+    <h2 class="slide-title">Estrategia: Strangler Fig (12–18 meses)</h2>
+
+    <div class="timeline">
+      <div class="timeline-track">
+        <div class="tl-phase">
+          <div class="tl-circle bg-muted">0</div>
+          <div class="tl-card">
+            <div class="tlt" style="color: var(--muted)">Proxy</div>
+            <div class="tld">Nginx delante.<br/>100% al PHP.</div>
+          </div>
+        </div>
+        <div class="tl-phase">
+          <div class="tl-circle bg-primary2">1</div>
+          <div class="tl-card">
+            <div class="tlt" style="color: var(--primary2)">Nuevos features</div>
+            <div class="tld">Solo en stack nuevo.<br/>PHP no se toca.</div>
+          </div>
+        </div>
+        <div class="tl-phase">
+          <div class="tl-circle bg-primary">2</div>
+          <div class="tl-card">
+            <div class="tlt" style="color: var(--primary)">Módulo a módulo</div>
+            <div class="tld">Doble escritura.<br/>5→20→50→100% lectura.</div>
+          </div>
+        </div>
+        <div class="tl-phase">
+          <div class="tl-circle bg-warn">3</div>
+          <div class="tl-card">
+            <div class="tlt" style="color: var(--warn)">Datos históricos</div>
+            <div class="tld">ETL + validación cruzada.</div>
+          </div>
+        </div>
+        <div class="tl-phase">
+          <div class="tl-circle bg-ok">4</div>
+          <div class="tl-card">
+            <div class="tlt" style="color: var(--ok)">Apagar PHP</div>
+            <div class="tld">0% tráfico legacy.<br/>Snapshot 5 años.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="timeline-band">70% de los rewrites "big-bang" en salud fracasan. Strangler Fig migra en producción, sin downtime.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 13 — MANTENER / MEJORAR / AGREGAR
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">ESTRATEGIA POR MÓDULOS</div>
+    <h2 class="slide-title">Mantener · Mejorar · Agregar</h2>
+
+    <div class="mma-grid">
+      <div class="mma-col ok">
+        <div class="mma-head">
+          <div class="t">MANTENER</div>
+          <div class="s">Lo que ya funciona</div>
+        </div>
+        <ul class="mma-list">
+          <li>Agenda (refactorizada)</li>
+          <li>Ficha del paciente</li>
+          <li>Recetas con QR</li>
+          <li>Promoción / landing</li>
+          <li>Gestión de personal</li>
+          <li>Reportes básicos</li>
+        </ul>
+      </div>
+      <div class="mma-col warn">
+        <div class="mma-head">
+          <div class="t">MEJORAR</div>
+          <div class="s">Necesitan rediseño</div>
+        </div>
+        <ul class="mma-list">
+          <li>Dashboard real con KPIs</li>
+          <li>Finanzas + CFDI nativo</li>
+          <li>Evolución médica + IA</li>
+          <li>Historia clínica NOM-004</li>
+          <li>Consentimiento digital</li>
+          <li>Inventario / productos</li>
+        </ul>
+      </div>
+      <div class="mma-col danger">
+        <div class="mma-head">
+          <div class="t">AGREGAR</div>
+          <div class="s">Lo que tu competencia ya tiene</div>
+        </div>
+        <ul class="mma-list">
+          <li>App móvil iOS/Android</li>
+          <li>Recordatorios WhatsApp</li>
+          <li>IA scribe (ambient)</li>
+          <li>Telemedicina embebida</li>
+          <li>MercadoPago en flujo</li>
+          <li>Portal de paciente</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="slide-footer">La gracia: no tirar nada útil. Migramos lo que vale, mejoramos lo que casi sirve y agregamos lo que falta.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 14 — ROADMAP MVP 4 MESES
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">FASE 1 — VALIDACIÓN</div>
+    <h2 class="slide-title">Roadmap MVP · 4 meses</h2>
+
+    <div class="months-grid">
+      <div class="month-card m1">
+        <div class="month-badge">MES 1</div>
+        <div class="month-title">Fundamentos</div>
+        <ul class="month-items">
+          <li>Auth + multi-tenant</li>
+          <li>Diseño BD Postgres</li>
+          <li>CI/CD + entornos</li>
+          <li>Migración usuarios</li>
+        </ul>
+      </div>
+      <div class="month-card m2">
+        <div class="month-badge">MES 2</div>
+        <div class="month-title">Núcleo clínico</div>
+        <ul class="month-items">
+          <li>Agenda multi-doctor</li>
+          <li>Pacientes / ficha</li>
+          <li>Historia clínica</li>
+          <li>Dashboard básico</li>
+        </ul>
+      </div>
+      <div class="month-card m3">
+        <div class="month-badge">MES 3</div>
+        <div class="month-title">Comunicación</div>
+        <ul class="month-items">
+          <li>Recetas + QR</li>
+          <li>Recordatorios WhatsApp</li>
+          <li>Email transaccional</li>
+          <li>App PWA paciente</li>
+        </ul>
+      </div>
+      <div class="month-card m4">
+        <div class="month-badge">MES 4</div>
+        <div class="month-title">Monetización</div>
+        <ul class="month-items">
+          <li>MercadoPago integrado</li>
+          <li>Telemedicina (Daily)</li>
+          <li>Piloto: 3 clínicas</li>
+          <li>Métricas + iteración</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="slide-footer">Al final del MVP: 3 clínicas piloto vivas + datos para decidir la inversión en producto v1.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 15 — ROADMAP 18 MESES (GANTT)
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">VISIÓN COMPLETA</div>
+    <h2 class="slide-title">Roadmap 18 meses · MVP → Producto competitivo</h2>
+
+    <div class="gantt">
+      <div class="gantt-row">
+        <!-- M0 a M4: 0/18 a 4/18 -->
+        <div class="gantt-bar" style="left: 0%; width: 22.2%; background: var(--primary);">
+          <div class="gtt">FASE 1 · MVP</div>
+          <div class="gtd">Auth, agenda, ficha, recetas, WhatsApp, pagos. 3 clínicas piloto.</div>
+        </div>
+      </div>
+      <div class="gantt-row">
+        <!-- M3 a M11: 16.6% a 61.1% -->
+        <div class="gantt-bar" style="left: 16.6%; width: 44.5%; background: var(--primary2);">
+          <div class="gtt">FASE 2 · Producto v1</div>
+          <div class="gtd">8–10 módulos completos, app móvil, telemedicina, IA scribe, NOM-024.</div>
+        </div>
+      </div>
+      <div class="gantt-row">
+        <!-- M9 a M18: 50% a 100% -->
+        <div class="gantt-bar" style="left: 50%; width: 50%; background: var(--ok);">
+          <div class="gtt">FASE 3 · Paridad con líderes</div>
+          <div class="gtd">Marketplace de doctores, ERP clínica, integraciones lab/farmacia, BAA HIPAA.</div>
+        </div>
+      </div>
+
+      <div class="gantt-axis">
+        <div class="gantt-tick" style="left: 0%;">M0</div>
+        <div class="gantt-tick" style="left: 16.66%;">M3</div>
+        <div class="gantt-tick" style="left: 33.33%;">M6</div>
+        <div class="gantt-tick" style="left: 50%;">M9</div>
+        <div class="gantt-tick" style="left: 66.66%;">M12</div>
+        <div class="gantt-tick" style="left: 83.33%;">M15</div>
+        <div class="gantt-tick" style="left: 100%;">M18</div>
+      </div>
+
+      <div class="gantt-notes">
+        Cada fase se entrega en producción. No es un rewrite oculto por 18 meses.<br/>
+        El legacy PHP se va apagando módulo por módulo a partir del mes 6 (Strangler Fig).
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 16 — INVERSIÓN
+============================================================================ -->
+<section>
+  <div class="slide">
+    <div class="side-band-thin"></div>
+    <div class="eyebrow">INVERSIÓN</div>
+    <h2 class="slide-title">Desarrollo y operación mensual</h2>
+
+    <div class="invest-section">
+      <div class="invest-head">DESARROLLO (rango realista, agencia mediana México)</div>
+      <div class="invest-row">
+        <div class="invest-label">MVP (4 meses)</div>
+        <div class="invest-bar-wrap">
+          <div class="invest-bar-max bar-ok" style="width: 3.5%;"></div>
+          <div class="invest-bar-min bar-ok" style="width: 1.5%;"></div>
+        </div>
+        <div class="invest-val">$300K – $700K MXN</div>
+      </div>
+      <div class="invest-row">
+        <div class="invest-label">Producto v1 (10 meses)</div>
+        <div class="invest-bar-wrap">
+          <div class="invest-bar-max bar-primary2" style="width: 17.5%;"></div>
+          <div class="invest-bar-min bar-primary2" style="width: 7.5%;"></div>
+        </div>
+        <div class="invest-val">$1,500K – $3,500K MXN</div>
+      </div>
+      <div class="invest-row">
+        <div class="invest-label">Paridad líderes (24 meses)</div>
+        <div class="invest-bar-wrap">
+          <div class="invest-bar-max bar-primary" style="width: 100%;"></div>
+          <div class="invest-bar-min bar-primary" style="width: 40%;"></div>
+        </div>
+        <div class="invest-val">$8,000K – $20,000K MXN</div>
+      </div>
+    </div>
+
+    <div class="invest-section">
+      <div class="invest-head">OPERACIÓN MENSUAL (cloud + APIs)</div>
+      <div class="invest-row">
+        <div class="invest-label">100 doctores activos</div>
+        <div class="invest-bar-wrap">
+          <div class="invest-bar-max bar-ok" style="width: 11%;"></div>
+          <div class="invest-bar-min bar-ok" style="width: 6.4%;"></div>
+        </div>
+        <div class="invest-val">$15K – $26K MXN/mes</div>
+      </div>
+      <div class="invest-row">
+        <div class="invest-label">1,000 doctores activos</div>
+        <div class="invest-bar-wrap">
+          <div class="invest-bar-max bar-warn" style="width: 100%;"></div>
+          <div class="invest-bar-min bar-warn" style="width: 61.7%;"></div>
+        </div>
+        <div class="invest-val">$145K – $235K MXN/mes</div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Cifras de mercado mexicano 2026. WhatsApp en vez de SMS recorta 60–90% el costo de comunicaciones.</div>
+  </div>
+</section>
+
+<!-- ============================================================================
+SLIDE 17 — SIGUIENTES PASOS (DARK)
+============================================================================ -->
+<section data-background-color="#0F4C5C">
+  <div class="slide dark">
+    <div class="side-band"></div>
+    <div class="steps-eyebrow">PARA AVANZAR HOY</div>
+    <h2 class="steps-title">Siguientes pasos</h2>
+
+    <div class="steps-list">
+      <div class="step-row">
+        <div class="step-n danger">01</div>
+        <div>
+          <div class="step-pill danger">ESTA SEMANA</div>
+          <div class="step-t">Apagar el incendio</div>
+          <div class="step-d">Rotar la contraseña de MySQL, sacar backup/ y .env del repo, parchar las 3 inyecciones SQL más expuestas.</div>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-n warn">02</div>
+        <div>
+          <div class="step-pill warn">PRÓXIMOS 30 DÍAS</div>
+          <div class="step-t">Definir el camino</div>
+          <div class="step-d">Workshop ejecutivo: parchar legacy vs reescribir con Strangler Fig. Acordar presupuesto y equipo (3–4 personas).</div>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-n ok">03</div>
+        <div>
+          <div class="step-pill ok">60–90 DÍAS</div>
+          <div class="step-t">MVP en vivo</div>
+          <div class="step-d">Liberar Fase 1 del roadmap (auth + agenda + ficha + WhatsApp) con 2–3 clínicas piloto reales.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="slide-footer">Cada día sin decidir = deuda compuesta. La buena noticia: hay un camino claro.</div>
+  </div>
+</section>
+
+</div>
+</div>
+
+<!-- reveal.js JS -->
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+  Reveal.initialize({
+    width: 1280,
+    height: 720,
+    margin: 0,
+    minScale: 0.2,
+    maxScale: 2.0,
+    hash: true,
+    controls: true,
+    progress: true,
+    slideNumber: 'c/t',
+    transition: 'slide',
+    transitionSpeed: 'default',
+    center: false,
+    pdfSeparateFragments: false,
+  });
+</script>
+
+</body>
+</html>

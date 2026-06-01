@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily Platform — Arquitectura del Sistema</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+<style>
+:root{--primary:#0F4C5C;--primary2:#1C7293;--light:#5EB1BF;--ink:#0F1B2D;--body:#334155;--muted:#64748B;--border:#E2E8F0;--bg:#F8FAFC;--danger:#D7263D;--warn:#F4A261;--ok:#2A9D8F;--accent:#FFB703;--violet:#7C3AED;}
+.reveal{font-family:'Inter',sans-serif;font-size:22px;color:var(--body);}
+.reveal .slides{text-align:left;}
+.reveal section{padding:0;}
+.reveal h1,.reveal h2,.reveal h3{font-family:'Playfair Display',serif;color:var(--ink);font-weight:800;margin:0 0 10px;text-transform:none;letter-spacing:0;}
+.reveal h1{font-size:1.7em;}
+.reveal h2{font-size:1.25em;color:var(--primary);}
+.eyebrow{font-size:.55em;letter-spacing:3px;color:var(--primary2);font-weight:700;text-transform:uppercase;margin-bottom:6px;}
+.reveal p{font-size:.62em;color:var(--body);margin:6px 0;}
+.muted{color:var(--muted);font-style:italic;font-size:.5em;}
+
+/* layered system diagram */
+.band{border-radius:12px;padding:9px 14px;margin:7px 0;display:flex;align-items:center;gap:12px;}
+.band .blab{font-size:.42em;font-weight:800;letter-spacing:1px;color:#fff;writing-mode:horizontal-tb;min-width:118px;text-transform:uppercase;}
+.band .items{display:flex;gap:8px;flex:1;flex-wrap:wrap;}
+.nd{background:#fff;border-radius:8px;padding:6px 11px;font-size:.46em;font-weight:600;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+.nd small{display:block;font-weight:400;color:var(--muted);font-size:.85em;}
+.arrowdown{text-align:center;color:var(--muted);font-size:.5em;line-height:.4;margin:-2px 0;}
+
+/* generic boxes */
+.flowrow{display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0;}
+.box{background:#fff;border:2px solid var(--border);border-radius:10px;padding:10px 13px;font-size:.5em;font-weight:600;color:var(--ink);text-align:center;box-shadow:0 2px 6px rgba(15,27,45,.06);}
+.box small{display:block;font-weight:400;color:var(--muted);font-size:.85em;margin-top:2px;}
+.box.p{border-color:var(--primary);}.box.ok{border-color:var(--ok);}.box.acc{border-color:var(--accent);}.box.v{border-color:var(--violet);}.box.d{border-color:var(--danger);}
+.ar{font-size:.7em;color:var(--primary2);font-weight:800;}
+
+/* grids */
+.grid{display:grid;gap:9px;}
+.g3{grid-template-columns:repeat(3,1fr);}.g4{grid-template-columns:repeat(4,1fr);}.g2{grid-template-columns:repeat(2,1fr);}
+.grp{border-radius:10px;padding:10px 12px;border:1px solid var(--border);background:#fff;}
+.grp .gt{font-size:.5em;font-weight:800;color:#fff;border-radius:6px;padding:3px 8px;display:inline-block;margin-bottom:6px;}
+.grp .gl{font-size:.42em;color:var(--body);line-height:1.5;}
+.tag{display:inline-block;background:#EEF2F6;color:var(--primary);border-radius:5px;padding:1px 6px;margin:2px 2px 0 0;font-size:.92em;font-family:'JetBrains Mono';}
+
+.legend{font-size:.45em;color:var(--muted);margin-top:10px;font-style:italic;}
+.pill{display:inline-block;border-radius:20px;padding:3px 12px;font-size:.5em;font-weight:700;color:#fff;}
+
+.reveal .slide-number{font-size:14px;}
+/* title slide */
+.title-slide{background:linear-gradient(135deg,#0F4C5C,#0F2A33);color:#fff;height:100%;padding:60px;border-radius:8px;}
+.title-slide h1{color:#fff;font-size:2.1em;}
+.title-slide .eyebrow{color:var(--light);}
+.title-slide p{color:#cbd5e1;font-size:.7em;}
+.chips{display:flex;gap:8px;margin-top:24px;flex-wrap:wrap;}
+.chips .c{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 14px;font-size:.5em;}
+.chips .c b{color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="reveal"><div class="slides">
+
+<!-- 1 PORTADA -->
+<section data-background-color="#0F2A33">
+  <div class="title-slide">
+    <div class="eyebrow">DOCUMENTO TÉCNICO · 2026</div>
+    <h1>Arquitectura de Maily Platform</h1>
+    <p>Cómo funciona el sistema completo: roles, módulos, cómo se comunican entre ellos y el flujo de venta a un especialista.</p>
+    <div class="chips">
+      <div class="c"><b>1</b> backend (Django + DRF)</div>
+      <div class="c"><b>3</b> frontends (React · Flutter)</div>
+      <div class="c"><b>Multi-tenant</b> + identidad global</div>
+      <div class="c"><b>Especialidades</b> como plugins</div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 VISTA DE SISTEMA -->
+<section>
+  <div class="eyebrow">VISTA DE 30,000 PIES</div>
+  <h2>El sistema completo, por capas</h2>
+  <div class="band" style="background:var(--ink);">
+    <div class="blab">👤 Usuarios</div>
+    <div class="items"><div class="nd">👨‍⚕️ Doctor / staff</div><div class="nd">🧑 Paciente</div><div class="nd">👔 Dueño SaaS</div></div>
+  </div>
+  <div class="arrowdown">▼ ▼ ▼</div>
+  <div class="band" style="background:var(--primary2);">
+    <div class="blab">🖥️ Frontends</div>
+    <div class="items"><div class="nd">Maily Soft<small>React · clínica</small></div><div class="nd">Maily te cuida<small>Flutter · paciente</small></div><div class="nd">Panel Plataforma<small>React · SaaS</small></div></div>
+  </div>
+  <div class="arrowdown">▼ &nbsp; REST + WebSocket (OpenAPI → SDKs)</div>
+  <div class="band" style="background:var(--primary);">
+    <div class="blab">🔌 API Gateway</div>
+    <div class="items"><div class="nd">Django REST Framework · JWT · multi-tenant · /api/v1</div></div>
+  </div>
+  <div class="arrowdown">▼</div>
+  <div class="band" style="background:var(--light);">
+    <div class="blab">🧩 Módulos</div>
+    <div class="items"><div class="nd">Identidad</div><div class="nd">Clínico</div><div class="nd">Documentos</div><div class="nd">Finanzas</div><div class="nd">Especialidades</div><div class="nd">Paciente / engagement</div></div>
+  </div>
+  <div class="arrowdown">▼ &nbsp; Servicios · Signals (sync) · Celery (async)</div>
+  <div class="band" style="background:var(--ok);">
+    <div class="blab">💾 Datos</div>
+    <div class="items"><div class="nd">PostgreSQL<small>multi-tenant + RLS</small></div><div class="nd">Redis<small>cache + colas</small></div><div class="nd">S3<small>archivos cifrados</small></div></div>
+  </div>
+  <div class="arrowdown">▼</div>
+  <div class="band" style="background:var(--accent);">
+    <div class="blab" style="color:#0F1B2D;">🌐 Externos</div>
+    <div class="items"><div class="nd">WhatsApp</div><div class="nd">Stripe / MercadoPago</div><div class="nd">Claude (IA)</div><div class="nd">CFDI</div><div class="nd">Email</div></div>
+  </div>
+</section>
+
+<!-- 3 ROLES -->
+<section>
+  <div class="eyebrow">CONTROL DE ACCESO</div>
+  <h2>Los 3 niveles de roles</h2>
+  <div class="grid g3">
+    <div class="grp" style="border-top:4px solid var(--ink);">
+      <span class="gt" style="background:var(--ink);">🌐 PLATAFORMA</span>
+      <div class="gl">El equipo SaaS (tú). Acceso global, métricas, todos los tenants.
+        <div style="margin-top:6px;"><span class="tag">Súper Admin</span><span class="tag">Ventas / Éxito</span><span class="tag">Ingeniería</span></div>
+      </div>
+    </div>
+    <div class="grp" style="border-top:4px solid var(--primary2);">
+      <span class="gt" style="background:var(--primary2);">🏥 TENANT (clínica)</span>
+      <div class="gl">Personal de cada clínica. Aislado por multi-tenant + RLS.
+        <div style="margin-top:6px;"><span class="tag">Owner</span><span class="tag">Admin</span><span class="tag">Médico</span><span class="tag">Enfermería</span><span class="tag">Recepción</span><span class="tag">Finanzas</span><span class="tag">Solo lectura</span></div>
+      </div>
+    </div>
+    <div class="grp" style="border-top:4px solid var(--ok);">
+      <span class="gt" style="background:var(--ok);">🧑 PACIENTE</span>
+      <div class="gl">Identidad GLOBAL (no pertenece a una clínica). Usa Maily te cuida y se conecta a las clínicas del catálogo.
+        <div style="margin-top:6px;"><span class="tag">Cuenta global (MPI)</span></div>
+      </div>
+    </div>
+  </div>
+  <p style="margin-top:14px;"><b>Dos dimensiones independientes:</b> el <b>rol</b> define qué <i>puede hacer</i> (permisos); la <b>especialidad</b> define qué <i>evalúa</i> (su hoja). Una persona puede ser <span class="tag">Médico</span> + <span class="tag">Nutrición</span>.</p>
+  <div class="legend">El rol nunca cruza niveles: el staff de plataforma no es staff de clínica, y el paciente no está en el árbol de la clínica.</div>
+</section>
+
+<!-- 4 MAPA DE MÓDULOS -->
+<section>
+  <div class="eyebrow">LO QUE TENEMOS HASTA AHORA</div>
+  <h2>Mapa de módulos</h2>
+  <div class="grid g4">
+    <div class="grp"><span class="gt" style="background:var(--ink);">Identidad</span><div class="gl"><span class="tag">auth</span><span class="tag">tenancy</span><span class="tag">rbac</span><span class="tag">audit</span></div></div>
+    <div class="grp"><span class="gt" style="background:var(--primary2);">Comercial</span><div class="gl"><span class="tag">billing</span><span class="tag">platform_metrics</span></div></div>
+    <div class="grp"><span class="gt" style="background:var(--primary);">Operación</span><div class="gl"><span class="tag">agenda</span><span class="tag">pacientes</span><span class="tag">personal</span><span class="tag">consultorio</span></div></div>
+    <div class="grp"><span class="gt" style="background:var(--primary);">Expediente</span><div class="gl"><span class="tag">expediente</span><span class="tag">historia</span><span class="tag">evolución</span><span class="tag">exploración</span><span class="tag">enfermería</span><span class="tag">archivos</span></div></div>
+    <div class="grp"><span class="gt" style="background:var(--primary2);">Documentos</span><div class="gl"><span class="tag">recetas</span><span class="tag">constancias</span><span class="tag">consentimientos</span><span class="tag">notas</span></div></div>
+    <div class="grp"><span class="gt" style="background:var(--ok);">Finanzas</span><div class="gl"><span class="tag">finanzas</span><span class="tag">estado_cuenta</span><span class="tag">cotizaciones</span><span class="tag">inventario</span></div></div>
+    <div class="grp"><span class="gt" style="background:var(--accent);">Especialidades</span><div class="gl"><span class="tag">general</span><span class="tag">nutrición</span><span class="tag">fisio</span><span class="tag">microcirugía</span><span class="tag">toxina</span></div></div>
+    <div class="grp"><span class="gt" style="background:var(--ok);">Paciente</span><div class="gl"><span class="tag">chat</span><span class="tag">recordatorios</span><span class="tag">gamificación</span><span class="tag">triage IA</span><span class="tag">directorio</span></div></div>
+  </div>
+  <div class="grid g4" style="margin-top:9px;">
+    <div class="grp" style="grid-column:span 4;"><span class="gt" style="background:var(--violet);">Adaptadores (integraciones externas)</span><div class="gl"><span class="tag">whatsapp</span><span class="tag">email</span><span class="tag">payments (Stripe/MP)</span><span class="tag">cfdi</span><span class="tag">ai (Claude)</span><span class="tag">storage (S3)</span></div></div>
+  </div>
+  <div class="legend">~25 módulos de negocio + adaptadores. De 71 carpetas del legacy se consolidan en estos. Cada uno = un dominio claro.</div>
+</section>
+
+<!-- 5 COMUNICACIÓN -->
+<section>
+  <div class="eyebrow">CÓMO SE HABLAN ENTRE SÍ</div>
+  <h2>Comunicación entre módulos — 4 canales</h2>
+  <div class="grid g2" style="gap:12px;">
+    <div class="grp" style="border-left:4px solid var(--primary);">
+      <b style="font-size:.55em;color:var(--ink);">1 · Frontend ↔ Backend</b>
+      <div class="flowrow" style="margin:8px 0;"><div class="box">React / Flutter</div><span class="ar">→ REST →</span><div class="box p">DRF API</div></div>
+      <p class="muted">JSON sobre HTTPS con JWT. Un OpenAPI genera los SDK de React y Flutter (tipos siempre sincronizados).</p>
+    </div>
+    <div class="grp" style="border-left:4px solid var(--ok);">
+      <b style="font-size:.55em;color:var(--ink);">2 · Módulo ↔ Módulo</b>
+      <div class="flowrow" style="margin:8px 0;"><div class="box">agenda</div><span class="ar">→ usa →</span><div class="box ok">pacientes.<br>services</div></div>
+      <p class="muted">Se llaman vía la capa de <b>servicios</b> (no tocan las tablas de otro módulo). Cada módulo es dueño de sus datos.</p>
+    </div>
+    <div class="grp" style="border-left:4px solid var(--accent);">
+      <b style="font-size:.55em;color:var(--ink);">3 · Eventos asíncronos</b>
+      <div class="flowrow" style="margin:8px 0;"><div class="box">cita.creada</div><span class="ar">→</span><div class="box acc">Signals</div><span class="ar">+</span><div class="box acc">Celery</div></div>
+      <p class="muted">Una acción emite una señal; otros reaccionan sin bloquear: WhatsApp, bitácora, métricas (Celery + Redis).</p>
+    </div>
+    <div class="grp" style="border-left:4px solid var(--violet);">
+      <b style="font-size:.55em;color:var(--ink);">4 · Webhooks externos</b>
+      <div class="flowrow" style="margin:8px 0;"><div class="box v">Stripe / WhatsApp</div><span class="ar">→ firma →</span><div class="box">/webhooks</div></div>
+      <p class="muted">Sistemas externos notifican al backend (pago, mensaje). Siempre con firma verificada.</p>
+    </div>
+  </div>
+  <div class="legend">Regla de oro: la lógica vive en <b>services/selectors</b>; las vistas son delgadas; los módulos no se acoplan a las tablas de otros.</div>
+</section>
+
+<!-- 6 FLUJO EJEMPLO -->
+<section>
+  <div class="eyebrow">EJEMPLO REAL</div>
+  <h2>Flujo: crear una cita con recordatorio</h2>
+  <div class="flowrow">
+    <div class="box">1 · Recepción<br><small>React: "Crear cita"</small></div><span class="ar">→</span>
+    <div class="box p">2 · API<br><small>POST /agenda/citas</small></div><span class="ar">→</span>
+    <div class="box ok">3 · Servicio<br><small>valida + guarda</small></div>
+  </div>
+  <div class="arrowdown">▼ emite señal "cita.creada"</div>
+  <div class="flowrow">
+    <div class="box acc">4a · WhatsApp<br><small>Celery → recordatorio</small></div>
+    <div class="box acc">4b · Auditoría<br><small>bitácora NOM-024</small></div>
+    <div class="box acc">4c · Dashboard<br><small>actualiza KPI</small></div>
+  </div>
+  <div class="arrowdown">▼</div>
+  <div class="flowrow">
+    <div class="box d">5 · Paciente<br><small>recibe WhatsApp</small></div><span class="ar">↔</span>
+    <div class="box">Maily te cuida<br><small>ve la cita en su app</small></div>
+  </div>
+  <div class="legend">Todo type-safe de punta a punta: si cambia el tipo "cita", no compila hasta arreglar las 4 capas. La misma cita la ve la clínica (Maily Soft) y el paciente (Maily te cuida).</div>
+</section>
+
+<!-- 7 ESPECIALIDADES PLUGINS -->
+<section>
+  <div class="eyebrow">EL CORAZÓN DEL MODELO</div>
+  <h2>Especialidades como plugins</h2>
+  <div class="box p" style="font-size:.55em;padding:14px;margin:10px 0;display:block;text-align:center;background:#EFF6FF;">
+    <b>NÚCLEO COMÚN (85-90%)</b><br>
+    <small style="font-size:.85em;">auth · tenancy · agenda · pacientes · expediente · recetas · finanzas · facturación · chat · archivos · triage · gamificación</small>
+  </div>
+  <div class="arrowdown">▲ cada especialidad "se enchufa" arriba ▲</div>
+  <div class="grid g4">
+    <div class="box ok">🩺 Medicina General<small>hoja base (referencia)</small></div>
+    <div class="box acc">🥗 Nutrición<small>peso, grasa, plan</small></div>
+    <div class="box acc">🤸 Fisioterapia<small>ROM, fuerza, EVA</small></div>
+    <div class="box acc">➕ Ginecología…<small>se agrega sin tocar el núcleo</small></div>
+  </div>
+  <p style="margin-top:12px;">Cada especialidad define su <b>hoja clínica</b> con un <span class="tag">JSON Schema</span>. El backend valida los datos y el frontend <b>genera el formulario solo</b>. Agregar una especialidad nueva = registrar un plugin, sin reprogramar.</p>
+  <div class="legend">Una clínica de 1 especialidad ni ve el concepto de "caso"; una multidisciplinaria activa varias y suma un "Caso" que une las hojas.</div>
+</section>
+
+<!-- 8 MULTITENANT + MPI -->
+<section>
+  <div class="eyebrow">AISLAMIENTO + IDENTIDAD</div>
+  <h2>Multi-tenant + identidad global del paciente</h2>
+  <div class="box ok" style="display:block;text-align:center;margin:6px auto 10px;max-width:520px;background:#F0FDFA;">👤 PatientAccount — identidad GLOBAL (CURP) · dueño de su cuenta y salud</div>
+  <div class="arrowdown">▼ se conecta a (1 a varias)</div>
+  <div class="flowrow">
+    <div class="box p">🏥 Clínica A<small>gineco · tenant_id</small></div>
+    <div class="box p">🏥 Clínica B<small>nutrición · tenant_id</small></div>
+    <div class="box p">🏥 Clínica C<small>general · tenant_id</small></div>
+  </div>
+  <p style="margin-top:10px;">Cada clínica ve <b>SOLO sus propios datos</b> (Row Level Security en PostgreSQL). El paciente ve <b>todo su historial</b> en su app. Para que una clínica vea datos de otra, el paciente da un <b>permiso explícito</b> (SharingGrant).</p>
+  <div class="legend">Patrón estándar de salud (Master Patient Index): identidad compartida, datos clínicos aislados por clínica.</div>
+</section>
+
+<!-- 9 VENTA A ESPECIALISTA -->
+<section>
+  <div class="eyebrow">EL FLUJO COMPLETO</div>
+  <h2>Venta de software a un especialista</h2>
+  <div class="flowrow">
+    <div class="box">1 · Venta<br><small>elige plan anual</small></div><span class="ar">→</span>
+    <div class="box">2 · Add-on<br><small>activa su especialidad</small></div><span class="ar">→</span>
+    <div class="box ok">3 · Crear tenant<br><small>su clínica (aislada)</small></div><span class="ar">→</span>
+    <div class="box p">4 · Activar feature<br><small>billing + plugin</small></div>
+  </div>
+  <div class="arrowdown">▼ el sistema se "transforma" solo</div>
+  <div class="flowrow">
+    <div class="box acc">5 · Plugin carga la hoja<br><small>JSON Schema → formulario</small></div><span class="ar">→</span>
+    <div class="box">6 · Personaliza<br><small>logo, plantillas, equipo</small></div><span class="ar">→</span>
+    <div class="box ok">7 · Especialista opera<br><small>su hoja + agenda + expediente</small></div>
+  </div>
+  <div class="grid g3" style="margin-top:12px;">
+    <div class="grp" style="border-left:3px solid var(--ink);"><div class="gl"><b>Sin código nuevo.</b> Activar una especialidad es un cambio de datos, no de programa.</div></div>
+    <div class="grp" style="border-left:3px solid var(--ok);"><div class="gl"><b>Minutos, no semanas.</b> El costo de sumar un cliente es casi cero.</div></div>
+    <div class="grp" style="border-left:3px solid var(--accent);"><div class="gl"><b>Cobro:</b> plan anual + especialidad como add-on recurrente.</div></div>
+  </div>
+  <div class="legend">Misma plataforma, misma base de datos. Una fisio, una nutrióloga o una clínica regenerativa: cada quien ve solo sus módulos y su(s) especialidad(es).</div>
+</section>
+
+<!-- 10 STACK -->
+<section>
+  <div class="eyebrow">CON QUÉ SE CONSTRUYE</div>
+  <h2>Stack tecnológico</h2>
+  <div class="grid g2">
+    <div class="grp"><span class="gt" style="background:var(--primary);">Backend</span><div class="gl">Django 5 + Django REST Framework · Celery + Redis · Channels (WebSocket) · PostgreSQL 16</div></div>
+    <div class="grp"><span class="gt" style="background:var(--primary2);">Frontends</span><div class="gl">Maily Soft y Panel: React + Vite · Maily te cuida: Flutter (iOS/Android)</div></div>
+    <div class="grp"><span class="gt" style="background:var(--ok);">Datos e infra</span><div class="gl">PostgreSQL (RLS) · Redis · S3 cifrado · AWS región México (Querétaro)</div></div>
+    <div class="grp"><span class="gt" style="background:var(--accent);">Integraciones</span><div class="gl">WhatsApp Cloud API · Stripe / MercadoPago · Claude (IA) · CFDI 4.0 · Email</div></div>
+    <div class="grp"><span class="gt" style="background:var(--danger);">Seguridad</span><div class="gl">JWT + 2FA · multi-tenant RLS · bitácora NOM-024 · cifrado · LFPDPPP</div></div>
+    <div class="grp"><span class="gt" style="background:var(--violet);">Calidad</span><div class="gl">Tipado (mypy) · tests (pytest) · CI/CD · arquitectura por capas (services/selectors)</div></div>
+  </div>
+</section>
+
+<!-- 11 CIERRE -->
+<section data-background-color="#0F2A33">
+  <div class="title-slide">
+    <div class="eyebrow">EN UNA FRASE</div>
+    <h1>Una plataforma, muchas clínicas, muchas especialidades</h1>
+    <p>Un solo backend multi-tenant sirve a la clínica (Maily Soft), al paciente (Maily te cuida) y al dueño SaaS (Panel). Las especialidades se activan como plugins, los módulos se comunican por servicios y eventos, y vender a un especialista es encender un interruptor — no construir un sistema nuevo.</p>
+    <div class="chips">
+      <div class="c"><b>Roles:</b> plataforma · clínica · paciente</div>
+      <div class="c"><b>~25 módulos</b> por dominio</div>
+      <div class="c"><b>Especialidades</b> enchufables</div>
+      <div class="c"><b>Escala</b> sin reprogramar</div>
+    </div>
+  </div>
+</section>
+
+</div></div>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+Reveal.initialize({width:1240,height:760,margin:0.045,minScale:0.2,maxScale:1.6,hash:true,slideNumber:'c/t',transition:'fade'});
+</script>
+</body>
+</html>

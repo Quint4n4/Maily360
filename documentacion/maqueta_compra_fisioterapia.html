@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily Soft — Compra + Software para Fisioterapia (Prototipo)</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{--primary:#0F4C5C;--primary2:#1C7293;--light:#5EB1BF;--ink:#0F1B2D;--body:#334155;--muted:#64748B;--border:#E2E8F0;--bg:#F1F5F9;--card:#FFFFFF;--danger:#D7263D;--warn:#F4A261;--ok:#2A9D8F;--accent:#FFB703;--sidebar:#0F2A33;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--body);font-size:14px;line-height:1.5;}
+button{font-family:inherit;cursor:pointer;border:none;}
+.demo-banner{height:30px;background:var(--accent);color:#0F1B2D;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:.5px;}
+
+/* ===== PURCHASE WIZARD ===== */
+#wizard{min-height:calc(100vh - 30px);background:linear-gradient(160deg,#0F4C5C 0%,#0F2A33 100%);padding:24px 16px 60px;}
+.wlogo{text-align:center;color:#fff;font-family:'Playfair Display';font-size:24px;font-weight:800;margin-bottom:4px;}
+.wlogo span{color:var(--accent);}
+.stepper{display:flex;justify-content:center;gap:6px;max-width:760px;margin:14px auto 26px;flex-wrap:wrap;}
+.stp{display:flex;align-items:center;gap:7px;font-size:11px;color:#7da0aa;}
+.stp .num{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.12);color:#cbd5e1;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;}
+.stp.active .num{background:var(--accent);color:#0F1B2D;}
+.stp.done .num{background:var(--ok);color:#fff;}
+.stp.active{color:#fff;font-weight:700;}
+.wstep{display:none;max-width:880px;margin:0 auto;}
+.wstep.show{display:block;animation:fade .25s;}
+@keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;}}
+.wcard{background:#fff;border-radius:18px;padding:30px;box-shadow:0 20px 50px rgba(0,0,0,.25);}
+.wcard h2{font-family:'Playfair Display';font-size:26px;color:var(--ink);font-weight:800;}
+.wcard .lead{color:var(--muted);margin:4px 0 22px;}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.plan{border:2px solid var(--border);border-radius:16px;padding:20px;}
+.plan.pop{border-color:var(--accent);position:relative;}
+.plan.pop::before{content:"★ Más elegido";position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0F1B2D;font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;}
+.plan .pn{font-weight:800;font-size:17px;color:var(--ink);}
+.plan .pp{font-family:'Playfair Display';font-size:28px;font-weight:800;color:var(--primary);margin:8px 0 2px;}
+.plan .py{font-size:12px;color:var(--muted);}
+.plan ul{list-style:none;margin:14px 0;font-size:12.5px;}
+.plan ul li{padding:5px 0;border-bottom:1px solid #f1f5f9;}
+.plan ul li::before{content:"✓ ";color:var(--ok);font-weight:700;}
+.btn{background:var(--primary);color:#fff;padding:11px 18px;border-radius:10px;font-weight:700;font-size:14px;}
+.btn:hover{background:var(--primary2);}
+.btn.full{width:100%;}
+.btn.acc{background:var(--accent);color:#0F1B2D;}
+.btn.ghost{background:#fff;color:var(--primary);border:1px solid var(--border);}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:5px;}
+.field input{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.addon{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border:1px solid var(--border);border-radius:12px;margin-bottom:10px;}
+.addon.on{border-color:var(--ok);background:#F0FDFA;}
+.sw{width:42px;height:24px;border-radius:20px;background:var(--ok);position:relative;flex-shrink:0;}
+.sw.off{background:#cbd5e1;}
+.sw::after{content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;top:2px;right:2px;}
+.sw.off::after{right:auto;left:2px;}
+.summary{background:var(--bg);border-radius:12px;padding:16px;}
+.summary .ln{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;}
+.summary .tot{display:flex;justify-content:space-between;padding:10px 0 0;margin-top:6px;border-top:1px solid var(--border);font-weight:800;color:var(--ink);font-size:16px;}
+.wfoot{display:flex;justify-content:space-between;margin-top:22px;}
+.trust{display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--muted);margin-top:14px;}
+.bigcheck{width:74px;height:74px;border-radius:50%;background:var(--ok);color:#fff;font-size:38px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+
+/* ===== SOFTWARE SHELL ===== */
+#app{display:none;min-height:calc(100vh - 30px);}
+.shell{display:flex;min-height:calc(100vh - 30px);}
+.sidebar{width:240px;background:var(--sidebar);color:#fff;flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:calc(100vh - 30px);}
+.sidebar .brand{font-family:'Playfair Display';font-size:21px;font-weight:800;padding:20px 22px 2px;}
+.sidebar .brand span{color:var(--accent);}
+.sidebar .clinic{font-size:11px;color:var(--light);padding:0 22px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.nav{padding:14px 12px;flex:1;}
+.navitem{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:#cbd5e1;font-size:13.5px;cursor:pointer;margin-bottom:2px;}
+.navitem:hover{background:rgba(255,255,255,.07);color:#fff;}
+.navitem.active{background:var(--primary2);color:#fff;font-weight:600;}
+.maincol{flex:1;display:flex;flex-direction:column;min-width:0;}
+.topbar{height:60px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 26px;}
+.topbar input{flex:1;max-width:380px;padding:9px 14px;border:1px solid var(--border);border-radius:20px;background:var(--bg);font-size:13px;}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#0F1B2D;display:flex;align-items:center;justify-content:center;font-weight:800;}
+.content{padding:26px;flex:1;}
+.screen{display:none;}.screen.show{display:block;animation:fade .2s;}
+.pagehead{margin-bottom:18px;}
+.pagehead h1{font-family:'Playfair Display';font-size:25px;color:var(--ink);font-weight:800;}
+.pagehead p{color:var(--muted);font-size:13px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(15,27,45,.04);}
+.row{display:flex;gap:16px;}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px;}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;}
+.kpi .lbl{font-size:12px;color:var(--muted);}
+.kpi .val{font-family:'Playfair Display';font-size:28px;font-weight:800;color:var(--ink);margin-top:5px;}
+h3.block{font-size:15px;color:var(--ink);font-weight:700;margin-bottom:12px;}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+table.tbl th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border);}
+table.tbl td{padding:11px 12px;border-bottom:1px solid var(--border);}
+table.tbl tr:last-child td{border-bottom:none;}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+.green{background:#DCFCE7;color:#166534;}.amber{background:#FEF3C7;color:#854D0E;}.blue{background:#DBEAFE;color:#1E40AF;}.teal{background:#CCFBF1;color:#115E59;}.accentt{background:#FEF3C7;color:#92400E;}
+.field2 label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;}
+.field2 input,.field2 textarea,.field2 select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.vbox{background:var(--bg);border-radius:10px;padding:12px;text-align:center;}
+.vbox .vv{font-size:19px;font-weight:800;color:var(--ink);}.vbox .vl{font-size:10px;color:var(--muted);}
+.phead{display:flex;align-items:center;gap:16px;}
+.pic{width:66px;height:66px;border-radius:14px;background:linear-gradient(135deg,var(--primary2),var(--light));color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;}
+.tabs{display:flex;gap:6px;margin:16px 0;border-bottom:1px solid var(--border);}
+.tab{padding:9px 15px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+.progress{height:10px;background:var(--border);border-radius:10px;overflow:hidden;}
+.progress .fill{height:100%;background:linear-gradient(90deg,var(--ok),var(--light));}
+.btn-primary{background:var(--primary);color:#fff;padding:9px 16px;border-radius:9px;font-weight:600;font-size:13px;}
+@media(max-width:860px){.plans,.kpis,.grid4{grid-template-columns:repeat(2,1fr);}.sidebar{display:none;}.grid2{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="demo-banner">🛒 PROTOTIPO — Proceso de compra + software para una clínica de FISIOTERAPIA · Datos de demostración</div>
+
+<!-- ============ WIZARD ============ -->
+<div id="wizard">
+  <div class="wlogo">Maily<span>Soft</span></div>
+  <div class="stepper">
+    <div class="stp active" id="st1"><span class="num">1</span> Plan</div>
+    <div class="stp" id="st2"><span class="num">2</span> Personaliza</div>
+    <div class="stp" id="st3"><span class="num">3</span> Tu clínica</div>
+    <div class="stp" id="st4"><span class="num">4</span> Fisioterapia</div>
+    <div class="stp" id="st5"><span class="num">5</span> Pago</div>
+    <div class="stp" id="st6"><span class="num">6</span> ¡Listo!</div>
+  </div>
+
+  <!-- STEP 1 — PLANES -->
+  <div class="wstep show" id="w1">
+    <div class="wcard">
+      <h2>Elige tu plan</h2>
+      <p class="lead">Maily Soft para tu clínica de fisioterapia. Suscripción anual · 2 meses de prueba gratis.</p>
+      <div class="plans">
+        <div class="plan"><div class="pn">Starter</div><div class="pp">$6,990</div><div class="py">MXN / año + IVA</div>
+          <ul><li>1 usuario</li><li>1 consultorio</li><li>Agenda + pacientes</li><li>Expediente básico</li></ul>
+          <button class="btn ghost full" onclick="goStep(2)">Elegir Starter</button></div>
+        <div class="plan pop"><div class="pn">Plus</div><div class="pp">$13,990</div><div class="py">MXN / año + IVA</div>
+          <ul><li>3 usuarios</li><li>2 consultorios</li><li>Expediente completo</li><li>WhatsApp recordatorios</li><li>Telemedicina</li></ul>
+          <button class="btn full" onclick="goStep(2)">Elegir Plus</button></div>
+        <div class="plan"><div class="pn">VIP</div><div class="pp">$22,990</div><div class="py">MXN / año + IVA</div>
+          <ul><li>10 usuarios</li><li>5 consultorios</li><li>Reportes avanzados</li><li>Soporte prioritario</li></ul>
+          <button class="btn ghost full" onclick="goStep(2)">Elegir VIP</button></div>
+      </div>
+      <div class="trust">🔒 Pago seguro · 🇲🇽 Datos en México · ✓ Cancela cuando quieras</div>
+    </div>
+  </div>
+
+  <!-- STEP 2 — PERSONALIZA -->
+  <div class="wstep" id="w2">
+    <div class="wcard">
+      <h2>Personaliza tu plan</h2>
+      <p class="lead">Plan seleccionado: <b>Plus anual</b>. Agrega las especialidades y extras que tu clínica necesita.</p>
+      <div class="row" style="align-items:flex-start;">
+        <div style="flex:1.4;">
+          <div class="addon on"><div><b>🤸 Especialidad: Fisioterapia</b><div style="font-size:12px;color:var(--muted);">Hoja clínica de fisio: movilidad, fuerza, dolor, plan de ejercicios.</div></div><div style="text-align:right;"><span class="sw"></span><div style="font-size:12px;color:var(--ok);font-weight:700;">+$199/mes</div></div></div>
+          <div class="addon"><div><b>🧠 IA Scribe</b><div style="font-size:12px;color:var(--muted);">Llena la nota por voz durante la sesión.</div></div><div style="text-align:right;"><span class="sw off"></span><div style="font-size:12px;color:var(--muted);">+$299/usuario</div></div></div>
+          <div class="addon"><div><b>📲 WhatsApp extra</b><div style="font-size:12px;color:var(--muted);">1,000 recordatorios adicionales/mes.</div></div><div style="text-align:right;"><span class="sw off"></span><div style="font-size:12px;color:var(--muted);">+$399/mes</div></div></div>
+          <div class="addon"><div><b>🧾 CFDI 4.0</b><div style="font-size:12px;color:var(--muted);">Facturación electrónica nativa.</div></div><div style="text-align:right;"><span class="sw off"></span><div style="font-size:12px;color:var(--muted);">+$199/mes</div></div></div>
+        </div>
+        <div style="flex:1;">
+          <div class="summary">
+            <h3 class="block">Resumen</h3>
+            <div class="ln"><span>Plan Plus (anual)</span><span>$13,990</span></div>
+            <div class="ln"><span>Fisioterapia (add-on)</span><span>$2,388/año</span></div>
+            <div class="ln" style="color:var(--ok);"><span>2 meses de prueba gratis</span><span>-$0 hoy</span></div>
+            <div class="tot"><span>Total al activar</span><span>$0 hoy</span></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px;">Después de la prueba: $16,378 + IVA / año.</div>
+          </div>
+        </div>
+      </div>
+      <div class="wfoot"><button class="btn ghost" onclick="goStep(1)">← Atrás</button><button class="btn" onclick="goStep(3)">Continuar →</button></div>
+    </div>
+  </div>
+
+  <!-- STEP 3 — TU CLÍNICA -->
+  <div class="wstep" id="w3">
+    <div class="wcard">
+      <h2>Crea tu clínica</h2>
+      <p class="lead">Estos datos crean tu espacio privado (tenant) en la plataforma.</p>
+      <div class="field"><label>Nombre de la clínica</label><input value="Centro de Fisioterapia Movimiento" /></div>
+      <div class="grid2">
+        <div class="field"><label>Tu nombre (administrador)</label><input value="Lic. Roberto Díaz" /></div>
+        <div class="field"><label>Correo electrónico</label><input value="r.diaz@movimiento.mx" /></div>
+        <div class="field"><label>Teléfono</label><input value="442 310 5520" /></div>
+        <div class="field"><label>RFC</label><input value="CFM240310XY9" /></div>
+        <div class="field"><label># de consultorios</label><input value="2" /></div>
+        <div class="field"><label>Ciudad</label><input value="Querétaro" /></div>
+      </div>
+      <div class="wfoot"><button class="btn ghost" onclick="goStep(2)">← Atrás</button><button class="btn" onclick="goStep(4)">Continuar →</button></div>
+    </div>
+  </div>
+
+  <!-- STEP 4 — FISIOTERAPIA -->
+  <div class="wstep" id="w4">
+    <div class="wcard">
+      <h2>Configura Fisioterapia 🤸</h2>
+      <p class="lead">Tu clínica usará la hoja clínica de fisioterapia. Esto es lo que tus terapeutas podrán registrar en cada sesión:</p>
+      <div class="grid2">
+        <div class="card" style="background:#F0FDFA;border-color:var(--ok);"><b>📐 Rango de movilidad (ROM)</b><div style="font-size:12.5px;color:var(--muted);margin-top:4px;">Flexión, extensión, abducción en grados.</div></div>
+        <div class="card" style="background:#F0FDFA;border-color:var(--ok);"><b>💪 Fuerza muscular</b><div style="font-size:12.5px;color:var(--muted);margin-top:4px;">Escala 0-5 por grupo muscular.</div></div>
+        <div class="card" style="background:#F0FDFA;border-color:var(--ok);"><b>📊 Escala de dolor (EVA)</b><div style="font-size:12.5px;color:var(--muted);margin-top:4px;">0 a 10, seguimiento por sesión.</div></div>
+        <div class="card" style="background:#F0FDFA;border-color:var(--ok);"><b>🏃 Plan de ejercicios</b><div style="font-size:12.5px;color:var(--muted);margin-top:4px;">Rutina en clínica y en casa, # de sesiones.</div></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);font-style:italic;margin-top:14px;">💡 Si más adelante agregas otra especialidad (ej. nutrición), aparecerá su propia hoja — sin reprogramar nada.</p>
+      <div class="wfoot"><button class="btn ghost" onclick="goStep(3)">← Atrás</button><button class="btn" onclick="goStep(5)">Continuar →</button></div>
+    </div>
+  </div>
+
+  <!-- STEP 5 — PAGO -->
+  <div class="wstep" id="w5">
+    <div class="wcard">
+      <h2>Activa tu prueba</h2>
+      <p class="lead">2 meses gratis. No se te cobra hoy; cancela antes y no pagas nada.</p>
+      <div class="row" style="align-items:flex-start;">
+        <div style="flex:1.3;">
+          <div class="field"><label>Nombre en la tarjeta</label><input value="Roberto Díaz" /></div>
+          <div class="field"><label>Número de tarjeta</label><input value="4242 4242 4242 4242" /></div>
+          <div class="grid2"><div class="field"><label>Vencimiento</label><input value="04/28" /></div><div class="field"><label>CVC</label><input value="•••" /></div></div>
+          <div class="trust" style="justify-content:flex-start;">🔒 Procesado por Stripe · Pago seguro</div>
+        </div>
+        <div style="flex:1;">
+          <div class="summary">
+            <h3 class="block">Tu suscripción</h3>
+            <div class="ln"><span>Plan Plus (anual)</span><span>$13,990</span></div>
+            <div class="ln"><span>Fisioterapia</span><span>$2,388</span></div>
+            <div class="ln" style="color:var(--ok);"><span>Prueba 2 meses</span><span>Gratis</span></div>
+            <div class="tot"><span>Hoy pagas</span><span>$0</span></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px;">Primer cargo el 26 jul 2026: $16,378 + IVA.</div>
+          </div>
+          <button class="btn acc full" style="margin-top:12px;" onclick="goStep(6)">Activar prueba gratis</button>
+        </div>
+      </div>
+      <div class="wfoot"><button class="btn ghost" onclick="goStep(4)">← Atrás</button><span></span></div>
+    </div>
+  </div>
+
+  <!-- STEP 6 — LISTO -->
+  <div class="wstep" id="w6">
+    <div class="wcard" style="text-align:center;">
+      <div class="bigcheck">✓</div>
+      <h2>¡Tu clínica está activa! 🎉</h2>
+      <p class="lead" style="text-align:center;">Centro de Fisioterapia Movimiento ya tiene su espacio en Maily Soft.</p>
+      <div class="summary" style="text-align:left;max-width:420px;margin:0 auto 18px;">
+        <div class="ln"><span>Plan</span><span><b>Plus anual</b></span></div>
+        <div class="ln"><span>Especialidad</span><span><b>Fisioterapia ✓</b></span></div>
+        <div class="ln"><span>Usuarios</span><span>3 · Consultorios: 2</span></div>
+        <div class="ln"><span>Prueba gratis hasta</span><span>26 jul 2026</span></div>
+      </div>
+      <button class="btn acc" onclick="enterApp()">Entrar al sistema →</button>
+      <div class="trust" style="margin-top:16px;">📧 Te enviamos un correo para invitar a tu equipo · 📚 Guía de inicio incluida</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SOFTWARE (FISIO) ============ -->
+<div id="app">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">Maily<span>Soft</span></div>
+      <div class="clinic">🤸 Centro de Fisioterapia Movimiento</div>
+      <nav class="nav">
+        <div class="navitem active" data-screen="dash" onclick="show('dash')"><span>🏠</span> Dashboard</div>
+        <div class="navitem" data-screen="ag" onclick="show('ag')"><span>📅</span> Agenda de sesiones</div>
+        <div class="navitem" data-screen="pac" onclick="show('pac')"><span>👥</span> Pacientes</div>
+        <div class="navitem" data-screen="fic" onclick="show('fic')"><span>📋</span> Ficha del paciente</div>
+        <div class="navitem" data-screen="hoja" onclick="show('hoja')"><span>🤸</span> Hoja de fisioterapia</div>
+        <div class="navitem" data-screen="cfg" onclick="show('cfg')"><span>⚙️</span> Configuración</div>
+      </nav>
+      <div style="padding:14px 18px;border-top:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:10px;font-size:12px;">
+        <div class="avatar" style="width:32px;height:32px;">RD</div><div><div style="color:#fff;font-weight:600;">Lic. Roberto Díaz</div><div style="color:#5b7782;">Owner · Fisioterapeuta</div></div>
+      </div>
+    </aside>
+    <div class="maincol">
+      <div class="topbar"><input placeholder="🔍 Buscar paciente, sesión..." /><div style="margin-left:auto;" class="avatar">RD</div></div>
+      <div class="content">
+
+        <!-- DASHBOARD -->
+        <section id="dash" class="screen show">
+          <div class="pagehead"><h1>Buenos días, Lic. Díaz 👋</h1><p>Centro de Fisioterapia Movimiento · martes 26 de mayo</p></div>
+          <div class="kpis">
+            <div class="kpi"><div class="lbl">🤸 Sesiones de hoy</div><div class="val">9</div></div>
+            <div class="kpi"><div class="lbl">👥 Pacientes en tratamiento</div><div class="val">47</div></div>
+            <div class="kpi"><div class="lbl">📈 Adherencia al plan</div><div class="val">82%</div></div>
+            <div class="kpi"><div class="lbl">💰 Ingresos del mes</div><div class="val">$88K</div></div>
+          </div>
+          <div class="card"><h3 class="block">Sesiones de hoy</h3>
+            <table class="tbl">
+              <tr><th>Hora</th><th>Paciente</th><th>Tratamiento</th><th>Sesión</th><th>Estado</th></tr>
+              <tr><td>09:00</td><td>Sofía Mendoza</td><td>Rehabilitación de hombro</td><td>5 de 12</td><td><span class="tag green">En curso</span></td></tr>
+              <tr><td>10:00</td><td>Juan Hernández</td><td>Gonartrosis rodilla</td><td>2 de 10</td><td><span class="tag blue">Próxima</span></td></tr>
+              <tr><td>11:00</td><td>Laura Mora</td><td>Lumbalgia</td><td>8 de 8</td><td><span class="tag amber">Última sesión</span></td></tr>
+              <tr><td>12:00</td><td>Diego Cano</td><td>Esguince de tobillo</td><td>1 de 6</td><td><span class="tag blue">Próxima</span></td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- AGENDA -->
+        <section id="ag" class="screen">
+          <div class="pagehead" style="display:flex;justify-content:space-between;align-items:center;"><div><h1>Agenda de sesiones</h1><p>Semana actual · 2 consultorios</p></div><button class="btn-primary">+ Nueva sesión</button></div>
+          <div class="card"><table class="tbl">
+            <tr><th>Hora</th><th>Lun 25</th><th>Mar 26</th><th>Mié 27</th><th>Jue 28</th><th>Vie 29</th></tr>
+            <tr><td>09:00</td><td>S. Mendoza<br><span class="tag teal">Hombro</span></td><td>S. Mendoza<br><span class="tag teal">Hombro</span></td><td></td><td>S. Mendoza</td><td></td></tr>
+            <tr><td>10:00</td><td></td><td>J. Hernández<br><span class="tag accentt">Rodilla</span></td><td>J. Hernández</td><td></td><td>J. Hernández</td></tr>
+            <tr><td>11:00</td><td>L. Mora<br><span class="tag blue">Lumbalgia</span></td><td>L. Mora</td><td></td><td>L. Mora</td><td></td></tr>
+            <tr><td>12:00</td><td></td><td>D. Cano<br><span class="tag green">Tobillo</span></td><td>D. Cano</td><td></td><td>D. Cano</td></tr>
+          </table></div>
+          <p style="font-size:12px;color:var(--muted);margin-top:10px;">Cada paciente tiene su serie de sesiones programadas (ej. 12 sesiones, 3 por semana).</p>
+        </section>
+
+        <!-- PACIENTES -->
+        <section id="pac" class="screen">
+          <div class="pagehead" style="display:flex;justify-content:space-between;align-items:center;"><div><h1>Pacientes</h1><p>47 en tratamiento activo</p></div><button class="btn-primary">+ Nuevo paciente</button></div>
+          <div class="card" style="padding:0;"><table class="tbl">
+            <tr><th>Paciente</th><th>Diagnóstico</th><th>Plan</th><th>Progreso</th><th>Terapeuta</th></tr>
+            <tr><td>Sofía Mendoza</td><td>Lesión de manguito rotador</td><td>12 sesiones</td><td><div class="progress" style="width:120px;"><div class="fill" style="width:42%;"></div></div>5/12</td><td>Lic. Díaz</td></tr>
+            <tr><td>Juan Hernández</td><td>Gonartrosis grado II</td><td>10 sesiones</td><td><div class="progress" style="width:120px;"><div class="fill" style="width:20%;"></div></div>2/10</td><td>Lic. Díaz</td></tr>
+            <tr><td>Laura Mora</td><td>Lumbalgia mecánica</td><td>8 sesiones</td><td><div class="progress" style="width:120px;"><div class="fill" style="width:100%;"></div></div>8/8</td><td>Lic. Sosa</td></tr>
+            <tr><td>Diego Cano</td><td>Esguince de tobillo II</td><td>6 sesiones</td><td><div class="progress" style="width:120px;"><div class="fill" style="width:16%;"></div></div>1/6</td><td>Lic. Sosa</td></tr>
+          </table></div>
+        </section>
+
+        <!-- FICHA -->
+        <section id="fic" class="screen">
+          <div class="card">
+            <div class="phead"><div class="pic">SM</div>
+              <div style="flex:1;"><h1 style="font-size:22px;">Sofía Mendoza</h1><div style="color:var(--muted);font-size:13px;">EXP-0912 · 47 años · F</div>
+                <div style="margin-top:6px;"><span class="tag accentt">Lesión de manguito rotador</span> <span class="tag blue">Sesión 5 de 12</span></div></div>
+              <button class="btn-primary" onclick="show('hoja')">Registrar sesión de hoy</button>
+            </div>
+            <div class="tabs"><div class="tab active">Resumen</div><div class="tab">Evaluación inicial</div><div class="tab" onclick="show('hoja')">Sesiones</div><div class="tab">Plan de ejercicios</div></div>
+            <div class="row">
+              <div style="flex:1;"><h3 class="block">Progreso del tratamiento</h3>
+                <div class="card" style="background:var(--bg);"><div style="display:flex;justify-content:space-between;font-size:13px;"><span>Sesión 5 de 12</span><span>42%</span></div><div class="progress" style="margin-top:6px;"><div class="fill" style="width:42%;"></div></div></div>
+                <h3 class="block" style="margin-top:16px;">Evolución del dolor (EVA)</h3>
+                <div style="display:flex;gap:8px;align-items:flex-end;height:90px;">
+                  <div style="flex:1;background:var(--danger);height:80%;border-radius:5px 5px 0 0;"></div>
+                  <div style="flex:1;background:var(--danger);height:70%;border-radius:5px 5px 0 0;"></div>
+                  <div style="flex:1;background:var(--warn);height:55%;border-radius:5px 5px 0 0;"></div>
+                  <div style="flex:1;background:var(--warn);height:45%;border-radius:5px 5px 0 0;"></div>
+                  <div style="flex:1;background:var(--ok);height:30%;border-radius:5px 5px 0 0;"></div>
+                </div>
+                <div style="font-size:11px;color:var(--muted);text-align:center;">Sesiones 1→5 · de 8/10 a 4/10 👍</div>
+              </div>
+              <div style="flex:1;"><h3 class="block">Mediciones recientes</h3>
+                <div class="grid3">
+                  <div class="vbox"><div class="vv">95°</div><div class="vl">Flexión</div></div>
+                  <div class="vbox"><div class="vv">3/5</div><div class="vl">Fuerza</div></div>
+                  <div class="vbox"><div class="vv">4/10</div><div class="vl">Dolor EVA</div></div>
+                </div>
+                <h3 class="block" style="margin-top:16px;">Próximas sesiones</h3>
+                <div class="card" style="background:var(--bg);margin-bottom:8px;font-size:13px;"><b>Jue 28 · 09:00</b> — Lic. Díaz</div>
+                <div class="card" style="background:var(--bg);font-size:13px;"><b>Lun 01 jun · 09:00</b> — Lic. Díaz</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- HOJA DE FISIOTERAPIA -->
+        <section id="hoja" class="screen">
+          <div class="pagehead"><h1>🤸 Hoja de Fisioterapia · Sofía Mendoza</h1><p>Sesión 5 de 12 · 26 may 2026 · Lic. Roberto Díaz</p></div>
+          <div class="row">
+            <div class="card" style="flex:1;"><h3 class="block">📐 Rango de movilidad (ROM)</h3>
+              <div class="grid3">
+                <div class="field2"><label>Flexión (°)</label><input value="95" /></div>
+                <div class="field2"><label>Extensión (°)</label><input value="40" /></div>
+                <div class="field2"><label>Abducción (°)</label><input value="80" /></div>
+              </div>
+            </div>
+            <div class="card" style="flex:1;"><h3 class="block">💪 Fuerza muscular (0-5)</h3>
+              <div class="grid3">
+                <div class="field2"><label>Deltoides</label><input value="3" /></div>
+                <div class="field2"><label>Supraespinoso</label><input value="3" /></div>
+                <div class="field2"><label>Rotadores</label><input value="2" /></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <div class="grid2">
+              <div class="field2"><label>📊 Dolor (EVA 0-10)</label><input value="4" /></div>
+              <div class="field2"><label>Tratamiento aplicado hoy</label><input value="Electroterapia + ejercicio terapéutico + crioterapia" /></div>
+            </div>
+            <div class="field2" style="margin-top:14px;"><label>🏃 Plan de ejercicios en casa</label><textarea rows="2">Pendulares de Codman 3x10. Isométricos de hombro 3x15. Estiramiento capsular posterior 30s x3. Aplicar hielo 15 min post-ejercicio.</textarea></div>
+            <div class="field2" style="margin-top:14px;"><label>Observaciones / evolución</label><textarea rows="2">Mejora notable en ROM y dolor respecto a sesión 1 (EVA 8→4). Continuar progresión de fuerza. Reevaluar en sesión 8.</textarea></div>
+            <div style="display:flex;gap:10px;margin-top:10px;"><button class="btn-primary">Guardar sesión</button><button class="btn ghost">Agendar siguiente sesión</button></div>
+          </div>
+          <p style="font-size:12px;color:var(--muted);font-style:italic;margin-top:10px;">💡 Esta hoja es específica de fisioterapia. La generó automáticamente el sistema al activar la especialidad — sin programar nada.</p>
+        </section>
+
+        <!-- CONFIG -->
+        <section id="cfg" class="screen">
+          <div class="pagehead"><h1>Configuración</h1><p>Tu clínica y suscripción</p></div>
+          <div class="card" style="background:linear-gradient(135deg,#0F4C5C,#1C7293);color:#fff;">
+            <div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:12px;color:var(--light);">PLAN ACTUAL</div><div style="font-family:'Playfair Display';font-size:24px;font-weight:800;">Plus Anual · 🤸 Fisioterapia</div><div style="font-size:12px;color:#cbd5e1;">Prueba gratis hasta 26 jul 2026 · 3 usuarios · 2 consultorios</div></div></div>
+          </div>
+          <div class="card" style="margin-top:16px;"><h3 class="block">Especialidades activas</h3>
+            <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);">🤸 Fisioterapia <span class="tag green">Activa</span></div>
+            <div style="display:flex;justify-content:space-between;padding:9px 0;color:var(--muted);">🥗 Nutrición — Activar (+$249/mes) · 🩺 Medicina General — Activar</div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function goStep(n){
+  document.querySelectorAll('.wstep').forEach(s=>s.classList.remove('show'));
+  document.getElementById('w'+n).classList.add('show');
+  for(var i=1;i<=6;i++){var s=document.getElementById('st'+i);s.classList.remove('active','done');if(i<n)s.classList.add('done');if(i===n)s.classList.add('active');}
+  window.scrollTo(0,0);
+}
+function enterApp(){document.getElementById('wizard').style.display='none';document.getElementById('app').style.display='block';show('dash');}
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
+  var el=document.getElementById(id); if(el) el.classList.add('show');
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  var nav=document.querySelector('.navitem[data-screen="'+id+'"]'); if(nav) nav.classList.add('active');
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily Platform — Plan de Unificación del Backend Maily te cuida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{--primary:#0F4C5C;--primary2:#1C7293;--light:#5EB1BF;--cream:#F8FAFC;--card:#FFFFFF;--ink:#0F1B2D;--body:#334155;--muted:#64748B;--border:#E2E8F0;--danger:#D7263D;--warn:#F4A261;--ok:#2A9D8F;--accent:#FFB703;--code-bg:#0F1B2D;--code-fg:#E2E8F0;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'Inter',sans-serif;color:var(--body);background:var(--cream);line-height:1.65;font-size:15px;}
+.wrap{display:flex;max-width:1400px;margin:0 auto;}
+nav.toc{position:sticky;top:0;align-self:flex-start;width:300px;height:100vh;overflow-y:auto;background:var(--primary);color:#fff;padding:28px 20px;flex-shrink:0;}
+nav.toc .brand{font-family:'Playfair Display',serif;font-size:20px;font-weight:800;margin-bottom:4px;}
+nav.toc .brand small{display:block;font-family:'Inter';font-size:10px;font-weight:400;color:var(--light);letter-spacing:1.3px;margin-top:4px;}
+nav.toc .ver{font-size:11px;color:var(--light);margin:14px 0 20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.15);}
+nav.toc a{display:block;color:#CBD5E1;text-decoration:none;font-size:12.5px;padding:6px 10px;border-radius:6px;margin-bottom:2px;transition:.15s;}
+nav.toc a:hover{background:rgba(255,255,255,.1);color:#fff;}
+main{flex:1;padding:48px 56px;max-width:1080px;}
+h1{font-family:'Playfair Display',serif;font-size:38px;color:var(--ink);font-weight:800;line-height:1.15;margin-bottom:8px;}
+h2{font-family:'Playfair Display',serif;font-size:26px;color:var(--primary);font-weight:700;margin:44px 0 14px;padding-top:12px;}
+h3{font-size:18px;color:var(--ink);font-weight:700;margin:26px 0 10px;}
+h4{font-size:14px;color:var(--primary2);font-weight:700;margin:18px 0 8px;text-transform:uppercase;letter-spacing:1px;}
+p{margin-bottom:14px;}
+ul,ol{margin:0 0 14px 22px;}
+li{margin-bottom:6px;}
+strong{color:var(--ink);font-weight:700;}
+code{font-family:'JetBrains Mono',monospace;background:#EEF2F6;color:var(--primary);padding:2px 6px;border-radius:4px;font-size:13px;}
+.hero{background:var(--primary);color:#fff;border-radius:16px;padding:42px 40px;margin-bottom:30px;position:relative;overflow:hidden;}
+.hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,183,3,.12);}
+.hero .eyebrow{font-size:12px;letter-spacing:4px;color:var(--light);font-weight:700;margin-bottom:10px;}
+.hero h1{color:#fff;font-size:38px;}
+.hero p{font-size:16px;color:#CBD5E1;margin-top:10px;max-width:720px;}
+pre.diagram{background:var(--code-bg);color:var(--code-fg);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.45;padding:20px 22px;border-radius:12px;overflow-x:auto;margin:16px 0;border:1px solid #1e2d44;box-shadow:0 6px 24px rgba(15,27,45,.12);}
+pre.code{background:var(--code-bg);color:#cbd5e1;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;padding:18px 20px;border-radius:12px;overflow-x:auto;margin:14px 0;}
+pre.code .k{color:#7dd3fc;}pre.code .s{color:#fcd34d;}pre.code .c{color:#64748b;font-style:italic;}pre.code .r{color:#fb7185;}pre.code .g{color:#86efac;}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(15,27,45,.06);}
+th{background:var(--primary);color:#fff;text-align:left;padding:10px 13px;font-weight:600;font-size:12.5px;}
+td{padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+tr:nth-child(even) td{background:#F8FAFC;}
+.center{text-align:center;}
+.callout{border-radius:10px;padding:15px 18px;margin:16px 0;border-left:5px solid;font-size:13.5px;}
+.callout.info{background:#EFF6FF;border-color:var(--primary2);}
+.callout.warn{background:#FFF7ED;border-color:var(--warn);}
+.callout.danger{background:#FEF2F2;border-color:var(--danger);}
+.callout.ok{background:#F0FDFA;border-color:var(--ok);}
+.callout b{display:block;margin-bottom:4px;color:var(--ink);}
+.section-tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:3px;color:var(--primary2);margin-bottom:4px;}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;color:#fff;letter-spacing:.3px;}
+.effort{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700;}
+.e-s{background:#DCFCE7;color:#166534;}.e-m{background:#FEF9C3;color:#854D0E;}.e-l{background:#FEE2E2;color:#991B1B;}
+.footer{margin-top:46px;padding-top:22px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+.printbtn{position:fixed;bottom:24px;right:24px;background:var(--primary);color:#fff;border:none;padding:13px 20px;border-radius:30px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(15,76,92,.35);font-family:'Inter';z-index:99;}
+.printbtn:hover{background:var(--primary2);}
+.bad{color:var(--danger);font-weight:600;}.good{color:var(--ok);font-weight:600;}
+@media print{nav.toc{display:none;}.printbtn{display:none;}main{padding:0;max-width:100%;}body{font-size:11px;}pre.diagram,pre.code{font-size:9px;box-shadow:none;}.hero{break-inside:avoid;}h2{break-after:avoid;}table,pre,.callout{break-inside:avoid;}}
+@media(max-width:900px){.wrap{flex-direction:column;}nav.toc{width:100%;height:auto;position:relative;}main{padding:24px;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <div class="brand">Maily Platform<small>UNIFICAR · MAILY TE CUIDA</small></div>
+  <div class="ver">v0.1 · Plan de cambios · 2026</div>
+  <a href="#objetivo">1. Objetivo y alcance</a>
+  <a href="#esfuerzo">2. Esfuerzo total estimado</a>
+  <a href="#brechas">3. Mapa de brechas</a>
+  <a href="#c1">C1. Modelo base + multi-tenant</a>
+  <a href="#c2">C2. Identidad global del paciente</a>
+  <a href="#c3">C3. Especialidades a plugins</a>
+  <a href="#c4">C4. Auth unificada (Clerk→JWT)</a>
+  <a href="#c5">C5. Modelo de negocio unificado</a>
+  <a href="#c6">C6. Capa de servicios</a>
+  <a href="#c7">C7. Qué pasa con cada app</a>
+  <a href="#c8">C8. Seguridad (bloqueantes)</a>
+  <a href="#c9">C9. Calidad y herramientas</a>
+  <a href="#plan">4. Plan por fases</a>
+  <a href="#decisiones">5. Decisiones que debes tomar</a>
+  <a href="#riesgos">6. Riesgos</a>
+</nav>
+<main>
+
+<div class="hero">
+  <div class="eyebrow">CAMINO DE UNIFICACIÓN</div>
+  <h1>Qué cambiar en Maily te cuida para unificarlo</h1>
+  <p>Lista concreta y accionable de los cambios necesarios para que el backend actual de Maily te cuida (app del paciente) deje de ser un sistema aislado y se integre en la Maily Platform unificada: multi-tenant, identidad global del paciente, especialidades como plugins, autenticación y cobro unificados.</p>
+</div>
+
+<!-- 1 -->
+<section id="objetivo">
+<span class="section-tag">SECCIÓN 1</span>
+<h2>Objetivo y alcance</h2>
+<p>El backend actual es <strong>de buena calidad (7/10) y está ~80% completo</strong>, pero fue construido como una app de paciente <em>aislada</em> (B2C, sin multi-tenant, especialidades fijas, auth con Clerk). Este documento detalla lo que hay que transformar para que sea parte de <strong>una sola plataforma</strong> donde clínica (Maily Soft) y paciente (Maily te cuida) comparten cimientos.</p>
+<div class="callout warn">
+  <b>Recordatorio honesto</b>
+  Unificar es un <strong>refactor mayor</strong> (semanas, no días). La alternativa —mantener dos backends separados que se comunican por API— es más rápida pero te deja dos sistemas que mantener. Este documento asume que <strong>eliges unificar</strong>. Si dudas, lee primero la Sección 5 (modelo de negocio) y la 6.
+</div>
+<p>Leyenda de esfuerzo por cambio: <span class="effort e-s">BAJO</span> (días) · <span class="effort e-m">MEDIO</span> (1-2 semanas) · <span class="effort e-l">ALTO</span> (2+ semanas)</p>
+</section>
+
+<!-- 2 -->
+<section id="esfuerzo">
+<span class="section-tag">SECCIÓN 2</span>
+<h2>Esfuerzo total estimado</h2>
+<table>
+<tr><th>Bloque de cambios</th><th>Esfuerzo</th><th>Riesgo</th></tr>
+<tr><td>C1 · Modelo base abstracto + multi-tenant (tenant_id en todo)</td><td><span class="effort e-l">ALTO</span></td><td>Alto (toca todos los modelos + migraciones)</td></tr>
+<tr><td>C2 · Identidad global del paciente (MPI)</td><td><span class="effort e-l">ALTO</span></td><td>Alto (cambia el eje del sistema)</td></tr>
+<tr><td>C3 · Especialidades a sistema de plugins</td><td><span class="effort e-m">MEDIO</span></td><td>Medio</td></tr>
+<tr><td>C4 · Auth unificada (Clerk → JWT o abstracción)</td><td><span class="effort e-m">MEDIO</span></td><td>Medio</td></tr>
+<tr><td>C5 · Modelo de negocio unificado (B2B + B2C)</td><td><span class="effort e-m">MEDIO</span></td><td>Medio</td></tr>
+<tr><td>C6 · Capa de servicios/selectors (alinear a estándares)</td><td><span class="effort e-m">MEDIO</span></td><td>Bajo (gradual)</td></tr>
+<tr><td>C7 · Resolver solapamiento de apps con Maily Soft</td><td><span class="effort e-l">ALTO</span></td><td>Alto (definir fuente de verdad)</td></tr>
+<tr><td>C8 · Correcciones de seguridad (bloqueantes)</td><td><span class="effort e-s">BAJO</span></td><td>Crítico si no se hace</td></tr>
+<tr><td>C9 · Calidad y herramientas (mypy, N+1, factories)</td><td><span class="effort e-s">BAJO</span></td><td>Bajo</td></tr>
+</table>
+<div class="callout info">
+  <b>Estimación realista</b>
+  Con un equipo de 2 devs senior: <strong>6 a 10 semanas</strong> de refactor para tener la base unificada estable. La seguridad (C8) se hace en <strong>la primera semana</strong> sí o sí. C1, C2 y C7 son el grueso del trabajo y deben ir primero porque todo lo demás depende de ellos.
+</div>
+</section>
+
+<!-- 3 -->
+<section id="brechas">
+<span class="section-tag">SECCIÓN 3</span>
+<h2>Mapa de brechas: hoy vs. objetivo</h2>
+<table>
+<tr><th>Dimensión</th><th>Hoy (Maily te cuida)</th><th>Objetivo (Maily Platform)</th></tr>
+<tr><td>Multi-tenant</td><td class="bad">No existe</td><td>Toda entidad con <code>tenant_id</code> + RLS</td></tr>
+<tr><td>Identidad del paciente</td><td class="bad">1:1 usuario↔paciente, una sola "clínica"</td><td>Global (MPI), se conecta a varias clínicas</td></tr>
+<tr><td>Especialidades</td><td class="bad">Apps fijas hardcodeadas</td><td>Plugins + JSON Schema por especialidad</td></tr>
+<tr><td>Autenticación</td><td>Clerk (acoplado)</td><td>JWT propio unificado (o Clerk tras abstracción)</td></tr>
+<tr><td>Cobro</td><td>B2C mensual (FREE/SILVER/GOLD/PLATINUM)</td><td>B2B anual (clínica) + B2C opcional (paciente premium)</td></tr>
+<tr><td>Arquitectura de código</td><td>Lógica en views/serializers</td><td>Capa de servicios/selectors</td></tr>
+<tr><td>Modelo base</td><td class="bad">Cada modelo repite id/timestamps</td><td><code>TenantAwareModel</code> abstracto común</td></tr>
+<tr><td>Tipado / mypy</td><td class="bad">Parcial, sin mypy</td><td>Type hints + mypy en CI</td></tr>
+</table>
+</section>
+
+<!-- C1 -->
+<section id="c1">
+<span class="section-tag">CAMBIO 1 · <span class="effort e-l">ALTO</span></span>
+<h2>C1. Modelo base abstracto + multi-tenant</h2>
+<p>Es el cimiento de todo. Hoy no hay multi-tenancy: ninguna tabla sabe a qué clínica pertenece. Hay que introducir un modelo base que TODA entidad de negocio herede.</p>
+<h4>Qué hacer</h4>
+<ol>
+  <li>Crear <code>core/models.py</code> con un modelo abstracto <code>TenantAwareModel</code>.</li>
+  <li>Migrar cada modelo de negocio para que herede de él (agrega <code>tenant_id</code>, timestamps, soft delete).</li>
+  <li>Agregar un <code>TenantManager</code> que filtre automáticamente por la clínica del usuario.</li>
+  <li>Activar Row Level Security en PostgreSQL como segunda barrera.</li>
+  <li>Middleware que fije el tenant del request a partir del token.</li>
+</ol>
+<pre class="code"><span class="c"># core/models.py — NUEVO</span>
+<span class="k">class</span> <span class="g">TenantAwareModel</span>(models.Model):
+    id         = models.UUIDField(primary_key=<span class="k">True</span>, default=uuid4, editable=<span class="k">False</span>)
+    tenant_id  = models.UUIDField(db_index=<span class="k">True</span>)        <span class="c"># ← LA clave nueva</span>
+    created_at = models.DateTimeField(auto_now_add=<span class="k">True</span>)
+    updated_at = models.DateTimeField(auto_now=<span class="k">True</span>)
+    deleted_at = models.DateTimeField(null=<span class="k">True</span>, blank=<span class="k">True</span>)
+
+    objects = TenantManager()       <span class="c"># filtra por tenant automático</span>
+    all_objects = models.Manager()  <span class="c"># sin filtro (admin)</span>
+
+    <span class="k">class</span> <span class="g">Meta</span>:
+        abstract = <span class="k">True</span></pre>
+<div class="callout warn">
+  <b>El reto real</b>
+  No es escribir el modelo base (eso es fácil) — es <strong>migrar los datos existentes</strong> asignándoles un <code>tenant_id</code> y reescribir cada query para respetar el tenant. Por eso es ALTO. Hazlo módulo por módulo, no todo de golpe.
+</div>
+</section>
+
+<!-- C2 -->
+<section id="c2">
+<span class="section-tag">CAMBIO 2 · <span class="effort e-l">ALTO</span></span>
+<h2>C2. Identidad global del paciente (Master Patient Index)</h2>
+<p>Hoy <code>PatientProfile</code> es un <code>OneToOne</code> con el usuario y asume una sola relación. En la plataforma, el paciente es <strong>global</strong> y se conecta a varias clínicas.</p>
+<h4>Qué hacer</h4>
+<ul>
+  <li>Separar la identidad global (<code>PatientAccount</code>, sin tenant) del vínculo por clínica (<code>ClinicPatientLink</code>, con tenant).</li>
+  <li>Mover el perfil de salud "propio del paciente" (alergias, tipo de sangre, crónicos) a la cuenta global.</li>
+  <li>Usar <strong>CURP</strong> como llave anti-duplicados.</li>
+  <li>Los datos clínicos (vitals, medications, lab_results...) cuelgan del <code>ClinicPatientLink</code>, no del paciente directo.</li>
+</ul>
+<pre class="diagram">HOY:   User ──1:1── PatientProfile ──< vitals, medications, ...
+
+OBJETIVO:
+  PatientAccount (global, sin tenant)        ← identidad + salud propia + gamificación
+        │ se conecta a (1:N)
+        ▼
+  ClinicPatientLink (con tenant_id)          ← uno por clínica
+        │
+        ▼
+  vitals, medications, lab_results, ...      ← cuelgan del link (tenant-scoped)</pre>
+<div class="callout danger">
+  <b>Impacto fuerte</b>
+  Esto cambia el "eje" del sistema. Casi todas las apps de datos clínicos (vitals, medications, prescriptions, lab_results, documents) deben repuntar de <code>patient</code> a <code>patient_link</code>. Es de los cambios más invasivos — planéalo con migración de datos y doble lectura.
+</div>
+</section>
+
+<!-- C3 -->
+<section id="c3">
+<span class="section-tag">CAMBIO 3 · <span class="effort e-m">MEDIO</span></span>
+<h2>C3. Especialidades a sistema de plugins</h2>
+<p>Hoy nutrición, fisio, etc. son apps Django fijas. En la plataforma deben ser <strong>plugins activables por clínica</strong>, con su hoja de datos definida por JSON Schema.</p>
+<h4>Qué hacer</h4>
+<ul>
+  <li>Crear un registro de especialidades (<code>Specialty</code>) y un contrato <code>SpecialtyPlugin</code>.</li>
+  <li>Las hojas de cada especialidad se definen por <strong>JSON Schema</strong> y se guardan en un campo <code>specialty_data</code> (JSONB) del encounter, validado contra el schema.</li>
+  <li>La especialidad se activa por tenant (y es un add-on cobrable).</li>
+  <li>Mantener <code>apps/nutrition</code> como la <strong>implementación de referencia</strong> del plugin (no tirarla — adaptarla al contrato).</li>
+</ul>
+<div class="callout info">
+  <b>Lo bueno</b>
+  No hay que reescribir la lógica de nutrición; hay que <em>envolverla</em> en el contrato de plugin. El núcleo clínico (encounter común) se comparte, y solo la "hoja" varía por especialidad. Ver el documento de arquitectura, Sección 8.
+</div>
+</section>
+
+<!-- C4 -->
+<section id="c4">
+<span class="section-tag">CAMBIO 4 · <span class="effort e-m">MEDIO</span></span>
+<h2>C4. Autenticación unificada (Clerk → JWT)</h2>
+<p>Hoy todo pasa por Clerk (middleware, webhooks, sync de usuarios). La plataforma usa <strong>un solo sistema de auth</strong> para clínica y paciente.</p>
+<h4>Qué hacer (2 opciones)</h4>
+<table>
+<tr><th>Opción</th><th>Qué implica</th><th>Cuándo</th></tr>
+<tr><td><b>A. Migrar a JWT propio</b> (<code>simplejwt</code>)</td><td>Quitar Clerk, implementar login/registro/refresh propios. Más control, sin dependencia externa, alineado al diseño.</td><td>Recomendado si Maily Soft también usará JWT propio.</td></tr>
+<tr><td><b>B. Abstraer auth detrás de una interfaz</b></td><td>Dejar Clerk para pacientes pero detrás de una capa <code>auth provider</code>, para poder cambiarlo sin tocar el resto. ~3-4 h de desacople inmediato.</td><td>Si quieres avanzar ya y decidir después.</td></tr>
+</table>
+<div class="callout warn">
+  <b>Primero, sin importar la opción</b>
+  Corregir <strong>YA</strong> la validación del JWT de Clerk: hoy no valida <code>iss</code> ni <code>azp</code> (acepta tokens de otras instancias). Es un hallazgo de seguridad ALTO (ver C8).
+</div>
+</section>
+
+<!-- C5 -->
+<section id="c5">
+<span class="section-tag">CAMBIO 5 · <span class="effort e-m">MEDIO</span></span>
+<h2>C5. Modelo de negocio unificado</h2>
+<p>Hay un choque: hoy el cobro es <strong>B2C mensual</strong> (el paciente paga FREE/SILVER/GOLD/PLATINUM); el diseño de la plataforma es <strong>B2B anual</strong> (la clínica paga + add-ons por especialidad).</p>
+<h4>Qué hacer: no fusionar, coexistir (cobro DUAL)</h4>
+<table>
+<tr><th>Flujo</th><th>Quién paga</th><th>Qué</th></tr>
+<tr><td><b>B2B (Maily Soft)</b></td><td>La clínica</td><td>Suscripción anual + add-ons por especialidad/almacenamiento. Es el ingreso principal.</td></tr>
+<tr><td><b>B2C (Maily te cuida)</b></td><td>El paciente (opcional)</td><td>Premium: IA avanzada, más almacenamiento de estudios, features de bienestar. Ingreso secundario.</td></tr>
+</table>
+<ul>
+  <li>Renombrar/reubicar el modelo de planes del paciente para que sea claramente "premium del paciente", no el plan de la clínica.</li>
+  <li>El <code>ai_engine</code> que asigna modelo por tier (SILVER→gpt-4o, PLATINUM→claude) se mantiene, pero como beneficio B2C.</li>
+  <li>Unificar la infraestructura de cobro (Stripe) para que ambos flujos usen el mismo motor de suscripciones y webhooks.</li>
+</ul>
+<div class="callout ok">
+  <b>Buena noticia</b>
+  Tener dos fuentes de ingreso (clínica + paciente premium) es una <strong>ventaja</strong>, no un problema. Solo hay que separarlas conceptualmente en el modelo de datos.
+</div>
+</section>
+
+<!-- C6 -->
+<section id="c6">
+<span class="section-tag">CAMBIO 6 · <span class="effort e-m">MEDIO</span></span>
+<h2>C6. Capa de servicios y selectors</h2>
+<p>Hoy la lógica vive en views/serializers (consistente, pero fuera del estándar de la plataforma). Hay que migrar gradualmente a la arquitectura por capas de la skill <code>django-clean-architecture</code>.</p>
+<h4>Qué hacer</h4>
+<ul>
+  <li>Por cada app, extraer la lógica de negocio a <code>services.py</code> (escrituras) y <code>selectors.py</code> (lecturas).</li>
+  <li>Las views quedan delgadas: validan entrada, llaman al servicio, devuelven respuesta.</li>
+  <li>Usar como modelo a seguir <code>apps/notifications/service.py</code> y <code>apps/wellness/services.py</code> (ya están bien hechos).</li>
+  <li>Es un cambio <strong>gradual</strong>: no bloquea, se hace app por app conforme se tocan.</li>
+</ul>
+</section>
+
+<!-- C7 -->
+<section id="c7">
+<span class="section-tag">CAMBIO 7 · <span class="effort e-l">ALTO</span></span>
+<h2>C7. Qué pasa con cada app (la decisión clave)</h2>
+<p>Varias apps <strong>se solapan</strong> con lo que hará el backend de la clínica (Maily Soft). Para cada una hay que decidir la <strong>fuente de verdad</strong>: quién es dueño del dato.</p>
+<table>
+<tr><th>App actual</th><th>Disposición</th><th>Detalle</th></tr>
+<tr><td><code>accounts</code></td><td>🔄 Fusionar</td><td>Se integra al sistema de usuarios + tenancy unificado.</td></tr>
+<tr><td><code>PatientProfile</code></td><td>🔄 Refactor</td><td>Se divide en <code>PatientAccount</code> (global) + <code>ClinicPatientLink</code> (tenant). Ver C2.</td></tr>
+<tr><td><code>prescriptions</code></td><td>⬅️ Dueño: Maily Soft</td><td>La clínica EMITE recetas; el paciente las VE. El paciente deja de "crear", solo consume.</td></tr>
+<tr><td><code>appointments</code></td><td>⬅️ Dueño: Maily Soft</td><td>La agenda vive en la clínica. El paciente agenda contra la agenda de la clínica.</td></tr>
+<tr><td><code>specialists</code></td><td>🔄 Fusionar</td><td>Se convierte en parte del directorio + plugins de especialidad. Ver C3.</td></tr>
+<tr><td><code>lab_results</code> / <code>documents</code></td><td>⬅️ Dueño: Maily Soft</td><td>Datos clínicos tenant-scoped. El paciente los ve vía su link.</td></tr>
+<tr><td><code>medications</code> / <code>vitals</code></td><td>↔️ Compartida</td><td>Origen mixto: la clínica indica, el paciente registra adherencia/mediciones. Tenant-scoped.</td></tr>
+<tr><td><code>payments</code></td><td>🔄 Fusionar</td><td>Motor de cobro unificado B2B + B2C. Ver C5.</td></tr>
+<tr><td><code>nutrition</code></td><td>🔄 A plugin</td><td>Implementación de referencia del sistema de especialidades.</td></tr>
+<tr><td><code>chat</code> / <code>telemedicine</code></td><td>↔️ Compartida</td><td>Paciente↔doctor. Necesita contexto de tenant.</td></tr>
+<tr><td><code>notifications</code> / <code>audit</code></td><td>✅ Infraestructura</td><td>Servicios transversales. Se reutilizan tal cual (audit alimenta NOM-024).</td></tr>
+<tr><td><code>wellness</code> / <code>gamification</code> / <code>family_care</code> / <code>surveys</code> / <code>coupons</code> / <code>partners</code></td><td>✅ Se quedan (paciente)</td><td>Son features de engagement del paciente. Solo se les agrega tenant-awareness donde aplique.</td></tr>
+<tr><td><code>analytics</code></td><td>✂️ Dividir</td><td>Analítica de paciente (se queda) vs. analítica de clínica (a Maily Soft).</td></tr>
+</table>
+<div class="callout info">
+  <b>Regla para decidir el dueño</b>
+  Si el dato lo <strong>genera la clínica</strong> (receta, cita, estudio) → dueño = Maily Soft. Si lo genera el <strong>paciente</strong> (registro de bienestar, adherencia, ánimo) → dueño = Maily te cuida. Lo clínico es la fuente de verdad; lo de engagement vive del lado del paciente.
+</div>
+</section>
+
+<!-- C8 -->
+<section id="c8">
+<span class="section-tag">CAMBIO 8 · <span class="effort e-s">BAJO</span> · BLOQUEANTE</span>
+<h2>C8. Correcciones de seguridad (antes de cualquier cosa)</h2>
+<p>Independientes de la unificación, estos deben corregirse en la <strong>primera semana</strong>. Son de bajo esfuerzo pero alto impacto:</p>
+<table>
+<tr><th>#</th><th>Problema</th><th>Corrección</th></tr>
+<tr><td>🟠 A1</td><td>Webhook de MailySoft omite la firma si no hay secreto (usa una variable de entorno inexistente) → <b>se pueden falsificar recetas</b></td><td>Fallar cerrado: rechazar si no hay secreto; usar la variable <code>ENVIRONMENT</code> correcta; exigir el secreto en producción.</td></tr>
+<tr><td>🟠 A2</td><td>El JWT de Clerk no valida <code>iss</code> ni <code>azp</code> → acepta tokens de otras instancias</td><td>Validar issuer y authorized-party; cachear JWKS con TTL.</td></tr>
+<tr><td>🟡 M1</td><td>DSN de Sentry real hardcodeado en <code>base.py</code></td><td>Mover a variable de entorno y rotar el DSN.</td></tr>
+<tr><td>🟡 M2</td><td>Django 5.1.4 con CVEs conocidos</td><td>Subir a la última 5.1.x + <code>pip-audit</code> en CI.</td></tr>
+<tr><td>🐞 Bug</td><td><code>notify()</code> no acepta <code>extra_data</code> → <code>TypeError</code> en runtime (notificaciones que nunca se mandan)</td><td>Corregir la firma + test de regresión.</td></tr>
+</table>
+</section>
+
+<!-- C9 -->
+<section id="c9">
+<span class="section-tag">CAMBIO 9 · <span class="effort e-s">BAJO</span></span>
+<h2>C9. Calidad y herramientas</h2>
+<ul>
+  <li><strong>mypy + django-stubs en CI</strong> — cazaría el tipo de bug del <code>extra_data</code>. Type hints en la capa HTTP (hoy casi sin tipar).</li>
+  <li><strong>Modelo base abstracto</strong> — ya cubierto en C1; elimina la duplicación de <code>id/created_at/updated_at</code> en cada modelo.</li>
+  <li><strong>Arreglar N+1</strong> — en <code>vitals</code> (una query por tipo de signo vital) y agregar <code>select_related</code>/<code>prefetch_related</code> en listados con FKs.</li>
+  <li><strong>factory_boy + conftest.py</strong> — ya está instalado pero no se usa; centralizar fixtures de prueba.</li>
+  <li><strong>pyproject.toml</strong> — hoy no existe; agregar config de black, ruff, mypy, pytest en un solo lugar.</li>
+</ul>
+</section>
+
+<!-- 4 -->
+<section id="plan">
+<span class="section-tag">SECCIÓN 4</span>
+<h2>Plan por fases</h2>
+<pre class="diagram">FASE 0 — Seguridad y tooling (semana 1)            [BLOQUEANTE]
+  • C8 (todos los fixes de seguridad + bug extra_data)
+  • C9 parcial: pyproject.toml + mypy + pip-audit en CI
+
+FASE 1 — Cimientos unificados (semanas 2-4)        [EL GRUESO]
+  • C1 modelo base + multi-tenant (módulo por módulo)
+  • C4 auth: corregir validación + decidir JWT vs abstracción
+  • C2 inicio: separar PatientAccount global de ClinicPatientLink
+
+FASE 2 — Reubicación de dominios (semanas 4-7)
+  • C7 resolver dueño de cada app (recetas/citas/labs → Maily Soft)
+  • C2 completar: repuntar datos clínicos a patient_link
+  • C5 cobro dual (separar B2B de B2C premium)
+
+FASE 3 — Especialidades y limpieza (semanas 7-10)
+  • C3 nutrición como plugin de referencia
+  • C6 capa de servicios (gradual, donde se toque)
+  • C9 resto: N+1, factories, modelo base en todos los modelos</pre>
+<div class="callout ok">
+  <b>Estrategia</b>
+  Igual que la migración del legacy: <strong>módulo por módulo, nunca "big bang"</strong>. Cada fase deja el sistema funcionando. La seguridad va primero porque no depende de nada.
+</div>
+</section>
+
+<!-- 5 -->
+<section id="decisiones">
+<span class="section-tag">SECCIÓN 5</span>
+<h2>Decisiones que debes tomar</h2>
+<table>
+<tr><th>Decisión</th><th>Opciones</th><th>Recomendación</th></tr>
+<tr><td>¿Unificar de verdad o dos backends?</td><td>(a) Un backend unificado · (b) Dos backends que se hablan por API</td><td>Si el equipo es pequeño y quieres ir rápido, (b) es más barato. Si quieres una sola base a largo plazo, (a) — este documento.</td></tr>
+<tr><td>Auth</td><td>(a) JWT propio · (b) Mantener Clerk tras abstracción</td><td>JWT propio si Maily Soft también lo usará (consistencia).</td></tr>
+<tr><td>Dueño de recetas/citas</td><td>Maily Soft (clínica) vs. compartido</td><td>Maily Soft es la fuente de verdad; el paciente consume.</td></tr>
+<tr><td>Cobro del paciente</td><td>Eliminar B2C · Mantener como premium</td><td>Mantener como premium (segunda fuente de ingreso).</td></tr>
+</table>
+</section>
+
+<!-- 6 -->
+<section id="riesgos">
+<span class="section-tag">SECCIÓN 6</span>
+<h2>Riesgos</h2>
+<ul>
+  <li><span class="bad">Migración de datos:</span> agregar <code>tenant_id</code> e introducir el MPI exige migrar datos existentes con cuidado. Doble lectura y validación cruzada.</li>
+  <li><span class="bad">Alcance:</span> es tentador "arreglar todo de paso". Limítate a las fases; no mezcles refactor de unificación con features nuevas.</li>
+  <li><span class="bad">Romper la app del paciente:</span> hay usuarios en producción (la primera versión). Cada fase debe mantener la app funcionando — feature flags y despliegues graduales.</li>
+  <li><span class="bad">Seguridad olvidada:</span> si C8 no se hace primero, el sistema queda explotable mientras se refactoriza. Es lo primero, sin excepción.</li>
+</ul>
+<div class="callout danger">
+  <b>Lo único innegociable</b>
+  Hagas (a) o (b), la <strong>Fase 0 (seguridad)</strong> se ejecuta YA. El webhook que permite falsificar recetas y la validación del JWT no pueden esperar al refactor.
+</div>
+</section>
+
+<div class="footer">
+  <strong>Maily Platform — Plan de Unificación de Maily te cuida v0.1</strong> · 2026<br>
+  Basado en el análisis de calidad, seguridad y alineación arquitectónica del backend en <code>mailytcuida_backend</code>. Documento vivo; las estimaciones son orientativas y dependen del equipo.
+</div>
+</main>
+</div>
+<button class="printbtn" onclick="window.print()">📄 Exportar a PDF</button>
+</body>
+</html>

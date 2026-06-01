@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maily Platform — Panel Interno (Prototipo)</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{--primary:#0F4C5C;--primary2:#1C7293;--light:#5EB1BF;--ink:#0F1B2D;--body:#334155;--muted:#64748B;--border:#E2E8F0;--bg:#F1F5F9;--card:#FFFFFF;--danger:#D7263D;--warn:#F4A261;--ok:#2A9D8F;--accent:#FFB703;--sidebar:#0F1B2D;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--body);font-size:14px;line-height:1.5;}
+button{font-family:inherit;cursor:pointer;border:none;}
+.demo-banner{height:30px;background:var(--accent);color:#0F1B2D;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:.5px;}
+.shell{display:flex;min-height:calc(100vh - 30px);}
+.sidebar{width:248px;background:var(--sidebar);color:#fff;flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:calc(100vh - 30px);}
+.sidebar .brand{font-family:'Playfair Display';font-size:20px;font-weight:800;padding:20px 22px 2px;}
+.sidebar .brand span{color:var(--accent);}
+.sidebar .sub{font-size:10px;color:#5b7782;letter-spacing:1.5px;padding:0 22px 14px;}
+.roleswitch{padding:12px;border-top:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08);}
+.roleswitch .rl{font-size:10px;color:#5b7782;letter-spacing:1px;margin:0 0 8px 8px;}
+.rolepill{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:9px;font-size:13px;color:#cbd5e1;cursor:pointer;margin-bottom:3px;}
+.rolepill:hover{background:rgba(255,255,255,.06);}
+.rolepill.active{background:var(--primary2);color:#fff;font-weight:600;}
+.rolepill .ic{font-size:15px;}
+.nav{padding:12px;flex:1;overflow-y:auto;}
+.navgroup{display:none;}
+.navitem{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:#cbd5e1;font-size:13px;cursor:pointer;margin-bottom:2px;}
+.navitem:hover{background:rgba(255,255,255,.06);color:#fff;}
+.navitem.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600;}
+.maincol{flex:1;display:flex;flex-direction:column;min-width:0;}
+.topbar{height:58px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 26px;gap:14px;}
+.topbar .role-label{font-weight:700;color:var(--ink);}
+.topbar .avatar{margin-left:auto;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#0F1B2D;display:flex;align-items:center;justify-content:center;font-weight:800;}
+.content{padding:26px;flex:1;}
+.screen{display:none;}
+.screen.show{display:block;animation:fade .2s;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;}}
+.pagehead{margin-bottom:18px;}
+.pagehead h1{font-family:'Playfair Display';font-size:25px;color:var(--ink);font-weight:800;}
+.pagehead p{color:var(--muted);font-size:13px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(15,27,45,.04);}
+.row{display:flex;gap:16px;}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px;}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+.kpi .lbl{font-size:12px;color:var(--muted);}
+.kpi .val{font-family:'Playfair Display';font-size:28px;font-weight:800;color:var(--ink);margin-top:5px;}
+.kpi .delta{font-size:11px;font-weight:600;margin-top:2px;}
+.up{color:var(--ok);}.down{color:var(--danger);}
+h3.block{font-size:15px;color:var(--ink);font-weight:700;margin-bottom:12px;}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+table.tbl th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--border);}
+table.tbl td{padding:11px 12px;border-bottom:1px solid var(--border);}
+table.tbl tr:last-child td{border-bottom:none;}
+table.tbl tr:hover td{background:#F8FAFC;}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+.green{background:#DCFCE7;color:#166534;}.amber{background:#FEF3C7;color:#854D0E;}.red{background:#FEE2E2;color:#991B1B;}.blue{background:#DBEAFE;color:#1E40AF;}.teal{background:#CCFBF1;color:#115E59;}.gray{background:#F1F5F9;color:#475569;}.purple{background:#EDE9FE;color:#5B21B6;}
+.btn-primary{background:var(--primary);color:#fff;padding:8px 15px;border-radius:8px;font-weight:600;font-size:12.5px;}
+.btn-ghost{background:#fff;color:var(--primary);border:1px solid var(--border);padding:7px 13px;border-radius:8px;font-weight:600;font-size:12.5px;}
+.barchart{display:flex;align-items:flex-end;gap:14px;height:140px;padding-top:10px;}
+.barchart .bar{flex:1;background:linear-gradient(var(--light),var(--primary2));border-radius:6px 6px 0 0;position:relative;}
+.barchart .bar b{position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:11px;color:var(--ink);}
+.barchart .bar span{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted);}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;}
+.field input{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.health{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);}
+.dot{width:10px;height:10px;border-radius:50%;}
+.dot.g{background:var(--ok);}.dot.y{background:var(--warn);}.dot.r{background:var(--danger);}
+.mono{font-family:'JetBrains Mono';font-size:12px;}
+.note{font-size:12px;color:var(--muted);font-style:italic;margin-top:10px;}
+.plan-card{border:2px solid var(--border);border-radius:14px;padding:18px;}
+.plan-card.pop{border-color:var(--accent);}
+.plan-card .pname{font-weight:800;font-size:16px;color:var(--ink);}
+.plan-card .pprice{font-family:'Playfair Display';font-size:26px;font-weight:800;color:var(--primary);margin:6px 0;}
+@media(max-width:860px){.kpis,.grid3{grid-template-columns:repeat(2,1fr);}.sidebar{display:none;}}
+</style>
+</head>
+<body>
+<div class="demo-banner">🛠️ PROTOTIPO — Panel Interno de Maily Platform · Cambia de rol arriba a la izquierda · Datos de demostración</div>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">Maily<span>Platform</span></div>
+    <div class="sub">PANEL INTERNO · SaaS</div>
+    <div class="roleswitch">
+      <div class="rl">VER COMO:</div>
+      <div class="rolepill active" id="r-admin" onclick="setRole('admin')"><span class="ic">👔</span> Súper Admin</div>
+      <div class="rolepill" id="r-ventas" onclick="setRole('ventas')"><span class="ic">💼</span> Ventas / Éxito</div>
+      <div class="rolepill" id="r-dev" onclick="setRole('dev')"><span class="ic">⚙️</span> Desarrollo</div>
+    </div>
+    <nav class="nav">
+      <div class="navgroup" data-role="admin" style="display:block;">
+        <div class="navitem active" data-screen="s1" onclick="show('s1')">📊 Visión global</div>
+        <div class="navitem" data-screen="s2" onclick="show('s2')">🏥 Clínicas (tenants)</div>
+        <div class="navitem" data-screen="s3" onclick="show('s3')">🔎 Detalle de clínica</div>
+      </div>
+      <div class="navgroup" data-role="ventas">
+        <div class="navitem" data-screen="v1" onclick="show('v1')">💲 Planes y precios</div>
+        <div class="navitem" data-screen="v2" onclick="show('v2')">🎁 Promociones</div>
+        <div class="navitem" data-screen="v3" onclick="show('v3')">📈 Pruebas y conversión</div>
+      </div>
+      <div class="navgroup" data-role="dev">
+        <div class="navitem" data-screen="d1" onclick="show('d1')">💚 Salud del sistema</div>
+        <div class="navitem" data-screen="d2" onclick="show('d2')">🐞 Errores y logs</div>
+        <div class="navitem" data-screen="d3" onclick="show('d3')">🚀 Despliegues y flags</div>
+      </div>
+    </nav>
+    <div style="padding:14px 18px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;font-size:12px;">
+      <div class="avatar" style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#0F1B2D;display:flex;align-items:center;justify-content:center;font-weight:800;">EM</div>
+      <div><div style="color:#fff;font-weight:600;">Emanuel R.</div><div style="color:#5b7782;" id="roleFoot">Súper Admin</div></div>
+    </div>
+  </aside>
+  <div class="maincol">
+    <div class="topbar"><span class="role-label" id="roleTop">👔 Vista: Súper Admin</span><div class="avatar">EM</div></div>
+    <div class="content">
+
+      <!-- ============ SUPER ADMIN ============ -->
+      <section id="s1" class="screen show">
+        <div class="pagehead"><h1>Visión global</h1><p>Estado de la plataforma — 26 de mayo, 2026 · Modelo anual</p></div>
+        <div class="kpis">
+          <div class="kpi"><div class="lbl">💰 ARR (ingreso anual)</div><div class="val">$5.1M</div><div class="delta up">▲ 18% vs año anterior</div></div>
+          <div class="kpi"><div class="lbl">🏥 Clínicas activas</div><div class="val">213</div><div class="delta up">▲ 18 nuevas · ▼ 5 no renovaron</div></div>
+          <div class="kpi"><div class="lbl">🔄 Renovación anual</div><div class="val">89%</div><div class="delta up">meta &gt;85%</div></div>
+          <div class="kpi"><div class="lbl">🎫 Ticket promedio</div><div class="val">$27.4K</div><div class="delta">MXN / año</div></div>
+        </div>
+        <div class="row">
+          <div class="card" style="flex:2;">
+            <h3 class="block">Ingresos por plan (anualizados)</h3>
+            <div class="barchart">
+              <div class="bar" style="height:35%;"><b>$608K</b><span>Starter (87)</span></div>
+              <div class="bar" style="height:88%;"><b>$1.43M</b><span>Plus (102)</span></div>
+              <div class="bar" style="height:38%;"><b>$552K</b><span>VIP (24)</span></div>
+              <div class="bar" style="height:62%;background:linear-gradient(var(--accent),var(--warn));"><b>$2.5M</b><span>Add-ons</span></div>
+            </div>
+          </div>
+          <div class="card" style="flex:1.2;">
+            <h3 class="block">🚨 Alertas</h3>
+            <div style="font-size:13px;">
+              <div style="padding:9px 0;border-bottom:1px solid var(--border);"><span class="tag red">7</span> renovaciones vencen este mes</div>
+              <div style="padding:9px 0;border-bottom:1px solid var(--border);"><span class="tag amber">12</span> pruebas terminan esta semana</div>
+              <div style="padding:9px 0;border-bottom:1px solid var(--border);"><span class="tag red">3</span> pagos fallidos</div>
+              <div style="padding:9px 0;"><span class="tag blue">14%</span> adopción IA Scribe (esperado 30%)</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s2" class="screen">
+        <div class="pagehead" style="display:flex;justify-content:space-between;align-items:center;"><div><h1>Clínicas (tenants)</h1><p>213 clínicas que compraron el programa</p></div><input style="padding:9px 14px;border:1px solid var(--border);border-radius:9px;width:280px;" placeholder="🔍 Buscar clínica..." /></div>
+        <div class="card" style="padding:0;">
+          <table class="tbl">
+            <tr><th>Clínica</th><th>Plan</th><th>Usuarios</th><th>ARR</th><th>Estado</th><th>Última actividad</th><th>Acciones</th></tr>
+            <tr><td>Clínica Regenerativa Vitalis</td><td><span class="tag teal">Plus</span></td><td>3</td><td>$22.4K</td><td><span class="tag green">Activa</span></td><td>hace 5 min</td><td><button class="btn-ghost" onclick="setRole('admin');show('s3')">Ver</button></td></tr>
+            <tr><td>Consultorio Dr. González</td><td><span class="tag gray">Starter</span></td><td>1</td><td>$6.9K</td><td><span class="tag green">Activa</span></td><td>hace 12 min</td><td><button class="btn-ghost">Ver</button></td></tr>
+            <tr><td>Centro Médico CAMSA</td><td><span class="tag blue">VIP</span></td><td>12</td><td>$45.2K</td><td><span class="tag green">Activa</span></td><td>hace 1 h</td><td><button class="btn-ghost">Ver</button></td></tr>
+            <tr><td>Nutrición Integral MX</td><td><span class="tag teal">Plus</span></td><td>4</td><td>$18.8K</td><td><span class="tag amber">Pago pendiente</span></td><td>hace 3 h</td><td><button class="btn-ghost">Ver</button></td></tr>
+            <tr><td>Clínica Dental Sonríe</td><td><span class="tag gray">Starter</span></td><td>2</td><td>$6.9K</td><td><span class="tag blue">En prueba</span></td><td>hace 1 día</td><td><button class="btn-ghost">Ver</button></td></tr>
+            <tr><td>Fisio &amp; Rehabilitación Norte</td><td><span class="tag teal">Plus</span></td><td>5</td><td>$19.0K</td><td><span class="tag red">Suspendida</span></td><td>hace 8 días</td><td><button class="btn-ghost">Ver</button></td></tr>
+          </table>
+        </div>
+        <p class="note">Acciones por clínica: ver detalle · impersonar (entrar como) · suspender/reactivar · asignar feature manual · reembolso.</p>
+      </section>
+
+      <section id="s3" class="screen">
+        <div class="pagehead"><h1>🏥 Clínica Regenerativa Vitalis</h1><p>tenant #1042 · Querétaro · Alta: 14 mar 2026</p></div>
+        <div class="row">
+          <div class="card" style="flex:1;">
+            <h3 class="block">Suscripción</h3>
+            <div style="font-size:13px;line-height:2;">Plan: <b>Plus Anual</b> · $13,990 + IVA<br>Renovación: <b>14 mar 2027</b><br>Usuarios: 3 de 3 · Consultorios: 2<br>Método: Stripe ·•••• 4242</div>
+            <div style="margin-top:12px;display:flex;gap:8px;"><button class="btn-primary">Impersonar</button><button class="btn-ghost">Suspender</button></div>
+          </div>
+          <div class="card" style="flex:1;">
+            <h3 class="block">Especialidades / Add-ons</h3>
+            <div style="font-size:13px;">
+              <div style="padding:6px 0;">✅ Medicina Regenerativa</div>
+              <div style="padding:6px 0;">✅ Nutrición <span class="tag green">add-on</span></div>
+              <div style="padding:6px 0;">✅ Fisioterapia <span class="tag green">add-on</span></div>
+              <div style="padding:6px 0;color:var(--muted);">➕ Ginecología (no activa)</div>
+            </div>
+            <button class="btn-ghost" style="margin-top:10px;">Asignar feature manual</button>
+          </div>
+          <div class="card" style="flex:1;">
+            <h3 class="block">Facturación reciente</h3>
+            <div style="font-size:12.5px;">
+              <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);">14 mar 2026 <span class="tag green">Pagado $13,990</span></div>
+              <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);">14 mar 2026 <span class="tag green">Add-ons $4,800</span></div>
+              <div style="display:flex;justify-content:space-between;padding:7px 0;">Uso: 142 GB de 100 GB <span class="tag amber">+42 GB extra</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ VENTAS ============ -->
+      <section id="v1" class="screen">
+        <div class="pagehead"><h1>Planes y precios</h1><p>Edita los precios anuales que se venden. Los cambios aplican a nuevos contratos.</p></div>
+        <div class="grid3">
+          <div class="plan-card"><div class="pname">Starter</div><div class="pprice">$6,990</div><div class="field"><label>Precio anual (MXN)</label><input value="6,990" /></div><div class="field"><label>Usuarios incluidos</label><input value="1" /></div><div class="field"><label>Almacenamiento</label><input value="20 GB" /></div></div>
+          <div class="plan-card pop"><div class="pname">Plus <span class="tag amber">★ Popular</span></div><div class="pprice">$13,990</div><div class="field"><label>Precio anual (MXN)</label><input value="13,990" /></div><div class="field"><label>Usuarios incluidos</label><input value="3" /></div><div class="field"><label>Almacenamiento</label><input value="100 GB" /></div></div>
+          <div class="plan-card"><div class="pname">VIP</div><div class="pprice">$22,990</div><div class="field"><label>Precio anual (MXN)</label><input value="22,990" /></div><div class="field"><label>Usuarios incluidos</label><input value="10" /></div><div class="field"><label>Almacenamiento</label><input value="500 GB" /></div></div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <h3 class="block">Add-ons (precios mensuales)</h3>
+          <table class="tbl">
+            <tr><th>Add-on</th><th>Precio</th><th>Activos</th><th></th></tr>
+            <tr><td>🧠 IA Scribe (por usuario)</td><td><input style="width:90px;padding:6px;border:1px solid var(--border);border-radius:6px;" value="$299" /></td><td>298</td><td><button class="btn-ghost">Guardar</button></td></tr>
+            <tr><td>🥗 Especialidad Nutrición</td><td><input style="width:90px;padding:6px;border:1px solid var(--border);border-radius:6px;" value="$249" /></td><td>64</td><td><button class="btn-ghost">Guardar</button></td></tr>
+            <tr><td>🤸 Especialidad Fisioterapia</td><td><input style="width:90px;padding:6px;border:1px solid var(--border);border-radius:6px;" value="$199" /></td><td>41</td><td><button class="btn-ghost">Guardar</button></td></tr>
+            <tr><td>💾 Almacenamiento (50 GB)</td><td><input style="width:90px;padding:6px;border:1px solid var(--border);border-radius:6px;" value="$99" /></td><td>23</td><td><button class="btn-ghost">Guardar</button></td></tr>
+          </table>
+        </div>
+        <p class="note">⚠️ Los precios se versionan: cambiarlos NO afecta a contratos vigentes, solo a nuevas ventas y renovaciones.</p>
+      </section>
+
+      <section id="v2" class="screen">
+        <div class="pagehead" style="display:flex;justify-content:space-between;align-items:center;"><div><h1>Promociones</h1><p>Descuentos, meses gratis y códigos promocionales</p></div><button class="btn-primary">+ Nueva promoción</button></div>
+        <div class="card" style="padding:0;">
+          <table class="tbl">
+            <tr><th>Promoción</th><th>Tipo</th><th>Código</th><th>Vigencia</th><th>Usos</th><th>Estado</th></tr>
+            <tr><td>Clínicas Fundadoras</td><td><span class="tag purple">3 meses gratis + precio congelado</span></td><td class="mono">FUNDADOR</td><td>hasta 30 jun 2026</td><td>18 / 30</td><td><span class="tag green">Activa</span></td></tr>
+            <tr><td>Lanzamiento Nutrición</td><td><span class="tag blue">50% primer año en add-on</span></td><td class="mono">NUTRI50</td><td>hasta 31 jul 2026</td><td>22</td><td><span class="tag green">Activa</span></td></tr>
+            <tr><td>Referido de clínica</td><td><span class="tag teal">1 mes gratis al referir</span></td><td class="mono">AMIGO</td><td>permanente</td><td>9</td><td><span class="tag green">Activa</span></td></tr>
+            <tr><td>Buen Fin 2025</td><td><span class="tag amber">20% anual</span></td><td class="mono">BUENFIN25</td><td>terminada</td><td>47</td><td><span class="tag gray">Expirada</span></td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section id="v3" class="screen">
+        <div class="pagehead"><h1>Pruebas y conversión</h1><p>Clínicas en periodo de prueba y seguimiento de conversión</p></div>
+        <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi"><div class="lbl">En prueba ahora</div><div class="val">19</div></div>
+          <div class="kpi"><div class="lbl">Conversión prueba→anual</div><div class="val">42%</div><div class="delta up">▲ 4%</div></div>
+          <div class="kpi"><div class="lbl">Terminan esta semana</div><div class="val">12</div><div class="delta down">requieren seguimiento</div></div>
+        </div>
+        <div class="card" style="padding:0;">
+          <table class="tbl">
+            <tr><th>Clínica</th><th>Días restantes</th><th>Plan objetivo</th><th>Asignado a</th><th>Acción</th></tr>
+            <tr><td>Clínica Dental Sonríe</td><td><span class="tag amber">2 días</span></td><td>Starter</td><td>Ventas · Karla</td><td><button class="btn-primary">Contactar</button></td></tr>
+            <tr><td>Pediatría Crecer</td><td><span class="tag amber">4 días</span></td><td>Plus</td><td>Ventas · Diego</td><td><button class="btn-primary">Contactar</button></td></tr>
+            <tr><td>Dermatología Lumina</td><td><span class="tag green">11 días</span></td><td>Plus</td><td>Ventas · Karla</td><td><button class="btn-ghost">Seguimiento</button></td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============ DESARROLLO ============ -->
+      <section id="d1" class="screen">
+        <div class="pagehead"><h1>Salud del sistema</h1><p>Estado en tiempo real de la infraestructura</p></div>
+        <div class="kpis">
+          <div class="kpi"><div class="lbl">⏱️ Uptime (30d)</div><div class="val">99.98%</div><div class="delta up">objetivo 99.9%</div></div>
+          <div class="kpi"><div class="lbl">⚡ Latencia API (p95)</div><div class="val">128ms</div><div class="delta up">saludable</div></div>
+          <div class="kpi"><div class="lbl">🐞 Tasa de error</div><div class="val">0.2%</div><div class="delta up">▼ 0.1%</div></div>
+          <div class="kpi"><div class="lbl">📦 Jobs en cola (Celery)</div><div class="val">14</div><div class="delta">procesando</div></div>
+        </div>
+        <div class="row">
+          <div class="card" style="flex:1;">
+            <h3 class="block">Servicios</h3>
+            <div class="health"><span class="dot g"></span> API (Django/DRF) <span style="margin-left:auto;" class="tag green">Operativo</span></div>
+            <div class="health"><span class="dot g"></span> Base de datos (PostgreSQL) <span style="margin-left:auto;" class="tag green">Operativo</span></div>
+            <div class="health"><span class="dot g"></span> Redis / Celery <span style="margin-left:auto;" class="tag green">Operativo</span></div>
+            <div class="health"><span class="dot y"></span> WhatsApp Cloud API <span style="margin-left:auto;" class="tag amber">Latencia alta</span></div>
+            <div class="health"><span class="dot g"></span> Almacenamiento S3 <span style="margin-left:auto;" class="tag green">Operativo</span></div>
+          </div>
+          <div class="card" style="flex:1;">
+            <h3 class="block">Base de datos</h3>
+            <div style="font-size:13px;line-height:2;">Conexiones activas: 42 / 100<br>Tamaño total: 312 GB<br>Réplica de lectura: <span class="tag green">sincronizada</span><br>Último backup: hace 3 h <span class="tag green">✓</span><br>Región: AWS México (Querétaro)</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="d2" class="screen">
+        <div class="pagehead"><h1>Errores y logs</h1><p>Últimos eventos (integrado con Sentry + bitácora de auditoría)</p></div>
+        <div class="card" style="padding:0;">
+          <table class="tbl">
+            <tr><th>Hora</th><th>Nivel</th><th>Evento</th><th>Origen</th><th>Tenant</th></tr>
+            <tr><td class="mono">10:42</td><td><span class="tag red">ERROR</span></td><td class="mono">TimeoutError: WhatsApp send</td><td>adapters/whatsapp</td><td>#1042</td></tr>
+            <tr><td class="mono">10:31</td><td><span class="tag amber">WARN</span></td><td class="mono">Slow query (1.8s) appointments_list</td><td>apps/agenda</td><td>#0915</td></tr>
+            <tr><td class="mono">10:18</td><td><span class="tag blue">INFO</span></td><td class="mono">Subscription renewed</td><td>apps/billing</td><td>#0987</td></tr>
+            <tr><td class="mono">09:55</td><td><span class="tag gray">AUDIT</span></td><td class="mono">Expediente accedido por Dra. Pérez</td><td>apps/audit</td><td>#1042</td></tr>
+            <tr><td class="mono">09:40</td><td><span class="tag red">ERROR</span></td><td class="mono">ValidationError: CFDI timbrado</td><td>adapters/cfdi</td><td>#0987</td></tr>
+          </table>
+        </div>
+        <p class="note">La fila AUDIT alimenta el cumplimiento NOM-024 (quién accede a qué expediente).</p>
+      </section>
+
+      <section id="d3" class="screen">
+        <div class="pagehead"><h1>Despliegues y feature flags</h1><p>Versiones liberadas y activación controlada de funciones</p></div>
+        <div class="row">
+          <div class="card" style="flex:1.3;">
+            <h3 class="block">Historial de despliegues</h3>
+            <table class="tbl">
+              <tr><th>Versión</th><th>Fecha</th><th>Cambios</th><th>Estado</th></tr>
+              <tr><td class="mono">v1.8.2</td><td>26 may</td><td>Fix recordatorios WhatsApp</td><td><span class="tag green">En prod</span></td></tr>
+              <tr><td class="mono">v1.8.1</td><td>22 may</td><td>Hoja de Nutrición</td><td><span class="tag green">En prod</span></td></tr>
+              <tr><td class="mono">v1.9.0-rc</td><td>—</td><td>IA Scribe (beta)</td><td><span class="tag amber">Staging</span></td></tr>
+            </table>
+          </div>
+          <div class="card" style="flex:1;">
+            <h3 class="block">Feature flags</h3>
+            <div style="font-size:13px;">
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">ia_scribe <span class="tag amber">Beta · 5 clínicas</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">whatsapp_reminders <span class="tag green">Global ON</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">cfdi_40 <span class="tag green">Global ON</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 0;">telemedicina_v2 <span class="tag gray">OFF</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+<script>
+var roleMeta={admin:{first:'s1',top:'👔 Vista: Súper Admin',foot:'Súper Admin'},ventas:{first:'v1',top:'💼 Vista: Ventas / Éxito del cliente',foot:'Ventas'},dev:{first:'d1',top:'⚙️ Vista: Desarrollo / Ingeniería',foot:'Ingeniería'}};
+function setRole(role){
+  document.querySelectorAll('.rolepill').forEach(p=>p.classList.remove('active'));
+  document.getElementById('r-'+role).classList.add('active');
+  document.querySelectorAll('.navgroup').forEach(g=>g.style.display = g.dataset.role===role?'block':'none');
+  document.getElementById('roleTop').textContent=roleMeta[role].top;
+  document.getElementById('roleFoot').textContent=roleMeta[role].foot;
+  show(roleMeta[role].first);
+}
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
+  var el=document.getElementById(id); if(el) el.classList.add('show');
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  var nav=document.querySelector('.navitem[data-screen="'+id+'"]'); if(nav) nav.classList.add('active');
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>
