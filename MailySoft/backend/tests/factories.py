@@ -11,6 +11,7 @@ import datetime
 import factory
 from factory.django import DjangoModelFactory
 
+from apps.agenda.models import Appointment, TenantAgendaConfig
 from apps.authn.models import User
 from apps.pacientes.models import Patient
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
@@ -151,3 +152,82 @@ class DoctorScheduleFactory(DjangoModelFactory):
     valid_from = None
     valid_until = None
     is_active = True
+
+
+# ---------------------------------------------------------------------------
+# Agenda (TenantAgendaConfig, Appointment)
+# ---------------------------------------------------------------------------
+
+
+class TenantAgendaConfigFactory(DjangoModelFactory):
+    """Configuración de agenda de una clínica.
+
+    Un único registro por tenant — la constraint UniqueConstraint lo garantiza.
+    En la mayoría de los tests es más práctico obtener la config vía el selector
+    agenda_config_get (get_or_create) que crear explícitamente con esta factory.
+    Úsala cuando necesitas controlar los valores (p. ej. duración default distinta).
+    """
+
+    class Meta:
+        model = TenantAgendaConfig
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = None
+    record_number_format = "EXP-{year}-{seq:05d}"
+    record_number_reset_yearly = False
+    default_appointment_duration = 30
+    reminder_offsets_minutes = factory.LazyFunction(lambda: [1440])
+    reminders_enabled = True
+
+
+class AppointmentFactory(DjangoModelFactory):
+    """Cita médica dentro de un tenant.
+
+    RESTRICCIONES IMPORTANTES:
+      - patient, doctor y consultorio deben pertenecer al MISMO tenant.
+        Usa `tenant` explícito o deja que LazyAttribute lo resuelva a partir
+        del doctor (que ya trae su propio tenant).
+      - Por el exclusion constraint anti-empalme, cada AppointmentFactory que
+        comparta el mismo doctor/consultorio DEBE tener horarios que NO se solapen.
+        Usa starts_at distinto o un Sequence basado en horas.
+
+    Estrategia de tenant:
+      El doctor trae su propio tenant. Patient y Consultorio se crean apuntando
+      a ese mismo tenant mediante LazyAttribute para garantizar consistencia.
+
+    OJO: en tests que ejercitan appointment_create() directamente no se necesita
+    esta factory; úsala cuando necesitas citas ya persistidas (selectors, APIs).
+    """
+
+    class Meta:
+        model = Appointment
+
+    # El doctor define el tenant raíz de la cita
+    doctor = factory.SubFactory(DoctorFactory)
+    tenant = factory.LazyAttribute(lambda obj: obj.doctor.tenant)
+    created_by = factory.LazyAttribute(lambda obj: obj.doctor.created_by)
+
+    # Paciente del MISMO tenant que el doctor
+    patient = factory.LazyAttribute(
+        lambda obj: PatientFactory(tenant=obj.doctor.tenant)
+    )
+
+    # Consultorio del MISMO tenant (opcional — None para telemedicina)
+    consultorio = factory.LazyAttribute(
+        lambda obj: ConsultorioFactory(tenant=obj.doctor.tenant)
+    )
+
+    # Horario: en el futuro, separado 1 hora por índice para evitar solapamiento
+    # entre citas del mismo doctor creadas en el mismo test.
+    # Si necesitas horarios distintos, pasa starts_at explícito.
+    starts_at = factory.Sequence(
+        lambda n: datetime.datetime(2030, 1, 1, 8, 0, 0, tzinfo=datetime.timezone.utc)
+        + datetime.timedelta(hours=n)
+    )
+    ends_at = factory.LazyAttribute(
+        lambda obj: obj.starts_at + datetime.timedelta(minutes=30)
+    )
+    status = Appointment.Status.SCHEDULED
+    reason = factory.Sequence(lambda n: f"Consulta de seguimiento #{n}")
+    specialty = ""
+    notes = ""

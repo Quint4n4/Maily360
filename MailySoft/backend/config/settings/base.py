@@ -65,6 +65,7 @@ LOCAL_APPS: list[str] = [
     # Apps de negocio (Paso 3+)
     "apps.pacientes",
     "apps.personal",
+    "apps.agenda",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -340,7 +341,7 @@ LOGGING: dict = {
         },
         "apps": {
             "handlers": ["console"],
-            "level": env("APP_LOG_LEVEL", default="DEBUG"),
+            "level": env("APP_LOG_LEVEL", default="INFO"),
             "propagate": False,
         },
     },
