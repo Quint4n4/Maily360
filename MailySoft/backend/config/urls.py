@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/v1/auth/verify/", TokenVerifyView.as_view(), name="token_verify"),
     # Apps del dominio (se registran aquí conforme se agregan)
     # path("api/v1/", include("apps.core.urls")),
+    path("api/v1/", include("apps.pacientes.urls")),
 ]
 
 # FIX-8: exponer la documentación OpenAPI SOLO en desarrollo.

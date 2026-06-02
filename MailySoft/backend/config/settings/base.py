@@ -62,6 +62,8 @@ LOCAL_APPS: list[str] = [
     # authn ANTES que tenancy: tenancy.TenantMembership tiene FK a authn.User
     "apps.authn",
     "apps.tenancy",
+    # Apps de negocio (Paso 3+)
+    "apps.pacientes",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

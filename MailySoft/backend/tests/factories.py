@@ -6,10 +6,13 @@ Factories específicas de un dominio pueden definirse en apps/<dominio>/tests/fa
 e importarse aquí si son ampliamente reutilizadas.
 """
 
+import datetime
+
 import factory
 from factory.django import DjangoModelFactory
 
 from apps.authn.models import User
+from apps.pacientes.models import Patient
 from apps.tenancy.models import Tenant, TenantMembership
 
 
@@ -56,4 +59,32 @@ class TenantMembershipFactory(DjangoModelFactory):
     user = factory.SubFactory(UserFactory)
     tenant = factory.SubFactory(TenantFactory)
     role = "doctor"
+    is_active = True
+
+
+class PatientFactory(DjangoModelFactory):
+    """Paciente (expediente) en un tenant.
+
+    El record_number se genera con un Sequence porque el servicio real usa
+    PatientSequence (SELECT FOR UPDATE). En tests que ejercitan el service,
+    llama directamente a patient_create() para generar el consecutivo real.
+    Usa esta factory solo cuando necesitas un Patient ya persistido sin pasar
+    por el service (p. ej., para tests de selectors o de aislamiento).
+    """
+
+    class Meta:
+        model = Patient
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    first_name = factory.Faker("first_name", locale="es_MX")
+    paternal_surname = factory.Faker("last_name", locale="es_MX")
+    maternal_surname = factory.Faker("last_name", locale="es_MX")
+    date_of_birth = factory.LazyFunction(lambda: datetime.date(1990, 1, 1))
+    sex = "M"
+    phone = factory.Sequence(lambda n: f"5512340{n:04d}")
+    curp = ""
+    email = ""
+    record_number = factory.Sequence(lambda n: f"EXP-TEST-{n:05d}")
+    notes = ""
     is_active = True

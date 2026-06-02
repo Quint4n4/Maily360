@@ -19,6 +19,16 @@ ALLOWED_HOSTS: list[str] = env.list("DJANGO_ALLOWED_HOSTS")
 SECRET_KEY: str = env("DJANGO_SECRET_KEY")
 
 # ---------------------------------------------------------------------------
+# JWT — clave de firma obligatoria en producción (FIX-B10)
+# ---------------------------------------------------------------------------
+
+# En producción la clave JWT DEBE ser distinta de SECRET_KEY y de alta entropía.
+# Sin JWT_SIGNING_KEY configurada, el proceso falla al arrancar con un ImproperlyConfigured
+# claro. En base.py queda el fallback a SECRET_KEY para entornos de desarrollo.
+# El dict base se importó vía `from .base import *`; solo sobreescribimos la clave de firma.
+SIMPLE_JWT["SIGNING_KEY"] = env("JWT_SIGNING_KEY")  # type: ignore[index]  # Sin default — falla ruidoso si falta.
+
+# ---------------------------------------------------------------------------
 # HTTPS y HSTS
 # ---------------------------------------------------------------------------
 
