@@ -77,6 +77,47 @@ class AppointmentCreateApi(APIView):
 - **Serializers de entrada y salida separados.** Nunca uno solo para todo.
 - Serializers NO tienen `create()`/`update()` con lógica. Eso va al servicio.
 
+## Campos sensibles, inmutabilidad y CRUD seguro (LECCIONES REALES — no repetir)
+
+Estos tres bugs aparecieron repetidamente en code review/security audit. Aplica las reglas SIEMPRE que escribas un modelo con CRUD.
+
+### 1. Estado de activación NO se cambia por PATCH (la "puerta trasera del `is_active`")
+`is_active` (y cualquier flag de estado: `status`, `is_verified`, `is_published`...) **NUNCA** se expone en el `InputSerializer` de un PATCH/update genérico. Cambiar estado tiene su propio endpoint/servicio explícito (`*_deactivate`, `*_reactivate`, `*_publish`).
+- Quítalo del `InputSerializer` del PATCH.
+- Inclúyelo en el `_IMMUTABLE_FIELDS` del servicio de update (junto con `id`, `tenant`, `tenant_id`, `created_at`, `updated_at`, `deleted_at`, y las FK de identidad como `membership`).
+- Razón: si no, cualquier usuario reactiva/cambia estado de un registro saltándose la regla de negocio.
+
+```python
+# services.py
+_IMMUTABLE_FIELDS: frozenset[str] = frozenset(
+    {"id", "tenant", "tenant_id", "created_at", "updated_at", "deleted_at", "is_active"}
+)
+def x_update(*, obj: X, user: User, **fields: Any) -> X:
+    bad = set(fields) & _IMMUTABLE_FIELDS
+    if bad:
+        raise ValidationError(f"No se pueden modificar los campos: {', '.join(sorted(bad))}.")
+    ...
+```
+
+### 2. Toda lectura de un objeto por id pasa por un SELECTOR (nunca `Model.objects.get` en la view)
+Un endpoint de detalle (`GET/PATCH/DELETE /x/<id>/`) que haga `X.objects.get(id=...)` **directo en la view** es un riesgo de IDOR. Crea siempre `x_get(*, x_id: UUID) -> X` en `selectors.py` y úsalo. El `TenantManager` filtra por tenant; un id de otro tenant → `DoesNotExist` → **404** (no 403, no revelar existencia). Sé consistente: TODOS los detail endpoints del módulo usan su selector.
+
+### 3. FK que referencian otros objetos: validar que sean del MISMO tenant en el servicio
+Cuando un servicio recibe un objeto/uuid relacionado (un `consultorio`, una `membership`, un `doctor`...), **valida explícitamente** `related.tenant_id == tenant.id` aunque la view ya lo haya resuelto por el manager. Es defensa en profundidad: el servicio puede llamarse desde Celery/commands/tests sin contexto de request.
+```python
+if consultorio is not None and consultorio.tenant_id != tenant.id:
+    raise ValidationError("El recurso no pertenece a esta clínica.")
+```
+
+### Checklist al crear un modelo con CRUD
+- [ ] `InputSerializer` de PATCH NO expone `is_active`/`status`/flags de estado ni campos de identidad.
+- [ ] `_IMMUTABLE_FIELDS` en el servicio de update cubre id, tenant, timestamps, deleted_at, flags de estado y FK de identidad.
+- [ ] Cada detail endpoint usa un selector `x_get`, nunca `Model.objects.get` inline en la view.
+- [ ] Cada FK relacionada que entra a un servicio se valida `tenant_id == tenant.id`.
+- [ ] Validación de formato de campos libres (CURP, teléfono, color hex, rangos de fecha) en el serializer.
+- [ ] Unicidad por tenant con `UniqueConstraint(fields=["tenant", ...])`, no solo validación en código.
+- [ ] `404` (no 403) para recursos de otro tenant.
+
 ## Tipado obligatorio
 
 - **Type hints en TODA firma de función** (args + retorno). Locales solo si son ambiguos.
