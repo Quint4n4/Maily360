@@ -64,6 +64,7 @@ LOCAL_APPS: list[str] = [
     "apps.tenancy",
     # Apps de negocio (Paso 3+)
     "apps.pacientes",
+    "apps.personal",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

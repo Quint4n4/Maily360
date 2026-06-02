@@ -24,6 +24,7 @@ urlpatterns = [
     # Apps del dominio (se registran aquí conforme se agregan)
     # path("api/v1/", include("apps.core.urls")),
     path("api/v1/", include("apps.pacientes.urls")),
+    path("api/v1/", include("apps.personal.urls")),
 ]
 
 # FIX-8: exponer la documentación OpenAPI SOLO en desarrollo.

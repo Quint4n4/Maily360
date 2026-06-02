@@ -13,6 +13,7 @@ from factory.django import DjangoModelFactory
 
 from apps.authn.models import User
 from apps.pacientes.models import Patient
+from apps.personal.models import Consultorio, Doctor, DoctorSchedule
 from apps.tenancy.models import Tenant, TenantMembership
 
 
@@ -87,4 +88,66 @@ class PatientFactory(DjangoModelFactory):
     email = ""
     record_number = factory.Sequence(lambda n: f"EXP-TEST-{n:05d}")
     notes = ""
+    is_active = True
+
+
+# ---------------------------------------------------------------------------
+# Personal (Doctor, Consultorio, DoctorSchedule)
+# ---------------------------------------------------------------------------
+
+
+class DoctorFactory(DjangoModelFactory):
+    """Perfil de médico dentro de un tenant.
+
+    El tenant del Doctor y el de la TenantMembership DEBEN coincidir.
+    Se usa LazyAttribute + post_generation para garantizar consistencia:
+    - membership se crea primero apuntando a `tenant` del Doctor.
+    - created_by se toma del usuario de la membership para evitar una
+      query adicional.
+    """
+
+    class Meta:
+        model = Doctor
+
+    tenant = factory.SubFactory(TenantFactory)
+    membership = factory.LazyAttribute(
+        lambda obj: TenantMembershipFactory(tenant=obj.tenant, role="doctor")
+    )
+    created_by = factory.LazyAttribute(lambda obj: obj.membership.user)
+    cedula_profesional = ""
+    specialty = factory.Sequence(lambda n: f"Especialidad {n}")
+    default_appointment_duration = 30
+    bio_short = ""
+    is_active = True
+
+
+class ConsultorioFactory(DjangoModelFactory):
+    """Consultorio (sala, box) dentro de un tenant."""
+
+    class Meta:
+        model = Consultorio
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Consultorio {n}")
+    location = ""
+    color_hex = ""
+    is_active = True
+
+
+class DoctorScheduleFactory(DjangoModelFactory):
+    """Bloque de horario de un médico."""
+
+    class Meta:
+        model = DoctorSchedule
+
+    tenant = factory.LazyAttribute(lambda obj: obj.doctor.tenant)
+    created_by = factory.LazyAttribute(lambda obj: obj.doctor.created_by)
+    doctor = factory.SubFactory(DoctorFactory)
+    day_of_week = 0  # Lunes
+    start_time = datetime.time(9, 0)
+    end_time = datetime.time(13, 0)
+    consultorio = None
+    valid_from = None
+    valid_until = None
     is_active = True
