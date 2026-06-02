@@ -189,6 +189,10 @@ SIMPLE_JWT: dict = {
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
+    # FIX-10: clave de firma JWT propia para que rotar SECRET_KEY no invalide tokens.
+    # En dev funciona con el default (SECRET_KEY). En prod configurar JWT_SIGNING_KEY
+    # con un secreto independiente y de alta entropía (mínimo 50 caracteres aleatorios).
+    "SIGNING_KEY": env("JWT_SIGNING_KEY", default=SECRET_KEY),
     "AUTH_HEADER_TYPES": ("Bearer",),
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",

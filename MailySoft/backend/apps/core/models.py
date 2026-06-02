@@ -60,11 +60,13 @@ class TenantAwareModel(BaseModel):
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
+        # FIX-7: SET_NULL en lugar de PROTECT para que borrar un usuario no bloquee
+        # el borrado de todos los registros que creó. Ya tiene null=True/blank=True.
+        on_delete=models.SET_NULL,
         related_name="+",
         null=True,
         blank=True,
-        help_text="Usuario que creó el registro. Null en imports/seeds.",
+        help_text="Usuario que creó el registro. Null en imports/seeds o si el usuario fue borrado.",
     )
 
     objects: TenantManager = TenantManager()

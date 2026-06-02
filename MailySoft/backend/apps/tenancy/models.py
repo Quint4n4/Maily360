@@ -107,9 +107,14 @@ class TenantMembership(BaseModel):
 
     class Meta:
         db_table = "tenancy_memberships"
-        unique_together = [("user", "tenant")]
+        # FIX-9: UniqueConstraint moderno en lugar de unique_together (deprecado en Django 4.2+).
+        constraints = [
+            models.UniqueConstraint(fields=["user", "tenant"], name="membership_user_tenant_uniq"),
+        ]
         indexes = [
             models.Index(fields=["tenant", "role"], name="membership_tenant_role_idx"),
+            # FIX-6: índice compuesto (user, is_active) para el filtro del middleware.
+            models.Index(fields=["user", "is_active"], name="membership_user_active_idx"),
         ]
 
     def __str__(self) -> str:
