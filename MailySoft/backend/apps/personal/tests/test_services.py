@@ -747,30 +747,25 @@ class TestScheduleCreateValidityRange:
 
 
 class TestDoctorCreateAfterSoftDelete:
-    """FIX-F6: chequeo de duplicado excluye soft-deleted (deleted_at__isnull=True).
+    """FIX-F6: re-crear un Doctor tras soft-delete es posible (extremo a extremo).
 
-    NOTA: La re-creación completa requeriría cambiar la restricción UNIQUE de
-    membership_id a un índice parcial (WHERE deleted_at IS NULL) en la BD,
-    lo cual requiere una migración adicional. Esa migración está fuera del
-    alcance de este fix (solo cambios de lógica). Se documenta como TODO(v2).
-
-    El service solo cambia el filtro de detección de duplicados; el constraint
-    de BD (OneToOneField) sigue bloqueando la re-creación hasta que se migre.
+    El service excluye soft-deleted del chequeo de duplicado
+    (deleted_at__isnull=True) Y el constraint de BD es ahora un índice único
+    parcial (doctor_membership_active_uniq, WHERE deleted_at IS NULL) en lugar
+    de la antigua restricción UNIQUE total del OneToOneField. Por eso un Doctor
+    soft-deleted ya NO bloquea la re-creación del perfil con la misma membresía.
     """
 
-    def test_doctor_create_service_level_duplicate_check_excludes_soft_deleted(
+    def test_doctor_create_allows_recreate_after_soft_delete(
         self, db: None
     ) -> None:
-        """FIX-F6: la validación del service NO lanza error si el Doctor existente
-        tiene deleted_at != None — es la restricción de BD (OneToOneField) la que
-        aún bloquea la operación hasta que se añada el índice parcial.
+        """FIX-F6: tras soft-deletear un Doctor, se puede crear otro con la misma
+        membresía sin lanzar ValidationError ni IntegrityError.
 
-        Este test verifica que el chequeo del SERVICE (deleted_at__isnull=True)
-        es correcto: no llama a ValidationError cuando el doctor está soft-deleted.
+        Verifica el fix completo: el índice único parcial deja fuera a los
+        registros soft-deleted, así que el INSERT del segundo Doctor tiene éxito.
         """
         # Arrange
-        from django.db import IntegrityError
-
         tenant = TenantFactory()
         user = UserFactory()
         membership = TenantMembershipFactory(tenant=tenant, role="doctor")
@@ -780,19 +775,18 @@ class TestDoctorCreateAfterSoftDelete:
         original.deleted_at = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
         original.save(update_fields=["deleted_at"])
 
-        # Verificar que el service NO lanza ValidationError (pasa el chequeo de lógica).
-        # El IntegrityError de BD (OneToOne constraint) es la barrera restante —
-        # se eliminaría añadiendo un índice parcial (TODO: migración futura).
-        with pytest.raises((IntegrityError, Exception)) as exc_info:
-            doctor_create(tenant=tenant, user=user, membership=membership)
+        # Act — re-crear con la misma membresía debe tener ÉXITO (sin excepción)
+        recreated = doctor_create(tenant=tenant, user=user, membership=membership)
 
-        # El error NO debe ser ValidationError "Ya existe" (ese es el chequeo del service).
-        # Debe ser IntegrityError (constraint de BD). Si algún día se añade el índice
-        # parcial, este test deberá actualizarse para esperar éxito en lugar de error.
-        assert "ValidationError" not in type(exc_info.value).__name__, (
-            "El service no debería lanzar ValidationError para un doctor soft-deleted. "
-            "Si ves esto, revisar el filtro deleted_at__isnull=True en doctor_create."
-        )
+        # Assert — es un registro nuevo, activo, con la misma membresía
+        assert recreated.pk is not None
+        assert recreated.pk != original.pk
+        assert recreated.membership_id == membership.id
+        assert recreated.deleted_at is None
+        # El original sigue soft-deleted; el activo es el recién creado.
+        assert Doctor.all_objects.filter(
+            membership=membership, deleted_at__isnull=True
+        ).count() == 1
 
     def test_doctor_create_still_rejects_active_duplicate(self, db: None) -> None:
         """Si el Doctor activo (no soft-deleted) ya existe, sigue lanzando ValidationError."""

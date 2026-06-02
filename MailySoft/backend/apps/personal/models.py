@@ -15,6 +15,7 @@ created_by, TenantManager con filtro por tenant activo).
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models import TenantAwareModel
 
@@ -25,13 +26,17 @@ class Doctor(TenantAwareModel):
     La identidad del usuario se obtiene a través de membership:
         doctor.membership.user.full_name
 
-    El campo `membership` es OneToOne: un TenantMembership puede tener como
-    máximo un Doctor. El service garantiza que membership.role == 'doctor'.
+    Unicidad de `membership`: un TenantMembership puede tener como máximo un
+    Doctor ACTIVO (deleted_at IS NULL). Se modela con un índice único parcial
+    (Meta.constraints) en vez de un OneToOneField, para que un Doctor
+    soft-deleted no bloquee la re-creación del perfil con la misma membresía.
+    El service garantiza que membership.role == 'doctor'.
     """
 
-    membership = models.OneToOneField(
+    membership = models.ForeignKey(
         "tenancy.TenantMembership",
         on_delete=models.PROTECT,
+        unique=False,
         related_name="doctor_profile",
         help_text="Membresía del médico en esta clínica. Role debe ser 'doctor'.",
     )
@@ -66,6 +71,16 @@ class Doctor(TenantAwareModel):
     class Meta:
         db_table = "personal_doctors"
         ordering = ["-created_at"]
+        constraints = [
+            # Índice único parcial: un TenantMembership solo puede tener un
+            # Doctor activo a la vez. Los soft-deleted (deleted_at NOT NULL)
+            # quedan fuera del índice y por tanto no bloquean re-creación.
+            models.UniqueConstraint(
+                fields=["membership"],
+                condition=Q(deleted_at__isnull=True),
+                name="doctor_membership_active_uniq",
+            ),
+        ]
 
     @property
     def full_name(self) -> str:

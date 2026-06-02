@@ -28,6 +28,7 @@ from rest_framework.test import APIClient
 
 from tests.factories import (
     DoctorFactory,
+    DoctorScheduleFactory,
     TenantFactory,
     TenantMembershipFactory,
     UserFactory,
@@ -47,6 +48,10 @@ def _doctor_detail_url(doctor_id: Any) -> str:
 
 def _consultorio_detail_url(consultorio_id: Any) -> str:
     return f"/api/v1/personal/consultorios/{consultorio_id}/"
+
+
+def _schedule_detail_url(schedule_id: Any) -> str:
+    return f"/api/v1/personal/horarios/{schedule_id}/"
 
 
 # ---------------------------------------------------------------------------
@@ -605,3 +610,84 @@ class TestConsultorioColorHexValidation:
 
         # Assert
         assert response.status_code == 400
+
+
+# ===========================================================================
+# FIX-F2: DELETE /personal/horarios/<id>/ — aislamiento cross-tenant (IDOR)
+# ===========================================================================
+
+
+class TestScheduleDeleteTenantIsolation:
+    """FIX-F2 verificado de extremo a extremo en el endpoint DELETE.
+
+    El selector schedule_get ya filtra por tenant vía TenantManager (cubierto en
+    test_selectors.py). Estos tests prueban el flujo HTTP COMPLETO con JWT real
+    (sin mocks): TenantAPIView.initial() resuelve el tenant del token y el handler
+    DELETE solo puede desactivar horarios del tenant del usuario.
+
+    Si un usuario del tenant A pudiera borrar un horario del tenant B, sería un
+    IDOR. El contrato esperado: 404 (no 403) y el horario del tenant B intacto.
+    """
+
+    def test_jwt_delete_own_schedule_returns_204(self, db: None) -> None:
+        """Camino feliz: el usuario desactiva un horario de su propio tenant → 204."""
+        # Arrange — usuario con membresía activa en el tenant A
+        tenant_a = TenantFactory()
+        user = UserFactory()
+        TenantMembershipFactory(user=user, tenant=tenant_a, role="admin", is_active=True)
+
+        doctor_a = DoctorFactory(tenant=tenant_a, is_active=True)
+        schedule_a = DoctorScheduleFactory(doctor=doctor_a, is_active=True)
+
+        access_token = _get_jwt_token(user)
+        api_client = APIClient()
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+
+        # Act
+        response = api_client.delete(_schedule_detail_url(schedule_a.id))
+
+        # Assert — 204 y el horario quedó desactivado (soft) en su tenant
+        assert response.status_code == 204, (
+            f"Esperado 204, obtenido {response.status_code}: {response.content!r}"
+        )
+        schedule_a.refresh_from_db()
+        assert schedule_a.is_active is False
+
+    def test_jwt_cross_tenant_schedule_delete_returns_404(self, db: None) -> None:
+        """IDOR: usuario del tenant A NO puede desactivar un horario del tenant B.
+
+        Adivinar el UUID de un horario ajeno debe devolver 404 (el recurso "no
+        existe" para este tenant) y el horario del tenant B debe seguir activo.
+        """
+        from apps.personal.models import DoctorSchedule
+
+        # Arrange — usuario autenticado en el tenant A
+        tenant_a = TenantFactory()
+        user = UserFactory()
+        TenantMembershipFactory(user=user, tenant=tenant_a, role="admin", is_active=True)
+
+        # Horario que pertenece a OTRO tenant (B)
+        tenant_b = TenantFactory()
+        doctor_b = DoctorFactory(tenant=tenant_b, is_active=True)
+        schedule_b = DoctorScheduleFactory(doctor=doctor_b, is_active=True)
+
+        access_token = _get_jwt_token(user)
+        api_client = APIClient()
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+
+        # Act — intentar borrar el horario del tenant B desde el contexto del A
+        response = api_client.delete(_schedule_detail_url(schedule_b.id))
+
+        # Assert — 404 (no 403; no se revela que existe en otro tenant)
+        assert response.status_code == 404, (
+            f"IDOR cross-tenant: esperado 404, obtenido {response.status_code}. "
+            "Un usuario del tenant A pudo alcanzar un horario del tenant B."
+        )
+
+        # El horario del tenant B sigue ACTIVO: nunca fue desactivado.
+        # all_objects evita cualquier filtro de tenant en la aserción.
+        schedule_b_fresh = DoctorSchedule.all_objects.get(id=schedule_b.id)
+        assert schedule_b_fresh.is_active is True, (
+            "El horario del tenant B fue desactivado por un usuario del tenant A "
+            "(fuga cross-tenant en el DELETE)."
+        )
