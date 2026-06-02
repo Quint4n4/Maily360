@@ -59,6 +59,9 @@ THIRD_PARTY_APPS: list[str] = [
 
 LOCAL_APPS: list[str] = [
     "apps.core",
+    # authn ANTES que tenancy: tenancy.TenantMembership tiene FK a authn.User
+    "apps.authn",
+    "apps.tenancy",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -75,6 +78,8 @@ MIDDLEWARE: list[str] = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # TenantMiddleware DESPUÉS de AuthenticationMiddleware (necesita request.user resuelto)
+    "apps.core.middleware.TenantMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -262,6 +267,9 @@ DEFAULT_FROM_EMAIL: str = env("DEFAULT_FROM_EMAIL", default="noreply@mailysoft.m
 # ---------------------------------------------------------------------------
 # Autenticación
 # ---------------------------------------------------------------------------
+
+# Modelo de usuario custom: email-based, con is_platform_staff y multi-tenant
+AUTH_USER_MODEL: str = "authn.User"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
