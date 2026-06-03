@@ -20,9 +20,10 @@ SECRETOS:
 
 import logging
 import uuid
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-logger = logging.getLogger("apps.adapters.whatsapp")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -40,14 +41,15 @@ class WhatsAppResult:
     error: str = field(default="")
 
 
-class WhatsAppAdapter:
-    """Interfaz de envío de mensajes WhatsApp.
+class WhatsAppAdapter(ABC):
+    """Interfaz abstracta de envío de mensajes WhatsApp.
 
     Todas las implementaciones deben satisfacer esta interfaz.
     La implementación real (MetaWhatsAppAdapter) se inyecta cuando haya
     credenciales Meta configuradas en el entorno.
     """
 
+    @abstractmethod
     def send_template(
         self,
         *,
@@ -65,7 +67,6 @@ class WhatsAppAdapter:
         Returns:
             WhatsAppResult con success=True y external_message_id si fue aceptado.
         """
-        raise NotImplementedError
 
 
 class SimulatedWhatsAppAdapter(WhatsAppAdapter):
@@ -83,13 +84,17 @@ class SimulatedWhatsAppAdapter(WhatsAppAdapter):
         template: str,
         params: dict[str, str],
     ) -> WhatsAppResult:
-        """Simula el envío: loguea a nivel INFO y retorna éxito."""
+        """Simula el envío: loguea a nivel INFO (sin PII) y retorna éxito.
+
+        El número de teléfono se enmascara y los params (que pueden contener
+        nombre del paciente) se omiten del log — cumplimiento LFPDPPP.
+        """
         simulated_id = f"sim-{uuid.uuid4().hex[:12]}"
+        masked_to = (to[:3] + "****" + to[-2:]) if len(to) > 6 else "***"
         logger.info(
-            "SIMULATED WhatsApp | to=%s | template=%s | params=%s | sim_id=%s",
-            to,
+            "SIMULATED WhatsApp | to=%s | template=%s | sim_id=%s",
+            masked_to,
             template,
-            params,
             simulated_id,
         )
         return WhatsAppResult(

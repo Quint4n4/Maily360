@@ -46,6 +46,7 @@ def appointment_get(*, appointment_id: uuid.UUID) -> Appointment:
             "cancelled_by",
             "no_show_registered_by",
         )
+        .prefetch_related("reminders")
         .get(id=appointment_id)
     )
 
@@ -86,6 +87,7 @@ def appointment_list(
             "doctor__membership__user",
             "consultorio",
         )
+        .prefetch_related("reminders")
     )
 
     if doctor_id is not None:
@@ -146,6 +148,5 @@ def reminder_list_for_appointment(
     Returns:
         QuerySet de AppointmentReminder de la cita (ascendente por scheduled_at).
     """
-    return AppointmentReminder.objects.filter(appointment=appointment).order_by(
-        "scheduled_at"
-    )
+    # order_by omitted: Meta.ordering already sorts by scheduled_at ASC
+    return AppointmentReminder.objects.filter(appointment=appointment)

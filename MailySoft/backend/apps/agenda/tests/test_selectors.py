@@ -390,17 +390,18 @@ class TestAppointmentListNoNPlusOne:
                 starts_at=_BASE_DT + datetime.timedelta(hours=i * 2),
             )
 
-        # Act — exactamente 1 query para el SELECT con JOINs (select_related)
-        # Sin select_related serían N+1 = 5 citas * relaciones = muchas queries.
+        # Act — 2 queries: 1 SELECT principal (con JOINs de select_related) +
+        # 1 IN-query de prefetch_related("reminders"). Constante respecto a N citas.
+        # Sin select_related/prefetch serían N+1 = muchas queries.
         with _tenant_context(tenant):
-            with django_assert_num_queries(1):  # type: ignore[call-arg]
+            with django_assert_num_queries(2):  # type: ignore[call-arg]
                 qs = appointment_list()
                 # Forzar evaluación del queryset y acceso a relaciones select_related
-                # (doctor, patient, consultorio) — sin N+1 porque select_related
-                # hace JOIN en la query principal.
+                # (doctor, patient, consultorio) y prefetch (reminders).
                 results = list(qs)
                 for appt in results:
                     _ = appt.doctor_id
                     _ = appt.patient_id
+                    _ = list(appt.reminders.all())  # usa el prefetch, 0 queries extra
 
 

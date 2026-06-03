@@ -420,7 +420,13 @@ class AppointmentReminder(TenantAwareModel):
     message_preview = models.TextField(
         blank=True,
         default="",
-        help_text="Primeros ~500 caracteres del mensaje enviado (para trazabilidad).",
+        help_text=(
+            "Primeros ~500 caracteres del mensaje enviado (para trazabilidad). "
+            "LFPDPPP: este campo puede contener datos personales del paciente "
+            "(nombre, fecha de cita). Está protegido por Row Level Security (RLS) "
+            "en PostgreSQL; nunca exponerlo en listados públicos ni logs. "
+            "Solo consultable por usuarios del mismo tenant."
+        ),
     )
     error_detail = models.TextField(
         blank=True,

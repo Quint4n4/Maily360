@@ -215,6 +215,7 @@ CELERY_TIMEZONE: str = "America/Mexico_City"
 CELERY_TASK_TRACK_STARTED: bool = True
 CELERY_TASK_TIME_LIMIT: int = 30 * 60  # 30 minutos hard limit
 CELERY_TASK_SOFT_TIME_LIMIT: int = 25 * 60  # 25 minutos soft limit
+CELERY_RESULT_EXPIRES: int = env.int("CELERY_RESULT_EXPIRES", default=3600)  # 1h
 
 # ---------------------------------------------------------------------------
 # Channels (WebSockets)

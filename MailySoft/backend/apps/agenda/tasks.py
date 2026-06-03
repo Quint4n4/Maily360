@@ -21,11 +21,19 @@ REINTENTOS:
     max_retries=3, default_retry_delay=300 (5 min entre reintentos).
     Solo reintenta en excepciones transitorias (adapter falló). Si el
     adapter devuelve success=False, la tarea NO reintenta: marca FAILED.
+
+VALIDACIÓN E.164:
+    Si el paciente no tiene teléfono o no cumple formato E.164, el reminder
+    queda SKIPPED (sin gastar reintentos con el adapter real).
+    En dev la mayoría de pacientes de prueba no tienen teléfono E.164 —
+    los reminders quedarán SKIPPED; eso es correcto.
 """
 
 import logging
+import re
+import zoneinfo
 
-from celery import shared_task
+from celery import Task, shared_task
 from celery.exceptions import MaxRetriesExceededError
 from django.utils import timezone
 
@@ -47,9 +55,13 @@ _INACTIVE_APPOINTMENT_STATUSES: frozenset[str] = frozenset(
 #: Longitud máxima del campo message_preview (truncar si supera).
 _MESSAGE_PREVIEW_MAX_LENGTH: int = 500
 
+#: Expresión regular para validar formato E.164.
+#: Acepta: + seguido de 1 dígito no-cero y entre 7 y 14 dígitos más = 8-15 total.
+_E164_RE: re.Pattern[str] = re.compile(r"^\+[1-9]\d{7,14}$")
+
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
-def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # type: ignore[name-defined]
+def send_appointment_reminder(self: Task, reminder_id: str) -> str:
     """Envía un recordatorio de cita al paciente vía WhatsApp (u otro canal).
 
     Flujo:
@@ -57,6 +69,7 @@ def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # 
       2. Si status != PENDING → "skipped:<status>" (idempotencia).
       3. Cargar la cita. Si está inactiva → marcar SKIPPED.
       4. Construir los parámetros del template.
+      4b. Validar teléfono E.164. Si inválido → marcar SKIPPED, retornar limpio.
       5. Llamar al adapter y actualizar status/sent_at/external_message_id.
       6. Si el adapter falla → marcar FAILED + guardar error_detail.
          (No se reintenta en fallo de adapter — es definitivo).
@@ -67,7 +80,8 @@ def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # 
 
     Returns:
         String de resultado para trazabilidad:
-        "sent:<external_id>", "skipped:<motivo>", "not_found", "failed:<error>".
+        "sent:<external_id>", "skipped:<motivo>", "not_found", "failed:max_retries",
+        "failed:adapter_error", "skipped:invalid_phone".
     """
     # ------------------------------------------------------------------
     # 1. Cargar el reminder (all_objects: no hay tenant en contexto Celery)
@@ -119,8 +133,8 @@ def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # 
     patient = appointment.patient
     doctor = appointment.doctor
 
-    # Nombre del paciente
-    patient_full_name: str = getattr(patient, "full_name", str(patient_id := patient.id))  # type: ignore[assignment]
+    # Nombre del paciente (sin walrus operator)
+    patient_full_name: str = getattr(patient, "full_name", "") or str(patient.id)
 
     # Nombre del médico (derivado de membership.user)
     doctor_full_name: str = ""
@@ -133,7 +147,6 @@ def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # 
     tenant = appointment.tenant
     tenant_timezone_name: str = getattr(tenant, "timezone", "America/Mexico_City") or "America/Mexico_City"
     try:
-        import zoneinfo
         tz = zoneinfo.ZoneInfo(tenant_timezone_name)
         local_starts = appointment.starts_at.astimezone(tz)
         date_str = local_starts.strftime("%d/%m/%Y %H:%M")
@@ -153,6 +166,19 @@ def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # 
         f"Recordatorio: {patient_full_name}, tienes cita el {date_str} "
         f"con {doctor_full_name}."
     )
+
+    # ------------------------------------------------------------------
+    # 4b. Validar teléfono E.164 ANTES de llamar al adapter
+    # ------------------------------------------------------------------
+    if not patient_phone or not _E164_RE.match(patient_phone):
+        reminder.status = AppointmentReminder.ReminderStatus.SKIPPED
+        reminder.error_detail = "Teléfono ausente o no E.164."
+        reminder.save(update_fields=["status", "error_detail", "updated_at"])
+        logger.info(
+            "send_appointment_reminder: reminder %s omitido (teléfono inválido)",
+            reminder_id,
+        )
+        return "skipped:invalid_phone"
 
     # ------------------------------------------------------------------
     # 5. Llamar al adapter
@@ -175,12 +201,14 @@ def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # 
         try:
             raise self.retry(exc=exc)
         except MaxRetriesExceededError:
-            # Agotamos reintentos — marcar como FAILED definitivo
+            # Agotamos reintentos — marcar como FAILED definitivo.
+            # El detalle del error externo se guarda en error_detail (BD protegida
+            # por RLS); NO se expone en el valor de retorno de la tarea (F3).
             reminder.status = AppointmentReminder.ReminderStatus.FAILED
             reminder.error_detail = f"Excepción tras {self.max_retries} reintentos: {exc}"
             reminder.message_preview = message_text[:_MESSAGE_PREVIEW_MAX_LENGTH]
             reminder.save(update_fields=["status", "error_detail", "message_preview", "updated_at"])
-            return f"failed:max_retries:{exc}"
+            return "failed:max_retries"
 
     # ------------------------------------------------------------------
     # 6. Procesar resultado del adapter
@@ -208,7 +236,9 @@ def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # 
         )
         return f"sent:{result.external_message_id}"
     else:
-        # El adapter devolvió fallo explícito — definitivo, no reintentar
+        # El adapter devolvió fallo explícito — definitivo, no reintentar.
+        # El detalle del error se persiste en error_detail (BD/RLS); no en el
+        # valor de retorno de la tarea (F3: no exponer error externo crudo).
         reminder.status = AppointmentReminder.ReminderStatus.FAILED
         reminder.error_detail = result.error or "El adapter reportó fallo sin detalle."
         reminder.message_preview = message_text[:_MESSAGE_PREVIEW_MAX_LENGTH]
@@ -218,4 +248,4 @@ def send_appointment_reminder(self: "shared_task", reminder_id: str) -> str:  # 
             reminder_id,
             result.error,
         )
-        return f"failed:{result.error}"
+        return "failed:adapter_error"

@@ -543,9 +543,6 @@ def appointment_reschedule(
                     exclude_appointment_id=appointment.id,
                 )
 
-            # Cancelar recordatorios anteriores ANTES de guardar el nuevo horario
-            cancel_reminders_for_appointment(appointment=appointment)
-
             appointment.starts_at = starts_at
             appointment.ends_at = ends_at
             if consultorio_id is not None:
@@ -570,6 +567,11 @@ def appointment_reschedule(
         raise ValidationError(
             "Error de integridad al reagendar la cita. Por favor intente de nuevo."
         ) from exc
+
+    # Cancelar reminders del horario anterior DESPUÉS de confirmar el nuevo horario.
+    # Si estuviera dentro del atomic(), un rollback dejaría los reminders cancelados
+    # con la cita en su horario viejo — race condition (F5).
+    cancel_reminders_for_appointment(appointment=appointment)
 
     # Reprogramar recordatorios con el nuevo horario (best-effort)
     try:

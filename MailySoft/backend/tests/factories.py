@@ -11,7 +11,7 @@ import datetime
 import factory
 from factory.django import DjangoModelFactory
 
-from apps.agenda.models import Appointment, TenantAgendaConfig
+from apps.agenda.models import Appointment, AppointmentReminder, TenantAgendaConfig
 from apps.authn.models import User
 from apps.pacientes.models import Patient
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
@@ -231,3 +231,32 @@ class AppointmentFactory(DjangoModelFactory):
     reason = factory.Sequence(lambda n: f"Consulta de seguimiento #{n}")
     specialty = ""
     notes = ""
+
+
+class AppointmentReminderFactory(DjangoModelFactory):
+    """Recordatorio de cita medica.
+
+    tenant y created_by se heredan de la cita (appointment) para garantizar
+    consistencia multi-tenant. El scheduled_at por defecto es 24h antes del
+    starts_at de la cita (offset estandar de la plataforma).
+
+    Restricciones:
+      - El appointment ya debe existir en BD antes de llamar a esta factory.
+      - El tenant del reminder DEBE coincidir con el del appointment.
+    """
+
+    class Meta:
+        model = AppointmentReminder
+
+    appointment = factory.SubFactory(AppointmentFactory)
+    tenant = factory.LazyAttribute(lambda obj: obj.appointment.tenant)
+    created_by = factory.LazyAttribute(lambda obj: obj.appointment.created_by)
+    channel = AppointmentReminder.Channel.WHATSAPP
+    scheduled_at = factory.LazyAttribute(
+        lambda obj: obj.appointment.starts_at - datetime.timedelta(hours=24)
+    )
+    sent_at = None
+    status = AppointmentReminder.ReminderStatus.PENDING
+    message_preview = ""
+    error_detail = ""
+    external_message_id = ""
