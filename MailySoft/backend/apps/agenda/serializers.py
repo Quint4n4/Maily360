@@ -15,7 +15,7 @@ Solo se acepta en AppointmentChangeStatusApi.
 
 from rest_framework import serializers
 
-from apps.agenda.models import Appointment, TenantAgendaConfig
+from apps.agenda.models import Appointment, AppointmentReminder, TenantAgendaConfig
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +51,36 @@ class _ConsultorioNestedSerializer(serializers.Serializer):
 
 
 # ---------------------------------------------------------------------------
+# AppointmentReminderOutputSerializer
+# ---------------------------------------------------------------------------
+
+
+class AppointmentReminderOutputSerializer(serializers.ModelSerializer):
+    """Serializer de salida (solo lectura) para AppointmentReminder.
+
+    Se anida dentro de AppointmentOutputSerializer y se usa en el endpoint de
+    recordatorios de una cita. No expone campos internos como error_detail o
+    external_message_id (no son útiles para el usuario clínico).
+    """
+
+    channel_display = serializers.CharField(source="get_channel_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = AppointmentReminder
+        fields = [
+            "id",
+            "channel",
+            "channel_display",
+            "scheduled_at",
+            "sent_at",
+            "status",
+            "status_display",
+        ]
+        read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
 # AppointmentOutputSerializer
 # ---------------------------------------------------------------------------
 
@@ -63,12 +93,14 @@ class AppointmentOutputSerializer(serializers.ModelSerializer):
     - doctor:  id + full_name (requiere select_related("doctor__membership__user")).
     - consultorio: id + name o null (requiere select_related("consultorio")).
     - status_display: etiqueta legible del estado.
+    - reminders: lista de recordatorios (read-only; requiere prefetch_related("reminders")).
     """
 
     patient = _PatientNestedSerializer(read_only=True)
     doctor = _DoctorNestedSerializer(read_only=True)
     consultorio = _ConsultorioNestedSerializer(read_only=True, allow_null=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    reminders = AppointmentReminderOutputSerializer(many=True, read_only=True)
 
     class Meta:
         model = Appointment
@@ -84,6 +116,7 @@ class AppointmentOutputSerializer(serializers.ModelSerializer):
             "reason",
             "specialty",
             "notes",
+            "reminders",
             "created_at",
         ]
         read_only_fields = fields

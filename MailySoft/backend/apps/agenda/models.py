@@ -1,10 +1,11 @@
 """
 Modelos de la app agenda.
 
-TenantAgendaConfig — configuración de agenda por clínica (1 registro por tenant).
-Appointment        — cita médica con máquina de estados explícita.
+TenantAgendaConfig    — configuración de agenda por clínica (1 registro por tenant).
+Appointment           — cita médica con máquina de estados explícita.
+AppointmentReminder   — recordatorio de cita (WhatsApp/SMS/Email, programado vía Celery).
 
-Ambos heredan de TenantAwareModel (id UUID, timestamps, soft-delete, tenant FK,
+Todos heredan de TenantAwareModel (id UUID, timestamps, soft-delete, tenant FK,
 created_by, TenantManager con filtro por tenant activo).
 
 Máquina de estados (ver VALID_TRANSITIONS al final del módulo):
@@ -337,3 +338,128 @@ ACTIVE_STATUSES: frozenset[str] = frozenset(
         Appointment.Status.IN_PROGRESS,
     }
 )
+
+
+# ---------------------------------------------------------------------------
+# AppointmentReminder
+# ---------------------------------------------------------------------------
+
+
+class AppointmentReminder(TenantAwareModel):
+    """Recordatorio programado para una cita médica.
+
+    Cada instancia representa un intento de enviar un aviso al paciente
+    por el canal elegido (WhatsApp, SMS, Email) en la fecha scheduled_at UTC.
+
+    La tarea Celery `send_appointment_reminder` carga el recordatorio por id,
+    verifica que siga PENDING y que la cita esté activa, luego llama al adapter
+    y actualiza status/sent_at/error_detail.
+
+    CICLO DE VIDA:
+        PENDING  →  SENT    (adapter respondió éxito)
+        PENDING  →  FAILED  (adapter falló; se reintenta hasta max_retries)
+        PENDING  →  SKIPPED (cita cancelada/no-show/atendida antes de enviarse)
+        PENDING  →  CANCELLED (cancel_reminders_for_appointment fue llamado)
+        FAILED   →  (la tarea ya agotó reintentos — queda en FAILED)
+
+    AISLAMIENTO MULTI-TENANT:
+        La tarea Celery carga con all_objects (no hay tenant en el worker).
+        El aislamiento lo garantiza el id directo de UUID + RLS en BD.
+        NUNCA exponer el endpoint de creación manual de recordatorios al usuario.
+
+    INMUTABILIDAD:
+        scheduled_at, channel y appointment no cambian tras la creación.
+        Solo status, sent_at, error_detail y external_message_id mutan
+        (escritura exclusiva desde la tarea Celery o cancel_reminders_for_appointment).
+    """
+
+    class Channel(models.TextChoices):
+        """Canal de envío del recordatorio."""
+
+        WHATSAPP = "whatsapp", "WhatsApp"
+        SMS = "sms", "SMS"
+        EMAIL = "email", "Email"
+
+    class ReminderStatus(models.TextChoices):
+        """Estado del recordatorio."""
+
+        PENDING = "pending", "Pendiente"
+        SENT = "sent", "Enviado"
+        FAILED = "failed", "Fallido"
+        SKIPPED = "skipped", "Omitido"
+        CANCELLED = "cancelled", "Cancelado"
+
+    appointment = models.ForeignKey(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name="reminders",
+        help_text="Cita a la que corresponde este recordatorio.",
+    )
+    channel = models.CharField(
+        max_length=20,
+        choices=Channel.choices,
+        default=Channel.WHATSAPP,
+        help_text="Canal de envío del recordatorio.",
+    )
+    scheduled_at = models.DateTimeField(
+        db_index=True,
+        help_text="Momento UTC en que debe enviarse el recordatorio.",
+    )
+    sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Momento UTC en que se envió efectivamente. Null si aún no se envió.",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ReminderStatus.choices,
+        default=ReminderStatus.PENDING,
+        db_index=True,
+        help_text="Estado del recordatorio.",
+    )
+    message_preview = models.TextField(
+        blank=True,
+        default="",
+        help_text="Primeros ~500 caracteres del mensaje enviado (para trazabilidad).",
+    )
+    error_detail = models.TextField(
+        blank=True,
+        default="",
+        help_text="Detalle del error si el envío falló.",
+    )
+    external_message_id = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text=(
+            "ID del mensaje asignado por el proveedor externo (Meta, Twilio, etc.). "
+            "Útil para reconciliación y webhooks de entrega."
+        ),
+    )
+
+    class Meta:
+        db_table = "agenda_appointment_reminders"
+        ordering = ["scheduled_at"]
+        indexes = [
+            # Worker query: buscar los PENDING próximos a enviarse
+            models.Index(
+                fields=["scheduled_at", "status"],
+                name="reminder_scheduled_status_idx",
+            ),
+            # Consultas por tenant + cita (selectors)
+            models.Index(
+                fields=["tenant", "appointment"],
+                name="reminder_tenant_appt_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        channel_label = self.get_channel_display()  # type: ignore[attr-defined]
+        status_label = self.get_status_display()  # type: ignore[attr-defined]
+        scheduled = (
+            self.scheduled_at.strftime("%Y-%m-%d %H:%M") if self.scheduled_at else "?"
+        )
+        return (
+            f"Recordatorio [{channel_label}] cita={self.appointment_id} "
+            f"scheduled={scheduled} UTC [{status_label}]"
+        )

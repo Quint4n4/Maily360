@@ -17,7 +17,7 @@ from typing import Optional
 
 from django.db.models import QuerySet
 
-from apps.agenda.models import Appointment, TenantAgendaConfig
+from apps.agenda.models import Appointment, AppointmentReminder, TenantAgendaConfig
 from apps.tenancy.models import Tenant
 
 
@@ -133,3 +133,19 @@ def agenda_config_get(*, tenant: Tenant) -> TenantAgendaConfig:
         },
     )
     return config
+
+
+def reminder_list_for_appointment(
+    *, appointment: Appointment
+) -> "QuerySet[AppointmentReminder]":
+    """Retorna los recordatorios de una cita, ordenados por momento de envío.
+
+    Args:
+        appointment: Cita cuyos recordatorios se listan.
+
+    Returns:
+        QuerySet de AppointmentReminder de la cita (ascendente por scheduled_at).
+    """
+    return AppointmentReminder.objects.filter(appointment=appointment).order_by(
+        "scheduled_at"
+    )

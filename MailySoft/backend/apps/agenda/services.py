@@ -13,9 +13,16 @@ Reglas críticas:
      como defensa en profundidad (el service puede llamarse desde Celery/commands).
   3. Anti-empalme capa 1: verificar solapamiento antes del INSERT.
      Capa 2: exclusion constraints en BD (migración 0002) capturados como IntegrityError.
+  4. Recordatorios (schedule_reminders_for_appointment / cancel_reminders_for_appointment):
+     - La programación de recordatorios NO puede tumbar la creación de la cita.
+       Cualquier falla se captura con try/except + log; la cita ya fue creada.
+     - La tarea Celery verifica de nuevo el estado antes de enviar (idempotencia).
+     - La revocación de tareas Celery ya encoladas es best-effort (by id es costoso
+       y no es garantizado). Lo que importa es que la tarea verifique status=CANCELLED.
 """
 
 import datetime
+import logging
 import uuid
 from typing import Optional
 
@@ -29,6 +36,7 @@ from apps.agenda.models import (
     ACTIVE_STATUSES,
     VALID_TRANSITIONS,
     Appointment,
+    AppointmentReminder,
     TenantAgendaConfig,
 )
 from apps.agenda.selectors import agenda_config_get
@@ -37,6 +45,8 @@ from apps.pacientes.selectors import patient_get
 from apps.personal.models import Consultorio, Doctor
 from apps.personal.selectors import consultorio_get, doctor_get
 from apps.tenancy.models import Tenant
+
+logger = logging.getLogger("apps.agenda.services")
 
 User = get_user_model()
 
@@ -348,6 +358,17 @@ def appointment_create(
             "Error de integridad al crear la cita. Por favor intente de nuevo."
         ) from exc
 
+    # -- 7. Programar recordatorios (best-effort: no tumba la creación de la cita)
+    try:
+        schedule_reminders_for_appointment(appointment=appointment)
+    except Exception as exc:
+        logger.error(
+            "appointment_create: error programando recordatorios para cita %s — %s",
+            appointment.id,
+            exc,
+            exc_info=True,
+        )
+
     # TODO(audit): registrar en apps/audit cuando exista
     return appointment
 
@@ -415,6 +436,16 @@ def appointment_change_status(
         update_fields += ["no_show_registered_by"]
 
     appointment.save(update_fields=update_fields)
+
+    # Cancelar recordatorios pendientes cuando la cita termina de forma negativa
+    if new_status in {Appointment.Status.CANCELLED, Appointment.Status.NO_SHOW}:
+        cancelled_count = cancel_reminders_for_appointment(appointment=appointment)
+        logger.info(
+            "appointment_change_status: cancelados %d recordatorios para cita %s (nuevo status=%s)",
+            cancelled_count,
+            appointment.id,
+            new_status,
+        )
 
     # TODO(audit): registrar en apps/audit cuando exista
     return appointment
@@ -512,6 +543,9 @@ def appointment_reschedule(
                     exclude_appointment_id=appointment.id,
                 )
 
+            # Cancelar recordatorios anteriores ANTES de guardar el nuevo horario
+            cancel_reminders_for_appointment(appointment=appointment)
+
             appointment.starts_at = starts_at
             appointment.ends_at = ends_at
             if consultorio_id is not None:
@@ -536,6 +570,17 @@ def appointment_reschedule(
         raise ValidationError(
             "Error de integridad al reagendar la cita. Por favor intente de nuevo."
         ) from exc
+
+    # Reprogramar recordatorios con el nuevo horario (best-effort)
+    try:
+        schedule_reminders_for_appointment(appointment=appointment)
+    except Exception as exc:
+        logger.error(
+            "appointment_reschedule: error reprogramando recordatorios para cita %s — %s",
+            appointment.id,
+            exc,
+            exc_info=True,
+        )
 
     # TODO(audit): registrar en apps/audit cuando exista
     return appointment
@@ -634,3 +679,106 @@ def agenda_config_update(
 
     # TODO(audit): registrar en apps/audit cuando exista
     return config
+
+
+# ---------------------------------------------------------------------------
+# Recordatorios (WhatsApp) — programación y cancelación
+# ---------------------------------------------------------------------------
+
+
+def schedule_reminders_for_appointment(
+    *,
+    appointment: Appointment,
+) -> list[AppointmentReminder]:
+    """Programa los recordatorios de una cita según la config de la clínica.
+
+    Lee ``reminder_offsets_minutes`` de la config del tenant y crea un
+    ``AppointmentReminder`` PENDING por cada offset cuyo ``scheduled_at`` esté en
+    el futuro, encolando la tarea Celery ``send_appointment_reminder`` con ``eta``.
+
+    Decisiones de diseño:
+      - Si ``reminders_enabled`` es False → no crea nada (devuelve ``[]``).
+      - Offsets cuyo ``scheduled_at`` ya pasó (<= ahora) se OMITEN: un recordatorio
+        en el pasado no aporta valor (no se crea como SKIPPED, simplemente no se crea).
+      - Evita duplicados: no crea otro PENDING para el mismo (cita, scheduled_at).
+
+    NOTA: esta función es best-effort respecto a la creación de la cita —
+    quien la llama (appointment_create / appointment_reschedule) la envuelve en
+    try/except para que una falla aquí NO tumbe la cita.
+
+    Args:
+        appointment: Cita ya persistida (recién creada o reagendada).
+
+    Returns:
+        Lista de ``AppointmentReminder`` creados (puede ser vacía).
+    """
+    config = agenda_config_get(tenant=appointment.tenant)
+    if not config.reminders_enabled:
+        return []
+
+    # Import local para evitar import circular (tasks importa services indirectamente).
+    from apps.agenda.tasks import send_appointment_reminder
+
+    now = timezone.now()
+    created: list[AppointmentReminder] = []
+
+    for offset_minutes in config.reminder_offsets_minutes or []:
+        scheduled_at = appointment.starts_at - datetime.timedelta(
+            minutes=int(offset_minutes)
+        )
+        if scheduled_at <= now:
+            # Recordatorio caería en el pasado: omitir.
+            continue
+
+        # Evitar duplicados para el mismo momento de envío.
+        duplicate_exists = AppointmentReminder.all_objects.filter(
+            appointment=appointment,
+            scheduled_at=scheduled_at,
+            status=AppointmentReminder.ReminderStatus.PENDING,
+        ).exists()
+        if duplicate_exists:
+            continue
+
+        reminder = AppointmentReminder.objects.create(
+            tenant=appointment.tenant,
+            created_by=appointment.created_by,
+            appointment=appointment,
+            channel=AppointmentReminder.Channel.WHATSAPP,
+            scheduled_at=scheduled_at,
+            status=AppointmentReminder.ReminderStatus.PENDING,
+        )
+        # Encola el envío para el momento programado. La tarea revalida el estado.
+        send_appointment_reminder.apply_async(
+            args=[str(reminder.id)],
+            eta=scheduled_at,
+        )
+        created.append(reminder)
+
+    return created
+
+
+def cancel_reminders_for_appointment(
+    *,
+    appointment: Appointment,
+) -> int:
+    """Marca como CANCELLED todos los recordatorios PENDING de una cita.
+
+    Se invoca al cancelar / marcar no-show una cita, o al reagendarla (antes de
+    reprogramar con el nuevo horario).
+
+    Usa ``all_objects`` porque puede ejecutarse sin contexto de tenant, pero filtra
+    por la cita concreta (que ya está acotada a su tenant). La revocación de las
+    tareas Celery encoladas es best-effort: la tarea ``send_appointment_reminder``
+    revalida ``status == PENDING`` antes de enviar, por lo que un recordatorio
+    CANCELLED nunca se envía aunque su tarea llegue a ejecutarse.
+
+    Args:
+        appointment: Cita cuyos recordatorios pendientes se cancelan.
+
+    Returns:
+        Número de recordatorios cancelados.
+    """
+    return AppointmentReminder.all_objects.filter(
+        appointment=appointment,
+        status=AppointmentReminder.ReminderStatus.PENDING,
+    ).update(status=AppointmentReminder.ReminderStatus.CANCELLED)
