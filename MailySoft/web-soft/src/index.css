@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 min-h-screen;
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #fff inset;
+    -webkit-text-fill-color: #111827;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+}
+
+@layer components {
+
+  /* ─── Superficies glass (blanco esmerilado) ───────────────────────────── */
+  .glass-card {
+    background:           rgba(255, 255, 255, 0.55);
+    backdrop-filter:      blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    border:               1px solid rgba(255, 255, 255, 0.65);
+    box-shadow:           0 8px 32px rgba(60, 42, 12, 0.10);
+  }
+  .glass-topbar {
+    background:           rgba(255, 255, 255, 0.60);
+    backdrop-filter:      blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    border-bottom:        1px solid rgba(255, 255, 255, 0.55);
+  }
+
+  /* ─── Botón login dorado (blanco → dorado al hover) ───────────────────── */
+  .btn-login {
+    background:   rgba(255, 255, 255, 0.92);
+    color:        #B8860B;
+    border:       1px solid rgba(255, 240, 200, 0.6);
+    box-shadow:   0 6px 20px rgba(40, 28, 8, 0.18);
+    transition:   all 0.25s ease;
+  }
+  .btn-login:hover:not(:disabled) {
+    background:   #C9A227;
+    color:        #ffffff;
+    border-color: #C9A227;
+    box-shadow:   0 10px 28px rgba(201, 162, 39, 0.50);
+    transform:    translateY(-1px);
+  }
+  .btn-login:active:not(:disabled) {
+    transform:    scale(0.99);
+  }
+
+  /* ─── Botón primario (teal) ───────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-teal-600 hover:bg-teal-700 active:bg-teal-800
+           text-white font-semibold text-sm
+           px-5 py-2.5 rounded-xl
+           transition-all duration-150
+           focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-teal-500 focus-visible:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed
+           select-none cursor-pointer;
+    box-shadow: 0 4px 14px rgba(13,148,136,0.25);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 8px 24px rgba(13,148,136,0.30);
+  }
+
+  /* ─── Botón secundario ────────────────────────────────────────────────── */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-white hover:bg-gray-50 active:bg-gray-100
+           text-gray-700 font-medium text-sm
+           px-5 py-2.5 rounded-xl
+           border border-gray-200 hover:border-gray-300
+           shadow-sm transition-all duration-150
+           focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-teal-500 focus-visible:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed
+           select-none cursor-pointer;
+  }
+
+  /* ─── Botón ghost ─────────────────────────────────────────────────────── */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+           text-gray-500 hover:text-gray-700 hover:bg-gray-100
+           font-medium text-sm px-3 py-2 rounded-lg
+           transition-all duration-150 cursor-pointer;
+  }
+
+  /* ─── Input ───────────────────────────────────────────────────────────── */
+  .input {
+    @apply w-full bg-white border border-gray-200 text-gray-900
+           placeholder-gray-400 text-sm
+           px-3.5 py-2.5 rounded-xl
+           transition-all duration-150
+           focus:outline-none focus:ring-2 focus:ring-amber-500/30
+           focus:border-amber-500
+           disabled:bg-gray-50 disabled:text-gray-400
+           disabled:cursor-not-allowed;
+  }
+
+  .input-error {
+    @apply border-red-400 focus:ring-red-400/30 focus:border-red-400;
+  }
+
+  /* ─── Label ───────────────────────────────────────────────────────────── */
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1.5;
+  }
+
+  /* ─── Card ────────────────────────────────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  /* ─── Badges ──────────────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-success { @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200; }
+  .badge-warning { @apply bg-amber-50   text-amber-700   ring-1 ring-amber-200;   }
+  .badge-danger  { @apply bg-red-50     text-red-700     ring-1 ring-red-200;     }
+  .badge-info    { @apply bg-blue-50    text-blue-700    ring-1 ring-blue-200;    }
+  .badge-primary { @apply bg-teal-50    text-teal-700    ring-1 ring-teal-200;    }
+  .badge-neutral { @apply bg-gray-100   text-gray-600    ring-1 ring-gray-200;    }
+}
