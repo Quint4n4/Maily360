@@ -5,10 +5,10 @@ TenantMiddleware está en MIDDLEWARE DESPUÉS de AuthenticationMiddleware.
 
 IMPORTANTE — arquitectura de resolución de tenant (FIX-A2):
   Para peticiones con autenticación JWT (la mayoría de la API), el tenant se
-  resuelve en TenantAPIView.initial(), NOT aquí. Esto es porque DRF resuelve la
-  autenticación JWT a nivel de vista (en APIView.initial()), DESPUÉS de que todo
-  el middleware ya se ejecutó. En ese punto request.user aún es AnonymousUser
-  cuando este middleware corre.
+  resuelve en TenantAPIView.check_permissions(), NOT aquí. Esto es porque DRF
+  resuelve la autenticación JWT a nivel de vista (en APIView.initial()), DESPUÉS
+  de que todo el middleware ya se ejecutó. En ese punto request.user aún es
+  AnonymousUser cuando este middleware corre.
 
   Este middleware cumple dos roles:
   1. Para sesión de Django (admin): resuelve el tenant desde request.user de
@@ -18,7 +18,13 @@ IMPORTANTE — arquitectura de resolución de tenant (FIX-A2):
      que reutilice la misma conexión (FIX-A1).
 
   La resolución de tenant para peticiones JWT ocurre en:
-  apps/core/views.py → TenantAPIView.initial()
+  apps/core/views.py → TenantAPIView.check_permissions()
+
+  Estados de tenant (FIX-C):
+  resolve_tenant_for_user → resolve_membership_for_user filtra
+  tenant__status__in=["active", "trial"]. El middleware hereda este comportamiento
+  automáticamente al delegar en resolve_tenant_for_user.
+  suspended → bloqueado; trial y active → acceso permitido.
 """
 
 from typing import Callable, Optional

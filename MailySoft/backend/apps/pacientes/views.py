@@ -23,6 +23,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.core.permissions import PatientPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
 from apps.pacientes.models import Patient, Sex
@@ -91,7 +92,7 @@ class PatientListCreateApi(TenantAPIView):
     POST /api/v1/pacientes/ — crea un paciente nuevo.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PatientPermission]
 
     class InputSerializer(serializers.Serializer):
         first_name = serializers.CharField(max_length=120)
@@ -170,7 +171,7 @@ class PatientDetailApi(TenantAPIView):
     DELETE /api/v1/pacientes/<uuid>/  — desactivación (soft).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PatientPermission]
 
     class InputSerializer(serializers.Serializer):
         first_name = serializers.CharField(max_length=120, required=False)

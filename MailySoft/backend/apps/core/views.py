@@ -3,31 +3,52 @@ Vistas base de Maily Soft.
 
 TenantAPIView — base para TODAS las vistas de la API que requieren contexto de tenant.
 
-Por qué existe esta clase (FIX-A2):
-    DRF resuelve la autenticación JWT en APIView.initial(), que se ejecuta DENTRO
-    del handler de la vista, DESPUÉS de que el middleware ya procesó el request.
-    Esto significa que cuando TenantMiddleware corre, request.user aún es
-    AnonymousUser para peticiones JWT, y el middleware no puede resolver el tenant.
+Diseño (FIX-A):
+    La resolución de membresía y tenant se hace en check_permissions(), NO en initial().
+    Esto preserva el flujo completo de DRF en super().initial():
+        - perform_authentication()  → request.user poblado con el JWT
+        - perform_content_negotiation() → format_kwarg, renderers
+        - determine_version()           → versioning
+        - check_permissions()   ← aquí sobreescribimos (request.user ya disponible)
+        - check_throttles()
 
-    TenantAPIView.initial() sobreescribe el método de DRF para:
-    1. Llamar a super().initial() primero → DRF resuelve JWT, request.user queda
-       poblado con el usuario real.
-    2. Resolver el tenant desde request.user (usando resolve_tenant_for_user).
-    3. Actualizar el thread-local (set_current_tenant + set_tenant_context_active).
-    4. Propagar el GUC a PostgreSQL (is_local=false, FIX-A1) para que RLS funcione.
+    Así drf-spectacular, content negotiation y versioning funcionan sin interferencia.
 
-    El TenantMiddleware sigue limpiando el GUC en su finally, por lo que no hay
-    riesgo de filtración entre peticiones.
+    El flujo garantizado es:
+        middleware.set_tenant_context_active(True)
+        → middleware.set_current_tenant(None)   ← user aún es AnonymousUser aquí
+        → TenantAPIView.initial() (sin override, DRF estándar):
+            perform_authentication()            ← DRF autentica JWT → request.user poblado
+            perform_content_negotiation()
+            determine_version()
+            check_permissions()  ← override nuestro:
+                early-return si anónimo (sin query)
+                resolve_membership_for_user(user)  ← UNA sola query
+                request.membership  = membership
+                request.active_role = role
+                set_current_tenant(tenant)
+                set_tenant_context_active(True)
+                set_config('app.current_tenant_id', ..., false) si tenant no es None
+                super().check_permissions(request)  ← evalúa permission_classes
+            check_throttles()
+        → handler (get/post/patch/delete)
+        → middleware.finally: clear_current_tenant() + limpiar GUC
+
+Nota sobre platform staff sin membresía:
+    Un usuario con is_platform_staff=True pero sin TenantMembership tendrá
+    request.active_role = None y será denegado (403) en cualquier endpoint de
+    clínica protegido por HasClinicRole. Esto es correcto en v1: el staff de
+    plataforma opera vía el admin de Django, no vía la API de clínica.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 from django.db import connection
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.core.tenant_context import (
-    resolve_tenant_for_user,
+    resolve_membership_for_user,
     set_current_tenant,
     set_tenant_context_active,
 )
@@ -39,38 +60,60 @@ class TenantAPIView(APIView):
     Todas las vistas de la API que accedan a datos de tenant deben heredar
     de esta clase en lugar de APIView.
 
-    El flujo garantizado es:
-        middleware.set_tenant_context_active(True)
-        → middleware.set_current_tenant(None)   ← user aún es AnonymousUser aquí
-        → TenantAPIView.initial():
-            super().initial()                   ← DRF autentica JWT → request.user poblado
-            resolve_tenant_for_user(request.user)
-            set_current_tenant(tenant)
-            set_config('app.current_tenant_id', ..., false)
-        → handler (get/post/patch/delete)
-        → middleware.finally: clear_current_tenant() + limpiar GUC
+    Ver el módulo docstring arriba para el flujo completo.
     """
 
-    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
-        """Resuelve autenticación JWT PRIMERO, luego el tenant del usuario.
+    def check_permissions(self, request: Request) -> None:  # type: ignore[override]
+        """Resuelve la membresía del usuario y fija el contexto de tenant ANTES de
+        evaluar las permission_classes de DRF.
 
-        Sobreescribe APIView.initial() para que el tenant quede en el
-        thread-local y en el GUC de Postgres antes de que el handler corra.
+        Se sobreescribe check_permissions (no initial) para preservar el flujo
+        estándar de DRF: format negotiation, content negotiation y versioning
+        se ejecutan dentro de super().initial() sin interferencia.
+
+        Cuando super().initial() llama a check_permissions(), perform_authentication()
+        ya corrió, por lo que request.user está poblado con el usuario real del JWT.
+
+        Early-return para anónimos:
+            Si el usuario no está autenticado, delegamos directamente a
+            super().check_permissions() sin resolver la membresía. IsAuthenticated
+            (en permission_classes) cortará el request con 401, sin tocar la BD.
+
+        Una única query a la BD resuelve tanto el tenant (para el thread-local
+        y el GUC de RLS) como el rol clínico activo (para los permisos DRF).
         """
-        # 1. Autenticación, permisos y throttling de DRF (resuelve JWT → request.user).
-        super().initial(request, *args, **kwargs)
+        # Early-return para requests no autenticados: evita una query innecesaria.
+        # IsAuthenticated en permission_classes devolverá 401.
+        if not getattr(request.user, "is_authenticated", False):
+            super().check_permissions(request)
+            return
 
-        # 2. Ahora request.user está poblado. Resolver el tenant.
-        tenant = resolve_tenant_for_user(request.user)
+        # Resolver membresía para que HasClinicRole pueda leer request.active_role.
+        membership = resolve_membership_for_user(request.user)
+
+        # Adjuntar al request para acceso sin query adicional en los permisos
+        # y en los handlers de la vista.
+        request.membership = membership  # type: ignore[attr-defined]
+        request.active_role = (  # type: ignore[attr-defined]
+            membership.role if membership is not None else None
+        )
+
+        # Propagar tenant al thread-local (para el TenantManager / ORM).
+        tenant = membership.tenant if membership is not None else None
         set_current_tenant(tenant)
         set_tenant_context_active(True)
 
-        # 3. Propagar a PostgreSQL para que la política RLS use el tenant correcto.
+        # Propagar a PostgreSQL para que la política RLS use el tenant correcto.
+        # Solo cuando hay tenant: evita la query si el usuario no tiene membresía.
         # is_local=false: nivel sesión/conexión, no desaparece entre sentencias
         # en modo autocommit con CONN_MAX_AGE>0 (FIX-A1).
-        tenant_id_str: str = str(tenant.id) if tenant is not None else ""
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT set_config('app.current_tenant_id', %s, false)",
-                [tenant_id_str],
-            )
+        if tenant is not None:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT set_config('app.current_tenant_id', %s, false)",
+                    [str(tenant.id)],
+                )
+
+        # Evaluar permission_classes (IsAuthenticated + HasClinicRole, etc.).
+        # En este punto request.active_role ya está disponible para HasClinicRole.
+        super().check_permissions(request)

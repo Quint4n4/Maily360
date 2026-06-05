@@ -40,6 +40,7 @@ from apps.pacientes.models import Patient
 from tests.factories import (
     PatientFactory,
     TenantFactory,
+    TenantMembershipFactory,
     UserFactory,
 )
 
@@ -106,6 +107,25 @@ def _make_auth_client(user: Any) -> APIClient:
     return client
 
 
+def _make_member_client(tenant: Any, role: str = "owner") -> APIClient:
+    """Crea un user con TenantMembership del rol indicado y devuelve un cliente autenticado.
+
+    Necesario desde que se activó el enforcement de permisos por rol (PatientPermission).
+    Sin membership activa en el tenant, TenantAPIView adjunta active_role=None y
+    HasClinicRole deniega la solicitud con 403.
+
+    Args:
+        tenant: el Tenant al que pertenece la membresía.
+        role:   rol clínico requerido para la operación que se va a testear.
+
+    Returns:
+        APIClient autenticado como el user creado.
+    """
+    user = UserFactory()
+    TenantMembershipFactory(user=user, tenant=tenant, role=role, is_active=True)
+    return _make_auth_client(user)
+
+
 # ===========================================================================
 # GET /api/v1/pacientes/
 # ===========================================================================
@@ -123,11 +143,13 @@ class TestPatientListApi:
         assert response.status_code == 401
 
     def test_list_patients_returns_200_for_authenticated_user(self, db: None) -> None:
-        """Usuario autenticado con tenant inyectado recibe 200."""
+        """Usuario autenticado con tenant inyectado recibe 200.
+
+        Ajuste Paso 4: el user ahora tiene rol 'readonly' (mínimo para GET pacientes).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="readonly")
 
         # Act
         with _tenant_context(tenant):
@@ -137,12 +159,14 @@ class TestPatientListApi:
         assert response.status_code == 200
 
     def test_list_patients_returns_paginated_response(self, db: None) -> None:
-        """La respuesta incluye la estructura de paginación DRF o lista directa."""
+        """La respuesta incluye la estructura de paginación DRF o lista directa.
+
+        Ajuste Paso 4: el user tiene rol 'readonly' para pasar PatientPermission en GET.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         PatientFactory.create_batch(3, tenant=tenant, is_active=True)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="readonly")
 
         # Act
         with _tenant_context(tenant):
@@ -154,13 +178,15 @@ class TestPatientListApi:
         assert isinstance(data, (list, dict))
 
     def test_list_patients_search_param_filters_results(self, db: None) -> None:
-        """El parámetro ?search= filtra por nombre dentro del tenant del usuario."""
+        """El parámetro ?search= filtra por nombre dentro del tenant del usuario.
+
+        Ajuste Paso 4: el user tiene rol 'readonly' para pasar PatientPermission en GET.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         PatientFactory(tenant=tenant, first_name="Valentina", is_active=True)
         PatientFactory(tenant=tenant, first_name="Roberto", is_active=True)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="readonly")
 
         # Act
         with _tenant_context(tenant):
@@ -174,15 +200,19 @@ class TestPatientListApi:
         assert results[0]["first_name"] == "Valentina"
 
     def test_list_patients_only_shows_own_tenant_patients(self, db: None) -> None:
-        """El listado solo muestra pacientes del tenant activo."""
+        """El listado solo muestra pacientes del tenant activo.
+
+        Ajuste Paso 4: el user tiene membresía en tenant_a (rol readonly) para
+        pasar PatientPermission en GET. El aislamiento sigue siendo verificado
+        por el TenantManager + contexto mockeado.
+        """
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
-        user = UserFactory()
 
         PatientFactory.create_batch(2, tenant=tenant_a, is_active=True)
         PatientFactory.create_batch(3, tenant=tenant_b, is_active=True)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant_a, role="readonly")
 
         # Act — contexto del tenant A
         with _tenant_context(tenant_a):
@@ -212,11 +242,13 @@ class TestPatientCreateApi:
         assert response.status_code == 401
 
     def test_create_patient_returns_201(self, db: None) -> None:
-        """POST válido con tenant activo devuelve 201 y record_number generado."""
+        """POST válido con tenant activo devuelve 201 y record_number generado.
+
+        Ajuste Paso 4: el user tiene rol 'reception' (incluido en POST de PatientPermission).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -230,11 +262,13 @@ class TestPatientCreateApi:
         assert data["record_number"].startswith("EXP-")
 
     def test_create_patient_persists_to_database(self, db: None) -> None:
-        """El paciente creado vía API debe existir en BD."""
+        """El paciente creado vía API debe existir en BD.
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar PatientPermission en POST.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -248,11 +282,14 @@ class TestPatientCreateApi:
     def test_create_patient_validation_error_returns_400_missing_required(
         self, db: None
     ) -> None:
-        """Faltar un campo requerido (first_name) debe devolver 400."""
+        """Faltar un campo requerido (first_name) debe devolver 400.
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar PatientPermission.
+        El 400 viene del InputSerializer, no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
         incomplete_payload = {k: v for k, v in _VALID_PAYLOAD.items() if k != "first_name"}
 
         # Act
@@ -263,11 +300,13 @@ class TestPatientCreateApi:
         assert response.status_code == 400
 
     def test_create_patient_validation_error_returns_400_invalid_sex(self, db: None) -> None:
-        """Sexo inválido debe devolver 400 (rechazado por InputSerializer)."""
+        """Sexo inválido debe devolver 400 (rechazado por InputSerializer).
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar PatientPermission.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
         payload = {**_VALID_PAYLOAD, "sex": "Z"}
 
         # Act
@@ -278,13 +317,15 @@ class TestPatientCreateApi:
         assert response.status_code == 400
 
     def test_create_patient_duplicate_curp_returns_400(self, db: None) -> None:
-        """CURP duplicada en el mismo tenant devuelve 400 con mensaje."""
+        """CURP duplicada en el mismo tenant devuelve 400 con mensaje.
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar PatientPermission en POST.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         curp = "MARL920704MDFNRS04"
         PatientFactory(tenant=tenant, curp=curp, is_active=True)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
         payload = {**_VALID_PAYLOAD, "curp": curp}
 
         # Act
@@ -320,12 +361,14 @@ class TestPatientDetailApi:
     """GET /api/v1/pacientes/<uuid>/ — detalle de paciente."""
 
     def test_get_patient_detail_returns_200(self, db: None) -> None:
-        """GET con UUID válido del propio tenant devuelve 200."""
+        """GET con UUID válido del propio tenant devuelve 200.
+
+        Ajuste Paso 4: el user tiene rol 'readonly' (mínimo para GET pacientes).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         patient = PatientFactory(tenant=tenant)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="readonly")
 
         # Act
         with _tenant_context(tenant):
@@ -336,11 +379,13 @@ class TestPatientDetailApi:
         assert response.json()["id"] == str(patient.id)
 
     def test_get_patient_detail_returns_404_for_unknown_uuid(self, db: None) -> None:
-        """UUID inexistente devuelve 404."""
+        """UUID inexistente devuelve 404.
+
+        Ajuste Paso 4: el user tiene rol 'readonly' para pasar PatientPermission en GET.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="readonly")
 
         # Act
         with _tenant_context(tenant):
@@ -350,13 +395,16 @@ class TestPatientDetailApi:
         assert response.status_code == 404
 
     def test_get_patient_detail_returns_404_for_other_tenant_patient(self, db: None) -> None:
-        """Paciente de otro tenant retorna 404 (no 403; sin revelar existencia)."""
+        """Paciente de otro tenant retorna 404 (no 403; sin revelar existencia).
+
+        Ajuste Paso 4: el user tiene membresía en tenant_a (rol readonly) para
+        pasar PatientPermission en GET. El 404 viene del selector (ORM filtra por tenant).
+        """
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
-        user = UserFactory()
         patient_b = PatientFactory(tenant=tenant_b)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant_a, role="readonly")
 
         # Act — contexto del tenant A, pero el paciente es del tenant B
         with _tenant_context(tenant_a):
@@ -388,12 +436,14 @@ class TestPatientPatchApi:
     """PATCH /api/v1/pacientes/<uuid>/ — actualización parcial."""
 
     def test_patch_patient_returns_200_with_updated_fields(self, db: None) -> None:
-        """PATCH válido devuelve 200 con los datos actualizados."""
+        """PATCH válido devuelve 200 con los datos actualizados.
+
+        Ajuste Paso 4: el user tiene rol 'reception' (incluido en PATCH de PatientPermission).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         patient = PatientFactory(tenant=tenant, phone="5500000001")
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -406,12 +456,15 @@ class TestPatientPatchApi:
         assert response.json()["phone"] == "5599999999"
 
     def test_patch_patient_record_number_returns_400(self, db: None) -> None:
-        """Intentar cambiar record_number via PATCH devuelve 400."""
+        """Intentar cambiar record_number via PATCH devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar PatientPermission (PATCH).
+        El 400 viene del servicio (campo inmutable), no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         patient = PatientFactory(tenant=tenant)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -425,12 +478,14 @@ class TestPatientPatchApi:
         assert response.status_code == 400
 
     def test_patch_patient_empty_body_returns_400(self, db: None) -> None:
-        """PATCH sin campos válidos devuelve 400."""
+        """PATCH sin campos válidos devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar PatientPermission (PATCH).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         patient = PatientFactory(tenant=tenant)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -440,13 +495,16 @@ class TestPatientPatchApi:
         assert response.status_code == 400
 
     def test_patch_patient_returns_404_for_other_tenant(self, db: None) -> None:
-        """PATCH a paciente de otro tenant devuelve 404."""
+        """PATCH a paciente de otro tenant devuelve 404.
+
+        Ajuste Paso 4: el user tiene membresía en tenant_a (rol reception) para
+        pasar PatientPermission (PATCH). El 404 viene del selector.
+        """
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
-        user = UserFactory()
         patient_b = PatientFactory(tenant=tenant_b)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant_a, role="reception")
 
         # Act
         with _tenant_context(tenant_a):
@@ -467,12 +525,15 @@ class TestPatientDeleteApi:
     """DELETE /api/v1/pacientes/<uuid>/ — desactivación soft."""
 
     def test_delete_patient_returns_204(self, db: None) -> None:
-        """DELETE válido devuelve 204 No Content."""
+        """DELETE válido devuelve 204 No Content.
+
+        Ajuste Paso 4: el user tiene rol 'owner' (único junto a 'admin' con DELETE
+        en PatientPermission según la matriz de roles).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         patient = PatientFactory(tenant=tenant, is_active=True)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="owner")
 
         # Act
         with _tenant_context(tenant):
@@ -482,13 +543,15 @@ class TestPatientDeleteApi:
         assert response.status_code == 204
 
     def test_delete_patient_sets_inactive_in_db(self, db: None) -> None:
-        """Tras DELETE el registro en BD tiene is_active=False (no fue borrado)."""
+        """Tras DELETE el registro en BD tiene is_active=False (no fue borrado).
+
+        Ajuste Paso 4: el user tiene rol 'owner' para pasar PatientPermission (DELETE).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         patient = PatientFactory(tenant=tenant, is_active=True)
         patient_id = patient.id
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="owner")
 
         # Act
         with _tenant_context(tenant):
@@ -513,13 +576,16 @@ class TestPatientDeleteApi:
         assert response.status_code == 401
 
     def test_delete_patient_returns_404_for_other_tenant(self, db: None) -> None:
-        """DELETE a paciente de otro tenant devuelve 404."""
+        """DELETE a paciente de otro tenant devuelve 404.
+
+        Ajuste Paso 4: el user tiene membresía en tenant_a (rol owner) para
+        pasar PatientPermission (DELETE). El 404 viene del selector.
+        """
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
-        user = UserFactory()
         patient_b = PatientFactory(tenant=tenant_b)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant_a, role="owner")
 
         # Act
         with _tenant_context(tenant_a):
@@ -597,10 +663,14 @@ class TestPatientJWTIsolation:
             "Si obtuvo 5, hay fuga cross-tenant."
         )
 
-    def test_jwt_auth_without_membership_returns_empty_list(self, db: None) -> None:
-        """Usuario con JWT pero SIN membresía activa en ningún tenant recibe lista vacía.
+    def test_jwt_auth_without_membership_returns_403(self, db: None) -> None:
+        """Usuario con JWT pero SIN membresía activa en ningún tenant recibe 403.
 
-        TenantAPIView debe resolver tenant=None → TenantManager devuelve qs.none().
+        CAMBIO POST-ENFORCEMENT: antes de activar los permisos por rol, este
+        endpoint devolvía 200 con lista vacía (falla segura: tenant=None → ORM
+        devuelve qs.none()). Ahora que HasClinicRole está activo, el usuario sin
+        membresía tiene active_role=None → 403 Forbidden. Este es el comportamiento
+        correcto: el endpoint de clínica requiere un rol activo para acceder.
         """
         # Arrange — user sin membresías
         user = UserFactory()
@@ -621,12 +691,10 @@ class TestPatientJWTIsolation:
         api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
         response = api_client.get(LIST_URL)
 
-        # Assert — 200 pero sin resultados (falla segura)
-        assert response.status_code == 200
-        data = response.json()
-        results = data.get("results", data) if isinstance(data, dict) else data
-        assert len(results) == 0, (
-            f"Sin membresía debería devolver 0 pacientes, obtuvo {len(results)}."
+        # Assert — 403: sin membresía activa, HasClinicRole deniega el acceso
+        assert response.status_code == 403, (
+            f"Sin membresía activa esperamos 403, obtuvo {response.status_code}. "
+            "HasClinicRole debe denegar si active_role=None."
         )
 
     def test_jwt_cross_tenant_isolation(self, db: None) -> None:

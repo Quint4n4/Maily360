@@ -40,6 +40,10 @@ from tests.factories import (
 )
 
 # ---------------------------------------------------------------------------
+# Helper adicional con membresía
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Constantes de URLs
 # ---------------------------------------------------------------------------
 
@@ -91,6 +95,25 @@ def _make_auth_client(user: Any) -> APIClient:
     client = APIClient()
     client.force_authenticate(user=user)
     return client
+
+
+def _make_member_client(tenant: Any, role: str = "owner") -> APIClient:
+    """Crea un user con TenantMembership del rol indicado y devuelve un cliente autenticado.
+
+    Necesario desde que se activó el enforcement de permisos por rol (AppointmentPermission,
+    AppointmentStatusPermission, AgendaConfigPermission). Sin membership activa en el tenant,
+    TenantAPIView adjunta active_role=None y HasClinicRole deniega la solicitud con 403.
+
+    Args:
+        tenant: el Tenant al que pertenece la membresía.
+        role:   rol clínico requerido para la operación que se va a testear.
+
+    Returns:
+        APIClient autenticado como el user creado.
+    """
+    user = UserFactory()
+    TenantMembershipFactory(user=user, tenant=tenant, role=role, is_active=True)
+    return _make_auth_client(user)
 
 
 def _get_jwt_token(user: Any, password: str = "password-segura-123") -> str:
@@ -150,13 +173,15 @@ class TestAppointmentCreateApi:
     """POST /agenda/citas/ — creación de cita mediante API."""
 
     def test_create_appointment_via_api_201(self, db: None) -> None:
-        """POST válido crea la cita y devuelve 201 con datos de la cita."""
+        """POST válido crea la cita y devuelve 201 con datos de la cita.
+
+        Ajuste Paso 4: el user tiene rol 'reception' (incluido en POST de AppointmentPermission).
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         starts = _BASE_DT
         ends = starts + datetime.timedelta(hours=1)
@@ -183,8 +208,14 @@ class TestAppointmentCreateApi:
         assert "id" in data
 
     def test_create_appointment_without_tenant_returns_403(self, db: None) -> None:
-        """Sin tenant activo (contexto no inyectado) la vista retorna 403."""
-        # Arrange
+        """Sin tenant activo (contexto no inyectado) la vista retorna 403.
+
+        Nota: con el enforcement de roles, este test sigue funcionando porque
+        un user sin membership tiene active_role=None → HasClinicRole devuelve 403
+        antes de llegar al check de tenant en la vista. El comportamiento observable
+        (403) es idéntico.
+        """
+        # Arrange — user sin membership (active_role=None → 403 por HasClinicRole)
         user = UserFactory()
         client = _make_auth_client(user)
 
@@ -206,11 +237,14 @@ class TestAppointmentCreateApi:
     def test_create_appointment_missing_required_fields_returns_400(
         self, db: None
     ) -> None:
-        """POST sin campos requeridos (reason, patient_id) devuelve 400."""
+        """POST sin campos requeridos (reason, patient_id) devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentPermission (POST).
+        El 400 viene del InputSerializer, no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act — falta reason
         with _tenant_context(tenant):
@@ -231,13 +265,16 @@ class TestAppointmentCreateApi:
     def test_create_appointment_ends_before_starts_returns_400(
         self, db: None
     ) -> None:
-        """POST con ends_at < starts_at devuelve 400 (ValidationError del service)."""
+        """POST con ends_at < starts_at devuelve 400 (ValidationError del service).
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentPermission (POST).
+        El 400 viene del servicio (validación de rango), no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         starts = _BASE_DT
         bad_ends = starts - datetime.timedelta(hours=1)
@@ -269,11 +306,13 @@ class TestAppointmentListApi:
     """GET /agenda/citas/ con autenticación."""
 
     def test_list_appointments_returns_200(self, db: None) -> None:
-        """Usuario autenticado con tenant inyectado recibe 200 y lista paginada."""
+        """Usuario autenticado con tenant inyectado recibe 200 y lista paginada.
+
+        Ajuste Paso 4: el user tiene rol 'readonly' (mínimo para GET en AppointmentPermission).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="readonly")
 
         # Act
         with _tenant_context(tenant):
@@ -283,7 +322,11 @@ class TestAppointmentListApi:
         assert response.status_code == 200
 
     def test_list_appointments_returns_only_own_tenant_citas(self, db: None) -> None:
-        """GET /citas/ con tenant inyectado devuelve solo las citas de ese tenant."""
+        """GET /citas/ con tenant inyectado devuelve solo las citas de ese tenant.
+
+        Ajuste Paso 4: el user tiene membresía en tenant_a (rol readonly) para
+        pasar AppointmentPermission (GET). El aislamiento lo garantiza el ORM.
+        """
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
@@ -304,8 +347,7 @@ class TestAppointmentListApi:
             starts_at=_BASE_DT + datetime.timedelta(days=1),
         )
 
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant_a, role="readonly")
 
         # Act — con contexto del tenant_a
         with _tenant_context(tenant_a):
@@ -330,7 +372,11 @@ class TestAppointmentChangeStatusApi:
     """POST /agenda/citas/<id>/estado/ — máquina de estados vía API."""
 
     def test_change_status_valid_transition_returns_200(self, db: None) -> None:
-        """Transición válida (scheduled→confirmed) devuelve 200 con el nuevo estado."""
+        """Transición válida (scheduled→confirmed) devuelve 200 con el nuevo estado.
+
+        Ajuste Paso 4: el user tiene rol 'reception' (incluido en POST de
+        AppointmentStatusPermission según la matriz de roles).
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
@@ -340,8 +386,7 @@ class TestAppointmentChangeStatusApi:
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -356,7 +401,11 @@ class TestAppointmentChangeStatusApi:
         assert response.json()["status"] == Appointment.Status.CONFIRMED
 
     def test_change_status_invalid_transition_returns_400(self, db: None) -> None:
-        """Transición inválida (scheduled→attended) devuelve 400."""
+        """Transición inválida (scheduled→attended) devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'nurse' (incluido en POST de
+        AppointmentStatusPermission). El 400 viene del servicio (máquina de estados).
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
@@ -366,8 +415,7 @@ class TestAppointmentChangeStatusApi:
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="nurse")
 
         # Act — scheduled → attended es inválido
         with _tenant_context(tenant):
@@ -383,11 +431,14 @@ class TestAppointmentChangeStatusApi:
     def test_change_status_nonexistent_appointment_returns_404(
         self, db: None
     ) -> None:
-        """UUID inexistente devuelve 404."""
+        """UUID inexistente devuelve 404.
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentStatusPermission.
+        El 404 viene del selector (UUID no existe), no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
         fake_id = uuid_module.uuid4()
 
         # Act
@@ -402,7 +453,11 @@ class TestAppointmentChangeStatusApi:
         assert response.status_code == 404
 
     def test_change_status_invalid_status_value_returns_400(self, db: None) -> None:
-        """Valor de status no válido devuelve 400 (error de serializer)."""
+        """Valor de status no válido devuelve 400 (error de serializer).
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentStatusPermission.
+        El 400 viene del serializer (ChoiceField), no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
@@ -411,8 +466,7 @@ class TestAppointmentChangeStatusApi:
             tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
             starts_at=_BASE_DT,
         )
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -440,6 +494,8 @@ class TestAppointmentPatchApi:
         El InputSerializer del PATCH solo acepta reason/specialty/notes.
         Enviar status lo ignora (partial=True → campo no reconocido se omite)
         y devuelve 400 porque s.validated_data queda vacío.
+
+        Ajuste Paso 4: el user tiene rol 'reception' (incluido en PATCH de AppointmentPermission).
         """
         # Arrange
         tenant = TenantFactory()
@@ -450,8 +506,7 @@ class TestAppointmentPatchApi:
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act — enviar solo status en el PATCH
         with _tenant_context(tenant):
@@ -469,7 +524,10 @@ class TestAppointmentPatchApi:
         assert appt.status == Appointment.Status.SCHEDULED
 
     def test_patch_appointment_allowed_field_updates_correctly(self, db: None) -> None:
-        """PATCH con reason/notes válidos actualiza esos campos y devuelve 200."""
+        """PATCH con reason/notes válidos actualiza esos campos y devuelve 200.
+
+        Ajuste Paso 4: el user tiene rol 'doctor' (incluido en PATCH de AppointmentPermission).
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
@@ -480,8 +538,7 @@ class TestAppointmentPatchApi:
             notes="",
             starts_at=_BASE_DT,
         )
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="doctor")
 
         # Act
         with _tenant_context(tenant):
@@ -498,11 +555,14 @@ class TestAppointmentPatchApi:
         assert data["notes"] == "Traer estudios."
 
     def test_patch_appointment_nonexistent_returns_404(self, db: None) -> None:
-        """PATCH de UUID inexistente devuelve 404."""
+        """PATCH de UUID inexistente devuelve 404.
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentPermission (PATCH).
+        El 404 viene del selector (UUID no existe).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -525,7 +585,11 @@ class TestAppointmentDeleteApi:
     """DELETE /agenda/citas/<id>/ cancela la cita (no la borra físicamente)."""
 
     def test_delete_appointment_cancels_not_deletes(self, db: None) -> None:
-        """DELETE → status=cancelled, registro físico permanece en BD."""
+        """DELETE → status=cancelled, registro físico permanece en BD.
+
+        Ajuste Paso 4: el user tiene rol 'reception' (incluido en DELETE de
+        AppointmentPermission = cancelar cita).
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
@@ -536,8 +600,7 @@ class TestAppointmentDeleteApi:
             starts_at=_BASE_DT,
         )
         appt_id = appt.id
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act
         with _tenant_context(tenant):
@@ -552,7 +615,11 @@ class TestAppointmentDeleteApi:
         assert Appointment.all_objects.filter(id=appt_id).exists()
 
     def test_delete_already_cancelled_returns_400(self, db: None) -> None:
-        """DELETE de una cita ya cancelada devuelve 400 (transición inválida)."""
+        """DELETE de una cita ya cancelada devuelve 400 (transición inválida).
+
+        Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentPermission (DELETE).
+        El 400 viene del servicio (máquina de estados), no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
@@ -562,8 +629,7 @@ class TestAppointmentDeleteApi:
             status=Appointment.Status.CANCELLED,
             starts_at=_BASE_DT,
         )
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="reception")
 
         # Act — intentar cancelar una cita ya cancelada
         with _tenant_context(tenant):
@@ -573,11 +639,14 @@ class TestAppointmentDeleteApi:
         assert response.status_code == 400
 
     def test_delete_appointment_nonexistent_returns_404(self, db: None) -> None:
-        """DELETE de UUID inexistente devuelve 404."""
+        """DELETE de UUID inexistente devuelve 404.
+
+        Ajuste Paso 4: el user tiene rol 'owner' para pasar AppointmentPermission (DELETE).
+        El 404 viene del selector (UUID no existe).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="owner")
 
         # Act
         with _tenant_context(tenant):
@@ -587,7 +656,11 @@ class TestAppointmentDeleteApi:
         assert response.status_code == 404
 
     def test_delete_appointment_cross_tenant_returns_404(self, db: None) -> None:
-        """DELETE de una cita de otro tenant devuelve 404 (no 403, no revelar existencia)."""
+        """DELETE de una cita de otro tenant devuelve 404 (no 403, no revelar existencia).
+
+        Ajuste Paso 4: el user tiene membresía en tenant_a (rol owner) para
+        pasar AppointmentPermission (DELETE). El 404 viene del selector (ORM filtra).
+        """
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
@@ -598,8 +671,7 @@ class TestAppointmentDeleteApi:
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant_a, role="owner")
 
         # Act — con contexto del tenant_a, intentar borrar cita del tenant_b
         with _tenant_context(tenant_a):
@@ -720,10 +792,16 @@ class TestAppointmentJWTIsolation:
             f"citas en lugar de 1 del tenant A."
         )
 
-    def test_jwt_auth_without_membership_returns_empty_cita_list(
+    def test_jwt_auth_without_membership_returns_403(
         self, db: None
     ) -> None:
-        """Usuario con JWT pero SIN membresía activa recibe lista vacía (falla segura)."""
+        """Usuario con JWT pero SIN membresía activa recibe 403.
+
+        CAMBIO POST-ENFORCEMENT: antes de activar los permisos por rol, este
+        endpoint devolvía 200 con lista vacía. Ahora que HasClinicRole está activo,
+        el usuario sin membresía tiene active_role=None → 403 Forbidden.
+        Es el comportamiento correcto: los endpoints de clínica requieren rol activo.
+        """
         # Arrange — user sin membresías
         user = UserFactory()
         tenant = TenantFactory()
@@ -740,10 +818,7 @@ class TestAppointmentJWTIsolation:
         api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
         response = api_client.get(CITAS_LIST_URL)
 
-        # Assert — 200 pero lista vacía
-        assert response.status_code == 200
-        data = response.json()
-        results = data.get("results", data) if isinstance(data, dict) else data
-        assert len(results) == 0, (
-            f"Sin membresía debería devolver 0 citas, obtuvo {len(results)}."
+        # Assert — 403: sin membresía activa, HasClinicRole deniega el acceso
+        assert response.status_code == 403, (
+            f"Sin membresía activa esperamos 403, obtuvo {response.status_code}."
         )

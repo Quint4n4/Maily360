@@ -35,6 +35,10 @@ from tests.factories import (
 )
 
 # ---------------------------------------------------------------------------
+# Helper adicional con membresía
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Constantes de URLs
 # ---------------------------------------------------------------------------
 
@@ -91,6 +95,25 @@ def _make_auth_client(user: Any) -> APIClient:
     return client
 
 
+def _make_member_client(tenant: Any, role: str = "owner") -> APIClient:
+    """Crea un user con TenantMembership del rol indicado y devuelve un cliente autenticado.
+
+    Necesario desde que se activó el enforcement de permisos por rol (PersonalPermission).
+    Sin membership activa en el tenant, TenantAPIView adjunta active_role=None y
+    HasClinicRole deniega la solicitud con 403.
+
+    Args:
+        tenant: el Tenant al que pertenece la membresía.
+        role:   rol clínico requerido para la operación que se va a testear.
+
+    Returns:
+        APIClient autenticado como el user creado.
+    """
+    user = UserFactory()
+    TenantMembershipFactory(user=user, tenant=tenant, role=role, is_active=True)
+    return _make_auth_client(user)
+
+
 def _get_jwt_token(user: Any, password: str = "password-segura-123") -> str:
     """Obtiene un JWT real vía POST /api/v1/auth/login/."""
     login_client = APIClient()
@@ -122,11 +145,13 @@ class TestDoctorListAuth:
         assert response.status_code == 401
 
     def test_list_doctores_returns_200_for_authenticated_user(self, db: None) -> None:
-        """Usuario autenticado con tenant inyectado recibe 200."""
+        """Usuario autenticado con tenant inyectado recibe 200.
+
+        Ajuste Paso 4: el user tiene rol 'readonly' (mínimo para GET personal).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="readonly")
 
         # Act
         with _tenant_context(tenant):
@@ -136,13 +161,15 @@ class TestDoctorListAuth:
         assert response.status_code == 200
 
     def test_list_doctores_only_shows_active_doctors(self, db: None) -> None:
-        """Por defecto solo se retornan doctores activos."""
+        """Por defecto solo se retornan doctores activos.
+
+        Ajuste Paso 4: el user tiene rol 'readonly' para pasar PersonalPermission en GET.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         DoctorFactory.create_batch(2, tenant=tenant, is_active=True)
         DoctorFactory(tenant=tenant, is_active=False)  # no debe aparecer
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="readonly")
 
         # Act
         with _tenant_context(tenant):
@@ -166,11 +193,14 @@ class TestDoctorCreateApi:
     def test_create_doctor_validation_error_400_invalid_membership(
         self, db: None
     ) -> None:
-        """Enviar un membership_id que no existe en el tenant devuelve 404."""
+        """Enviar un membership_id que no existe en el tenant devuelve 404.
+
+        Ajuste Paso 4: el user tiene rol 'admin' (MANAGE_ROLES = POST en PersonalPermission).
+        El 404 viene de la lógica de la vista (membership no encontrada), no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
         payload = {
             "membership_id": str(uuid_module.uuid4()),  # UUID inexistente
             "specialty": "Cardiología",
@@ -186,12 +216,15 @@ class TestDoctorCreateApi:
     def test_create_doctor_validation_error_400_non_doctor_role(
         self, db: None
     ) -> None:
-        """Membresía existente pero con role != 'doctor' devuelve 400."""
+        """Membresía existente pero con role != 'doctor' devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'admin' para pasar PersonalPermission (POST).
+        El 400 viene del servicio (validación de rol del doctor), no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         membership = TenantMembershipFactory(tenant=tenant, role="reception")
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
         payload = {
             "membership_id": str(membership.id),
         }
@@ -212,12 +245,16 @@ class TestDoctorCreateApi:
         assert response.status_code == 401
 
     def test_create_doctor_returns_201(self, db: None) -> None:
-        """POST con membresía válida crea el doctor y devuelve 201."""
+        """POST con membresía válida crea el doctor y devuelve 201.
+
+        Ajuste Paso 4: el user tiene rol 'admin' (MANAGE_ROLES = POST en PersonalPermission).
+        La membership de role='doctor' es la que se le asigna al nuevo perfil de médico,
+        no la del actor del request.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
         membership = TenantMembershipFactory(tenant=tenant, role="doctor")
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
         payload = {
             "membership_id": str(membership.id),
             "specialty": "Pediatría",
@@ -260,11 +297,13 @@ class TestConsultorioCreateApi:
     """POST /api/v1/personal/consultorios/ — creación de consultorio."""
 
     def test_create_consultorio_via_api_201(self, db: None) -> None:
-        """POST válido con nombre nuevo devuelve 201 y los datos persistidos."""
+        """POST válido con nombre nuevo devuelve 201 y los datos persistidos.
+
+        Ajuste Paso 4: el user tiene rol 'admin' (MANAGE_ROLES = POST en PersonalPermission).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
         payload = {
             "name": "Consultorio Azul",
             "location": "Piso 2, Ala Norte",
@@ -284,14 +323,17 @@ class TestConsultorioCreateApi:
         assert "id" in data
 
     def test_create_consultorio_duplicate_name_returns_400(self, db: None) -> None:
-        """Nombre duplicado en el mismo tenant devuelve 400."""
+        """Nombre duplicado en el mismo tenant devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'admin' para pasar PersonalPermission (POST).
+        El 400 viene del servicio (nombre duplicado), no del permiso.
+        """
         # Arrange
         from tests.factories import ConsultorioFactory
 
         tenant = TenantFactory()
-        user = UserFactory()
         ConsultorioFactory(tenant=tenant, name="Box 1")
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
         payload = {"name": "Box 1"}
 
         # Act
@@ -314,11 +356,13 @@ class TestConsultorioCreateApi:
         assert response.status_code == 401
 
     def test_create_consultorio_missing_name_returns_400(self, db: None) -> None:
-        """Omitir el campo name requerido devuelve 400."""
+        """Omitir el campo name requerido devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'admin' para pasar PersonalPermission (POST).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
 
         # Act
         with _tenant_context(tenant):
@@ -443,10 +487,16 @@ class TestDoctorJWTIsolation:
             f"doctores en lugar de 2 del tenant A."
         )
 
-    def test_jwt_auth_without_membership_returns_empty_doctor_list(
+    def test_jwt_auth_without_membership_returns_403(
         self, db: None
     ) -> None:
-        """Usuario con JWT pero SIN membresía activa recibe lista vacía (falla segura)."""
+        """Usuario con JWT pero SIN membresía activa recibe 403.
+
+        CAMBIO POST-ENFORCEMENT: antes de activar los permisos por rol, este
+        endpoint devolvía 200 con lista vacía. Ahora que HasClinicRole está activo,
+        el usuario sin membresía tiene active_role=None → 403 Forbidden.
+        Es el comportamiento correcto: los endpoints de clínica requieren rol activo.
+        """
         # Arrange — user sin membresías
         user = UserFactory()
         tenant = TenantFactory()
@@ -459,12 +509,9 @@ class TestDoctorJWTIsolation:
         api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
         response = api_client.get(DOCTORES_LIST_URL)
 
-        # Assert — 200 pero lista vacía
-        assert response.status_code == 200
-        data = response.json()
-        results = data.get("results", data) if isinstance(data, dict) else data
-        assert len(results) == 0, (
-            f"Sin membresía debería devolver 0 doctores, obtuvo {len(results)}."
+        # Assert — 403: sin membresía activa, HasClinicRole deniega el acceso
+        assert response.status_code == 403, (
+            f"Sin membresía activa esperamos 403, obtuvo {response.status_code}."
         )
 
 
@@ -482,14 +529,17 @@ class TestDoctorPatchIsActiveRejected:
     """
 
     def test_patch_doctor_ignores_is_active_field(self, db: None) -> None:
-        """PATCH con is_active=False es ignorado: el doctor permanece activo."""
+        """PATCH con is_active=False es ignorado: el doctor permanece activo.
+
+        Ajuste Paso 4: el user tiene rol 'admin' (MANAGE_ROLES = PATCH en PersonalPermission).
+        El 400 viene de que is_active no está en el InputSerializer → validated_data vacío.
+        """
         # Arrange
         from tests.factories import DoctorFactory
 
         tenant = TenantFactory()
-        user = UserFactory()
         doctor = DoctorFactory(tenant=tenant, is_active=True)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
 
         # Act — enviar is_active=False en PATCH
         with _tenant_context(tenant):
@@ -504,14 +554,16 @@ class TestDoctorPatchIsActiveRejected:
         assert response.status_code == 400
 
     def test_patch_doctor_allowed_field_still_works(self, db: None) -> None:
-        """PATCH con un campo permitido (specialty) actualiza correctamente."""
+        """PATCH con un campo permitido (specialty) actualiza correctamente.
+
+        Ajuste Paso 4: el user tiene rol 'admin' (MANAGE_ROLES = PATCH en PersonalPermission).
+        """
         # Arrange
         from tests.factories import DoctorFactory
 
         tenant = TenantFactory()
-        user = UserFactory()
         doctor = DoctorFactory(tenant=tenant, specialty="General")
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
 
         # Act
         with _tenant_context(tenant):
@@ -535,11 +587,14 @@ class TestConsultorioColorHexValidation:
     """FIX-F5: color_hex debe tener formato #RRGGBB; valores inválidos devuelven 400."""
 
     def test_create_consultorio_invalid_color_hex_returns_400(self, db: None) -> None:
-        """POST con color_hex inválido (no #RRGGBB) devuelve 400."""
+        """POST con color_hex inválido (no #RRGGBB) devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'admin' para pasar PersonalPermission (POST).
+        El 400 viene del serializer (RegexField), no del permiso.
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
 
         invalid_colors = [
             "FF0000",     # sin #
@@ -559,11 +614,13 @@ class TestConsultorioColorHexValidation:
             )
 
     def test_create_consultorio_valid_color_hex_accepted(self, db: None) -> None:
-        """POST con color_hex válido (#RRGGBB) devuelve 201."""
+        """POST con color_hex válido (#RRGGBB) devuelve 201.
+
+        Ajuste Paso 4: el user tiene rol 'admin' para pasar PersonalPermission (POST).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
         payload = {"name": "Sala Color", "color_hex": "#3B82F6"}
 
         # Act
@@ -575,11 +632,13 @@ class TestConsultorioColorHexValidation:
         assert response.json()["color_hex"] == "#3B82F6"
 
     def test_create_consultorio_empty_color_hex_accepted(self, db: None) -> None:
-        """POST con color_hex='' (vacío) es aceptado (campo opcional)."""
+        """POST con color_hex='' (vacío) es aceptado (campo opcional).
+
+        Ajuste Paso 4: el user tiene rol 'admin' para pasar PersonalPermission (POST).
+        """
         # Arrange
         tenant = TenantFactory()
-        user = UserFactory()
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
         payload = {"name": "Sala Sin Color", "color_hex": ""}
 
         # Act
@@ -591,14 +650,17 @@ class TestConsultorioColorHexValidation:
         assert response.json()["color_hex"] == ""
 
     def test_patch_consultorio_invalid_color_hex_returns_400(self, db: None) -> None:
-        """PATCH con color_hex inválido devuelve 400."""
+        """PATCH con color_hex inválido devuelve 400.
+
+        Ajuste Paso 4: el user tiene rol 'admin' (MANAGE_ROLES = PATCH en PersonalPermission).
+        El 400 viene del serializer (RegexField), no del permiso.
+        """
         # Arrange
         from tests.factories import ConsultorioFactory
 
         tenant = TenantFactory()
-        user = UserFactory()
         consultorio = ConsultorioFactory(tenant=tenant)
-        client = _make_auth_client(user)
+        client = _make_member_client(tenant, role="admin")
 
         # Act
         with _tenant_context(tenant):

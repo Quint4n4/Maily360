@@ -37,6 +37,11 @@ from apps.agenda.services import (
     appointment_reschedule,
     appointment_update,
 )
+from apps.core.permissions import (
+    AgendaConfigPermission,
+    AppointmentPermission,
+    AppointmentStatusPermission,
+)
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
 
@@ -51,7 +56,7 @@ class AppointmentListCreateApi(TenantAPIView):
     POST /api/v1/agenda/citas/    — crea una cita nueva.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, AppointmentPermission]
 
     class InputSerializer(serializers.Serializer):
         """Campos para crear una cita (POST).
@@ -149,7 +154,7 @@ class AppointmentDetailApi(TenantAPIView):
     DELETE /api/v1/agenda/citas/<appointment_id>/   — cancela la cita (no borra).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, AppointmentPermission]
 
     class InputSerializer(serializers.Serializer):
         """Campos editables de una cita por PATCH.
@@ -254,7 +259,7 @@ class AppointmentChangeStatusApi(TenantAPIView):
     Valida la transición contra la máquina de estados.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, AppointmentStatusPermission]
 
     class InputSerializer(serializers.Serializer):
         status = serializers.ChoiceField(choices=Appointment.Status.choices)
@@ -301,7 +306,7 @@ class AppointmentRescheduleApi(TenantAPIView):
     Revalida anti-empalme excluyendo la propia cita.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, AppointmentPermission]
 
     class InputSerializer(serializers.Serializer):
         starts_at = serializers.DateTimeField()
@@ -346,7 +351,7 @@ class AgendaConfigApi(TenantAPIView):
     PATCH /api/v1/agenda/config/   — actualizar configuración.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, AgendaConfigPermission]
 
     class InputSerializer(serializers.Serializer):
         """Campos editables de TenantAgendaConfig.

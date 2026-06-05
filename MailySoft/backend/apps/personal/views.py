@@ -22,7 +22,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.core.permissions import PersonalPermission
 from apps.core.tenant_context import get_current_tenant
+from apps.core.views import TenantAPIView
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule, Weekday
 from apps.personal.selectors import (
     consultorio_get,
@@ -47,7 +49,6 @@ from apps.personal.services import (
     schedule_create,
     schedule_deactivate,
 )
-from apps.core.views import TenantAPIView
 from apps.tenancy.models import TenantMembership
 
 
@@ -61,7 +62,7 @@ class DoctorListCreateApi(TenantAPIView):
     POST /api/v1/personal/doctores/       — crea un nuevo perfil de médico.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PersonalPermission]
 
     class InputSerializer(serializers.Serializer):
         membership_id = serializers.UUIDField(
@@ -160,7 +161,7 @@ class DoctorDetailApi(TenantAPIView):
     DELETE /api/v1/personal/doctores/<uuid:doctor_id>/  — desactivación (soft).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PersonalPermission]
 
     class InputSerializer(serializers.Serializer):
         cedula_profesional = serializers.CharField(
@@ -253,7 +254,7 @@ class ConsultorioListCreateApi(TenantAPIView):
     POST /api/v1/personal/consultorios/  — crea un consultorio nuevo.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PersonalPermission]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=100)
@@ -325,7 +326,7 @@ class ConsultorioDetailApi(TenantAPIView):
     DELETE /api/v1/personal/consultorios/<uuid:consultorio_id>/  — desactivación (soft).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PersonalPermission]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=100, required=False)
@@ -411,7 +412,7 @@ class DoctorScheduleListCreateApi(TenantAPIView):
     POST /api/v1/personal/doctores/<uuid:doctor_id>/horarios/  — crea un horario.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PersonalPermission]
 
     class InputSerializer(serializers.Serializer):
         day_of_week = serializers.ChoiceField(choices=Weekday.choices)
@@ -512,7 +513,7 @@ class DoctorScheduleDetailApi(TenantAPIView):
     """DELETE /api/v1/personal/horarios/<uuid:schedule_id>/  — desactiva un horario (soft).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, PersonalPermission]
 
     def _get_schedule_or_404(
         self, schedule_id: uuid.UUID
