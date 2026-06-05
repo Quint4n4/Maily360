@@ -7,6 +7,41 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (Fase 4 — Bitácora de auditoría NOM-024) · commit `50d33dc`
+
+- `apps/audit`: modelo `AuditLog` append-only tenant-aware (tenant nullable para eventos globales como login fallido); campos actor, rol snapshot, acción, recurso (referencia débil), ip, user_agent, request_id, metadata.
+- Helper `audit_record(...)` que NUNCA propaga excepciones al caller (la auditoría no tumba la operación de negocio).
+- Contexto de request (ip/user_agent/request_id) por thread-local, poblado en `TenantAPIView.check_permissions` y limpiado en el `finally` del middleware.
+- 18 puntos de integración: services de pacientes/personal/agenda + `PATIENT_READ` en la view + `LOGIN` (`MailyTokenObtainPairView`) + `LOGIN_FAILED` (señal `user_login_failed`).
+- Endpoint `GET /api/v1/audit/logs/` (paginado, filtros) solo para owner/admin (`AuditLogPermission`).
+- Inmutabilidad doble barrera: override `save()`/`delete()` + `AuditLogQuerySet` que bloquea `update()`/`delete()` masivos + RLS append-only en Postgres (migraciones `0002`, `0003`).
+- Decisiones del dueño: retención 10 años, auditar solo el detalle del expediente (no listas), login fallido registrado, ver bitácora solo owner/admin.
+
+### Added (Fase 4 — Endpoint /me/) · commit `128e283`
+
+- `GET /api/v1/me/`: devuelve identidad del usuario + `is_platform_staff` + `active_tenant` + `active_role` + lista de membresías activas. El frontend lo usa tras el login para decidir el panel según el rol. `MeApi` hereda de `APIView` (no `TenantAPIView`) para funcionar sin tenant activo.
+
+### Added (Fase 4 — Permisos por rol clínico) · commit `ffd8c85`
+
+- `apps/core/permissions.py`: `HasClinicRole` (base sensible al método HTTP) + 5 políticas declarativas (`PatientPermission`, `PersonalPermission`, `AppointmentPermission`, `AppointmentStatusPermission`, `AgendaConfigPermission`).
+- Aplicado a los 14 endpoints de pacientes/personal/agenda según la matriz aprobada. Denegación por rol → 403; recurso de otro tenant → 404 (aislamiento).
+- `TenantAPIView` resuelve el rol del servidor (`resolve_membership_for_user`) y lo expone en `request.active_role` antes de evaluar permisos.
+- 159 tests de matriz (rol × endpoint × método).
+
+### Changed (Fase 4)
+
+- `TenantAPIView` sobreescribe `check_permissions()` en vez de reescribir `initial()` (preserva content-negotiation/versioning/renderers de DRF).
+- `resolve_membership_for_user`: tenants en estado `trial` tienen acceso (modelo de prueba gratis); `suspended` queda bloqueado.
+- Login (`/auth/login/`) usa view custom `MailyTokenObtainPairView` que registra el evento en la bitácora.
+
+### Fixed (Fase 4)
+
+- OPTIONS/HEAD no se bloquean por rol (el preflight CORS del frontend ya no da 403).
+- Política RLS SELECT de la bitácora ya no expone eventos `tenant=NULL` (login fallido) a otros tenants — fuga cross-tenant/PII corregida.
+- `resource_repr` de pacientes usa número de expediente, no el nombre (minimización LFPDPPP); email de login fallido se guarda hasheado (`email_hint`).
+- Login sin doble `authenticate()` (evita `LOGIN_FAILED` espurio); señal limpia el request context en `finally`.
+- Bitácora: `save()` usa `_state.adding` (sin SELECT extra); paginación con `max_page_size` (anti-DoS).
+
 ### Added (Paso 3c-2 — Recordatorios WhatsApp) · commits `a9b93f1`, `13a01e1`
 
 - `apps/agenda`: modelo `AppointmentReminder` con ciclo `PENDING → SENT / FAILED / SKIPPED / CANCELLED`; canal, `scheduled_at`, `sent_at`, `message_preview`, `external_message_id`.
