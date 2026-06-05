@@ -67,6 +67,7 @@ class ActionType(models.TextChoices):
 
     # Autenticación
     LOGIN = "LOGIN", "Inicio de sesión"
+    LOGOUT = "LOGOUT", "Cierre de sesión"
     LOGIN_FAILED = "LOGIN_FAILED", "Intento de sesión fallido"
 
 

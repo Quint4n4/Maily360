@@ -73,14 +73,38 @@ La plomería que todo lo demás usa. **No toca pantallas todavía.**
 ### Fase 4 — Panel de plataforma (cuando exista backend)
 El panel SaaS (`pages/plataforma/`) consume endpoints que **aún no existen** en el backend (métricas, clínicas, billing). Queda **bloqueado** hasta construir esos endpoints. Mientras, puede quedar con mock.
 
-## 5. Decisión a tomar: almacenamiento de tokens
+## 5. Decisión TOMADA: almacenamiento de tokens — HÍBRIDO (memoria + httpOnly)
 
-| Opción | Seguridad | Para el MVP |
+**Decisión (2026-06-05):** patrón híbrido, lo más seguro, desde el inicio.
+- **Access token** → en **memoria** (variable JS, no localStorage). Vida corta (15 min). Se pierde al
+  recargar, pero se recupera con el refresh. No es robable por XSS persistente.
+- **Refresh token** → en **cookie `HttpOnly` + `Secure` + `SameSite=Strict`**. JavaScript NO lo lee →
+  protegido de XSS. El navegador la envía sola en `/auth/refresh/` y `/auth/logout/`.
+
+### Implicaciones (el backend cambia ANTES que el frontend)
+
+| # | Lado | Cambio |
 |---|---|---|
-| `localStorage`/`sessionStorage` | Vulnerable a XSS (si hubiera) | Aceptable si el front está libre de XSS; rápido de implementar |
-| Memoria + refresh en cookie httpOnly | Más seguro (access no accesible por JS) | Requiere que el backend ponga la cookie; más trabajo |
+| 1 | Backend | `POST /auth/login/` devuelve `{access}` en el JSON y pone el refresh en cookie httpOnly (no en el body). |
+| 2 | Backend | `POST /auth/refresh/` lee el refresh de la cookie (no del body) → devuelve `{access}` nuevo. |
+| 3 | Backend | `POST /auth/logout/` borra la cookie + blacklist del refresh (SimpleJWT token_blacklist ya está). |
+| 4 | Backend | **Protección CSRF**: como ahora hay cookies, se requiere mitigar CSRF — `SameSite=Strict` en la cookie + (si aplica) token CSRF en mutaciones. Documentar el enfoque. |
+| 5 | Backend | CORS con credenciales: `CORS_ALLOW_CREDENTIALS=True` (ya) + el front manda `credentials: 'include'`. Afinar `CSRF_TRUSTED_ORIGINS` / `CORS_ALLOWED_ORIGINS`. |
+| 6 | Frontend | Cliente HTTP: access en memoria; en 401 → `POST /auth/refresh/` (la cookie viaja sola) → reintento; `credentials: 'include'` en todas las llamadas. |
 
-**Recomendación para el MVP:** `localStorage` (con "recordarme") / `sessionStorage`, **condicionado** a que el frontend pase la auditoría de seguridad (sin `dangerouslySetInnerHTML`, sin XSS). Documentar el plan de migrar a cookie httpOnly antes de producción con datos reales.
+### Flujo resultante
+```
+login    → {access} en memoria + cookie httpOnly (refresh)
+llamadas → Authorization: Bearer <access en memoria>
+recargar → /auth/refresh/ (cookie) → nuevo access → sesión recuperada sin re-login
+logout   → /auth/logout/ borra cookie + blacklist
+```
+
+> **Trade-off asumido:** httpOnly elimina el riesgo de robo de token por XSS, pero introduce el riesgo
+> de CSRF (las cookies se envían solas). Se mitiga con `SameSite=Strict` + protección CSRF en mutaciones.
+> Es el estándar de la industria para apps con datos sensibles.
+
+**Orden de trabajo:** primero los cambios de backend (pasos 1-5, con el flujo de agentes engineer→tester→reviewer→security), luego el frontend (paso 6) consume el nuevo flujo.
 
 ## 6. Lo que NO cambia
 - La UI, los estilos, las animaciones — se conservan.

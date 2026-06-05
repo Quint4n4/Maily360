@@ -49,8 +49,13 @@ SESSION_COOKIE_SAMESITE: str = "Lax"
 SESSION_COOKIE_AGE: int = 60 * 60 * 24 * 7  # 7 días
 
 CSRF_COOKIE_SECURE: bool = True
-CSRF_COOKIE_HTTPONLY: bool = True
-CSRF_COOKIE_SAMESITE: str = "Lax"
+# CSRF_COOKIE_HTTPONLY DEBE ser False: el frontend necesita leer csrftoken con JS
+# para enviarlo como X-CSRFToken en refresh y logout. Sobreescribimos el True de base.
+CSRF_COOKIE_HTTPONLY: bool = False
+CSRF_COOKIE_SAMESITE: str = "Strict"
+
+# AUTH cookie de refresh: Secure=True obligatorio en producción (HTTPS).
+AUTH_COOKIE_SECURE: bool = True
 
 # ---------------------------------------------------------------------------
 # Headers de seguridad adicionales
@@ -79,6 +84,10 @@ X_FRAME_OPTIONS: str = "DENY"
 
 CORS_ALLOWED_ORIGINS: list[str] = env.list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_ALL_ORIGINS: bool = False
+
+# CSRF: orígenes confiables explícitos en prod (sin default → falla ruidoso si falta).
+# El front (cookie httpOnly + double-submit) requiere que su origen esté aquí.
+CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS")
 
 # ---------------------------------------------------------------------------
 # Almacenamiento en S3

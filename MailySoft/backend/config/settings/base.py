@@ -164,6 +164,8 @@ REST_FRAMEWORK: dict = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": env("DRF_THROTTLE_ANON", default="60/minute"),
         "user": env("DRF_THROTTLE_USER", default="300/minute"),
+        # Límite estricto para login: protege contra fuerza bruta de credenciales.
+        "auth_login": env("DRF_THROTTLE_LOGIN", default="5/minute"),
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": [
@@ -356,6 +358,42 @@ LOGGING: dict = {
 
 CORS_ALLOWED_ORIGINS: list[str] = env.list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_CREDENTIALS: bool = True
+
+# ---------------------------------------------------------------------------
+# Auth — cookie de refresh (patrón híbrido: access en memoria, refresh en cookie)
+#
+# AUTH_REFRESH_COOKIE: nombre de la cookie httpOnly que transporta el refresh token.
+# AUTH_COOKIE_SECURE: True en producción (HTTPS), False en desarrollo. Se sobreescribe
+#   en settings/production.py.  Lee de env para permitir ajuste sin tocar el código.
+# AUTH_COOKIE_SAMESITE: "Strict" — la cookie NO se envía en requests cross-site,
+#   lo que bloquea CSRF incluso sin el header X-CSRFToken en escenarios same-origin.
+# AUTH_COOKIE_PATH: limita la cookie al prefijo de los endpoints de auth únicamente,
+#   reduciendo la superficie de ataque (la cookie no viaja en requests a /api/v1/pacientes/,
+#   /api/v1/personal/, etc.).
+# ---------------------------------------------------------------------------
+
+AUTH_REFRESH_COOKIE: str = "maily_refresh"
+AUTH_COOKIE_SECURE: bool = env.bool("AUTH_COOKIE_SECURE", default=False)
+AUTH_COOKIE_SAMESITE: str = "Strict"
+AUTH_COOKIE_PATH: str = "/api/v1/auth/"
+
+# ---------------------------------------------------------------------------
+# CSRF
+#
+# CSRF_COOKIE_HTTPONLY=False: el front necesita leer la cookie csrftoken con JS
+#   (document.cookie) y mandarlo como header X-CSRFToken en refresh y logout.
+# CSRF_COOKIE_SAMESITE="Strict": mismo razonamiento que AUTH_COOKIE_SAMESITE.
+# CSRF_TRUSTED_ORIGINS: debe incluir el origen del frontend. En dev se incluye
+#   localhost:5173 (Vite) y localhost:3000. En prod, el dominio real del frontend.
+# CsrfViewMiddleware ya está en MIDDLEWARE (ver arriba).
+# ---------------------------------------------------------------------------
+
+CSRF_COOKIE_HTTPONLY: bool = False  # El frontend DEBE poder leerla con JS
+CSRF_COOKIE_SAMESITE: str = "Strict"
+CSRF_TRUSTED_ORIGINS: list[str] = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=["http://localhost:5173", "http://localhost:3000"],
+)
 
 # ---------------------------------------------------------------------------
 # Sentry (opcional, activar con SENTRY_DSN)
