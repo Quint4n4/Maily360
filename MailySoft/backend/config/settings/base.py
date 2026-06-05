@@ -66,6 +66,8 @@ LOCAL_APPS: list[str] = [
     "apps.pacientes",
     "apps.personal",
     "apps.agenda",
+    # Bitácora de auditoría NOM-024 (Paso 4)
+    "apps.audit",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

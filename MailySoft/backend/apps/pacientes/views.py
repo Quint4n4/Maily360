@@ -23,6 +23,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.audit.models import ActionType
+from apps.audit.services import audit_record
 from apps.core.permissions import PatientPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
@@ -206,10 +208,23 @@ class PatientDetailApi(TenantAPIView):
             )
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
-        """Retorna el detalle de un paciente."""
+        """Retorna el detalle de un paciente. Registra PATIENT_READ en la bitácora (NOM-024)."""
         patient, error_response = self._get_patient_or_404(patient_id)
         if error_response is not None:
             return error_response
+
+        # NOM-024: registrar acceso al expediente individual del paciente.
+        # Se registra DESPUÉS de obtener el paciente (objeto existe) y ANTES de serializar.
+        # La auditoría NO debe impedir la respuesta (audit_record absorbe excepciones).
+        audit_record(
+            action=ActionType.PATIENT_READ,
+            resource_type="Patient",
+            actor=request.user,
+            tenant=get_current_tenant(),
+            resource_id=patient.id,  # type: ignore[union-attr]
+            resource_repr=patient.record_number,  # identificador no-PII (LFPDPPP)
+            actor_role=getattr(request, "active_role", "") or "",
+        )
 
         return Response(PatientOutputSerializer(patient).data)
 

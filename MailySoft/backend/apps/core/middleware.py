@@ -34,6 +34,7 @@ from django.http import HttpRequest, HttpResponse
 
 from apps.core.tenant_context import (
     clear_current_tenant,
+    clear_request_context,
     resolve_tenant_for_user,
     set_current_tenant,
     set_tenant_context_active,
@@ -80,6 +81,7 @@ class TenantMiddleware:
             # próxima petición que reutilice esta conexión vea NULL, no el tenant
             # del request anterior (FIX-A1).
             clear_current_tenant()
+            clear_request_context()
             set_tenant_context_active(False)
             with connection.cursor() as cursor:
                 cursor.execute("SELECT set_config('app.current_tenant_id', '', false)")

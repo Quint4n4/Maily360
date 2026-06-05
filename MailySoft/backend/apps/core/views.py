@@ -47,9 +47,12 @@ from django.db import connection
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
+import uuid as _uuid_module
+
 from apps.core.tenant_context import (
     resolve_membership_for_user,
     set_current_tenant,
+    set_request_context,
     set_tenant_context_active,
 )
 
@@ -113,6 +116,15 @@ class TenantAPIView(APIView):
                     "SELECT set_config('app.current_tenant_id', %s, false)",
                     [str(tenant.id)],
                 )
+
+        # Poblar el contexto de request HTTP (ip/user_agent/request_id) en thread-local.
+        # El helper audit_record() lo consume sin acoplar los services a HTTP.
+        x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        ip: str = x_forwarded.split(",")[0].strip() if x_forwarded else request.META.get("REMOTE_ADDR", "")
+        user_agent: str = request.META.get("HTTP_USER_AGENT", "")[:512]
+        raw_request_id: str = request.META.get("HTTP_X_REQUEST_ID", "")
+        request_id: str = raw_request_id if raw_request_id else _uuid_module.uuid4().hex
+        set_request_context(ip=ip, user_agent=user_agent, request_id=request_id)
 
         # Evaluar permission_classes (IsAuthenticated + HasClinicRole, etc.).
         # En este punto request.active_role ya está disponible para HasClinicRole.

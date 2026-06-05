@@ -16,6 +16,8 @@ from django.db import transaction
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
+from apps.audit.models import ActionType
+from apps.audit.services import audit_record
 from apps.pacientes.models import Patient, PatientSequence, Sex
 from apps.tenancy.models import Tenant
 
@@ -184,7 +186,14 @@ def patient_create(
             "Error de concurrencia al generar el número de expediente. Por favor, intente de nuevo."
         ) from exc
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.PATIENT_CREATE,
+        resource_type="Patient",
+        actor=user,
+        tenant=tenant,
+        resource_id=patient.id,
+        resource_repr=patient.record_number,  # identificador no-PII (minimización LFPDPPP)
+    )
     return patient
 
 
@@ -261,7 +270,15 @@ def patient_update(
     update_fields = list(fields.keys()) + ["updated_at"]
     patient.save(update_fields=update_fields)
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.PATIENT_UPDATE,
+        resource_type="Patient",
+        actor=user,
+        tenant=patient.tenant,
+        resource_id=patient.id,
+        resource_repr=patient.record_number,  # identificador no-PII (minimización LFPDPPP)
+        metadata={"changed_fields": sorted(fields.keys())},
+    )
     return patient
 
 
@@ -293,5 +310,12 @@ def patient_deactivate(
     patient.is_active = False
     patient.save(update_fields=["is_active", "updated_at"])
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.PATIENT_DEACTIVATE,
+        resource_type="Patient",
+        actor=_user,
+        tenant=patient.tenant,
+        resource_id=patient.id,
+        resource_repr=patient.record_number,  # identificador no-PII (minimización LFPDPPP)
+    )
     return patient

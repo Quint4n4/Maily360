@@ -13,6 +13,8 @@ from typing import Optional
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
+from apps.audit.models import ActionType
+from apps.audit.services import audit_record
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
 from apps.tenancy.models import Tenant, TenantMembership
 
@@ -113,7 +115,14 @@ def doctor_create(
         bio_short=bio_short,
     )
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.DOCTOR_CREATE,
+        resource_type="Doctor",
+        actor=user,
+        tenant=tenant,
+        resource_id=doctor.id,
+        resource_repr=str(doctor),
+    )
     return doctor
 
 
@@ -151,7 +160,15 @@ def doctor_update(
     update_fields = list(fields.keys()) + ["updated_at"]
     doctor.save(update_fields=update_fields)
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.DOCTOR_UPDATE,
+        resource_type="Doctor",
+        actor=user,
+        tenant=doctor.tenant,
+        resource_id=doctor.id,
+        resource_repr=str(doctor),
+        metadata={"changed_fields": sorted(fields.keys())},
+    )
     return doctor
 
 
@@ -174,7 +191,14 @@ def doctor_deactivate(
     doctor.is_active = False
     doctor.save(update_fields=["is_active", "updated_at"])
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.DOCTOR_DEACTIVATE,
+        resource_type="Doctor",
+        actor=user,
+        tenant=doctor.tenant,
+        resource_id=doctor.id,
+        resource_repr=str(doctor),
+    )
     return doctor
 
 
@@ -227,7 +251,14 @@ def consultorio_create(
         color_hex=color_hex,
     )
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.CONSULTORIO_CREATE,
+        resource_type="Consultorio",
+        actor=user,
+        tenant=tenant,
+        resource_id=consultorio.id,
+        resource_repr=str(consultorio),
+    )
     return consultorio
 
 
@@ -277,7 +308,15 @@ def consultorio_update(
     update_fields = list(fields.keys()) + ["updated_at"]
     consultorio.save(update_fields=update_fields)
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.CONSULTORIO_UPDATE,
+        resource_type="Consultorio",
+        actor=user,
+        tenant=consultorio.tenant,
+        resource_id=consultorio.id,
+        resource_repr=str(consultorio),
+        metadata={"changed_fields": sorted(fields.keys())},
+    )
     return consultorio
 
 
@@ -298,7 +337,14 @@ def consultorio_deactivate(
     consultorio.is_active = False
     consultorio.save(update_fields=["is_active", "updated_at"])
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.CONSULTORIO_DEACTIVATE,
+        resource_type="Consultorio",
+        actor=user,
+        tenant=consultorio.tenant,
+        resource_id=consultorio.id,
+        resource_repr=str(consultorio),
+    )
     return consultorio
 
 
@@ -385,7 +431,15 @@ def schedule_create(
     schedule.full_clean(exclude=["tenant", "created_by"])
     schedule.save()
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.SCHEDULE_CREATE,
+        resource_type="DoctorSchedule",
+        actor=user,
+        tenant=tenant,
+        resource_id=schedule.id,
+        resource_repr=str(schedule),
+        metadata={"day_of_week": day_of_week},
+    )
     return schedule
 
 
@@ -409,5 +463,12 @@ def schedule_deactivate(
     schedule.is_active = False
     schedule.save(update_fields=["is_active", "updated_at"])
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.SCHEDULE_DEACTIVATE,
+        resource_type="DoctorSchedule",
+        actor=user,
+        tenant=schedule.tenant,
+        resource_id=schedule.id,
+        resource_repr=str(schedule),
+    )
     return schedule

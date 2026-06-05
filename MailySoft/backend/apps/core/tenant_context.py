@@ -130,6 +130,43 @@ def resolve_membership_for_user(
     )
 
 
+def set_request_context(*, ip: str, user_agent: str = "", request_id: str = "") -> None:
+    """Guarda el contexto HTTP del request (ip, user_agent, request_id) en thread-local.
+
+    Llamar en TenantAPIView.check_permissions() tras resolver la membresía.
+    El helper audit_record() lo consume sin acoplar los services a HTTP.
+
+    Args:
+        ip:         IP de origen del request (puede ser NAT / X-Forwarded-For).
+        user_agent: User-Agent del cliente (máx 512 chars recomendado).
+        request_id: ID de correlación del request (X-Request-ID o uuid4 hex).
+    """
+    _state.request_ip = ip
+    _state.request_user_agent = user_agent
+    _state.request_id = request_id
+
+
+def get_request_context() -> dict[str, str]:
+    """Devuelve el contexto HTTP del request en curso.
+
+    Returns:
+        Dict con keys 'ip', 'user_agent' y 'request_id'.
+        Vacíos si no se ha seteado (Celery, management commands, tests).
+    """
+    return {
+        "ip": getattr(_state, "request_ip", ""),
+        "user_agent": getattr(_state, "request_user_agent", ""),
+        "request_id": getattr(_state, "request_id", ""),
+    }
+
+
+def clear_request_context() -> None:
+    """Limpia el contexto HTTP del thread-local. Llamar siempre en finally del middleware."""
+    for attr in ("request_ip", "request_user_agent", "request_id"):
+        if hasattr(_state, attr):
+            delattr(_state, attr)
+
+
 def resolve_tenant_for_user(user: Optional["AbstractBaseUser"]) -> Optional["Tenant"]:
     """Resuelve el tenant activo para un usuario autenticado.
 

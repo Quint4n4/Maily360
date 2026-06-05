@@ -9,16 +9,18 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path  # noqa: F401  (include se usa al sumar apps)
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
     TokenVerifyView,
 )
+
+from apps.authn.views import MailyTokenObtainPairView
 
 urlpatterns = [
     # Admin de Django
     path("admin/", admin.site.urls),
     # Auth (SimpleJWT) — endpoints explícitos
-    path("api/v1/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    # MailyTokenObtainPairView: view custom que registra LOGIN en la bitácora de auditoría.
+    path("api/v1/auth/login/", MailyTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/v1/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/v1/auth/verify/", TokenVerifyView.as_view(), name="token_verify"),
     # Apps del dominio (se registran aquí conforme se agregan)
@@ -27,6 +29,7 @@ urlpatterns = [
     path("api/v1/", include("apps.pacientes.urls")),
     path("api/v1/", include("apps.personal.urls")),
     path("api/v1/", include("apps.agenda.urls")),
+    path("api/v1/audit/", include("apps.audit.urls")),
 ]
 
 # FIX-8: exponer la documentación OpenAPI SOLO en desarrollo.

@@ -12,6 +12,7 @@ import factory
 from factory.django import DjangoModelFactory
 
 from apps.agenda.models import Appointment, AppointmentReminder, TenantAgendaConfig
+from apps.audit.models import ActionType, AuditLog
 from apps.authn.models import User
 from apps.pacientes.models import Patient
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
@@ -260,3 +261,43 @@ class AppointmentReminderFactory(DjangoModelFactory):
     message_preview = ""
     error_detail = ""
     external_message_id = ""
+
+
+# ---------------------------------------------------------------------------
+# Audit (AuditLog)
+# ---------------------------------------------------------------------------
+
+
+class AuditLogFactory(DjangoModelFactory):
+    """Registro inmutable de la bitácora (AuditLog).
+
+    Usa all_objects.create() a través del método _create() para bypassar el
+    TenantManager, que requiere tenant no-None. AuditLog puede tener tenant=None
+    (eventos globales como LOGIN_FAILED), por lo que usamos all_objects igual
+    que hace audit_record() en producción.
+
+    Importante: no llames .save() sobre un AuditLog ya persistido — el modelo
+    lanzará RuntimeError (diseño append-only). Esta factory solo crea, nunca edita.
+    """
+
+    class Meta:
+        model = AuditLog
+        # factory_boy necesita saber que queremos usar save() normal.
+        # El override de save() en AuditLog verifica si el pk ya existe;
+        # al crear uno nuevo el pk aún no está en BD → INSERT → OK.
+        exclude: list[str] = []
+
+    tenant = factory.SubFactory(TenantFactory)
+    actor = factory.SubFactory(UserFactory)
+    actor_role = "owner"
+    action = ActionType.PATIENT_READ
+    resource_type = "Patient"
+    resource_id = factory.LazyFunction(
+        lambda: __import__("uuid").uuid4()
+    )
+    resource_repr = factory.Sequence(lambda n: f"Paciente #{n}")
+    description = ""
+    ip_address = None
+    user_agent = ""
+    request_id = ""
+    metadata = factory.LazyFunction(dict)

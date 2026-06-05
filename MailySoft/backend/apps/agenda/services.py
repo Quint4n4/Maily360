@@ -40,6 +40,8 @@ from apps.agenda.models import (
     TenantAgendaConfig,
 )
 from apps.agenda.selectors import agenda_config_get
+from apps.audit.models import ActionType
+from apps.audit.services import audit_record
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
 from apps.personal.models import Consultorio, Doctor
@@ -369,7 +371,18 @@ def appointment_create(
             exc_info=True,
         )
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.APPOINTMENT_CREATE,
+        resource_type="Appointment",
+        actor=user,
+        tenant=tenant,
+        resource_id=appointment.id,
+        resource_repr=str(appointment),
+        metadata={
+            "doctor_id": str(doctor_id),
+            "patient_id": str(patient_id),
+        },
+    )
     return appointment
 
 
@@ -447,7 +460,18 @@ def appointment_change_status(
             new_status,
         )
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.APPOINTMENT_STATUS,
+        resource_type="Appointment",
+        actor=user,
+        tenant=appointment.tenant,
+        resource_id=appointment.id,
+        resource_repr=str(appointment),
+        metadata={
+            "old_status": current,
+            "new_status": new_status,
+        },
+    )
     return appointment
 
 
@@ -584,7 +608,18 @@ def appointment_reschedule(
             exc_info=True,
         )
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.APPOINTMENT_RESCHEDULE,
+        resource_type="Appointment",
+        actor=user,
+        tenant=appointment.tenant,
+        resource_id=appointment.id,
+        resource_repr=str(appointment),
+        metadata={
+            "new_starts_at": appointment.starts_at.isoformat() if appointment.starts_at else "",
+            "new_ends_at": appointment.ends_at.isoformat() if appointment.ends_at else "",
+        },
+    )
     return appointment
 
 
@@ -634,7 +669,15 @@ def appointment_update(
     update_fields = list(fields.keys()) + ["updated_at"]
     appointment.save(update_fields=update_fields)
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.APPOINTMENT_UPDATE,
+        resource_type="Appointment",
+        actor=user,
+        tenant=appointment.tenant,
+        resource_id=appointment.id,
+        resource_repr=str(appointment),
+        metadata={"changed_fields": sorted(fields.keys())},
+    )
     return appointment
 
 
@@ -679,7 +722,15 @@ def agenda_config_update(
     update_fields = list(fields.keys()) + ["updated_at"]
     config.save(update_fields=update_fields)
 
-    # TODO(audit): registrar en apps/audit cuando exista
+    audit_record(
+        action=ActionType.CONFIG_UPDATE,
+        resource_type="TenantAgendaConfig",
+        actor=user,
+        tenant=tenant,
+        resource_id=config.id,
+        resource_repr=str(config),
+        metadata={"changed_fields": sorted(fields.keys())},
+    )
     return config
 
 

@@ -17,6 +17,7 @@ Si el usuario pide algo que las viola, propón la alternativa correcta y explica
 
 1. **CERO secretos en el código o en git.** Nunca `SECRET_KEY`, contraseñas, tokens o API keys en archivos.
    Siempre `env("NOMBRE")` con `django-environ`. Si ves un secreto hardcodeado, es un bug crítico: detente y corrígelo.
+   **Tampoco en los MENSAJES DE COMMIT** (ni credenciales de prueba): quedan permanentes en el historial de git. Si una credencial llega a git/commit, rótala de inmediato.
 2. **NUNCA SQL armado con datos del usuario.** Siempre el ORM o queries parametrizadas. Cero f-strings/concatenación en SQL.
 3. **NUNCA lógica de negocio en views o serializers.** La lógica vive en `services.py` (escrituras) y `selectors.py` (lecturas).
 
