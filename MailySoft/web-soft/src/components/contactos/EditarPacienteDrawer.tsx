@@ -1,25 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Info, AlertCircle, Loader2 } from 'lucide-react'
-import { useCreatePatient } from '../../hooks/pacientes'
+import { X, AlertCircle, Loader2 } from 'lucide-react'
+import { useUpdatePatient } from '../../hooks/pacientes'
 import { ApiError } from '../../lib/http'
-import type { Sex } from '../../types/paciente'
+import type { PatientOut, Sex } from '../../types/paciente'
 
-interface NuevoPacienteDrawerProps {
-  open: boolean
+interface EditarPacienteDrawerProps {
+  paciente: PatientOut | null
   onClose: () => void
 }
 
 const SECCION = 'text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-3'
 
-const FORM_VACIO = {
-  first_name: '', paternal_surname: '', maternal_surname: '',
-  date_of_birth: '', sex: '' as '' | Sex, phone: '', email: '', curp: '', notes: '',
-}
-
 /** Extrae mensajes de error legibles de un ApiError de DRF. */
 function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar el paciente.']
+  if (!(err instanceof ApiError)) return ['No se pudo guardar.']
   if (err.isNetwork) return ['No se pudo conectar con el servidor.']
   const body = err.body
   if (!body) return [`Error ${err.status}.`]
@@ -31,23 +26,37 @@ function erroresDe(err: unknown): string[] {
   return msgs.length ? msgs : [`Error ${err.status}.`]
 }
 
-export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDrawerProps) {
-  const [form, setForm] = useState(FORM_VACIO)
+export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacienteDrawerProps) {
+  const [form, setForm] = useState({
+    first_name: '', paternal_surname: '', maternal_surname: '',
+    date_of_birth: '', sex: '' as '' | Sex, phone: '', email: '', curp: '', notes: '',
+  })
   const [errores, setErrores] = useState<string[]>([])
-  const crear = useCreatePatient()
+  const actualizar = useUpdatePatient()
+
+  // Precargar el formulario cuando cambia el paciente seleccionado.
+  useEffect(() => {
+    if (!paciente) return
+    setErrores([])
+    setForm({
+      first_name: paciente.first_name,
+      paternal_surname: paciente.paternal_surname,
+      maternal_surname: paciente.maternal_surname,
+      date_of_birth: paciente.date_of_birth,
+      sex: paciente.sex,
+      phone: paciente.phone,
+      email: paciente.email,
+      curp: paciente.curp,
+      notes: paciente.notes,
+    })
+  }, [paciente])
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }))
 
-  const cerrar = () => {
-    setForm(FORM_VACIO)
-    setErrores([])
-    onClose()
-  }
-
   const guardar = async () => {
+    if (!paciente) return
     setErrores([])
-    // Validación mínima en cliente (el backend valida a fondo).
     const faltan: string[] = []
     if (!form.first_name.trim()) faltan.push('El nombre es obligatorio.')
     if (!form.paternal_surname.trim()) faltan.push('El apellido paterno es obligatorio.')
@@ -57,18 +66,21 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
     if (faltan.length) { setErrores(faltan); return }
 
     try {
-      await crear.mutateAsync({
-        first_name: form.first_name.trim(),
-        paternal_surname: form.paternal_surname.trim(),
-        maternal_surname: form.maternal_surname.trim(),
-        date_of_birth: form.date_of_birth,
-        sex: form.sex as Sex,
-        phone: form.phone.trim(),
-        curp: form.curp.trim(),
-        email: form.email.trim(),
-        notes: form.notes.trim(),
+      await actualizar.mutateAsync({
+        id: paciente.id,
+        input: {
+          first_name: form.first_name.trim(),
+          paternal_surname: form.paternal_surname.trim(),
+          maternal_surname: form.maternal_surname.trim(),
+          date_of_birth: form.date_of_birth,
+          sex: form.sex as Sex,
+          phone: form.phone.trim(),
+          curp: form.curp.trim(),
+          email: form.email.trim(),
+          notes: form.notes.trim(),
+        },
       })
-      cerrar()
+      onClose()
     } catch (err) {
       setErrores(erroresDe(err))
     }
@@ -76,17 +88,17 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
 
   return (
     <AnimatePresence>
-      {open && (
+      {paciente && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-start justify-center px-4 py-10 overflow-y-auto"
+          className="fixed inset-0 z-[60] flex items-start justify-center px-4 py-10 overflow-y-auto"
           style={{ background: 'rgba(40,28,8,0.4)', backdropFilter: 'blur(6px)' }}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          onClick={cerrar}
+          onClick={onClose}
         >
           <motion.div
             className="relative w-full max-w-lg rounded-3xl overflow-hidden"
             style={{
-              background: 'rgba(255,255,255,0.82)',
+              background: 'rgba(255,255,255,0.85)',
               backdropFilter: 'blur(30px) saturate(160%)',
               WebkitBackdropFilter: 'blur(30px) saturate(160%)',
               border: '1px solid rgba(255,255,255,0.7)',
@@ -98,18 +110,17 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
             transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-7 py-5 border-b border-white/40">
-              <h2 className="text-lg font-bold text-gray-900">Nuevo paciente</h2>
-              <button onClick={cerrar} className="text-gray-400 hover:text-gray-700 transition-colors">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Editar paciente</h2>
+                <p className="text-xs text-gray-500">{paciente.record_number}</p>
+              </div>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Cuerpo */}
             <div className="px-7 py-6 space-y-7">
-
-              {/* Errores */}
               {errores.length > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl px-4 py-3" style={{ background: 'rgba(190,40,40,0.10)', border: '1px solid rgba(190,40,40,0.25)' }}>
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
@@ -124,16 +135,16 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
                 <div className="space-y-3">
                   <div>
                     <label className="label">Nombre(s)</label>
-                    <input className="input" value={form.first_name} onChange={set('first_name')} placeholder="María" />
+                    <input className="input" value={form.first_name} onChange={set('first_name')} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="label">Apellido paterno</label>
-                      <input className="input" value={form.paternal_surname} onChange={set('paternal_surname')} placeholder="González" />
+                      <input className="input" value={form.paternal_surname} onChange={set('paternal_surname')} />
                     </div>
                     <div>
                       <label className="label">Apellido materno</label>
-                      <input className="input" value={form.maternal_surname} onChange={set('maternal_surname')} placeholder="Pérez" />
+                      <input className="input" value={form.maternal_surname} onChange={set('maternal_surname')} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -159,11 +170,11 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
                 <div className="space-y-3">
                   <div>
                     <label className="label">Teléfono</label>
-                    <input className="input" value={form.phone} onChange={set('phone')} placeholder="55 1234 5678" />
+                    <input className="input" value={form.phone} onChange={set('phone')} />
                   </div>
                   <div>
                     <label className="label">Email <span className="text-gray-400 font-normal">(opcional)</span></label>
-                    <input type="email" className="input" value={form.email} onChange={set('email')} placeholder="paciente@correo.mx" />
+                    <input type="email" className="input" value={form.email} onChange={set('email')} />
                   </div>
                 </div>
               </section>
@@ -172,31 +183,25 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
                 <p className={SECCION}>Identificación</p>
                 <div>
                   <label className="label">CURP <span className="text-gray-400 font-normal">(opcional)</span></label>
-                  <input className="input uppercase" maxLength={18} value={form.curp} onChange={set('curp')} placeholder="18 caracteres" />
+                  <input className="input uppercase" maxLength={18} value={form.curp} onChange={set('curp')} />
                 </div>
               </section>
 
               <section>
                 <p className={SECCION}>Notas</p>
-                <textarea className="input resize-none" rows={3} value={form.notes} onChange={set('notes')} placeholder="Observaciones, alergias, antecedentes…" />
+                <textarea className="input resize-none" rows={3} value={form.notes} onChange={set('notes')} />
               </section>
-
-              <div className="flex items-start gap-2.5 rounded-xl px-4 py-3" style={{ background: 'rgba(201,162,39,0.10)', border: '1px solid rgba(201,162,39,0.25)' }}>
-                <Info className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#C9A227' }} />
-                <p className="text-xs text-amber-800">El número de expediente se asignará automáticamente al guardar.</p>
-              </div>
             </div>
 
-            {/* Footer */}
             <div className="flex items-center justify-between gap-3 px-7 py-4 border-t border-white/40" style={{ background: 'rgba(255,255,255,0.25)' }}>
-              <button onClick={cerrar} disabled={crear.isPending} className="btn-secondary flex-1 disabled:opacity-60">Cancelar</button>
+              <button onClick={onClose} disabled={actualizar.isPending} className="btn-secondary flex-1 disabled:opacity-60">Cancelar</button>
               <button
                 onClick={guardar}
-                disabled={crear.isPending}
+                disabled={actualizar.isPending}
                 className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
                 style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
               >
-                {crear.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : 'Guardar paciente'}
+                {actualizar.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : 'Guardar cambios'}
               </button>
             </div>
           </motion.div>

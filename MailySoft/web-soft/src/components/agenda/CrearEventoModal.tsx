@@ -1,75 +1,122 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, AlertCircle, Loader2, Search } from 'lucide-react'
+import { usePatients } from '../../hooks/pacientes'
+import { useDoctors, useConsultorios, useCreateAppointment } from '../../hooks/agenda'
+import { combineToISO } from '../../lib/fecha'
+import { ApiError } from '../../lib/http'
 
-/* ─── Tipos ─────────────────────────────────────────────────────────────── */
-type TipoEvento = 'cita' | 'reunion' | 'bloqueo'
-type ModoPaciente = 'seleccionar' | 'nuevo'
-type TipoCita = 'primera' | 'subsecuente' | 'urgente'
-type Modalidad = 'consultorio' | 'telefonica' | 'video' | 'fuera'
+type TipoCita = 'Primera vez' | 'Subsecuente' | 'Urgente'
 
 interface CrearEventoModalProps {
   open: boolean
   onClose: () => void
-  fecha: string
+  dayKey: string
+  fechaLarga: string
   horaInicio: string
-  consultorio?: string
+  consultorioId?: string | null
+  consultorioName?: string
 }
 
-const PACIENTES_DEMO = [
-  'Reyes Benítez Alondra',
-  'María González Pérez',
-  'Roberto Sánchez Luna',
-  'Lucía Ramírez Soto',
-  'Jorge Mendoza Ríos',
-]
-
-const HORAS_FIN = ['09:30', '10:00', '10:30', '11:00', '11:30', '12:00']
-
 const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
+const LABEL = 'block text-xs font-medium text-gray-500 mb-1'
+const TIPOS: TipoCita[] = ['Primera vez', 'Subsecuente', 'Urgente']
+const DURACIONES = [30, 45, 60, 90]
 
-/* ─── Pill ──────────────────────────────────────────────────────────────── */
+function erroresDe(err: unknown): string[] {
+  if (!(err instanceof ApiError)) return ['No se pudo agendar la cita.']
+  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
+  const body = err.body
+  if (!body) return [`Error ${err.status}.`]
+  const msgs: string[] = []
+  for (const [campo, valor] of Object.entries(body)) {
+    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
+    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
+  }
+  return msgs.length ? msgs : [`Error ${err.status}.`]
+}
+
 function Pill({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 active:scale-[0.98]"
-      style={
-        selected
-          ? { background: '#C9A227', color: '#fff', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }
-          : { background: 'rgba(255,255,255,0.55)', color: '#9A7B1E', border: '1px solid rgba(255,255,255,0.7)' }
-      }
-    >
+    <button type="button" onClick={onClick}
+      className="px-4 py-2 rounded-full text-sm font-semibold transition-all duration-150 active:scale-[0.98]"
+      style={selected
+        ? { background: '#C9A227', color: '#fff', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }
+        : { background: 'rgba(255,255,255,0.55)', color: '#9A7B1E', border: '1px solid rgba(255,255,255,0.7)' }}>
       {label}
     </button>
   )
 }
 
-/* ─── Componente ─────────────────────────────────────────────────────────── */
 export default function CrearEventoModal({
-  open, onClose, fecha, horaInicio, consultorio,
+  open, onClose, dayKey, fechaLarga, horaInicio, consultorioId, consultorioName,
 }: CrearEventoModalProps) {
-  const [doctor, setDoctor]             = useState('Dr. Prueba')
-  const [horaFin, setHoraFin]           = useState('09:30')
-  const [tipoEvento, setTipoEvento]     = useState<TipoEvento | null>(null)
-  const [modoPaciente, setModoPaciente] = useState<ModoPaciente | null>(null)
-  const [paciente, setPaciente]         = useState('')
-  const [tipoCita, setTipoCita]         = useState<TipoCita | null>(null)
-  const [modalidad, setModalidad]       = useState<Modalidad | null>(null)
-  const [observaciones, setObs]         = useState('')
-  const [enviarCorreo, setEnviarCorreo] = useState(false)
+  const [search, setSearch] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const [pacienteId, setPacienteId] = useState('')
+  const [doctorId, setDoctorId] = useState('')
+  const [consId, setConsId] = useState<string>('')
+  const [duracion, setDuracion] = useState(30)
+  const [tipo, setTipo] = useState<TipoCita | null>(null)
+  const [notas, setNotas] = useState('')
+  const [errores, setErrores] = useState<string[]>([])
+
+  const { data: pacData, isLoading: loadingPac } = usePatients(debounced)
+  const { data: docData } = useDoctors()
+  const { data: consData } = useConsultorios()
+  const crear = useCreateAppointment()
+
+  const pacientes = pacData?.results ?? []
+  const doctores = (docData?.results ?? []).filter(d => d.is_active)
+  const consultorios = (consData?.results ?? []).filter(c => c.is_active)
+
+  // Debounce de la búsqueda de pacientes.
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Al abrir: preseleccionar consultorio (de la columna clicada) y resetear.
+  useEffect(() => {
+    if (!open) return
+    setConsId(consultorioId ?? '')
+    setErrores([])
+  }, [open, consultorioId])
 
   const reset = () => {
-    setTipoEvento(null); setModoPaciente(null); setPaciente('')
-    setTipoCita(null); setModalidad(null); setObs(''); setEnviarCorreo(false)
+    setSearch(''); setDebounced(''); setPacienteId(''); setDoctorId('')
+    setDuracion(30); setTipo(null); setNotas(''); setErrores([])
   }
-  const handleClose = () => { reset(); onClose() }
+  const cerrar = () => { reset(); onClose() }
 
-  const esCita       = tipoEvento === 'cita'
-  const muestraTipo  = esCita && !!paciente
-  const muestraModal = muestraTipo && !!tipoCita
-  const puedeGuardar = (esCita && !!modalidad) || tipoEvento === 'reunion' || tipoEvento === 'bloqueo'
+  const guardar = async () => {
+    setErrores([])
+    const faltan: string[] = []
+    if (!pacienteId) faltan.push('Selecciona un paciente.')
+    if (!doctorId) faltan.push('Selecciona un doctor.')
+    if (!tipo) faltan.push('Indica el tipo de cita.')
+    if (faltan.length) { setErrores(faltan); return }
+
+    const startISO = combineToISO(dayKey, horaInicio)
+    const endISO = new Date(new Date(startISO).getTime() + duracion * 60_000).toISOString()
+    const doctorSel = doctores.find(d => d.id === doctorId)
+
+    try {
+      await crear.mutateAsync({
+        patient_id: pacienteId,
+        doctor_id: doctorId,
+        consultorio_id: consId || null,
+        starts_at: startISO,
+        ends_at: endISO,
+        reason: tipo as string,
+        specialty: doctorSel?.specialty ?? '',
+        notes: notas.trim(),
+      })
+      cerrar()
+    } catch (err) {
+      setErrores(erroresDe(err))
+    }
+  }
 
   return (
     <AnimatePresence>
@@ -78,148 +125,118 @@ export default function CrearEventoModal({
           className="fixed inset-0 z-50 flex items-start justify-center px-4 py-10 overflow-y-auto"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           style={{ background: 'rgba(40,28,8,0.4)', backdropFilter: 'blur(6px)' }}
-          onClick={handleClose}
+          onClick={cerrar}
         >
           <motion.div
             className="relative w-full max-w-2xl rounded-3xl overflow-hidden"
             style={{
-              background: 'rgba(255,255,255,0.62)',
+              background: 'rgba(255,255,255,0.78)',
               backdropFilter: 'blur(30px) saturate(160%)',
               WebkitBackdropFilter: 'blur(30px) saturate(160%)',
               border: '1px solid rgba(255,255,255,0.65)',
               boxShadow: '0 20px 60px rgba(60,42,12,0.25)',
             }}
             initial={{ opacity: 0, y: 20, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0,  scale: 1 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.97 }}
             transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
             onClick={e => e.stopPropagation()}
           >
-            {/* ── Encabezado glass ── */}
+            {/* Encabezado */}
             <div className="px-7 py-5 flex items-start justify-between border-b border-white/40">
               <div>
-                <h2 className="text-gray-900 text-xl font-bold">Crear nuevo evento</h2>
+                <h2 className="text-gray-900 text-xl font-bold">Agendar cita</h2>
                 <p className="text-gray-500 text-sm italic mt-0.5">
-                  {fecha} a las {horaInicio} hrs.{consultorio ? ` · ${consultorio}` : ''}
+                  {fechaLarga} · {horaInicio} hrs{consultorioName ? ` · ${consultorioName}` : ''}
                 </p>
               </div>
-              <button onClick={handleClose} className="text-gray-400 hover:text-gray-700 transition-colors">
+              <button onClick={cerrar} className="text-gray-400 hover:text-gray-700 transition-colors">
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            {/* ── Cuerpo ── */}
+            {/* Cuerpo */}
             <div className="px-7 py-6 space-y-5">
 
-              {/* Doctor */}
-              <select value={doctor} onChange={e => setDoctor(e.target.value)} className={INPUT}>
-                <option>Dr. Prueba</option>
-                <option>Dra. Martínez</option>
-                <option>Dr. Herrera</option>
-              </select>
-
-              {/* Horario + tipo de evento */}
-              <div className="flex flex-wrap items-end gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Inicia cita</label>
-                  <input value={horaInicio} disabled
-                    className="w-28 rounded-xl border border-white/50 bg-white/40 px-4 py-2.5 text-sm text-gray-600" />
+              {errores.length > 0 && (
+                <div className="flex items-start gap-2.5 rounded-xl px-4 py-3" style={{ background: 'rgba(190,40,40,0.10)', border: '1px solid rgba(190,40,40,0.25)' }}>
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
+                  <ul className="text-xs text-red-700 space-y-0.5 list-disc list-inside">
+                    {errores.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
                 </div>
+              )}
+
+              {/* Paciente */}
+              <div>
+                <label className={LABEL}>Paciente</label>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar paciente…" className={`${INPUT} pl-10`} />
+                </div>
+                <select value={pacienteId} onChange={e => setPacienteId(e.target.value)} className={INPUT}>
+                  <option value="">{loadingPac ? 'Cargando…' : 'Selecciona un paciente…'}</option>
+                  {pacientes.map(p => <option key={p.id} value={p.id}>{p.full_name} · {p.record_number}</option>)}
+                </select>
+              </div>
+
+              {/* Doctor + consultorio */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Finaliza cita</label>
-                  <select value={horaFin} onChange={e => setHoraFin(e.target.value)} className={`${INPUT} w-32`}>
-                    {HORAS_FIN.map(h => <option key={h}>{h} hrs</option>)}
+                  <label className={LABEL}>Doctor</label>
+                  <select value={doctorId} onChange={e => setDoctorId(e.target.value)} className={INPUT}>
+                    <option value="">Selecciona…</option>
+                    {doctores.map(d => <option key={d.id} value={d.id}>{d.full_name}</option>)}
                   </select>
                 </div>
-                <div className="flex gap-2.5 ml-auto">
-                  <Pill label="Cita"    selected={tipoEvento === 'cita'}    onClick={() => { reset(); setTipoEvento('cita') }} />
-                  <Pill label="Reunión" selected={tipoEvento === 'reunion'} onClick={() => { reset(); setTipoEvento('reunion') }} />
-                  <Pill label="Bloqueo" selected={tipoEvento === 'bloqueo'} onClick={() => { reset(); setTipoEvento('bloqueo') }} />
+                <div>
+                  <label className={LABEL}>Consultorio</label>
+                  <select value={consId} onChange={e => setConsId(e.target.value)} className={INPUT}>
+                    <option value="">Sin consultorio</option>
+                    {consultorios.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
               </div>
 
-              {/* Paciente (solo si es Cita) */}
-              <AnimatePresence>
-                {esCita && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden"
-                  >
-                    <div className="flex flex-wrap items-center gap-3 pt-1">
-                      <Pill label="Seleccionar paciente" selected={modoPaciente === 'seleccionar'} onClick={() => setModoPaciente('seleccionar')} />
-                      <Pill label="Nuevo paciente"       selected={modoPaciente === 'nuevo'}       onClick={() => setModoPaciente('nuevo')} />
-                      {modoPaciente === 'seleccionar' && (
-                        <select value={paciente} onChange={e => setPaciente(e.target.value)} className={`${INPUT} flex-1 min-w-[200px]`}>
-                          <option value="">Selecciona un paciente…</option>
-                          {PACIENTES_DEMO.map(p => <option key={p}>{p}</option>)}
-                        </select>
-                      )}
-                      {modoPaciente === 'nuevo' && (
-                        <input value={paciente} onChange={e => setPaciente(e.target.value)}
-                          placeholder="Nombre del nuevo paciente" className={`${INPUT} flex-1 min-w-[200px]`} />
-                      )}
-                    </div>
+              {/* Horario */}
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className={LABEL}>Inicia</label>
+                  <input value={`${horaInicio} hrs`} disabled className="w-28 rounded-xl border border-white/50 bg-white/40 px-4 py-2.5 text-sm text-gray-600" />
+                </div>
+                <div>
+                  <label className={LABEL}>Duración</label>
+                  <select value={duracion} onChange={e => setDuracion(Number(e.target.value))} className={`${INPUT} w-36`}>
+                    {DURACIONES.map(d => <option key={d} value={d}>{d} min</option>)}
+                  </select>
+                </div>
+              </div>
 
-                    <AnimatePresence>
-                      {muestraTipo && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }} className="flex flex-wrap gap-2.5 overflow-hidden"
-                        >
-                          <Pill label="Cita primera vez" selected={tipoCita === 'primera'}     onClick={() => setTipoCita('primera')} />
-                          <Pill label="Cita subsecuente" selected={tipoCita === 'subsecuente'} onClick={() => setTipoCita('subsecuente')} />
-                          <Pill label="Cita urgente"     selected={tipoCita === 'urgente'}     onClick={() => setTipoCita('urgente')} />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <AnimatePresence>
-                      {muestraModal && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }} className="flex flex-wrap gap-2.5 overflow-hidden"
-                        >
-                          <Pill label="Consultorio u oficina" selected={modalidad === 'consultorio'} onClick={() => setModalidad('consultorio')} />
-                          <Pill label="Telefónica"            selected={modalidad === 'telefonica'}  onClick={() => setModalidad('telefonica')} />
-                          <Pill label="Video llamada"         selected={modalidad === 'video'}       onClick={() => setModalidad('video')} />
-                          <Pill label="Fuera de la instalación" selected={modalidad === 'fuera'}     onClick={() => setModalidad('fuera')} />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Tipo de cita */}
+              <div>
+                <label className={LABEL}>Tipo de cita</label>
+                <div className="flex flex-wrap gap-2.5">
+                  {TIPOS.map(t => <Pill key={t} label={t} selected={tipo === t} onClick={() => setTipo(t)} />)}
+                </div>
+              </div>
 
               {/* Observaciones */}
-              <AnimatePresence>
-                {puedeGuardar && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }} className="overflow-hidden"
-                  >
-                    <textarea value={observaciones} onChange={e => setObs(e.target.value)}
-                      placeholder="Observaciones…" rows={3} className={`${INPUT} resize-none`} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Enviar correo */}
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={enviarCorreo} onChange={e => setEnviarCorreo(e.target.checked)} className="w-4 h-4 accent-amber-600" />
-                <span className="text-sm text-gray-600">Enviar correo</span>
-              </label>
+              <div>
+                <label className={LABEL}>Observaciones <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={3} className={`${INPUT} resize-none`} placeholder="Notas de la cita…" />
+              </div>
             </div>
 
-            {/* ── Pie: acciones ── */}
+            {/* Pie */}
             <div className="px-7 py-4 flex items-center justify-between border-t border-white/40" style={{ background: 'rgba(255,255,255,0.25)' }}>
-              <button onClick={handleClose} className="btn-secondary">Cancelar</button>
+              <button onClick={cerrar} disabled={crear.isPending} className="btn-secondary disabled:opacity-60">Cancelar</button>
               <button
-                onClick={() => { alert('✅ Evento guardado (demo)'); handleClose() }}
-                disabled={!puedeGuardar}
-                className="px-8 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: '#C9A227', boxShadow: puedeGuardar ? '0 4px 14px rgba(201,162,39,0.4)' : 'none' }}
+                onClick={guardar}
+                disabled={crear.isPending}
+                className="px-8 py-2.5 inline-flex items-center gap-2 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
               >
-                Guardar
+                {crear.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Agendando…</> : 'Agendar cita'}
               </button>
             </div>
           </motion.div>

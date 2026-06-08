@@ -1,9 +1,32 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react'
+import { useAuth } from '../auth/AuthContext'
+import { inicioDeRol } from '../auth/permisos'
+import { ApiError } from '../lib/http'
+import type { Me } from '../types/api'
 
 interface LoginForm { email: string; password: string }
+
+/** Destino tras login: a dónde iba (state.from), o el inicio según el rol real. */
+function destinoTrasLogin(profile: Me, from: string | null): string {
+  if (from && from !== '/login') return from
+  if (profile.active_role) return inicioDeRol(profile.active_role)
+  if (profile.is_platform_staff) return '/plataforma/dashboard'
+  return '/agenda'
+}
+
+/** Traduce un error de la API a un mensaje claro para el usuario. */
+function mensajeDeError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.isNetwork) return 'No se pudo conectar con el servidor.'
+    if (err.status === 401) return 'Correo o contraseña incorrectos. Intenta de nuevo.'
+    if (err.status === 429) return 'Demasiados intentos. Espera un momento e inténtalo de nuevo.'
+    if (err.body?.detail) return err.body.detail
+  }
+  return 'No se pudo iniciar sesión. Intenta de nuevo.'
+}
 
 const fadeUp = (delay = 0) => ({
   initial:    { opacity: 0, y: 14 },
@@ -18,6 +41,11 @@ export default function LoginPage() {
   const [error, setError]               = useState<string | null>(null)
   const [rememberMe, setRememberMe]     = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+  const { login } = useAuth()
+
+  // A dónde quería ir el usuario antes de que RequireAuth lo mandara a /login.
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? null
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -30,15 +58,14 @@ export default function LoginPage() {
     if (!form.email || !form.password) { setError('Por favor completa todos los campos.'); return }
     setIsLoading(true); setError(null)
     try {
-      /* TODO: POST /api/v1/auth/login/ → { access, refresh } → navigate('/dashboard') */
-      await new Promise(r => setTimeout(r, 1400))
-      if (form.email === 'demo@maily360.mx' && form.password === 'demo') {
-        navigate('/agenda')
-      } else {
-        setError('Correo o contraseña incorrectos. Intenta de nuevo.')
-      }
-    } catch { setError('No se pudo conectar con el servidor.') }
-    finally  { setIsLoading(false) }
+      // Login real: setea cookie httpOnly de refresh + access en memoria, y trae /me/.
+      const profile = await login({ email: form.email.trim(), password: form.password })
+      navigate(destinoTrasLogin(profile, from), { replace: true })
+    } catch (err) {
+      setError(mensajeDeError(err))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -176,16 +203,6 @@ export default function LoginPage() {
             </button>
           </motion.div>
         </form>
-
-        {/* Demo */}
-        <motion.div {...fadeUp(0.3)} className="mt-5 text-center">
-          <button type="button"
-            onClick={() => navigate('/agenda')}
-            className="text-xs font-medium transition-colors hover:underline"
-            style={{ color: '#ffffff', textShadow: '0 1px 8px rgba(40,28,8,0.85)' }}>
-            Usar cuenta de demostración
-          </button>
-        </motion.div>
       </motion.div>
     </div>
   )

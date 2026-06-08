@@ -5,6 +5,8 @@ import DoctorDetalleDrawer from '../components/personal/DoctorDetalleDrawer'
 import NuevoDoctorDrawer from '../components/personal/NuevoDoctorDrawer'
 import NuevoConsultorioDrawer from '../components/personal/NuevoConsultorioDrawer'
 import { DOCTORES, CONSULTORIOS_DATA, Doctor, initialesDoctor } from '../data/personal'
+import { useRole } from '../auth/RoleContext'
+import { puedeEditar } from '../auth/permisos'
 
 type Tab = 'doctores' | 'consultorios'
 
@@ -13,6 +15,8 @@ export default function PersonalPage() {
   const [doctorSel, setDoctorSel]   = useState<Doctor | null>(null)
   const [nuevoDoctor, setNuevoDoc]  = useState(false)
   const [nuevoConsul, setNuevoCons] = useState(false)
+  const { role } = useRole()
+  const editar = puedeEditar(role, 'personal')
 
   return (
     <div className="min-h-screen relative">
@@ -33,13 +37,15 @@ export default function PersonalPage() {
               <h1 className="text-2xl font-bold text-gray-900">Personal</h1>
               <p className="text-sm text-gray-500">Doctores, consultorios y horarios de tu clínica</p>
             </div>
-            <button
-              onClick={() => tab === 'doctores' ? setNuevoDoc(true) : setNuevoCons(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
-              style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
-            >
-              <Plus className="w-4 h-4" /> {tab === 'doctores' ? 'Nuevo doctor' : 'Nuevo consultorio'}
-            </button>
+            {editar && (
+              <button
+                onClick={() => tab === 'doctores' ? setNuevoDoc(true) : setNuevoCons(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
+              >
+                <Plus className="w-4 h-4" /> {tab === 'doctores' ? 'Nuevo doctor' : 'Nuevo consultorio'}
+              </button>
+            )}
           </div>
 
           {/* Pestañas */}
@@ -114,7 +120,7 @@ export default function PersonalPage() {
         )}
       </div>
 
-      <DoctorDetalleDrawer doctor={doctorSel} onClose={() => setDoctorSel(null)} />
+      <DoctorDetalleDrawer doctor={doctorSel} onClose={() => setDoctorSel(null)} soloLectura={!editar} />
       <NuevoDoctorDrawer open={nuevoDoctor} onClose={() => setNuevoDoc(false)} />
       <NuevoConsultorioDrawer open={nuevoConsul} onClose={() => setNuevoCons(false)} />
     </div>

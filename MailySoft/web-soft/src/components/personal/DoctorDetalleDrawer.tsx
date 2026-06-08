@@ -10,6 +10,7 @@ import ConfiguracionAgendaModal from './ConfiguracionAgendaModal'
 interface Props {
   doctor: Doctor | null
   onClose: () => void
+  soloLectura?: boolean
 }
 
 function Card({
@@ -39,7 +40,7 @@ function Linea({ label, value }: { label: string; value: string }) {
   )
 }
 
-export default function DoctorDetalleDrawer({ doctor, onClose }: Props) {
+export default function DoctorDetalleDrawer({ doctor, onClose, soloLectura = false }: Props) {
   const [configOpen, setConfigOpen] = useState(false)
   const horarios = doctor ? (HORARIOS[doctor.id] ?? []) : []
 
@@ -111,15 +112,17 @@ export default function DoctorDetalleDrawer({ doctor, onClose }: Props) {
                   {doctor.activo ? 'Activo' : 'Inactivo'}
                 </span>
 
-                <div className="flex gap-3 mt-5 w-full max-w-[280px]">
-                  <button className="btn-secondary flex-1"><Pencil className="w-4 h-4" /> Editar</button>
-                  <button
-                    onClick={() => setConfigOpen(true)}
-                    className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
-                    style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
-                    <Settings className="w-4 h-4" /> Configuración
-                  </button>
-                </div>
+                {!soloLectura && (
+                  <div className="flex gap-3 mt-5 w-full max-w-[280px]">
+                    <button className="btn-secondary flex-1"><Pencil className="w-4 h-4" /> Editar</button>
+                    <button
+                      onClick={() => setConfigOpen(true)}
+                      className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                      style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
+                      <Settings className="w-4 h-4" /> Configuración
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* ── Derecha ── */}
@@ -147,13 +150,13 @@ export default function DoctorDetalleDrawer({ doctor, onClose }: Props) {
             <div className="mt-5">
               <Card
                 title="Horarios de atención" icon={CalendarDays}
-                action={
+                action={!soloLectura ? (
                   <button onClick={() => alert('Agregar horario (demo)')}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                     style={{ color: '#B8860B', background: 'rgba(201,162,39,0.12)' }}>
                     <Plus className="w-3.5 h-3.5" /> Agregar
                   </button>
-                }
+                ) : undefined}
               >
                 <div className="grid gap-2 md:grid-cols-2">
                   {horarios.map((h, i) => (
@@ -167,9 +170,11 @@ export default function DoctorDetalleDrawer({ doctor, onClose }: Props) {
                           <p className="text-xs text-gray-400">{h.inicio} – {h.fin} · {h.consultorio}</p>
                         </div>
                       </div>
-                      <button onClick={() => alert('Eliminar horario (demo)')} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {!soloLectura && (
+                        <button onClick={() => alert('Eliminar horario (demo)')} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   ))}
                   {horarios.length === 0 && (

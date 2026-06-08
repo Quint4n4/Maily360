@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, MessageCircle, RotateCcw, MapPin, FileText, Stethoscope, User, AlertCircle } from 'lucide-react'
+import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX } from 'lucide-react'
 
 export type EstadoCita =
   | 'agendada' | 'confirmada' | 'llego' | 'en_consulta' | 'atendida' | 'cancelada' | 'no_asistio'
+
+export interface RecordatorioVista {
+  texto: string
+  fecha: string
+  estado: string
+}
 
 export interface CitaDetalle {
   paciente: string
@@ -16,6 +22,15 @@ export interface CitaDetalle {
   especialidad: string
   notas: string
   estadoInicial: EstadoCita
+  recordatorios?: RecordatorioVista[]
+}
+
+interface Props {
+  cita: CitaDetalle | null
+  onClose: () => void
+  soloLectura?: boolean
+  onCambiarEstado?: (nuevo: EstadoCita) => void
+  cambiando?: boolean
 }
 
 const FLUJO: EstadoCita[] = ['agendada', 'confirmada', 'llego', 'en_consulta', 'atendida']
@@ -32,21 +47,30 @@ const META: Record<EstadoCita, { label: string; bg: string; color: string }> = {
   cancelada:   { label: 'Cancelada',   bg: '#FDE8E8', color: '#C0392B' },
   no_asistio:  { label: 'No asistió',  bg: '#FDE8E8', color: '#C0392B' },
 }
+/** Botón para AVANZAR al siguiente paso del flujo. */
 const SIGUIENTE: Partial<Record<EstadoCita, { label: string; next: EstadoCita }>> = {
-  agendada:    { label: 'Confirmar cita',  next: 'confirmada' },
-  confirmada:  { label: 'Marcar llegada',  next: 'llego' },
+  agendada:    { label: 'Confirmar cita',   next: 'confirmada' },
+  confirmada:  { label: 'Marcar llegada',   next: 'llego' },
   llego:       { label: 'Iniciar consulta', next: 'en_consulta' },
-  en_consulta: { label: 'Marcar atendida', next: 'atendida' },
+  en_consulta: { label: 'Marcar atendida',  next: 'atendida' },
+}
+/** Transiciones válidas (espejo de VALID_TRANSITIONS del backend). */
+const TRANSICIONES: Record<EstadoCita, EstadoCita[]> = {
+  agendada:    ['confirmada', 'cancelada', 'no_asistio'],
+  confirmada:  ['llego', 'cancelada', 'no_asistio'],
+  llego:       ['en_consulta', 'cancelada', 'no_asistio'],
+  en_consulta: ['atendida'],
+  atendida:    [],
+  cancelada:   [],
+  no_asistio:  [],
 }
 
-const RECORDATORIOS = [
-  { texto: '24 horas antes', fecha: '03 jun 2026 · 11:00', estado: 'Enviado' },
-  { texto: '2 horas antes',  fecha: '04 jun 2026 · 07:00', estado: 'Pendiente' },
-]
-const REC_META: Record<string, { bg: string; color: string }> = {
-  Enviado:   { bg: '#E7F6EE', color: '#2E7D5B' },
-  Pendiente: { bg: '#FBF1D9', color: '#9A7B1E' },
-  Falló:     { bg: '#FDE8E8', color: '#C0392B' },
+function recMeta(estado: string): { bg: string; color: string } {
+  const e = estado.toLowerCase()
+  if (e.includes('env')) return { bg: '#E7F6EE', color: '#2E7D5B' }
+  if (e.includes('pend')) return { bg: '#FBF1D9', color: '#9A7B1E' }
+  if (e.includes('fall') || e.includes('cancel')) return { bg: '#FDE8E8', color: '#C0392B' }
+  return { bg: '#F3F4F6', color: '#6B7280' }
 }
 
 function Dato({ icon: Icon, label, value, dot }: { icon: typeof User; label: string; value: string; dot?: string }) {
@@ -66,7 +90,7 @@ function Dato({ icon: Icon, label, value, dot }: { icon: typeof User; label: str
   )
 }
 
-export default function DetalleCitaModal({ cita, onClose }: { cita: CitaDetalle | null; onClose: () => void }) {
+export default function DetalleCitaModal({ cita, onClose, soloLectura = false, onCambiarEstado, cambiando = false }: Props) {
   const [estado, setEstado] = useState<EstadoCita>('agendada')
   useEffect(() => { if (cita) setEstado(cita.estadoInicial) }, [cita])
 
@@ -77,7 +101,14 @@ export default function DetalleCitaModal({ cita, onClose }: { cita: CitaDetalle 
   const terminalCancel = estado === 'cancelada' || estado === 'no_asistio'
   const terminal = estado === 'atendida' || terminalCancel
   const siguiente = SIGUIENTE[estado]
+  const permitidas = TRANSICIONES[estado]
   const m = META[estado]
+  const recordatorios = cita.recordatorios ?? []
+
+  const cambiar = (nuevo: EstadoCita) => {
+    if (cambiando) return
+    onCambiarEstado?.(nuevo)
+  }
 
   return (
     <AnimatePresence>
@@ -161,19 +192,22 @@ export default function DetalleCitaModal({ cita, onClose }: { cita: CitaDetalle 
               {/* Detalles */}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-2">Detalles de la cita</p>
-                <Dato icon={User}       label="Doctor"       value={cita.doctor} />
-                <Dato icon={MapPin}     label="Consultorio"  value={cita.consultorioName} dot={cita.consultorioColor} />
-                <Dato icon={FileText}   label="Motivo"       value={cita.motivo} />
+                <Dato icon={User}        label="Doctor"       value={cita.doctor} />
+                <Dato icon={MapPin}      label="Consultorio"  value={cita.consultorioName} dot={cita.consultorioColor} />
+                <Dato icon={FileText}    label="Motivo"       value={cita.motivo} />
                 <Dato icon={Stethoscope} label="Especialidad" value={cita.especialidad} />
                 {cita.notas && <Dato icon={FileText} label="Notas" value={cita.notas} />}
               </div>
 
-              {/* Recordatorios WhatsApp */}
+              {/* Recordatorios (reales) */}
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-2">Recordatorios por WhatsApp</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-2">Recordatorios</p>
                 <div className="space-y-2.5">
-                  {RECORDATORIOS.map((r, i) => {
-                    const rm = REC_META[r.estado]
+                  {recordatorios.length === 0 && (
+                    <p className="text-sm text-gray-400 italic">Sin recordatorios programados.</p>
+                  )}
+                  {recordatorios.map((r, i) => {
+                    const rm = recMeta(r.estado)
                     return (
                       <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3 bg-gray-50 border border-gray-100">
                         <div className="flex items-center gap-3 min-w-0">
@@ -197,32 +231,42 @@ export default function DetalleCitaModal({ cita, onClose }: { cita: CitaDetalle 
 
             {/* ── Acciones ── */}
             <div className="px-7 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
-              <div>
-                {!terminal && (
-                  <button onClick={() => setEstado('cancelada')}
-                    className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:brightness-95"
-                    style={{ color: '#C0392B', background: '#FDE8E8' }}>
-                    Cancelar cita
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                {estado === 'atendida' && (
-                  <span className="text-sm font-semibold" style={{ color: '#1F6E47' }}>✓ Cita atendida</span>
-                )}
-                {!terminal && (
-                  <button onClick={() => alert('Reagendar (demo)')} className="btn-secondary">
-                    <RotateCcw className="w-4 h-4" /> Reagendar
-                  </button>
-                )}
-                {siguiente && (
-                  <button onClick={() => setEstado(siguiente.next)}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
-                    style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
-                    <Check className="w-4 h-4" /> {siguiente.label}
-                  </button>
-                )}
-              </div>
+              {soloLectura ? (
+                <p className="text-sm text-gray-500 w-full text-center">Estás viendo esta cita en modo solo lectura.</p>
+              ) : terminal ? (
+                <p className="text-sm font-medium w-full text-center" style={{ color: m.color }}>
+                  {estado === 'atendida' ? '✓ Cita atendida' : `Cita ${m.label.toLowerCase()}`}
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    {permitidas.includes('cancelada') && (
+                      <button onClick={() => cambiar('cancelada')} disabled={cambiando}
+                        className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:brightness-95 disabled:opacity-50"
+                        style={{ color: '#C0392B', background: '#FDE8E8' }}>
+                        Cancelar
+                      </button>
+                    )}
+                    {permitidas.includes('no_asistio') && (
+                      <button onClick={() => cambiar('no_asistio')} disabled={cambiando}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:bg-gray-200 disabled:opacity-50"
+                        style={{ color: '#6B7280', background: '#F3F4F6' }}>
+                        <UserX className="w-4 h-4" /> No asistió
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {siguiente && (
+                      <button onClick={() => cambiar(siguiente.next)} disabled={cambiando}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                        style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
+                        {cambiando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        {siguiente.label}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </motion.div>
         </motion.div>
