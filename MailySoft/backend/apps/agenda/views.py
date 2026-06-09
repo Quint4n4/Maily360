@@ -680,7 +680,7 @@ class AppointmentNotesApi(TenantAPIView):
     permission_classes = [IsAuthenticated, AgendaItemNotePermission]
 
     class InputSerializer(serializers.Serializer):
-        body = serializers.CharField()
+        body = serializers.CharField(max_length=2_000)
 
     def _get_appointment_or_404(
         self, appointment_id: uuid.UUID
@@ -745,7 +745,7 @@ class AgendaBlockNotesApi(TenantAPIView):
     permission_classes = [IsAuthenticated, AgendaItemNotePermission]
 
     class InputSerializer(serializers.Serializer):
-        body = serializers.CharField()
+        body = serializers.CharField(max_length=2_000)
 
     def _get_block_or_404(
         self, block_id: uuid.UUID

@@ -1228,6 +1228,7 @@ def agenda_item_note_delete(
             user=user,
             tenant_id=note.tenant_id,
             is_active=True,
+            deleted_at__isnull=True,
         )
         user_role: Optional[str] = membership.role
     except TenantMembership.DoesNotExist:

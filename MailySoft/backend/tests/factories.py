@@ -11,9 +11,10 @@ import datetime
 import factory
 from factory.django import DjangoModelFactory
 
-from apps.agenda.models import Appointment, AppointmentReminder, TenantAgendaConfig
+from apps.agenda.models import AgendaBlock, AgendaItemNote, Appointment, AppointmentReminder, TenantAgendaConfig
 from apps.audit.models import ActionType, AuditLog
 from apps.authn.models import User
+from apps.notas.models import Note, NoteScope
 from apps.pacientes.models import Patient
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
 from apps.tenancy.models import Tenant, TenantMembership
@@ -266,6 +267,77 @@ class AppointmentReminderFactory(DjangoModelFactory):
 # ---------------------------------------------------------------------------
 # Audit (AuditLog)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Notas (Note)
+# ---------------------------------------------------------------------------
+
+
+class NoteFactory(DjangoModelFactory):
+    """Nota o tarea personal dentro de un tenant.
+
+    Por defecto crea notas personales (scope=personal).
+    Para notas globales pasa scope=NoteScope.ALL o scope=NoteScope.ROLE con
+    target_role, y asegúrate de que el author sea OWNER del tenant.
+    """
+
+    class Meta:
+        model = Note
+
+    tenant = factory.SubFactory(TenantFactory)
+    author = factory.SubFactory(UserFactory)
+    created_by = factory.LazyAttribute(lambda obj: obj.author)
+    title = factory.Sequence(lambda n: f"Nota {n}")
+    body = ""
+    scope = NoteScope.PERSONAL
+    target_role = ""
+    is_task = False
+    done = False
+    remind_at = None
+    pinned = False
+
+
+# ---------------------------------------------------------------------------
+# Agenda — AgendaBlock y AgendaItemNote
+# ---------------------------------------------------------------------------
+
+
+class AgendaBlockFactory(DjangoModelFactory):
+    """Evento de agenda (reunión o bloqueo) dentro de un tenant."""
+
+    class Meta:
+        model = AgendaBlock
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    kind = AgendaBlock.Kind.BLOCK
+    title = factory.Sequence(lambda n: f"Bloqueo {n}")
+    doctor = None
+    consultorio = None
+    starts_at = factory.Sequence(
+        lambda n: datetime.datetime(2030, 6, 1, 8, 0, 0, tzinfo=datetime.timezone.utc)
+        + datetime.timedelta(hours=n * 2)
+    )
+    ends_at = factory.LazyAttribute(
+        lambda obj: obj.starts_at + datetime.timedelta(hours=1)
+    )
+    all_day = False
+    notes = ""
+
+
+class AgendaItemNoteFactory(DjangoModelFactory):
+    """Nota colaborativa pegada a una cita o evento de agenda."""
+
+    class Meta:
+        model = AgendaItemNote
+
+    tenant = factory.LazyAttribute(lambda obj: obj.appointment.tenant if obj.appointment else obj.agenda_block.tenant)
+    created_by = factory.SubFactory(UserFactory)
+    author = factory.LazyAttribute(lambda obj: obj.created_by)
+    appointment = factory.SubFactory(AppointmentFactory)
+    agenda_block = None
+    body = factory.Sequence(lambda n: f"Nota colaborativa #{n}")
 
 
 class AuditLogFactory(DjangoModelFactory):

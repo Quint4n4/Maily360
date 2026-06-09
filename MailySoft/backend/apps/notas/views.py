@@ -60,7 +60,7 @@ class NoteListCreateApi(TenantAPIView):
         """Campos para crear una nota (POST)."""
 
         title = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
-        body = serializers.CharField(required=False, allow_blank=True, default="")
+        body = serializers.CharField(max_length=10_000, required=False, allow_blank=True, default="")
         scope = serializers.ChoiceField(
             choices=NoteScope.choices,
             required=False,

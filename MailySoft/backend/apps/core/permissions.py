@@ -262,20 +262,21 @@ class AgendaItemNotePermission(HasClinicRole):
              borrar = autor / Dueño / Admin (la granularidad real la valida el service).
 
     Matriz:
-        GET    → todos menos FINANCE (quien no puede ver la agenda no puede ver sus notas).
-        POST   → todos menos FINANCE (agregar nota = mismo conjunto que "puede ver agenda").
-        DELETE → todos menos FINANCE (el service valida si puede borrar la nota concreta).
+        GET    → todos menos FINANCE (incluye READONLY: puede VER el hilo).
+        POST   → roles con edición en agenda (READONLY y FINANCE excluidos: no escriben).
+        DELETE → roles con edición en agenda (el service valida autor/Dueño/Admin).
     """
 
     policy: dict[str, frozenset[str]] = {
         "GET": frozenset(
             {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
         ),
+        # READONLY puede ver el hilo pero NO escribir (rol de solo lectura).
         "POST": frozenset(
-            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
+            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}
         ),
         "DELETE": frozenset(
-            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
+            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}
         ),
     }
 
