@@ -79,10 +79,16 @@ export interface AgendaBlockUpdateInput {
   notes?: string
 }
 
+export interface AgendaItemNoteAuthor {
+  id: string
+  full_name: string
+  avatar: string | null
+}
+
 /** Nota colaborativa (hilo) pegada a una cita o evento. */
 export interface AgendaItemNote {
   id: string
-  author: AppointmentRef // { id, full_name }
+  author: AgendaItemNoteAuthor
   body: string
   created_at: string
 }

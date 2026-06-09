@@ -50,9 +50,14 @@ export default function NotasHilo({ kind, itemId }: Props) {
             const puedeBorrar = n.author.id === user?.id || esGestor
             return (
               <div key={n.id} className="group flex items-start gap-2.5 rounded-xl px-3 py-2 bg-white/60">
-                <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold text-white" style={{ background: '#C9A227' }}>
-                  {iniciales(n.author.full_name)}
-                </div>
+                {n.author.avatar ? (
+                  <img src={n.author.avatar} alt={n.author.full_name}
+                    className="w-7 h-7 rounded-full shrink-0 object-cover" style={{ border: '1px solid rgba(201,162,39,0.4)' }} />
+                ) : (
+                  <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold text-white" style={{ background: '#C9A227' }}>
+                    {iniciales(n.author.full_name)}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] text-gray-400">
                     <span className="font-semibold text-gray-600">{n.author.full_name}</span> · {formatFechaHora(n.created_at)}

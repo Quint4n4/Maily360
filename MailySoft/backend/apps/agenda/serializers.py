@@ -179,13 +179,18 @@ class AppointmentOutputSerializer(serializers.ModelSerializer):
 
 
 class _AuthorNestedSerializer(serializers.Serializer):
-    """Representación mínima del autor de una nota de agenda."""
+    """Representación mínima del autor de una nota de agenda (con avatar)."""
 
     id = serializers.UUIDField(read_only=True)
     full_name = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
 
     def get_full_name(self, obj: object) -> str:
         return getattr(obj, "full_name", "") or getattr(obj, "email", "")
+
+    def get_avatar(self, obj: object) -> str | None:
+        f = getattr(obj, "avatar", None)
+        return f.url if f else None
 
 
 class AgendaItemNoteOutputSerializer(serializers.ModelSerializer):
