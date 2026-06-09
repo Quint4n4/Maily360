@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX } from 'lucide-react'
+import NotasHilo from './NotasHilo'
 
 export type EstadoCita =
   | 'agendada' | 'confirmada' | 'llego' | 'en_consulta' | 'atendida' | 'cancelada' | 'no_asistio'
@@ -12,6 +13,7 @@ export interface RecordatorioVista {
 }
 
 export interface CitaDetalle {
+  id: string
   paciente: string
   doctor: string
   consultorioName: string
@@ -227,6 +229,11 @@ export default function DetalleCitaModal({ cita, onClose, soloLectura = false, o
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* ── Notas del equipo (hilo colaborativo) ── */}
+            <div className="px-7 pb-5">
+              <NotasHilo kind="cita" itemId={cita.id} />
             </div>
 
             {/* ── Acciones ── */}

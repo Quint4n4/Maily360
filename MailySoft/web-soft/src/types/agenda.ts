@@ -79,6 +79,14 @@ export interface AgendaBlockUpdateInput {
   notes?: string
 }
 
+/** Nota colaborativa (hilo) pegada a una cita o evento. */
+export interface AgendaItemNote {
+  id: string
+  author: AppointmentRef // { id, full_name }
+  body: string
+  created_at: string
+}
+
 export interface AppointmentReminder {
   id: string
   channel: string

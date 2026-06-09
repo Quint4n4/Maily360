@@ -6,6 +6,7 @@ import type {
   AgendaBlock,
   AgendaBlockCreateInput,
   AgendaBlockUpdateInput,
+  AgendaItemNote,
   Appointment,
   AppointmentStatus,
   AppointmentType,
@@ -84,6 +85,24 @@ export async function updateAgendaBlock(id: string, input: AgendaBlockUpdateInpu
 /** DELETE /agenda/eventos/<id>/ — elimina un evento. */
 export async function deleteAgendaBlock(id: string): Promise<void> {
   await request<void>(`/agenda/eventos/${id}/`, { method: 'DELETE' })
+}
+
+// ── Notas colaborativas (hilo en cita / evento) ─────────────────────────────
+
+export async function listAppointmentNotes(apptId: string): Promise<AgendaItemNote[]> {
+  return request<AgendaItemNote[]>(`/agenda/citas/${apptId}/notas/`)
+}
+export async function addAppointmentNote(apptId: string, body: string): Promise<AgendaItemNote> {
+  return request<AgendaItemNote>(`/agenda/citas/${apptId}/notas/`, { method: 'POST', body: { body } })
+}
+export async function listBlockNotes(blockId: string): Promise<AgendaItemNote[]> {
+  return request<AgendaItemNote[]>(`/agenda/eventos/${blockId}/notas/`)
+}
+export async function addBlockNote(blockId: string, body: string): Promise<AgendaItemNote> {
+  return request<AgendaItemNote>(`/agenda/eventos/${blockId}/notas/`, { method: 'POST', body: { body } })
+}
+export async function deleteAgendaNote(noteId: string): Promise<void> {
+  await request<void>(`/agenda/notas/${noteId}/`, { method: 'DELETE' })
 }
 
 /** POST /agenda/citas/<id>/estado/ — cambia el estado (valida la transición en backend). */

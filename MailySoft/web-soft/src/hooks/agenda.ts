@@ -2,9 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  addAppointmentNote,
+  addBlockNote,
   changeAppointmentStatus,
   createAgendaBlock,
   createAppointment,
+  deleteAgendaNote,
+  listAppointmentNotes,
+  listBlockNotes,
   createAppointmentType,
   deactivateAppointmentType,
   deleteAgendaBlock,
@@ -80,6 +85,36 @@ export function useDeleteAgendaBlock() {
   return useMutation({
     mutationFn: (id: string) => deleteAgendaBlock(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: agendaKeys.all }),
+  })
+}
+
+// ── Notas colaborativas (hilo en cita / evento) ─────────────────────────────
+
+type ItemKind = 'cita' | 'evento'
+const itemNotesKey = (kind: ItemKind, id: string) => ['agenda', 'item-notes', kind, id] as const
+
+export function useAgendaItemNotes(kind: ItemKind, id: string | null) {
+  return useQuery({
+    queryKey: ['agenda', 'item-notes', kind, id],
+    queryFn: () => (kind === 'cita' ? listAppointmentNotes(id as string) : listBlockNotes(id as string)),
+    enabled: !!id,
+  })
+}
+
+export function useAddAgendaItemNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ kind, id, body }: { kind: ItemKind; id: string; body: string }) =>
+      kind === 'cita' ? addAppointmentNote(id, body) : addBlockNote(id, body),
+    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: itemNotesKey(vars.kind, vars.id) }),
+  })
+}
+
+export function useDeleteAgendaItemNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ noteId }: { noteId: string }) => deleteAgendaNote(noteId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['agenda', 'item-notes'] }),
   })
 }
 

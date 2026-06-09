@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2, Users, Ban, Trash2, Calendar } from 'lucide-react'
 import { useUpdateAgendaBlock, useDeleteAgendaBlock } from '../../hooks/agenda'
+import NotasHilo from './NotasHilo'
 import { toDayKey, localHHMM, combineToISO } from '../../lib/fecha'
 import { ApiError } from '../../lib/http'
 import type { AgendaBlock } from '../../types/agenda'
@@ -139,6 +140,10 @@ export default function EventoDetalleModal({ evento, onClose, soloLectura = fals
               <div>
                 <label className={LABEL}>Notas <span className="text-gray-400 font-normal">(opcional)</span></label>
                 <textarea className={`${INPUT} resize-none`} rows={2} value={notas} disabled={soloLectura} onChange={e => setNotas(e.target.value)} />
+              </div>
+
+              <div className="pt-3 border-t border-white/40">
+                <NotasHilo kind="evento" itemId={evento.id} />
               </div>
             </div>
 

@@ -100,6 +100,7 @@ export default function AgendaPage() {
   const toDetalle = (a: Appointment): CitaDetalle => {
     const col = cols[colIndexDe(a)]
     return {
+      id: a.id,
       paciente: a.patient.full_name,
       doctor: a.doctor.full_name,
       consultorioName: a.consultorio?.name ?? 'Sin consultorio',
