@@ -11,6 +11,7 @@ import AgendaPage from './pages/AgendaPage'
 import ContactosPage from './pages/ContactosPage'
 import PersonalPage from './pages/PersonalPage'
 import FinanzasPage from './pages/FinanzasPage'
+import NotasPage from './pages/NotasPage'
 import DashboardPlataformaPage from './pages/plataforma/DashboardPage'
 import ClinicasPage from './pages/plataforma/ClinicasPage'
 import SuscripcionesPage from './pages/plataforma/SuscripcionesPage'
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/agenda"    element={<ClinicRoute modulo="agenda"><AgendaPage /></ClinicRoute>} />
             <Route path="/contactos" element={<ClinicRoute modulo="contactos"><ContactosPage /></ClinicRoute>} />
             <Route path="/personal"  element={<ClinicRoute modulo="personal"><PersonalPage /></ClinicRoute>} />
+            <Route path="/notas"     element={<ClinicRoute modulo="notas"><NotasPage /></ClinicRoute>} />
             <Route path="/finanzas"  element={<ClinicRoute modulo="finanzas"><FinanzasPage /></ClinicRoute>} />
 
             {/* ── Panel interno de Maily (mock; sin backend todavía) ── */}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, CalendarDays, Users, Stethoscope, ChevronDown, LogOut, User } from 'lucide-react'
+import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ChevronDown, LogOut, User } from 'lucide-react'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
 import { Modulo, accesoModulo, ROLE_LABEL } from '../auth/permisos'
@@ -14,6 +14,7 @@ const NAV: { key: Modulo; label: string; icon: typeof BarChart3 }[] = [
   { key: 'agenda',    label: 'Agenda',    icon: CalendarDays },
   { key: 'contactos', label: 'Pacientes', icon: Users },
   { key: 'personal',  label: 'Personal',  icon: Stethoscope },
+  { key: 'notas',     label: 'Notas',     icon: StickyNote },
 ]
 
 export default function Topbar({ active = 'agenda' }: TopbarProps) {

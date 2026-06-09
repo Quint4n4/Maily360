@@ -5,7 +5,7 @@
    ──────────────────────────────────────────────────────────────────────── */
 
 export type ClinicRole = 'owner' | 'admin' | 'doctor' | 'nurse' | 'reception' | 'finance' | 'readonly'
-export type Modulo = 'finanzas' | 'agenda' | 'contactos' | 'personal'
+export type Modulo = 'finanzas' | 'agenda' | 'contactos' | 'personal' | 'notas'
 export type Acceso = 'edit' | 'view'
 
 export const ROLES: { key: ClinicRole; label: string }[] = [
@@ -28,19 +28,22 @@ interface Permisos {
   agenda?: Acceso
   contactos?: Acceso
   personal?: Acceso
+  notas?: Acceso
   /** ¿Puede ver el expediente CLÍNICO (historial, notas médicas)? */
   expedienteClinico: boolean
 }
 
-/* Matriz de permisos (ver docs/design/plan-paneles-roles.md) */
+/* Matriz de permisos (ver docs/design/plan-paneles-roles.md).
+   notas: todos los roles pueden usar el módulo (notas personales). El backend
+   restringe internamente quién difunde notas globales (solo Dueño). */
 export const PERMISOS: Record<ClinicRole, Permisos> = {
-  owner:     { agenda: 'edit', contactos: 'edit', personal: 'edit', finanzas: 'edit', expedienteClinico: true },
-  admin:     { agenda: 'edit', contactos: 'edit', personal: 'edit', finanzas: 'edit', expedienteClinico: true },
-  doctor:    { agenda: 'edit', contactos: 'edit', expedienteClinico: true },
-  nurse:     { agenda: 'edit', contactos: 'view', expedienteClinico: true },
-  reception: { agenda: 'edit', contactos: 'edit', expedienteClinico: false },
-  finance:   { agenda: 'view', contactos: 'view', finanzas: 'edit', expedienteClinico: false },
-  readonly:  { agenda: 'view', contactos: 'view', personal: 'view', finanzas: 'view', expedienteClinico: true },
+  owner:     { agenda: 'edit', contactos: 'edit', personal: 'edit', finanzas: 'edit', notas: 'edit', expedienteClinico: true },
+  admin:     { agenda: 'edit', contactos: 'edit', personal: 'edit', finanzas: 'edit', notas: 'edit', expedienteClinico: true },
+  doctor:    { agenda: 'edit', contactos: 'edit', notas: 'edit', expedienteClinico: true },
+  nurse:     { agenda: 'edit', contactos: 'view', notas: 'edit', expedienteClinico: true },
+  reception: { agenda: 'edit', contactos: 'edit', notas: 'edit', expedienteClinico: false },
+  finance:   { agenda: 'view', contactos: 'view', finanzas: 'edit', notas: 'edit', expedienteClinico: false },
+  readonly:  { agenda: 'view', contactos: 'view', personal: 'view', finanzas: 'view', notas: 'edit', expedienteClinico: true },
 }
 
 /* ─── Helpers ──────────────────────────────────────────────────────────── */
