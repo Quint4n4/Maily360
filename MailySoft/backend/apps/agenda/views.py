@@ -24,23 +24,40 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.agenda.models import Appointment
-from apps.agenda.selectors import agenda_config_get, appointment_get, appointment_list
+from apps.agenda.models import AgendaBlock, Appointment, AppointmentType
+from apps.agenda.selectors import (
+    agenda_block_get,
+    agenda_block_list,
+    agenda_config_get,
+    appointment_get,
+    appointment_list,
+    appointment_type_get,
+    appointment_type_list,
+)
 from apps.agenda.serializers import (
+    AgendaBlockOutputSerializer,
     AppointmentOutputSerializer,
+    AppointmentTypeOutputSerializer,
     TenantAgendaConfigOutputSerializer,
 )
 from apps.agenda.services import (
+    agenda_block_create,
+    agenda_block_delete,
+    agenda_block_update,
     agenda_config_update,
     appointment_change_status,
     appointment_create,
     appointment_reschedule,
+    appointment_type_create,
+    appointment_type_deactivate,
+    appointment_type_update,
     appointment_update,
 )
 from apps.core.permissions import (
     AgendaConfigPermission,
     AppointmentPermission,
     AppointmentStatusPermission,
+    AppointmentTypePermission,
 )
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
@@ -68,9 +85,10 @@ class AppointmentListCreateApi(TenantAPIView):
         patient_id = serializers.UUIDField()
         doctor_id = serializers.UUIDField()
         consultorio_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        appointment_type_id = serializers.UUIDField(required=False, allow_null=True, default=None)
         starts_at = serializers.DateTimeField()
         ends_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
-        reason = serializers.CharField(max_length=255)
+        reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
         specialty = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
         notes = serializers.CharField(required=False, allow_blank=True, default="")
 
@@ -414,3 +432,227 @@ class AgendaConfigApi(TenantAPIView):
             )
 
         return Response(TenantAgendaConfigOutputSerializer(config).data)
+
+
+# ---------------------------------------------------------------------------
+# AppointmentType — catálogo configurable de tipos de cita
+# ---------------------------------------------------------------------------
+
+
+class AppointmentTypeListCreateApi(TenantAPIView):
+    """GET  /api/v1/agenda/tipos-cita/   — lista de tipos de cita (sin paginar).
+    POST /api/v1/agenda/tipos-cita/   — crea un tipo de cita.
+    """
+
+    permission_classes = [IsAuthenticated, AppointmentTypePermission]
+
+    class InputSerializer(serializers.Serializer):
+        name = serializers.CharField(max_length=80)
+        color_hex = serializers.RegexField(
+            regex=r"^#[0-9A-Fa-f]{6}$",
+            max_length=7,
+            required=False,
+            allow_blank=True,
+            default="",
+            error_messages={"invalid": "El color debe tener formato #RRGGBB (ej: #3B82F6)."},
+        )
+
+    def get(self, request: Request) -> Response:
+        """Lista de tipos de cita del tenant (todos si only_active=false)."""
+        only_active = request.query_params.get("only_active", "true").lower() != "false"
+        qs = appointment_type_list(only_active=only_active)
+        return Response(AppointmentTypeOutputSerializer(qs, many=True).data)
+
+    def post(self, request: Request) -> Response:
+        """Crea un tipo de cita en el tenant del request."""
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo para este request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            appointment_type = appointment_type_create(
+                tenant=tenant,
+                user=request.user,
+                **s.validated_data,
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            AppointmentTypeOutputSerializer(appointment_type).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AppointmentTypeDetailApi(TenantAPIView):
+    """PATCH  /api/v1/agenda/tipos-cita/<id>/  — actualización parcial.
+    DELETE /api/v1/agenda/tipos-cita/<id>/  — desactivación (soft).
+    """
+
+    permission_classes = [IsAuthenticated, AppointmentTypePermission]
+
+    class InputSerializer(serializers.Serializer):
+        name = serializers.CharField(max_length=80, required=False)
+        color_hex = serializers.RegexField(
+            regex=r"^#[0-9A-Fa-f]{6}$",
+            max_length=7,
+            required=False,
+            allow_blank=True,
+            error_messages={"invalid": "El color debe tener formato #RRGGBB (ej: #3B82F6)."},
+        )
+
+    def _get_or_404(self, type_id: uuid.UUID) -> "tuple[AppointmentType | None, Response | None]":
+        try:
+            return appointment_type_get(type_id=type_id), None
+        except AppointmentType.DoesNotExist:
+            return None, Response(
+                {"detail": "Tipo de cita no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def patch(self, request: Request, type_id: uuid.UUID) -> Response:
+        appointment_type, error = self._get_or_404(type_id)
+        if error is not None:
+            return error
+
+        s = self.InputSerializer(data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        if not s.validated_data:
+            return Response(
+                {"detail": "No se proporcionaron campos para actualizar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        updated = appointment_type_update(
+            appointment_type=appointment_type,  # type: ignore[arg-type]
+            user=request.user,
+            **s.validated_data,
+        )
+        return Response(AppointmentTypeOutputSerializer(updated).data)
+
+    def delete(self, request: Request, type_id: uuid.UUID) -> Response:
+        appointment_type, error = self._get_or_404(type_id)
+        if error is not None:
+            return error
+        appointment_type_deactivate(appointment_type=appointment_type, user=request.user)  # type: ignore[arg-type]
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# AgendaBlock — reuniones y bloqueos
+# ---------------------------------------------------------------------------
+
+
+class AgendaBlockListCreateApi(TenantAPIView):
+    """GET  /api/v1/agenda/eventos/   — eventos (reuniones/bloqueos) en un rango.
+    POST /api/v1/agenda/eventos/   — crea un evento de agenda.
+    """
+
+    permission_classes = [IsAuthenticated, AppointmentPermission]
+
+    class InputSerializer(serializers.Serializer):
+        kind = serializers.ChoiceField(choices=AgendaBlock.Kind.choices)
+        title = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+        doctor_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        consultorio_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        starts_at = serializers.DateTimeField()
+        ends_at = serializers.DateTimeField()
+        all_day = serializers.BooleanField(required=False, default=False)
+        notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def get(self, request: Request) -> Response:
+        """Lista de eventos del tenant que solapan el rango [date_from, date_to]."""
+
+        class _FilterSerializer(serializers.Serializer):
+            date_from = serializers.DateTimeField(required=False)
+            date_to = serializers.DateTimeField(required=False)
+
+        filter_s = _FilterSerializer(data=request.query_params)
+        filter_s.is_valid(raise_exception=True)
+        qs = agenda_block_list(**filter_s.validated_data)
+        return Response(AgendaBlockOutputSerializer(qs, many=True).data)
+
+    def post(self, request: Request) -> Response:
+        """Crea un evento (reunión o bloqueo) en el tenant del request."""
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo para este request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            block = agenda_block_create(
+                tenant=tenant,
+                user=request.user,
+                **s.validated_data,
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            AgendaBlockOutputSerializer(block).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AgendaBlockDetailApi(TenantAPIView):
+    """PATCH  /api/v1/agenda/eventos/<id>/  — edita un evento (título, fecha/hora, notas).
+    DELETE /api/v1/agenda/eventos/<id>/  — elimina un evento de agenda.
+    """
+
+    permission_classes = [IsAuthenticated, AppointmentPermission]
+
+    class InputSerializer(serializers.Serializer):
+        title = serializers.CharField(max_length=120, required=False, allow_blank=True)
+        starts_at = serializers.DateTimeField(required=False)
+        ends_at = serializers.DateTimeField(required=False)
+        all_day = serializers.BooleanField(required=False)
+        notes = serializers.CharField(required=False, allow_blank=True)
+
+    def _get_or_404(self, block_id: uuid.UUID) -> "tuple[AgendaBlock | None, Response | None]":
+        try:
+            return agenda_block_get(block_id=block_id), None
+        except AgendaBlock.DoesNotExist:
+            return None, Response({"detail": "Evento no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+    def patch(self, request: Request, block_id: uuid.UUID) -> Response:
+        block, error = self._get_or_404(block_id)
+        if error is not None:
+            return error
+
+        s = self.InputSerializer(data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        if not s.validated_data:
+            return Response(
+                {"detail": "No se proporcionaron campos para actualizar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            updated = agenda_block_update(
+                agenda_block=block,  # type: ignore[arg-type]
+                user=request.user,
+                **s.validated_data,
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(AgendaBlockOutputSerializer(updated).data)
+
+    def delete(self, request: Request, block_id: uuid.UUID) -> Response:
+        block, error = self._get_or_404(block_id)
+        if error is not None:
+            return error
+
+        agenda_block_delete(agenda_block=block, user=request.user)  # type: ignore[arg-type]
+        return Response(status=status.HTTP_204_NO_CONTENT)

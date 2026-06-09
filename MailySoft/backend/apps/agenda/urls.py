@@ -14,11 +14,15 @@ Rutas:
 from django.urls import path
 
 from apps.agenda.views import (
+    AgendaBlockDetailApi,
+    AgendaBlockListCreateApi,
     AgendaConfigApi,
     AppointmentChangeStatusApi,
     AppointmentDetailApi,
     AppointmentListCreateApi,
     AppointmentRescheduleApi,
+    AppointmentTypeDetailApi,
+    AppointmentTypeListCreateApi,
 )
 
 urlpatterns = [
@@ -50,5 +54,27 @@ urlpatterns = [
         "agenda/config/",
         AgendaConfigApi.as_view(),
         name="agenda-config",
+    ),
+    # Tipos de cita (catálogo configurable con color)
+    path(
+        "agenda/tipos-cita/",
+        AppointmentTypeListCreateApi.as_view(),
+        name="appointment-type-list-create",
+    ),
+    path(
+        "agenda/tipos-cita/<uuid:type_id>/",
+        AppointmentTypeDetailApi.as_view(),
+        name="appointment-type-detail",
+    ),
+    # Eventos de agenda (reuniones / bloqueos)
+    path(
+        "agenda/eventos/",
+        AgendaBlockListCreateApi.as_view(),
+        name="agenda-block-list-create",
+    ),
+    path(
+        "agenda/eventos/<uuid:block_id>/",
+        AgendaBlockDetailApi.as_view(),
+        name="agenda-block-detail",
     ),
 ]

@@ -117,6 +117,104 @@ class TenantAgendaConfig(TenantAwareModel):
 # ---------------------------------------------------------------------------
 
 
+class AppointmentType(TenantAwareModel):
+    """Tipo de cita configurable por clínica (Primera vez, Seguimiento, Urgente…).
+
+    Cada tipo tiene un color para diferenciar las citas en el tablero de la agenda.
+    Se administra (crear/editar/desactivar) igual que los consultorios.
+    """
+
+    name = models.CharField(
+        max_length=80,
+        help_text="Nombre del tipo de cita (ej. 'Primera vez', 'Seguimiento').",
+    )
+    color_hex = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        help_text="Color #RRGGBB para distinguir el tipo en la agenda.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False = tipo desactivado (no aparece al agendar).",
+    )
+
+    class Meta:
+        db_table = "agenda_appointment_types"
+        ordering = ["name"]
+        constraints = [
+            # Nombre único por clínica entre los tipos no borrados.
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                condition=Q(deleted_at__isnull=True),
+                name="appointment_type_name_uniq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class AgendaBlock(TenantAwareModel):
+    """Evento de agenda SIN paciente: reunión o bloqueo de horario.
+
+    - MEETING (reunión): evento con título (ej. 'Junta de equipo').
+    - BLOCK (bloqueo): marca un horario como NO disponible.
+
+    Alcance (a qué afecta para el anti-empalme de citas):
+      - doctor y consultorio en null → toda la clínica (día festivo, etc.).
+      - doctor seteado               → ese médico está ocupado.
+      - consultorio seteado          → ese consultorio está ocupado.
+    Una cita de paciente NO puede agendarse sobre un evento que le aplique
+    (ver _check_block_overlap en services.py).
+    """
+
+    class Kind(models.TextChoices):
+        MEETING = "meeting", "Reunión"
+        BLOCK = "block", "Bloqueo"
+
+    kind = models.CharField(
+        max_length=10,
+        choices=Kind.choices,
+        default=Kind.BLOCK,
+        db_index=True,
+    )
+    title = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Título del evento (ej. 'Junta', 'Día festivo'). Opcional.",
+    )
+    doctor = models.ForeignKey(
+        "personal.Doctor",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="agenda_blocks",
+        help_text="Médico al que aplica. Null = no atado a un médico.",
+    )
+    consultorio = models.ForeignKey(
+        "personal.Consultorio",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="agenda_blocks",
+        help_text="Consultorio al que aplica. Null = no atado a un consultorio.",
+    )
+    starts_at = models.DateTimeField(db_index=True, help_text="Inicio en UTC.")
+    ends_at = models.DateTimeField(help_text="Fin en UTC. Debe ser posterior a starts_at.")
+    all_day = models.BooleanField(default=False, help_text="True = ocupa el día completo.")
+    notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "agenda_blocks"
+        ordering = ["starts_at"]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()}: {self.title or self.starts_at}"  # type: ignore[attr-defined]
+
+
 class Appointment(TenantAwareModel):
     """Cita médica dentro de un tenant.
 
@@ -199,7 +297,17 @@ class Appointment(TenantAwareModel):
 
     reason = models.CharField(
         max_length=255,
-        help_text="Motivo de la cita (requerido).",
+        blank=True,
+        default="",
+        help_text="Motivo de la cita (texto libre, opcional).",
+    )
+    appointment_type = models.ForeignKey(
+        "agenda.AppointmentType",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="appointments",
+        help_text="Tipo de cita (categoría con color). Opcional.",
     )
     specialty = models.CharField(
         max_length=100,

@@ -29,17 +29,20 @@ from typing import Optional
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
 from apps.agenda.models import (
     ACTIVE_STATUSES,
     VALID_TRANSITIONS,
+    AgendaBlock,
     Appointment,
     AppointmentReminder,
+    AppointmentType,
     TenantAgendaConfig,
 )
-from apps.agenda.selectors import agenda_config_get
+from apps.agenda.selectors import agenda_config_get, appointment_type_get
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
 from apps.pacientes.models import Patient
@@ -212,6 +215,38 @@ def _check_consultorio_overlap(
         )
 
 
+def _check_block_overlap(
+    *,
+    tenant: Tenant,
+    doctor_id: uuid.UUID,
+    consultorio_id: Optional[uuid.UUID],
+    starts_at: datetime.datetime,
+    ends_at: datetime.datetime,
+) -> None:
+    """Verifica que la cita no caiga sobre un evento (reunión/bloqueo) que le aplique.
+
+    Un AgendaBlock aplica si: es de toda la clínica (doctor y consultorio en null),
+    o su doctor es el de la cita, o su consultorio es el de la cita.
+
+    Raises:
+        ValidationError: si existe un evento que solapa y aplica.
+    """
+    aplica = Q(doctor__isnull=True, consultorio__isnull=True) | Q(doctor_id=doctor_id)
+    if consultorio_id is not None:
+        aplica |= Q(consultorio_id=consultorio_id)
+
+    overlapping = AgendaBlock.objects.filter(
+        tenant=tenant,
+        starts_at__lt=ends_at,
+        ends_at__gt=starts_at,
+    ).filter(aplica)
+
+    if overlapping.exists():
+        raise ValidationError(
+            "Ese horario está bloqueado por un evento de agenda. Elige otro horario."
+        )
+
+
 # ---------------------------------------------------------------------------
 # appointment_create
 # ---------------------------------------------------------------------------
@@ -226,7 +261,8 @@ def appointment_create(
     starts_at: datetime.datetime,
     ends_at: Optional[datetime.datetime] = None,
     consultorio_id: Optional[uuid.UUID] = None,
-    reason: str,
+    appointment_type_id: Optional[uuid.UUID] = None,
+    reason: str = "",
     specialty: str = "",
     notes: str = "",
 ) -> Appointment:
@@ -294,6 +330,16 @@ def appointment_create(
     if consultorio is not None and not consultorio.is_active:
         raise ValidationError("El consultorio no está activo.")
 
+    # -- 2c. Resolver y validar el tipo de cita (opcional)
+    appointment_type = None
+    if appointment_type_id is not None:
+        try:
+            appointment_type = appointment_type_get(type_id=appointment_type_id)
+        except AppointmentType.DoesNotExist:
+            raise ValidationError("Tipo de cita no encontrado en esta clínica.")
+        if appointment_type.tenant_id != tenant.id:
+            raise ValidationError("El tipo de cita no pertenece a esta clínica.")
+
     # -- 3. Calcular ends_at si no se provee
     config = agenda_config_get(tenant=tenant)
     ends_at = _resolve_ends_at(
@@ -326,6 +372,15 @@ def appointment_create(
                     ends_at=ends_at,
                 )
 
+            # -- 5b. Anti-empalme contra eventos (reuniones/bloqueos)
+            _check_block_overlap(
+                tenant=tenant,
+                doctor_id=doctor_id,
+                consultorio_id=consultorio_id,
+                starts_at=starts_at,
+                ends_at=ends_at,
+            )
+
             # -- 6. Crear la cita
             appointment = Appointment.objects.create(
                 tenant=tenant,
@@ -333,6 +388,7 @@ def appointment_create(
                 patient=patient,
                 doctor=doctor,
                 consultorio=consultorio,
+                appointment_type=appointment_type,
                 starts_at=starts_at,
                 ends_at=ends_at,
                 status=Appointment.Status.SCHEDULED,
@@ -835,3 +891,204 @@ def cancel_reminders_for_appointment(
         appointment=appointment,
         status=AppointmentReminder.ReminderStatus.PENDING,
     ).update(status=AppointmentReminder.ReminderStatus.CANCELLED)
+
+
+# ---------------------------------------------------------------------------
+# AppointmentType — tipos de cita configurables por clínica
+# ---------------------------------------------------------------------------
+
+_APPOINTMENT_TYPE_EDITABLE: frozenset[str] = frozenset({"name", "color_hex"})
+
+
+def appointment_type_create(
+    *,
+    tenant: Tenant,
+    user: "User",  # type: ignore[valid-type]
+    name: str,
+    color_hex: str = "",
+) -> AppointmentType:
+    """Crea un tipo de cita (categoría con color) para el tenant."""
+    appointment_type = AppointmentType.objects.create(
+        tenant=tenant,
+        created_by=user,
+        name=name,
+        color_hex=color_hex,
+        is_active=True,
+    )
+    audit_record(
+        action=ActionType.APPOINTMENT_TYPE_CREATE,
+        resource_type="AppointmentType",
+        actor=user,
+        tenant=tenant,
+        resource_id=appointment_type.id,
+        resource_repr=appointment_type.name,
+    )
+    return appointment_type
+
+
+def appointment_type_update(
+    *,
+    appointment_type: AppointmentType,
+    user: "User",  # type: ignore[valid-type]
+    **fields: object,
+) -> AppointmentType:
+    """Actualiza nombre y/o color de un tipo de cita."""
+    changed = [f for f in fields if f in _APPOINTMENT_TYPE_EDITABLE]
+    for field_name in changed:
+        setattr(appointment_type, field_name, fields[field_name])
+    if changed:
+        appointment_type.save(update_fields=[*changed, "updated_at"])
+        audit_record(
+            action=ActionType.APPOINTMENT_TYPE_UPDATE,
+            resource_type="AppointmentType",
+            actor=user,
+            tenant=appointment_type.tenant,
+            resource_id=appointment_type.id,
+            resource_repr=appointment_type.name,
+            metadata={"changed": sorted(changed)},
+        )
+    return appointment_type
+
+
+def appointment_type_deactivate(
+    *,
+    appointment_type: AppointmentType,
+    user: "User",  # type: ignore[valid-type]
+) -> AppointmentType:
+    """Desactiva (soft) un tipo de cita: deja de aparecer al agendar."""
+    appointment_type.is_active = False
+    appointment_type.save(update_fields=["is_active", "updated_at"])
+    audit_record(
+        action=ActionType.APPOINTMENT_TYPE_DEACTIVATE,
+        resource_type="AppointmentType",
+        actor=user,
+        tenant=appointment_type.tenant,
+        resource_id=appointment_type.id,
+        resource_repr=appointment_type.name,
+    )
+    return appointment_type
+
+
+# ---------------------------------------------------------------------------
+# AgendaBlock — reuniones y bloqueos (eventos sin paciente)
+# ---------------------------------------------------------------------------
+
+
+def agenda_block_create(
+    *,
+    tenant: Tenant,
+    user: "User",  # type: ignore[valid-type]
+    kind: str,
+    starts_at: datetime.datetime,
+    ends_at: datetime.datetime,
+    title: str = "",
+    doctor_id: Optional[uuid.UUID] = None,
+    consultorio_id: Optional[uuid.UUID] = None,
+    all_day: bool = False,
+    notes: str = "",
+) -> AgendaBlock:
+    """Crea un evento de agenda (reunión o bloqueo).
+
+    doctor_id/consultorio_id son OPCIONALES; ambos en None = aplica a toda la clínica.
+    """
+    valid_kinds = [choice[0] for choice in AgendaBlock.Kind.choices]
+    if kind not in valid_kinds:
+        raise ValidationError(f"Tipo de evento inválido '{kind}'.")
+    if ends_at <= starts_at:
+        raise ValidationError("La hora de fin debe ser posterior a la hora de inicio.")
+
+    doctor = None
+    if doctor_id is not None:
+        try:
+            doctor = doctor_get(doctor_id=doctor_id)
+        except Doctor.DoesNotExist:
+            raise ValidationError("Médico no encontrado en esta clínica.")
+        if doctor.tenant_id != tenant.id:
+            raise ValidationError("El médico no pertenece a esta clínica.")
+
+    consultorio = None
+    if consultorio_id is not None:
+        try:
+            consultorio = consultorio_get(consultorio_id=consultorio_id)
+        except Consultorio.DoesNotExist:
+            raise ValidationError("Consultorio no encontrado en esta clínica.")
+        if consultorio.tenant_id != tenant.id:
+            raise ValidationError("El consultorio no pertenece a esta clínica.")
+
+    block = AgendaBlock.objects.create(
+        tenant=tenant,
+        created_by=user,
+        kind=kind,
+        title=title,
+        doctor=doctor,
+        consultorio=consultorio,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        all_day=all_day,
+        notes=notes,
+    )
+    audit_record(
+        action=ActionType.AGENDA_EVENT_CREATE,
+        resource_type="AgendaBlock",
+        actor=user,
+        tenant=tenant,
+        resource_id=block.id,
+        resource_repr=block.title or block.get_kind_display(),
+        metadata={"kind": kind},
+    )
+    return block
+
+
+def agenda_block_delete(
+    *,
+    agenda_block: AgendaBlock,
+    user: "User",  # type: ignore[valid-type]
+) -> AgendaBlock:
+    """Elimina (soft) un evento de agenda."""
+    agenda_block.deleted_at = timezone.now()
+    agenda_block.save(update_fields=["deleted_at", "updated_at"])
+    audit_record(
+        action=ActionType.AGENDA_EVENT_DELETE,
+        resource_type="AgendaBlock",
+        actor=user,
+        tenant=agenda_block.tenant,
+        resource_id=agenda_block.id,
+        resource_repr=agenda_block.title or agenda_block.get_kind_display(),
+    )
+    return agenda_block
+
+
+_AGENDA_BLOCK_EDITABLE: frozenset[str] = frozenset(
+    {"title", "starts_at", "ends_at", "all_day", "notes"}
+)
+
+
+def agenda_block_update(
+    *,
+    agenda_block: AgendaBlock,
+    user: "User",  # type: ignore[valid-type]
+    **fields: object,
+) -> AgendaBlock:
+    """Actualiza un evento de agenda (título, fecha/hora, todo el día, notas).
+
+    El alcance (doctor/consultorio) NO se edita aquí; se define al crear.
+    """
+    changed = [f for f in fields if f in _AGENDA_BLOCK_EDITABLE]
+    for field_name in changed:
+        setattr(agenda_block, field_name, fields[field_name])
+
+    if agenda_block.ends_at <= agenda_block.starts_at:
+        raise ValidationError("La hora de fin debe ser posterior a la hora de inicio.")
+
+    if changed:
+        agenda_block.save(update_fields=[*changed, "updated_at"])
+        audit_record(
+            action=ActionType.AGENDA_EVENT_UPDATE,
+            resource_type="AgendaBlock",
+            actor=user,
+            tenant=agenda_block.tenant,
+            resource_id=agenda_block.id,
+            resource_repr=agenda_block.title or agenda_block.get_kind_display(),
+            metadata={"changed": sorted(changed)},
+        )
+    return agenda_block

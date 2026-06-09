@@ -51,6 +51,12 @@ class ActionType(models.TextChoices):
     APPOINTMENT_UPDATE = "APPOINTMENT_UPDATE", "Actualizar cita"
     APPOINTMENT_STATUS = "APPOINTMENT_STATUS", "Cambiar estado de cita"
     APPOINTMENT_RESCHEDULE = "APPOINTMENT_RESCHEDULE", "Reagendar cita"
+    APPOINTMENT_TYPE_CREATE = "APPOINTMENT_TYPE_CREATE", "Crear tipo de cita"
+    APPOINTMENT_TYPE_UPDATE = "APPOINTMENT_TYPE_UPDATE", "Actualizar tipo de cita"
+    APPOINTMENT_TYPE_DEACTIVATE = "APPOINTMENT_TYPE_DEACTIVATE", "Desactivar tipo de cita"
+    AGENDA_EVENT_CREATE = "AGENDA_EVENT_CREATE", "Crear evento de agenda (reunión/bloqueo)"
+    AGENDA_EVENT_UPDATE = "AGENDA_EVENT_UPDATE", "Actualizar evento de agenda"
+    AGENDA_EVENT_DELETE = "AGENDA_EVENT_DELETE", "Eliminar evento de agenda"
 
     # Personal
     DOCTOR_CREATE = "DOCTOR_CREATE", "Crear médico"

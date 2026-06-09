@@ -222,6 +222,24 @@ class MemberPermission(HasClinicRole):
     }
 
 
+class AppointmentTypePermission(HasClinicRole):
+    """Permisos para los tipos de cita (catálogo configurable).
+
+    Matriz:
+        GET    → todos los roles (necesitan listarlos para agendar).
+        POST   → solo owner y admin (administrar el catálogo).
+        PATCH  → solo owner y admin.
+        DELETE → solo owner y admin.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": ALL_ROLES,
+        "POST": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+        "DELETE": MANAGE_ROLES,
+    }
+
+
 class AgendaConfigPermission(HasClinicRole):
     """Permisos para GET/PATCH /agenda/config/.
 

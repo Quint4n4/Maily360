@@ -17,8 +17,46 @@ from typing import Optional
 
 from django.db.models import QuerySet
 
-from apps.agenda.models import Appointment, AppointmentReminder, TenantAgendaConfig
+from apps.agenda.models import (
+    AgendaBlock,
+    Appointment,
+    AppointmentReminder,
+    AppointmentType,
+    TenantAgendaConfig,
+)
 from apps.tenancy.models import Tenant
+
+
+def agenda_block_list(
+    *,
+    date_from: Optional[datetime.datetime] = None,
+    date_to: Optional[datetime.datetime] = None,
+) -> QuerySet[AgendaBlock]:
+    """Eventos de agenda (reuniones/bloqueos) que solapan el rango dado."""
+    qs = AgendaBlock.objects.select_related("doctor", "consultorio").all()
+    if date_to is not None:
+        qs = qs.filter(starts_at__lt=date_to)
+    if date_from is not None:
+        qs = qs.filter(ends_at__gt=date_from)
+    return qs.order_by("starts_at")
+
+
+def agenda_block_get(*, block_id: uuid.UUID) -> AgendaBlock:
+    """Retorna un evento de agenda por UUID (filtrado por tenant activo)."""
+    return AgendaBlock.objects.select_related("doctor", "consultorio").get(id=block_id)
+
+
+def appointment_type_list(*, only_active: bool = True) -> QuerySet[AppointmentType]:
+    """Tipos de cita del tenant activo, ordenados por nombre."""
+    qs = AppointmentType.objects.all()
+    if only_active:
+        qs = qs.filter(is_active=True)
+    return qs.order_by("name")
+
+
+def appointment_type_get(*, type_id: uuid.UUID) -> AppointmentType:
+    """Retorna un tipo de cita por UUID (filtrado por tenant activo)."""
+    return AppointmentType.objects.get(id=type_id)
 
 
 def appointment_get(*, appointment_id: uuid.UUID) -> Appointment:
