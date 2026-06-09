@@ -253,3 +253,28 @@ class AgendaConfigPermission(HasClinicRole):
         "GET": MANAGE_ROLES,
         "PATCH": MANAGE_ROLES,
     }
+
+
+class NotePermission(HasClinicRole):
+    """Permisos para el módulo Notas y Tareas.
+
+    Diseño (documentado en apps/notas/views.py):
+        GET    → todos los roles (el selector filtra lo que cada quien puede ver).
+        POST   → todos los roles (la restricción owner-only para scope=role|all
+                 la hace el SERVICE note_create, no el permiso HTTP).
+                 Razón: permite que cualquier usuario cree notas personales sin
+                 requerir roles admin/owner en el permiso HTTP.
+        PATCH  → todos los roles (el service valida author/owner antes de mutar).
+        DELETE → todos los roles (idem: el service valida).
+        POST (toggle-done) → todos los roles (el service valida author + is_task).
+
+    La granularidad real la da el service, no el permiso HTTP.
+    El permiso HTTP solo garantiza que el usuario está autenticado y tiene membresía activa.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": ALL_ROLES,
+        "POST": ALL_ROLES,
+        "PATCH": ALL_ROLES,
+        "DELETE": ALL_ROLES,
+    }

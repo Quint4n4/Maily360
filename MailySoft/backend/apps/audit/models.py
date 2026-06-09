@@ -77,6 +77,12 @@ class ActionType(models.TextChoices):
     MEMBER_BLOCK = "MEMBER_BLOCK", "Bloquear o reactivar cuenta de miembro"
     MEMBER_PASSWORD = "MEMBER_PASSWORD", "Restablecer contraseña de miembro"
 
+    # Notas y Tareas
+    NOTE_CREATE = "NOTE_CREATE", "Crear nota personal"
+    NOTE_UPDATE = "NOTE_UPDATE", "Actualizar nota"
+    NOTE_DELETE = "NOTE_DELETE", "Eliminar nota"
+    NOTE_GLOBAL_SEND = "NOTE_GLOBAL_SEND", "Enviar nota global"
+
     # Autenticación
     LOGIN = "LOGIN", "Inicio de sesión"
     LOGOUT = "LOGOUT", "Cierre de sesión"

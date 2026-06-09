@@ -31,6 +31,7 @@ urlpatterns = [
     path("api/v1/", include("apps.personal.urls")),
     path("api/v1/", include("apps.agenda.urls")),
     path("api/v1/audit/", include("apps.audit.urls")),
+    path("api/v1/", include("apps.notas.urls")),
 ]
 
 # FIX-8: exponer la documentación OpenAPI SOLO en desarrollo.
