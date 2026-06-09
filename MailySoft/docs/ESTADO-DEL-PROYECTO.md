@@ -14,8 +14,8 @@
 |---|---|
 | **Stack backend** | Django 5 + DRF · PostgreSQL 16 · Redis · Celery · Docker |
 | **Stack frontend** | React 18 + Vite + TypeScript + Tailwind + TanStack Query (carpeta `web-soft/`) |
-| **Apps Django** | 7 (core, tenancy, authn, pacientes, personal, agenda, audit) |
-| **Tests backend** | **754 pasando** (código commiteado) · features recientes pendientes de tests |
+| **Apps Django** | 8 (core, tenancy, authn, pacientes, personal, agenda, audit, **notas**) |
+| **Tests backend** | **1009 pasando** (código commiteado, endurecido) |
 | **Repo** | github.com/Quint4n4/Maily360 · rama `main` |
 | **Cumplimiento** | NOM-024 / LFPDPPP (bitácora, minimización de PII, Argon2) |
 
@@ -50,6 +50,7 @@
 | **personal** | Doctores, consultorios, horarios (CRUD). |
 | **agenda** | Citas (crear, estados con máquina de estados, reagendar, anti-empalme doble). **Tipos de cita** configurables con color. **Eventos** (reuniones/bloqueos) con bloqueo real. Recordatorios (Celery). Config de agenda. |
 | **audit** | Bitácora NOM-024: registra create/update/delete/login/bloqueo/etc. por actor, rol y tenant. |
+| **notas** | Notas y tareas: personales (privadas, con recordatorio), globales del Dueño (a un rol o a todos), y tareas (hecho/pendiente). Notas colaborativas (hilo con autor) viven en `agenda` (AgendaItemNote). |
 
 ---
 
@@ -59,7 +60,8 @@
 |---|---|---|
 | **Login / sesión** | ✅ Real | Login JWT híbrido, rol real desde `/me/`, logout, refresh automático, avatar en Topbar. |
 | **Pacientes** (antes "Contactos") | ✅ Real | Lista, búsqueda server-side, alta, **edición**, **baja**, **avatar**. Expediente con **próxima cita + historial reales** (conectado a la agenda). Alerta de "expediente provisional". |
-| **Agenda** | ✅ Real | Calendario navegable (día/mes/hoy), citas reales por día coloreadas por **tipo de cita**, **agendar** (paciente existente o **nuevo provisional**), **cambiar estado** (máquina de estados), **bloqueos/reuniones** (card unificado Cita/Bloqueo/Reunión). |
+| **Agenda** | ✅ Real | Calendario navegable, citas coloreadas por **tipo de cita**, **agendar** (paciente existente o **nuevo provisional**), **cambiar estado** (máquina de estados), **bloqueos/reuniones** (card unificado Cita/Bloqueo/Reunión, editable), **hilo de notas del equipo** en cada cita/evento, y widget **"Mis recordatorios"** (personal). |
+| **Notas y Tareas** | ✅ Real | Tarjetas de colores: **Mis notas/tareas** (con recordatorio, fijar, marcar hecha) y **Avisos de la clínica** (globales del Dueño a un rol o a todos). |
 | **Personal** | ✅ Real | Pestañas: **Equipo** (miembros por rol → ficha → editar/bloquear/contraseña/avatar/perfil médico), **Consultorios** (CRUD), **Tipos de cita** (CRUD con color). |
 | **Finanzas** | 🔴 Mock | Sin backend conectado. |
 | **Panel de plataforma** (dueño SaaS) | 🔴 Mock | Sin backend (Fase 4 — pendiente de construir). |

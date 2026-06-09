@@ -1,7 +1,13 @@
 # Plan de diseño — Módulo "Notas y Tareas"
 
 > Plan acordado con el dueño el **2026-06-09**. Guía de implementación por fases.
-> Estado: **diseñado, pendiente de implementar** (no se ha escrito código aún).
+> Estado: **✅ IMPLEMENTADO** (Fases 1–6 completas, 2026-06-09). 141 tests, endurecido (tester/reviewer/security). Backend `apps/notas` + `AgendaItemNote` en `apps/agenda`; frontend `web-soft` (panel Notas + widget de agenda + hilo en cita/evento).
+
+> **Pendientes de hardening (no bloqueantes, para una iteración futura):**
+> - Pasar `request.active_role` a selectors/services de notas para evitar 1–3 queries de membresía duplicadas por request (perf).
+> - Índices compuestos `(tenant, scope, target_role)` en `Note` y `(tenant, appointment)`/`(tenant, agenda_block)` en `AgendaItemNote`.
+> - Recordatorios reales por Celery (WhatsApp/email/push) y acuses de lectura de notas globales (estaban ya como "futuro").
+> - Migrar `CheckConstraint.check` → `condition` (deprecación Django 6.0).
 
 ---
 
