@@ -31,7 +31,12 @@ from apps.core.views import TenantAPIView
 from apps.pacientes.models import Patient, Sex
 from apps.pacientes.selectors import patient_get, patient_list
 from apps.pacientes.serializers import PatientOutputSerializer
-from apps.pacientes.services import patient_create, patient_deactivate, patient_update
+from apps.pacientes.services import (
+    patient_create,
+    patient_create_quick,
+    patient_deactivate,
+    patient_update,
+)
 
 # ---------------------------------------------------------------------------
 # Validadores reutilizables
@@ -160,6 +165,55 @@ class PatientListCreateApi(TenantAPIView):
                 {"detail": exc.messages},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        return Response(
+            PatientOutputSerializer(patient).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PatientQuickCreateApi(TenantAPIView):
+    """POST /api/v1/pacientes/rapido/ — alta PROVISIONAL con datos mínimos.
+
+    Pensado para agendar al vuelo desde la agenda cuando el paciente aún no existe.
+    Crea el expediente con solo el nombre (teléfono opcional) y lo marca como
+    provisional para que la UI alerte que faltan los datos personales.
+    """
+
+    permission_classes = [IsAuthenticated, PatientPermission]
+
+    class InputSerializer(serializers.Serializer):
+        first_name = serializers.CharField(max_length=120)
+        paternal_surname = serializers.CharField(max_length=120)
+        maternal_surname = serializers.CharField(max_length=120, default="", allow_blank=True)
+        phone = serializers.CharField(max_length=20, required=False, default="", allow_blank=True)
+
+        def validate_phone(self, value: str) -> str:
+            # Teléfono opcional en provisional; si se provee, valida formato.
+            if not value:
+                return ""
+            return _validate_phone(value)
+
+    def post(self, request: Request) -> Response:
+        """Crea un expediente provisional en el tenant del request."""
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo para este request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            patient = patient_create_quick(
+                tenant=tenant,
+                user=request.user,
+                **s.validated_data,
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
             PatientOutputSerializer(patient).data,

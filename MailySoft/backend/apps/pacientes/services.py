@@ -198,14 +198,84 @@ def patient_create(
 
 
 # ---------------------------------------------------------------------------
+# patient_create_quick — alta provisional desde la agenda
+# ---------------------------------------------------------------------------
+
+
+def patient_create_quick(
+    *,
+    tenant: Tenant,
+    user: "User",  # type: ignore[valid-type]
+    first_name: str,
+    paternal_surname: str,
+    maternal_surname: str = "",
+    phone: str = "",
+) -> Patient:
+    """Crea un expediente PROVISIONAL con datos mínimos (al vuelo desde la agenda).
+
+    Pensado para recepción: agenda con solo el nombre. Marca is_provisional=True
+    para que la UI alerte que falta completar fecha de nacimiento, sexo, etc.
+    El número de expediente se genera igual que en patient_create.
+
+    No exige fecha de nacimiento ni sexo (quedan vacíos hasta que se complete el
+    expediente vía patient_update, que limpia la bandera automáticamente).
+
+    Args:
+        tenant:           Clínica del paciente.
+        user:             Usuario que crea (auditoría).
+        first_name:       Nombre(s).
+        paternal_surname: Apellido paterno.
+        maternal_surname: Apellido materno (opcional).
+        phone:            Teléfono (opcional en provisional).
+
+    Returns:
+        El Patient provisional recién creado.
+
+    Raises:
+        ValidationError: ante un error de concurrencia en el consecutivo.
+    """
+    try:
+        with transaction.atomic():
+            record_number = _next_record_number(tenant)
+            patient = Patient.objects.create(
+                tenant=tenant,
+                created_by=user,
+                first_name=first_name,
+                paternal_surname=paternal_surname,
+                maternal_surname=maternal_surname,
+                date_of_birth=None,
+                sex="",
+                phone=phone,
+                record_number=record_number,
+                is_provisional=True,
+            )
+    except IntegrityError as exc:
+        raise ValidationError(
+            "Error de concurrencia al generar el número de expediente. Por favor, intente de nuevo."
+        ) from exc
+
+    audit_record(
+        action=ActionType.PATIENT_CREATE,
+        resource_type="Patient",
+        actor=user,
+        tenant=tenant,
+        resource_id=patient.id,
+        resource_repr=patient.record_number,
+        metadata={"provisional": True},
+    )
+    return patient
+
+
+# ---------------------------------------------------------------------------
 # patient_update
 # ---------------------------------------------------------------------------
 
 # Campos que NO se pueden actualizar vía patient_update.
 # FIX-B3: is_active y updated_at se agregan a los campos inmutables.
 # is_active solo cambia vía patient_deactivate.
+# is_provisional NO se setea por el cliente: se gestiona automáticamente aquí.
 _IMMUTABLE_FIELDS: frozenset[str] = frozenset(
-    {"record_number", "tenant", "tenant_id", "id", "created_at", "deleted_at", "is_active", "updated_at"}
+    {"record_number", "tenant", "tenant_id", "id", "created_at", "deleted_at", "is_active", "is_provisional", "updated_at"}
 )
 
 
@@ -266,8 +336,16 @@ def patient_update(
     for field_name, value in fields.items():
         setattr(patient, field_name, value)
 
+    update_fields = list(fields.keys())
+
+    # Auto-completar: si un expediente provisional ya tiene fecha de nacimiento,
+    # sexo y teléfono, deja de ser provisional y la alerta desaparece.
+    if patient.is_provisional and patient.date_of_birth and patient.sex and patient.phone:
+        patient.is_provisional = False
+        update_fields.append("is_provisional")
+
     # updated_at se gestiona automáticamente (auto_now=True en BaseModel).
-    update_fields = list(fields.keys()) + ["updated_at"]
+    update_fields.append("updated_at")
     patient.save(update_fields=update_fields)
 
     audit_record(

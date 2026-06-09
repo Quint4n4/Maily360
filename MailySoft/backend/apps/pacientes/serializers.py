@@ -40,6 +40,7 @@ class PatientOutputSerializer(serializers.ModelSerializer):
             "record_number",
             "notes",
             "is_active",
+            "is_provisional",
             "created_at",
         ]
         read_only_fields = fields

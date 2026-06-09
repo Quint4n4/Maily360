@@ -47,12 +47,16 @@ class Patient(TenantAwareModel):
         help_text="Apellido materno (opcional).",
     )
     date_of_birth = models.DateField(
-        help_text="Fecha de nacimiento.",
+        null=True,
+        blank=True,
+        help_text="Fecha de nacimiento. Puede ser null en expedientes provisionales.",
     )
     sex = models.CharField(
         max_length=1,
         choices=Sex.choices,
-        help_text="Sexo del paciente según NOM-024 (M/F/X).",
+        blank=True,
+        default="",
+        help_text="Sexo del paciente según NOM-024 (M/F/X). Vacío en provisionales.",
     )
     curp = models.CharField(
         max_length=18,
@@ -62,7 +66,9 @@ class Patient(TenantAwareModel):
     )
     phone = models.CharField(
         max_length=20,
-        help_text="Teléfono de contacto (WhatsApp).",
+        blank=True,
+        default="",
+        help_text="Teléfono de contacto (WhatsApp). Vacío en provisionales.",
     )
     email = models.EmailField(
         blank=True,
@@ -82,6 +88,14 @@ class Patient(TenantAwareModel):
         default=True,
         db_index=True,
         help_text="False = expediente desactivado (soft). No borra el registro.",
+    )
+    is_provisional = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "True = expediente creado al vuelo desde la agenda con datos mínimos. "
+            "Falta completar la información personal (fecha nac., sexo, etc.)."
+        ),
     )
 
     class Meta:
