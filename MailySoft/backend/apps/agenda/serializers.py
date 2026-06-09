@@ -17,6 +17,7 @@ from rest_framework import serializers
 
 from apps.agenda.models import (
     AgendaBlock,
+    AgendaItemNote,
     Appointment,
     AppointmentReminder,
     AppointmentType,
@@ -169,6 +170,35 @@ class AppointmentOutputSerializer(serializers.ModelSerializer):
             "reminders",
             "created_at",
         ]
+        read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
+# AgendaItemNoteOutputSerializer
+# ---------------------------------------------------------------------------
+
+
+class _AuthorNestedSerializer(serializers.Serializer):
+    """Representación mínima del autor de una nota de agenda."""
+
+    id = serializers.UUIDField(read_only=True)
+    full_name = serializers.SerializerMethodField()
+
+    def get_full_name(self, obj: object) -> str:
+        return getattr(obj, "full_name", "") or getattr(obj, "email", "")
+
+
+class AgendaItemNoteOutputSerializer(serializers.ModelSerializer):
+    """Serializer de salida para AgendaItemNote (hilo de notas de la agenda).
+
+    Requiere select_related("author") en el queryset para evitar N+1.
+    """
+
+    author = _AuthorNestedSerializer(read_only=True)
+
+    class Meta:
+        model = AgendaItemNote
+        fields = ["id", "author", "body", "created_at"]
         read_only_fields = fields
 
 

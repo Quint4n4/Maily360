@@ -19,6 +19,7 @@ from django.db.models import QuerySet
 
 from apps.agenda.models import (
     AgendaBlock,
+    AgendaItemNote,
     Appointment,
     AppointmentReminder,
     AppointmentType,
@@ -173,6 +174,42 @@ def agenda_config_get(*, tenant: Tenant) -> TenantAgendaConfig:
         },
     )
     return config
+
+
+def agenda_item_note_list(
+    *,
+    appointment_id: Optional[uuid.UUID] = None,
+    block_id: Optional[uuid.UUID] = None,
+) -> QuerySet[AgendaItemNote]:
+    """Retorna las notas del hilo de una cita o de un evento, ordenadas por created_at ASC.
+
+    El TenantManager filtra por tenant activo automáticamente.
+    Se espera que exactamente uno de appointment_id / block_id sea provisto.
+    Si ninguno se provee, devuelve un QuerySet vacío (uso defensivo).
+
+    Args:
+        appointment_id: UUID de la cita. Excluyente con block_id.
+        block_id:       UUID del evento. Excluyente con appointment_id.
+
+    Returns:
+        QuerySet[AgendaItemNote] con select_related("author"), ordenado por created_at ASC.
+    """
+    qs = AgendaItemNote.objects.select_related("author").order_by("created_at")
+    if appointment_id is not None:
+        return qs.filter(appointment_id=appointment_id)
+    if block_id is not None:
+        return qs.filter(agenda_block_id=block_id)
+    # Ninguno provisto: devolver vacío (la vista ya valida que tenga uno u otro).
+    return qs.none()
+
+
+def agenda_item_note_get(*, note_id: uuid.UUID) -> AgendaItemNote:
+    """Retorna una nota por su UUID (filtrado por tenant activo vía TenantManager).
+
+    Raises:
+        AgendaItemNote.DoesNotExist: si no existe o pertenece a otro tenant.
+    """
+    return AgendaItemNote.objects.select_related("author").get(id=note_id)
 
 
 def reminder_list_for_appointment(

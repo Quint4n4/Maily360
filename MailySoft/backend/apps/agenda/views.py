@@ -24,11 +24,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.agenda.models import AgendaBlock, Appointment, AppointmentType
+from apps.agenda.models import AgendaBlock, AgendaItemNote, Appointment, AppointmentType
 from apps.agenda.selectors import (
     agenda_block_get,
     agenda_block_list,
     agenda_config_get,
+    agenda_item_note_get,
+    agenda_item_note_list,
     appointment_get,
     appointment_list,
     appointment_type_get,
@@ -36,6 +38,7 @@ from apps.agenda.selectors import (
 )
 from apps.agenda.serializers import (
     AgendaBlockOutputSerializer,
+    AgendaItemNoteOutputSerializer,
     AppointmentOutputSerializer,
     AppointmentTypeOutputSerializer,
     TenantAgendaConfigOutputSerializer,
@@ -45,6 +48,8 @@ from apps.agenda.services import (
     agenda_block_delete,
     agenda_block_update,
     agenda_config_update,
+    agenda_item_note_create,
+    agenda_item_note_delete,
     appointment_change_status,
     appointment_create,
     appointment_reschedule,
@@ -55,6 +60,7 @@ from apps.agenda.services import (
 )
 from apps.core.permissions import (
     AgendaConfigPermission,
+    AgendaItemNotePermission,
     AppointmentPermission,
     AppointmentStatusPermission,
     AppointmentTypePermission,
@@ -655,4 +661,166 @@ class AgendaBlockDetailApi(TenantAPIView):
             return error
 
         agenda_block_delete(agenda_block=block, user=request.user)  # type: ignore[arg-type]
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# AgendaItemNote — hilo de notas colaborativas de citas y eventos
+# ---------------------------------------------------------------------------
+
+
+class AppointmentNotesApi(TenantAPIView):
+    """GET  /api/v1/agenda/citas/<appointment_id>/notas/  — lista el hilo de notas.
+    POST /api/v1/agenda/citas/<appointment_id>/notas/  — agrega una nota al hilo.
+
+    Antes de listar/crear verifica que la cita exista en el tenant (404 si no).
+    No se pagina: el hilo de una cita es corto (diseño D-B).
+    """
+
+    permission_classes = [IsAuthenticated, AgendaItemNotePermission]
+
+    class InputSerializer(serializers.Serializer):
+        body = serializers.CharField()
+
+    def _get_appointment_or_404(
+        self, appointment_id: uuid.UUID
+    ) -> "tuple[Appointment | None, Response | None]":
+        try:
+            return appointment_get(appointment_id=appointment_id), None
+        except Appointment.DoesNotExist:
+            return None, Response(
+                {"detail": "Cita no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def get(self, request: Request, appointment_id: uuid.UUID) -> Response:
+        """Lista todas las notas del hilo de una cita, ordenadas por created_at ASC."""
+        appointment, error = self._get_appointment_or_404(appointment_id)
+        if error is not None:
+            return error
+
+        notes = agenda_item_note_list(appointment_id=appointment_id)
+        return Response(AgendaItemNoteOutputSerializer(notes, many=True).data)
+
+    def post(self, request: Request, appointment_id: uuid.UUID) -> Response:
+        """Agrega una nota al hilo de una cita."""
+        appointment, error = self._get_appointment_or_404(appointment_id)
+        if error is not None:
+            return error
+
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo para este request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            note = agenda_item_note_create(
+                tenant=tenant,
+                user=request.user,
+                body=s.validated_data["body"],
+                appointment_id=appointment_id,
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            AgendaItemNoteOutputSerializer(note).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AgendaBlockNotesApi(TenantAPIView):
+    """GET  /api/v1/agenda/eventos/<block_id>/notas/  — lista el hilo de notas.
+    POST /api/v1/agenda/eventos/<block_id>/notas/  — agrega una nota al hilo.
+
+    Antes de listar/crear verifica que el evento exista en el tenant (404 si no).
+    No se pagina: el hilo de un evento es corto (diseño D-B).
+    """
+
+    permission_classes = [IsAuthenticated, AgendaItemNotePermission]
+
+    class InputSerializer(serializers.Serializer):
+        body = serializers.CharField()
+
+    def _get_block_or_404(
+        self, block_id: uuid.UUID
+    ) -> "tuple[AgendaBlock | None, Response | None]":
+        try:
+            return agenda_block_get(block_id=block_id), None
+        except AgendaBlock.DoesNotExist:
+            return None, Response(
+                {"detail": "Evento no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def get(self, request: Request, block_id: uuid.UUID) -> Response:
+        """Lista todas las notas del hilo de un evento, ordenadas por created_at ASC."""
+        block, error = self._get_block_or_404(block_id)
+        if error is not None:
+            return error
+
+        notes = agenda_item_note_list(block_id=block_id)
+        return Response(AgendaItemNoteOutputSerializer(notes, many=True).data)
+
+    def post(self, request: Request, block_id: uuid.UUID) -> Response:
+        """Agrega una nota al hilo de un evento de agenda."""
+        block, error = self._get_block_or_404(block_id)
+        if error is not None:
+            return error
+
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo para este request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            note = agenda_item_note_create(
+                tenant=tenant,
+                user=request.user,
+                body=s.validated_data["body"],
+                block_id=block_id,
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            AgendaItemNoteOutputSerializer(note).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AgendaItemNoteDetailApi(TenantAPIView):
+    """DELETE /api/v1/agenda/notas/<note_id>/  — elimina (soft) una nota del hilo.
+
+    404 si la nota no existe o es de otro tenant.
+    El service valida quién puede borrar (author / owner / admin).
+    """
+
+    permission_classes = [IsAuthenticated, AgendaItemNotePermission]
+
+    def delete(self, request: Request, note_id: uuid.UUID) -> Response:
+        """Soft-delete de una nota del hilo de agenda."""
+        try:
+            note = agenda_item_note_get(note_id=note_id)
+        except AgendaItemNote.DoesNotExist:
+            return Response(
+                {"detail": "Nota no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            agenda_item_note_delete(note=note, user=request.user)
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response(status=status.HTTP_204_NO_CONTENT)

@@ -255,6 +255,31 @@ class AgendaConfigPermission(HasClinicRole):
     }
 
 
+class AgendaItemNotePermission(HasClinicRole):
+    """Permisos para el hilo de notas colaborativas de la agenda.
+
+    Spec §5: agregar/ver = cualquier rol con acceso a la agenda (todos menos Finanzas);
+             borrar = autor / Dueño / Admin (la granularidad real la valida el service).
+
+    Matriz:
+        GET    → todos menos FINANCE (quien no puede ver la agenda no puede ver sus notas).
+        POST   → todos menos FINANCE (agregar nota = mismo conjunto que "puede ver agenda").
+        DELETE → todos menos FINANCE (el service valida si puede borrar la nota concreta).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset(
+            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
+        ),
+        "POST": frozenset(
+            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
+        ),
+        "DELETE": frozenset(
+            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
+        ),
+    }
+
+
 class NotePermission(HasClinicRole):
     """Permisos para el módulo Notas y Tareas.
 

@@ -82,6 +82,8 @@ class ActionType(models.TextChoices):
     NOTE_UPDATE = "NOTE_UPDATE", "Actualizar nota"
     NOTE_DELETE = "NOTE_DELETE", "Eliminar nota"
     NOTE_GLOBAL_SEND = "NOTE_GLOBAL_SEND", "Enviar nota global"
+    AGENDA_NOTE_ADD = "AGENDA_NOTE_ADD", "Agregar nota a evento de agenda"
+    AGENDA_NOTE_DELETE = "AGENDA_NOTE_DELETE", "Eliminar nota de evento de agenda"
 
     # Autenticación
     LOGIN = "LOGIN", "Inicio de sesión"

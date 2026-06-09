@@ -4,11 +4,14 @@ URLs de la app agenda.
 Se incluyen en config/urls.py bajo el prefijo api/v1/.
 
 Rutas:
-    agenda/citas/                                   AppointmentListCreateApi
-    agenda/citas/<appointment_id>/                  AppointmentDetailApi
-    agenda/citas/<appointment_id>/estado/           AppointmentChangeStatusApi
-    agenda/citas/<appointment_id>/reagendar/        AppointmentRescheduleApi
-    agenda/config/                                  AgendaConfigApi
+    agenda/citas/                                          AppointmentListCreateApi
+    agenda/citas/<appointment_id>/                         AppointmentDetailApi
+    agenda/citas/<appointment_id>/estado/                  AppointmentChangeStatusApi
+    agenda/citas/<appointment_id>/reagendar/               AppointmentRescheduleApi
+    agenda/config/                                         AgendaConfigApi
+    agenda/citas/<appointment_id>/notas/                   AppointmentNotesApi
+    agenda/eventos/<block_id>/notas/                       AgendaBlockNotesApi
+    agenda/notas/<note_id>/                                AgendaItemNoteDetailApi
 """
 
 from django.urls import path
@@ -16,10 +19,13 @@ from django.urls import path
 from apps.agenda.views import (
     AgendaBlockDetailApi,
     AgendaBlockListCreateApi,
+    AgendaBlockNotesApi,
     AgendaConfigApi,
+    AgendaItemNoteDetailApi,
     AppointmentChangeStatusApi,
     AppointmentDetailApi,
     AppointmentListCreateApi,
+    AppointmentNotesApi,
     AppointmentRescheduleApi,
     AppointmentTypeDetailApi,
     AppointmentTypeListCreateApi,
@@ -76,5 +82,21 @@ urlpatterns = [
         "agenda/eventos/<uuid:block_id>/",
         AgendaBlockDetailApi.as_view(),
         name="agenda-block-detail",
+    ),
+    # Notas colaborativas del hilo de citas y eventos (Fase 5)
+    path(
+        "agenda/citas/<uuid:appointment_id>/notas/",
+        AppointmentNotesApi.as_view(),
+        name="appointment-notes",
+    ),
+    path(
+        "agenda/eventos/<uuid:block_id>/notas/",
+        AgendaBlockNotesApi.as_view(),
+        name="agenda-block-notes",
+    ),
+    path(
+        "agenda/notas/<uuid:note_id>/",
+        AgendaItemNoteDetailApi.as_view(),
+        name="agenda-item-note-detail",
     ),
 ]

@@ -436,6 +436,80 @@ VALID_TRANSITIONS: dict[str, set[str]] = {
     Appointment.Status.NO_SHOW: set(),
 }
 
+# ---------------------------------------------------------------------------
+# AgendaItemNote
+# ---------------------------------------------------------------------------
+
+
+class AgendaItemNote(TenantAwareModel):
+    """Nota colaborativa pegada a una cita o a un evento de agenda (hilo de comentarios).
+
+    Visible para todos los roles con acceso a la agenda.
+    Solo se setea UNA de las dos FKs (appointment XOR agenda_block).
+    El constraint "agenda_item_note_exactly_one_target" lo refuerza a nivel BD.
+
+    Ciclo de vida:
+        - Cualquier miembro con acceso a la agenda puede crear notas.
+        - El autor, el owner y el admin pueden eliminarlas (soft-delete via deleted_at).
+        - NO se editan (append-only por diseño; corrige agregando una nota nueva).
+
+    Relaciones:
+        author       → User que creó la nota.
+        appointment  → Cita a la que pertenece (null si es de un evento).
+        agenda_block → Evento al que pertenece (null si es de una cita).
+    """
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="agenda_item_notes",
+        help_text="Usuario que agregó la nota.",
+    )
+    appointment = models.ForeignKey(
+        "agenda.Appointment",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="item_notes",
+        help_text="Cita a la que pertenece esta nota. Null si pertenece a un evento.",
+    )
+    agenda_block = models.ForeignKey(
+        "agenda.AgendaBlock",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="item_notes",
+        help_text="Evento al que pertenece esta nota. Null si pertenece a una cita.",
+    )
+    body = models.TextField(
+        help_text="Contenido de la nota. Requerido, no puede estar vacío.",
+    )
+
+    class Meta:
+        db_table = "agenda_item_notes"
+        ordering = ["created_at"]
+        constraints = [
+            # Exactamente uno de appointment / agenda_block debe estar seteado.
+            # (A XOR B) = (A AND NOT B) OR (NOT A AND B)
+            models.CheckConstraint(
+                check=(
+                    models.Q(appointment__isnull=False, agenda_block__isnull=True)
+                    | models.Q(appointment__isnull=True, agenda_block__isnull=False)
+                ),
+                name="agenda_item_note_exactly_one_target",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        author_str = getattr(self.author, "email", str(self.author_id))
+        target = (
+            f"cita={self.appointment_id}"
+            if self.appointment_id
+            else f"evento={self.agenda_block_id}"
+        )
+        return f"Nota de {author_str} en {target}"
+
+
 #: Estados que se consideran "activos" para el anti-empalme.
 #: Una cita en cualquiera de estos estados ocupa el slot del médico/consultorio.
 ACTIVE_STATUSES: frozenset[str] = frozenset(
