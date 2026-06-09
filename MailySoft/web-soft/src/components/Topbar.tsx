@@ -12,7 +12,7 @@ interface TopbarProps {
 const NAV: { key: Modulo; label: string; icon: typeof BarChart3 }[] = [
   { key: 'finanzas',  label: 'Finanzas',  icon: BarChart3 },
   { key: 'agenda',    label: 'Agenda',    icon: CalendarDays },
-  { key: 'contactos', label: 'Contactos', icon: Users },
+  { key: 'contactos', label: 'Pacientes', icon: Users },
   { key: 'personal',  label: 'Personal',  icon: Stethoscope },
 ]
 
@@ -73,9 +73,11 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
           onClick={() => setMenuOpen(v => !v)}
           className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition-colors hover:bg-black/5"
         >
-          <div className="w-9 h-9 rounded-full flex items-center justify-center"
+          <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center"
             style={{ background: 'rgba(201,162,39,0.18)', border: '1px solid rgba(201,162,39,0.45)' }}>
-            <User className="w-4 h-4" style={{ color: '#C9A227' }} />
+            {user?.avatar
+              ? <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+              : <User className="w-4 h-4" style={{ color: '#C9A227' }} />}
           </div>
           <div className="text-left leading-tight">
             <p className="text-sm font-medium" style={{ color: '#2A241B' }}>{nombreUsuario}</p>

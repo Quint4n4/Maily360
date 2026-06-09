@@ -35,6 +35,8 @@ export interface Me {
   first_name: string
   last_name: string
   full_name: string
+  /** URL de la foto de perfil del usuario, o null. */
+  avatar: string | null
   is_platform_staff: boolean
   platform_role: string
   active_tenant: TenantBrief | null

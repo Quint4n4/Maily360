@@ -16,6 +16,11 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      // Imágenes subidas (avatares) servidas por Django en dev.
+      '/media': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
 })

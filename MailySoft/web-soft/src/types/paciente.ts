@@ -10,6 +10,8 @@ export type Sex = 'M' | 'F' | 'X'
 export interface PatientOut {
   id: string
   full_name: string
+  /** URL de la foto del paciente, o null. */
+  avatar: string | null
   first_name: string
   paternal_surname: string
   maternal_surname: string

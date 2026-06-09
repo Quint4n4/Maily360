@@ -5,6 +5,9 @@ import {
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { initialsOf, edad } from '../../lib/paciente'
+import { useUploadPatientAvatar } from '../../hooks/pacientes'
+import { ApiError } from '../../lib/http'
+import AvatarUploader from '../common/AvatarUploader'
 
 interface ExpedienteDrawerProps {
   paciente: PatientOut | null
@@ -54,6 +57,16 @@ export default function ExpedienteDrawer({
   puedeEditar = false, onEditar, onDarDeBaja, dandoDeBaja = false,
 }: ExpedienteDrawerProps) {
   const years = paciente ? edad(paciente.date_of_birth ?? '') : null
+  const subirAvatar = useUploadPatientAvatar()
+  const onAvatarFile = (file: File) => {
+    if (!paciente) return
+    subirAvatar.mutate({ id: paciente.id, file }, {
+      onError: e => {
+        const d = e instanceof ApiError ? e.body?.detail : null
+        window.alert(Array.isArray(d) ? d.join(' ') : (d ?? 'No se pudo subir la imagen.'))
+      },
+    })
+  }
   return (
     <AnimatePresence>
       {paciente && (
@@ -127,11 +140,15 @@ export default function ExpedienteDrawer({
                   {/* anillo dorado decorativo */}
                   <div className="absolute -inset-3 rounded-full"
                     style={{ background: 'conic-gradient(from 120deg, #E8C766, #C9A227, #F5E6B8, #C9A227, #E8C766)', filter: 'blur(10px)', opacity: 0.55 }} />
-                  {/* iniciales */}
-                  <div className="relative w-44 h-44 rounded-full overflow-hidden flex items-center justify-center text-5xl font-bold"
-                    style={{ background: 'rgba(201,162,39,0.18)', color: '#B8860B', border: '4px solid rgba(255,255,255,0.85)', boxShadow: '0 12px 36px rgba(60,42,12,0.30)' }}>
-                    {initialsOf(paciente)}
-                  </div>
+                  {/* foto o iniciales (editable) */}
+                  <AvatarUploader
+                    src={paciente.avatar}
+                    initials={initialsOf(paciente)}
+                    size={176}
+                    editable={puedeEditar}
+                    uploading={subirAvatar.isPending}
+                    onFile={onAvatarFile}
+                  />
                 </div>
 
                 <h2 className="text-2xl font-bold text-gray-900 leading-tight">{paciente.full_name}</h2>

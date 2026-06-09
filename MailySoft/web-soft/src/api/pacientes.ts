@@ -57,3 +57,10 @@ export async function updatePatient(id: string, input: PatientUpdateInput): Prom
 export async function deactivatePatient(id: string): Promise<void> {
   await request<void>(`/pacientes/${id}/`, { method: 'DELETE' })
 }
+
+/** POST /pacientes/<id>/avatar/ — sube/reemplaza la foto del paciente (multipart). */
+export async function uploadPatientAvatar(id: string, file: File): Promise<PatientOut> {
+  const fd = new FormData()
+  fd.append('avatar', file)
+  return request<PatientOut>(`/pacientes/${id}/avatar/`, { method: 'POST', body: fd })
+}

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createConsultorio,
+  createDoctor,
   deactivateConsultorio,
   deactivateDoctor,
   listConsultorios,
@@ -13,6 +14,7 @@ import {
 import type {
   ConsultorioCreateInput,
   ConsultorioUpdateInput,
+  DoctorCreateInput,
   DoctorUpdateInput,
 } from '../types/personal'
 
@@ -26,6 +28,14 @@ export function useDoctorsManage() {
   return useQuery({
     queryKey: ['personal', 'doctores', 'manage'],
     queryFn: () => listDoctors(false),
+  })
+}
+
+export function useCreateDoctor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: DoctorCreateInput) => createDoctor(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: personalRoot }),
   })
 }
 

@@ -62,7 +62,7 @@ export default function ContactosPage() {
         <div className="glass-card rounded-2xl px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Contactos</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Pacientes</h1>
               <p className="text-sm text-gray-500">
                 {isLoading ? 'Cargando…' : `${total} paciente${total === 1 ? '' : 's'} registrado${total === 1 ? '' : 's'}`}
               </p>
@@ -135,9 +135,9 @@ export default function ContactosPage() {
                   className="relative z-10 glass-card rounded-2xl p-5 w-full text-left transition-shadow duration-200 group-hover:shadow-xl"
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                    <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold shrink-0"
                       style={{ background: 'rgba(201,162,39,0.16)', color: '#B8860B' }}>
-                      {initialsOf(p)}
+                      {p.avatar ? <img src={p.avatar} alt="" className="w-full h-full object-cover" /> : initialsOf(p)}
                     </div>
                     {p.is_provisional ? (
                       <span className="badge" style={{ background: '#FBF1D9', color: '#9A7B1E' }}>Por completar</span>

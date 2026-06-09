@@ -10,6 +10,7 @@ import {
   deactivatePatient,
   listPatients,
   updatePatient,
+  uploadPatientAvatar,
 } from '../api/pacientes'
 import type {
   PatientCreateInput,
@@ -54,6 +55,15 @@ export function useUpdatePatient() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: PatientUpdateInput }) => updatePatient(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: pacientesKeys.all }),
+  })
+}
+
+/** Subir foto del paciente. Invalida la lista al terminar. */
+export function useUploadPatientAvatar() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => uploadPatientAvatar(id, file),
     onSuccess: () => qc.invalidateQueries({ queryKey: pacientesKeys.all }),
   })
 }

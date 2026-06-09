@@ -7,6 +7,7 @@ import type {
   ConsultorioCreateInput,
   ConsultorioUpdateInput,
   Doctor,
+  DoctorCreateInput,
   DoctorUpdateInput,
 } from '../types/personal'
 
@@ -16,6 +17,11 @@ import type {
 export async function listDoctors(onlyActive = true): Promise<Paginated<Doctor>> {
   const qs = onlyActive ? '' : '?only_active=false'
   return request<Paginated<Doctor>>(`/personal/doctores/${qs}`)
+}
+
+/** POST /personal/doctores/ — crea el perfil médico para una membresía con rol doctor. */
+export async function createDoctor(input: DoctorCreateInput): Promise<Doctor> {
+  return request<Doctor>('/personal/doctores/', { method: 'POST', body: input })
 }
 
 /** PATCH /personal/doctores/<id>/ — actualiza datos del doctor. */
