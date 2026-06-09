@@ -65,6 +65,12 @@ class ActionType(models.TextChoices):
     # Configuración
     CONFIG_UPDATE = "CONFIG_UPDATE", "Actualizar configuración de agenda"
 
+    # Miembros de la clínica
+    MEMBER_CREATE = "MEMBER_CREATE", "Alta de miembro"
+    MEMBER_UPDATE = "MEMBER_UPDATE", "Actualizar miembro (nombre/rol)"
+    MEMBER_BLOCK = "MEMBER_BLOCK", "Bloquear o reactivar cuenta de miembro"
+    MEMBER_PASSWORD = "MEMBER_PASSWORD", "Restablecer contraseña de miembro"
+
     # Autenticación
     LOGIN = "LOGIN", "Inicio de sesión"
     LOGOUT = "LOGOUT", "Cierre de sesión"

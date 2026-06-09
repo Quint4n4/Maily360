@@ -7,6 +7,7 @@ Se incluyen en config/urls.py bajo el prefijo api/v1/.
 from django.urls import path
 
 from apps.pacientes.views import (
+    PatientAvatarApi,
     PatientDetailApi,
     PatientListCreateApi,
     PatientQuickCreateApi,
@@ -17,4 +18,5 @@ urlpatterns = [
     # Alta provisional ('rapido' no es UUID, no choca con el detalle <uuid>).
     path("pacientes/rapido/", PatientQuickCreateApi.as_view(), name="patient-quick-create"),
     path("pacientes/<uuid:patient_id>/", PatientDetailApi.as_view(), name="patient-detail"),
+    path("pacientes/<uuid:patient_id>/avatar/", PatientAvatarApi.as_view(), name="patient-avatar"),
 ]

@@ -203,6 +203,24 @@ class AppointmentStatusPermission(HasClinicRole):
     }
 
 
+class MemberPermission(HasClinicRole):
+    """Permisos para la gestión de miembros de la clínica.
+
+    Listar, crear, cambiar rol y bloquear/reactivar cuentas es una acción
+    administrativa sensible (toca cuentas de usuario y PII).
+    Matriz:
+        GET    → solo owner y admin.
+        POST   → solo owner y admin.
+        PATCH  → solo owner y admin.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": MANAGE_ROLES,
+        "POST": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+    }
+
+
 class AgendaConfigPermission(HasClinicRole):
     """Permisos para GET/PATCH /agenda/config/.
 

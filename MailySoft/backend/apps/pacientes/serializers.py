@@ -22,12 +22,14 @@ class PatientOutputSerializer(serializers.ModelSerializer):
 
     full_name = serializers.CharField(read_only=True)
     sex_display = serializers.CharField(source="get_sex_display", read_only=True)
+    avatar = serializers.ImageField(read_only=True)
 
     class Meta:
         model = Patient
         fields = [
             "id",
             "full_name",
+            "avatar",
             "first_name",
             "paternal_surname",
             "maternal_surname",

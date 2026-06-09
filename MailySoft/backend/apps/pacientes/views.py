@@ -19,12 +19,14 @@ import uuid
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers, status
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
+from apps.core.files import validate_avatar
 from apps.core.permissions import PatientPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
@@ -32,9 +34,11 @@ from apps.pacientes.models import Patient, Sex
 from apps.pacientes.selectors import patient_get, patient_list
 from apps.pacientes.serializers import PatientOutputSerializer
 from apps.pacientes.services import (
+    patient_clear_avatar,
     patient_create,
     patient_create_quick,
     patient_deactivate,
+    patient_set_avatar,
     patient_update,
 )
 
@@ -320,3 +324,46 @@ class PatientDetailApi(TenantAPIView):
 
         patient_deactivate(patient=patient, _user=request.user)  # type: ignore[arg-type]
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PatientAvatarApi(TenantAPIView):
+    """POST   /api/v1/pacientes/<id>/avatar/  — sube/reemplaza la foto del paciente.
+    DELETE /api/v1/pacientes/<id>/avatar/  — elimina la foto.
+
+    Recibe multipart/form-data con el campo `avatar`. La imagen se valida
+    (tamaño, formato real) antes de guardarse.
+    """
+
+    permission_classes = [IsAuthenticated, PatientPermission]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request: Request, patient_id: uuid.UUID) -> Response:
+        """Sube o reemplaza la foto del paciente."""
+        try:
+            patient = patient_get(patient_id=patient_id)
+        except Patient.DoesNotExist:
+            return Response({"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        image = request.FILES.get("avatar")
+        if image is None:
+            return Response(
+                {"detail": "No se envió ninguna imagen (campo 'avatar')."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_avatar(image)
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        patient = patient_set_avatar(patient=patient, user=request.user, image=image)
+        return Response(PatientOutputSerializer(patient).data)
+
+    def delete(self, request: Request, patient_id: uuid.UUID) -> Response:
+        """Elimina la foto del paciente."""
+        try:
+            patient = patient_get(patient_id=patient_id)
+        except Patient.DoesNotExist:
+            return Response({"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        patient = patient_clear_avatar(patient=patient, user=request.user)
+        return Response(PatientOutputSerializer(patient).data)

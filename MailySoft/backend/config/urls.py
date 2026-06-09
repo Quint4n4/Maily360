@@ -26,6 +26,7 @@ urlpatterns = [
     # Apps del dominio (se registran aquí conforme se agregan)
     # path("api/v1/", include("apps.core.urls")),
     path("api/v1/", include("apps.authn.urls")),
+    path("api/v1/", include("apps.tenancy.urls")),
     path("api/v1/", include("apps.pacientes.urls")),
     path("api/v1/", include("apps.personal.urls")),
     path("api/v1/", include("apps.agenda.urls")),
@@ -47,3 +48,9 @@ if settings.DEBUG:
         path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
         path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     ]
+
+    # Servir archivos subidos (avatares) en desarrollo. En producción los sirve
+    # el almacenamiento (S3) o el servidor web, NUNCA Django.
+    from django.conf.urls.static import static
+
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

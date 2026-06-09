@@ -17,6 +17,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 
 from apps.authn.managers import UserManager
+from apps.core.files import user_avatar_path
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -45,6 +46,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     first_name = models.CharField(max_length=120, blank=True)
     last_name = models.CharField(max_length=120, blank=True)
+    avatar = models.ImageField(
+        upload_to=user_avatar_path,
+        null=True,
+        blank=True,
+        help_text="Foto de perfil del usuario (opcional).",
+    )
 
     is_active = models.BooleanField(
         default=True,

@@ -361,6 +361,47 @@ def patient_update(
 
 
 # ---------------------------------------------------------------------------
+# Avatar
+# ---------------------------------------------------------------------------
+
+
+def patient_set_avatar(*, patient: Patient, user: "User", image: object) -> Patient:  # type: ignore[valid-type]
+    """Asigna (o reemplaza) la foto del paciente. La imagen ya viene validada por la vista."""
+    if patient.avatar:
+        patient.avatar.delete(save=False)  # borra el archivo anterior (evita huérfanos)
+    patient.avatar = image  # type: ignore[assignment]
+    patient.save(update_fields=["avatar", "updated_at"])
+    audit_record(
+        action=ActionType.PATIENT_UPDATE,
+        resource_type="Patient",
+        actor=user,
+        tenant=patient.tenant,
+        resource_id=patient.id,
+        resource_repr=patient.record_number,
+        metadata={"changed_fields": ["avatar"]},
+    )
+    return patient
+
+
+def patient_clear_avatar(*, patient: Patient, user: "User") -> Patient:  # type: ignore[valid-type]
+    """Elimina la foto del paciente."""
+    if patient.avatar:
+        patient.avatar.delete(save=False)
+    patient.avatar = None  # type: ignore[assignment]
+    patient.save(update_fields=["avatar", "updated_at"])
+    audit_record(
+        action=ActionType.PATIENT_UPDATE,
+        resource_type="Patient",
+        actor=user,
+        tenant=patient.tenant,
+        resource_id=patient.id,
+        resource_repr=patient.record_number,
+        metadata={"changed_fields": ["avatar"], "cleared": True},
+    )
+    return patient
+
+
+# ---------------------------------------------------------------------------
 # patient_deactivate
 # ---------------------------------------------------------------------------
 

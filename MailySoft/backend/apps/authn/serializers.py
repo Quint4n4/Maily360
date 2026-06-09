@@ -73,6 +73,7 @@ class MeSerializer(serializers.Serializer):
     first_name = serializers.CharField(read_only=True)
     last_name = serializers.CharField(read_only=True)
     full_name = serializers.CharField(read_only=True)
+    avatar = serializers.ImageField(read_only=True)
     is_platform_staff = serializers.BooleanField(read_only=True)
     platform_role = serializers.CharField(read_only=True)
 

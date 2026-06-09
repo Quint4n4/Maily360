@@ -10,6 +10,7 @@ Ambos heredan de TenantAwareModel: tienen tenant FK, created_by, soft-delete, UU
 from django.db import models
 from django.db.models import Q
 
+from apps.core.files import patient_avatar_path
 from apps.core.models import TenantAwareModel
 
 
@@ -96,6 +97,12 @@ class Patient(TenantAwareModel):
             "True = expediente creado al vuelo desde la agenda con datos mínimos. "
             "Falta completar la información personal (fecha nac., sexo, etc.)."
         ),
+    )
+    avatar = models.ImageField(
+        upload_to=patient_avatar_path,
+        null=True,
+        blank=True,
+        help_text="Foto del paciente (opcional).",
     )
 
     class Meta:
