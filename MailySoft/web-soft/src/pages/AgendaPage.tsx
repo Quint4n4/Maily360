@@ -3,13 +3,14 @@ import { ChevronLeft, ChevronRight, CalendarCheck, Cake, FileText, CircleDollarS
 import Topbar from '../components/Topbar'
 import CrearEventoModal from '../components/agenda/CrearEventoModal'
 import DetalleCitaModal, { CitaDetalle, EstadoCita } from '../components/agenda/DetalleCitaModal'
-import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus } from '../hooks/agenda'
+import EventoDetalleModal from '../components/agenda/EventoDetalleModal'
+import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus, useAgendaBlocksForDay } from '../hooks/agenda'
 import {
   addDays, addMonths, formatLargo, formatMedio, formatFechaHora, localHM, localHHMM,
   durationMin, monthGrid, sameDay, toDayKey,
 } from '../lib/fecha'
 import { ApiError } from '../lib/http'
-import type { Appointment, AppointmentStatus } from '../types/agenda'
+import type { Appointment, AppointmentStatus, AgendaBlock } from '../types/agenda'
 import { useRole } from '../auth/RoleContext'
 import { puedeEditar } from '../auth/permisos'
 
@@ -55,6 +56,8 @@ export default function AgendaPage() {
     { hora: '09:00', consultorioId: null, consultorioName: '' },
   )
   const [citaSel, setCitaSel] = useState<Appointment | null>(null)
+  const [eventoSel, setEventoSel] = useState<AgendaBlock | null>(null)
+  const [modalMode, setModalMode] = useState<'cita' | 'block' | 'meeting'>('cita')
   const { role } = useRole()
   const editar = puedeEditar(role, 'agenda')
   const cambiarEstado = useChangeAppointmentStatus()
@@ -62,8 +65,10 @@ export default function AgendaPage() {
   const dayKey = toDayKey(selectedDate)
   const { data: apptData, isLoading: loadingCitas, isError } = useAppointmentsForDay(dayKey)
   const { data: consData, isLoading: loadingCons } = useConsultorios()
+  const { data: eventos } = useAgendaBlocksForDay(dayKey)
 
   const citas: Appointment[] = apptData?.results ?? []
+  const bloques: AgendaBlock[] = eventos ?? []
   const consultorios = (consData?.results ?? []).filter(c => c.is_active)
 
   // Columnas del tablero = consultorios; + "Sin consultorio" si hay citas sin asignar.
@@ -86,6 +91,7 @@ export default function AgendaPage() {
       consultorioId: col.id === NONE_COL ? null : col.id,
       consultorioName: col.id === NONE_COL ? '' : col.name,
     })
+    setModalMode('cita')
     setModalOpen(true)
   }
 
@@ -99,7 +105,7 @@ export default function AgendaPage() {
       consultorioColor: col?.color ?? '#C9A227',
       horario: `${localHHMM(a.starts_at)} – ${localHHMM(a.ends_at)}`,
       fecha: formatLargo(selectedDate),
-      motivo: a.reason,
+      motivo: a.appointment_type?.name || a.reason,
       especialidad: a.specialty,
       notas: a.notes,
       estadoInicial: ESTADO_MAP[a.status],
@@ -206,7 +212,7 @@ export default function AgendaPage() {
         <main className="glass-card flex-1 rounded-2xl overflow-hidden">
 
           {/* Título del día */}
-          <div className="px-5 py-3 border-b border-white/50 flex items-center justify-between">
+          <div className="px-5 py-3 border-b border-white/50 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
               <CalendarCheck className="w-4 h-4" style={{ color: '#C9A227' }} />
               {formatLargo(selectedDate)}
@@ -266,6 +272,45 @@ export default function AgendaPage() {
                   </div>
                 ))}
 
+                {/* Bloqueos / Reuniones (bandas) */}
+                {bloques.map(b => {
+                  const { h, m } = localHM(b.starts_at)
+                  const startIdx = b.all_day ? 0 : (h - 9) * 2 + (m >= 30 ? 1 : 0)
+                  if (startIdx >= SLOTS.length) return null
+                  const safeStart = Math.max(0, startIdx)
+                  const span = b.all_day
+                    ? SLOTS.length
+                    : Math.max(1, Math.min(SLOTS.length - safeStart, Math.round((durationMin(b.starts_at, b.ends_at) || 30) / 30)))
+                  const ci = b.consultorio ? cols.findIndex(c => c.id === b.consultorio!.id) : -1
+                  const gridColumn = ci >= 0 ? `${ci + 2}` : `2 / span ${Math.max(1, cols.length)}`
+                  const esBloqueo = b.kind === 'block'
+                  const sub = b.doctor ? b.doctor.full_name : (b.consultorio ? b.consultorio.name : 'Toda la clínica')
+                  return (
+                    <div
+                      key={b.id}
+                      onClick={() => setEventoSel(b)}
+                      title="Ver / editar evento"
+                      className="relative m-0.5 rounded-xl px-3 py-1 overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer"
+                      style={{
+                        gridColumn,
+                        gridRow: `${safeStart + 1} / span ${span}`,
+                        background: esBloqueo
+                          ? 'repeating-linear-gradient(45deg, rgba(120,113,108,0.16), rgba(120,113,108,0.16) 9px, rgba(120,113,108,0.27) 9px, rgba(120,113,108,0.27) 18px)'
+                          : 'rgba(58,110,165,0.16)',
+                        border: esBloqueo ? '1px dashed rgba(120,113,108,0.55)' : '1px solid rgba(58,110,165,0.45)',
+                        zIndex: 3,
+                      }}
+                    >
+                      <p className="text-[11px] font-bold truncate w-full" style={{ color: esBloqueo ? '#6B7280' : '#3A6EA5' }}>
+                        {b.title || b.kind_display}
+                      </p>
+                      <p className="text-[10px] truncate w-full" style={{ color: '#9CA3AF' }}>
+                        {esBloqueo ? 'Bloqueado' : 'Reunión'} · {sub}
+                      </p>
+                    </div>
+                  )
+                })}
+
                 {/* Citas */}
                 {citas.map(a => {
                   const { h, m } = localHM(a.starts_at)
@@ -277,6 +322,9 @@ export default function AgendaPage() {
                   if (ci < 0) return null
                   const col = cols[ci]
                   const est = estiloEstado(a.status)
+                  // Color del TIPO de cita: tiñe toda la tarjeta (gris si no tiene tipo).
+                  const tipoColor = a.appointment_type?.color_hex || '#9A958C'
+                  const subtitulo = a.appointment_type?.name || a.reason || ''
                   return (
                     <div
                       key={a.id}
@@ -285,16 +333,18 @@ export default function AgendaPage() {
                       style={{
                         gridColumn: ci + 2,
                         gridRow: `${startIdx + 1} / span ${span}`,
-                        background: 'rgba(255,255,255,0.82)',
+                        background: `${tipoColor}26`,
+                        borderLeft: `4px solid ${tipoColor}`,
                         backdropFilter: 'blur(6px)',
                         boxShadow: '0 2px 10px rgba(60,42,12,0.12)',
                         zIndex: 5,
                       }}
                     >
+                      {/* punto del consultorio (la columna también lo indica) */}
                       <span className="absolute top-2.5 right-3 w-2.5 h-2.5 rounded-full"
                         style={{ background: col.color, boxShadow: `0 0 0 3px ${col.color}22` }} />
-                      <p className="text-xs font-semibold text-gray-800 leading-tight truncate w-full px-3">{a.patient.full_name}</p>
-                      <p className="text-[11px] text-gray-500 truncate w-full">{a.reason}</p>
+                      <p className="text-xs font-semibold text-gray-900 leading-tight truncate w-full px-3">{a.patient.full_name}</p>
+                      {subtitulo && <p className="text-[11px] font-medium truncate w-full" style={{ color: tipoColor }}>{subtitulo}</p>}
                       {span >= 2 && (
                         <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
                           style={{ background: est.bg, color: est.color }}>
@@ -318,6 +368,7 @@ export default function AgendaPage() {
         horaInicio={slotSel.hora}
         consultorioId={slotSel.consultorioId}
         consultorioName={slotSel.consultorioName}
+        initialMode={modalMode}
       />
 
       <DetalleCitaModal
@@ -326,6 +377,12 @@ export default function AgendaPage() {
         soloLectura={!editar}
         onCambiarEstado={handleCambiarEstado}
         cambiando={cambiarEstado.isPending}
+      />
+
+      <EventoDetalleModal
+        evento={eventoSel}
+        onClose={() => setEventoSel(null)}
+        soloLectura={!editar}
       />
     </div>
   )

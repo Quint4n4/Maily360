@@ -3,25 +3,29 @@ import { Plus, MapPin, Pencil, Trash2, Loader2 } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import NuevoConsultorioDrawer, { ConsultorioEdit } from '../components/personal/NuevoConsultorioDrawer'
 import NuevoMiembroDrawer from '../components/personal/NuevoMiembroDrawer'
+import NuevoTipoCitaDrawer, { TipoCitaEdit } from '../components/personal/NuevoTipoCitaDrawer'
 import EquipoTab from '../components/personal/EquipoTab'
+import TiposCitaTab from '../components/personal/TiposCitaTab'
 import { useConsultoriosManage, useDeactivateConsultorio } from '../hooks/personal'
 import type { Consultorio as ConsultorioApi } from '../types/personal'
 import { useRole } from '../auth/RoleContext'
 import { puedeEditar } from '../auth/permisos'
 
-type Tab = 'equipo' | 'consultorios'
-const TAB_LABEL: Record<Tab, string> = { equipo: 'Equipo', consultorios: 'Consultorios' }
+type Tab = 'equipo' | 'consultorios' | 'tipos'
+const TAB_LABEL: Record<Tab, string> = { equipo: 'Equipo', consultorios: 'Consultorios', tipos: 'Tipos de cita' }
 
 export default function PersonalPage() {
   const { role } = useRole()
   const editar = puedeEditar(role, 'personal')
   const gestor = role === 'owner' || role === 'admin'
 
-  const tabs: Tab[] = gestor ? ['equipo', 'consultorios'] : ['consultorios']
+  const tabs: Tab[] = gestor ? ['equipo', 'consultorios', 'tipos'] : ['consultorios', 'tipos']
   const [tab, setTab]               = useState<Tab>(gestor ? 'equipo' : 'consultorios')
   const [nuevoConsul, setNuevoCons] = useState(false)
   const [nuevoMiembro, setNuevoMi]  = useState(false)
+  const [nuevoTipo, setNuevoTipo]   = useState(false)
   const [editConsul, setEditConsul] = useState<ConsultorioEdit | null>(null)
+  const [editTipo, setEditTipo]     = useState<TipoCitaEdit | null>(null)
 
   const consultoriosQ = useConsultoriosManage()
   const bajaConsul = useDeactivateConsultorio()
@@ -35,8 +39,12 @@ export default function PersonalPage() {
     bajaConsul.mutate(c.id)
   }
 
-  const nuevoSegunTab = () => (tab === 'equipo' ? setNuevoMi(true) : setNuevoCons(true))
-  const labelNuevo = tab === 'equipo' ? 'Nuevo miembro' : 'Nuevo consultorio'
+  const nuevoSegunTab = () => {
+    if (tab === 'equipo') setNuevoMi(true)
+    else if (tab === 'consultorios') setNuevoCons(true)
+    else setNuevoTipo(true)
+  }
+  const labelNuevo = tab === 'equipo' ? 'Nuevo miembro' : tab === 'consultorios' ? 'Nuevo consultorio' : 'Nuevo tipo'
 
   return (
     <div className="min-h-screen relative">
@@ -87,6 +95,9 @@ export default function PersonalPage() {
 
         {/* ════ Equipo (roles → miembros → ficha) ════ */}
         {tab === 'equipo' && <EquipoTab enabled={gestor} />}
+
+        {/* ════ Tipos de cita ════ */}
+        {tab === 'tipos' && <TiposCitaTab editar={editar} onEditar={t => setEditTipo(t)} />}
 
         {/* ════ Consultorios ════ */}
         {tab === 'consultorios' && (
@@ -153,6 +164,8 @@ export default function PersonalPage() {
       <NuevoMiembroDrawer open={nuevoMiembro} onClose={() => setNuevoMi(false)} />
       <NuevoConsultorioDrawer open={nuevoConsul} onClose={() => setNuevoCons(false)} />
       <NuevoConsultorioDrawer open={editConsul !== null} editing={editConsul} onClose={() => setEditConsul(null)} />
+      <NuevoTipoCitaDrawer open={nuevoTipo} onClose={() => setNuevoTipo(false)} />
+      <NuevoTipoCitaDrawer open={editTipo !== null} editing={editTipo} onClose={() => setEditTipo(null)} />
     </div>
   )
 }
