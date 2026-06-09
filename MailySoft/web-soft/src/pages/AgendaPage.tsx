@@ -4,6 +4,7 @@ import Topbar from '../components/Topbar'
 import CrearEventoModal from '../components/agenda/CrearEventoModal'
 import DetalleCitaModal, { CitaDetalle, EstadoCita } from '../components/agenda/DetalleCitaModal'
 import EventoDetalleModal from '../components/agenda/EventoDetalleModal'
+import RecordatoriosWidget from '../components/agenda/RecordatoriosWidget'
 import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus, useAgendaBlocksForDay } from '../hooks/agenda'
 import {
   addDays, addMonths, formatLargo, formatMedio, formatFechaHora, localHM, localHHMM,
@@ -194,6 +195,9 @@ export default function AgendaPage() {
               <button onClick={() => setSelectedDate(d => addMonths(d, 1))} className="text-gray-600 hover:text-gray-800">Mes sig.</button>
             </div>
           </div>
+
+          {/* Mis recordatorios (personal, del día seleccionado) */}
+          <RecordatoriosWidget dayKey={dayKey} />
 
           {/* Accesos rápidos */}
           <div className="glass-card rounded-2xl overflow-hidden">
