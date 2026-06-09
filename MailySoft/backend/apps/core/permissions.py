@@ -218,6 +218,7 @@ class MemberPermission(HasClinicRole):
         "GET": MANAGE_ROLES,
         "POST": MANAGE_ROLES,
         "PATCH": MANAGE_ROLES,
+        "DELETE": MANAGE_ROLES,  # quitar avatar de un miembro
     }
 
 
