@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle } from 'lucide-react'
+import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle, AlertTriangle } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import NuevoPacienteDrawer from '../components/contactos/NuevoPacienteDrawer'
 import EditarPacienteDrawer from '../components/contactos/EditarPacienteDrawer'
 import ExpedienteDrawer from '../components/contactos/ExpedienteDrawer'
 import { usePatients, useDeactivatePatient } from '../hooks/pacientes'
-import { initialsOf, SEX_LABEL } from '../lib/paciente'
+import { initialsOf } from '../lib/paciente'
 import type { PatientOut } from '../types/paciente'
 import { useRole } from '../auth/RoleContext'
 import { puedeEditar, puedeVerExpedienteClinico } from '../auth/permisos'
@@ -139,13 +139,23 @@ export default function ContactosPage() {
                       style={{ background: 'rgba(201,162,39,0.16)', color: '#B8860B' }}>
                       {initialsOf(p)}
                     </div>
-                    <span className={`badge ${p.is_active ? 'badge-success' : 'badge-neutral'}`}>
-                      {p.is_active ? 'Activo' : 'Inactivo'}
-                    </span>
+                    {p.is_provisional ? (
+                      <span className="badge" style={{ background: '#FBF1D9', color: '#9A7B1E' }}>Por completar</span>
+                    ) : (
+                      <span className={`badge ${p.is_active ? 'badge-success' : 'badge-neutral'}`}>
+                        {p.is_active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="text-base font-semibold text-gray-900 leading-tight truncate">{p.full_name}</h3>
-                  <p className="text-xs text-gray-400 mb-3">{p.sex_display || SEX_LABEL[p.sex]}</p>
+                  {p.is_provisional ? (
+                    <div className="flex items-center gap-1 text-[11px] mb-3" style={{ color: '#9A7B1E' }}>
+                      <AlertTriangle className="w-3 h-3 shrink-0" /> Falta completar datos personales
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 mb-3">{p.sex_display || '—'}</p>
+                  )}
 
                   <div className="space-y-1.5 pt-3 border-t border-white/50">
                     <div className="flex items-center gap-2 text-xs text-gray-600">

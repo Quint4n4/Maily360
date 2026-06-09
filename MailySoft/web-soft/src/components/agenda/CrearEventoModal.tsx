@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, AlertCircle, Loader2, Search } from 'lucide-react'
-import { usePatients } from '../../hooks/pacientes'
+import { X, AlertCircle, Loader2, Search, Info } from 'lucide-react'
+import { usePatients, useCreatePatientQuick } from '../../hooks/pacientes'
 import { useDoctors, useConsultorios, useCreateAppointment } from '../../hooks/agenda'
 import { combineToISO } from '../../lib/fecha'
 import { ApiError } from '../../lib/http'
 
 type TipoCita = 'Primera vez' | 'Subsecuente' | 'Urgente'
+type ModoPaciente = 'existente' | 'nuevo'
 
 interface CrearEventoModalProps {
   open: boolean
@@ -36,6 +37,12 @@ function erroresDe(err: unknown): string[] {
   return msgs.length ? msgs : [`Error ${err.status}.`]
 }
 
+/** Parte un texto "Nombre Paterno Materno" en sus campos. */
+function partirNombre(texto: string): { nombre: string; paterno: string; materno: string } {
+  const w = texto.trim().split(/\s+/).filter(Boolean)
+  return { nombre: w[0] ?? '', paterno: w[1] ?? '', materno: w.slice(2).join(' ') }
+}
+
 function Pill({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
@@ -51,9 +58,16 @@ function Pill({ label, selected, onClick }: { label: string; selected: boolean; 
 export default function CrearEventoModal({
   open, onClose, dayKey, fechaLarga, horaInicio, consultorioId, consultorioName,
 }: CrearEventoModalProps) {
+  const [modo, setModo] = useState<ModoPaciente>('existente')
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [pacienteId, setPacienteId] = useState('')
+  // Campos del paciente nuevo (provisional).
+  const [npNombre, setNpNombre] = useState('')
+  const [npPaterno, setNpPaterno] = useState('')
+  const [npMaterno, setNpMaterno] = useState('')
+  const [npTel, setNpTel] = useState('')
+
   const [doctorId, setDoctorId] = useState('')
   const [consId, setConsId] = useState<string>('')
   const [duracion, setDuracion] = useState(30)
@@ -65,6 +79,8 @@ export default function CrearEventoModal({
   const { data: docData } = useDoctors()
   const { data: consData } = useConsultorios()
   const crear = useCreateAppointment()
+  const crearRapido = useCreatePatientQuick()
+  const guardando = crear.isPending || crearRapido.isPending
 
   const pacientes = pacData?.results ?? []
   const doctores = (docData?.results ?? []).filter(d => d.is_active)
@@ -84,26 +100,55 @@ export default function CrearEventoModal({
   }, [open, consultorioId])
 
   const reset = () => {
-    setSearch(''); setDebounced(''); setPacienteId(''); setDoctorId('')
+    setModo('existente'); setSearch(''); setDebounced(''); setPacienteId('')
+    setNpNombre(''); setNpPaterno(''); setNpMaterno(''); setNpTel('')
     setDuracion(30); setTipo(null); setNotas(''); setErrores([])
   }
   const cerrar = () => { reset(); onClose() }
 
+  // Cambiar a "paciente nuevo": precargar campos partiendo lo que escribió en la búsqueda.
+  const activarNuevo = () => {
+    if (!npNombre && !npPaterno && search.trim()) {
+      const p = partirNombre(search)
+      setNpNombre(p.nombre); setNpPaterno(p.paterno); setNpMaterno(p.materno)
+    }
+    setModo('nuevo')
+  }
+
   const guardar = async () => {
     setErrores([])
     const faltan: string[] = []
-    if (!pacienteId) faltan.push('Selecciona un paciente.')
+    let patientId = pacienteId
+
+    if (modo === 'existente') {
+      if (!pacienteId) faltan.push('Selecciona un paciente.')
+    } else {
+      if (!npNombre.trim()) faltan.push('El nombre del paciente es obligatorio.')
+      if (!npPaterno.trim()) faltan.push('El apellido paterno es obligatorio.')
+    }
     if (!doctorId) faltan.push('Selecciona un doctor.')
     if (!tipo) faltan.push('Indica el tipo de cita.')
     if (faltan.length) { setErrores(faltan); return }
 
-    const startISO = combineToISO(dayKey, horaInicio)
-    const endISO = new Date(new Date(startISO).getTime() + duracion * 60_000).toISOString()
-    const doctorSel = doctores.find(d => d.id === doctorId)
-
     try {
+      // 1) Si es paciente nuevo, crear expediente provisional primero.
+      if (modo === 'nuevo') {
+        const nuevo = await crearRapido.mutateAsync({
+          first_name: npNombre.trim(),
+          paternal_surname: npPaterno.trim(),
+          maternal_surname: npMaterno.trim(),
+          phone: npTel.trim(),
+        })
+        patientId = nuevo.id
+      }
+
+      // 2) Crear la cita.
+      const startISO = combineToISO(dayKey, horaInicio)
+      const endISO = new Date(new Date(startISO).getTime() + duracion * 60_000).toISOString()
+      const doctorSel = doctores.find(d => d.id === doctorId)
+
       await crear.mutateAsync({
-        patient_id: pacienteId,
+        patient_id: patientId,
         doctor_id: doctorId,
         consultorio_id: consId || null,
         starts_at: startISO,
@@ -167,17 +212,45 @@ export default function CrearEventoModal({
                 </div>
               )}
 
-              {/* Paciente */}
+              {/* Paciente: existente o nuevo */}
               <div>
                 <label className={LABEL}>Paciente</label>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar paciente…" className={`${INPUT} pl-10`} />
+                <div className="flex gap-2 mb-3">
+                  <Pill label="Paciente existente" selected={modo === 'existente'} onClick={() => setModo('existente')} />
+                  <Pill label="Paciente nuevo" selected={modo === 'nuevo'} onClick={activarNuevo} />
                 </div>
-                <select value={pacienteId} onChange={e => setPacienteId(e.target.value)} className={INPUT}>
-                  <option value="">{loadingPac ? 'Cargando…' : 'Selecciona un paciente…'}</option>
-                  {pacientes.map(p => <option key={p.id} value={p.id}>{p.full_name} · {p.record_number}</option>)}
-                </select>
+
+                {modo === 'existente' ? (
+                  <>
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar paciente…" className={`${INPUT} pl-10`} />
+                    </div>
+                    <select value={pacienteId} onChange={e => setPacienteId(e.target.value)} className={INPUT}>
+                      <option value="">{loadingPac ? 'Cargando…' : 'Selecciona un paciente…'}</option>
+                      {pacientes.map(p => <option key={p.id} value={p.id}>{p.full_name} · {p.record_number}</option>)}
+                    </select>
+                    {!loadingPac && debounced && pacientes.length === 0 && (
+                      <button type="button" onClick={activarNuevo}
+                        className="mt-2 text-xs font-medium hover:underline" style={{ color: '#B8860B' }}>
+                        ¿No aparece? Crea «{search.trim()}» como paciente nuevo →
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-xl p-3 space-y-3" style={{ background: 'rgba(201,162,39,0.08)', border: '1px solid rgba(201,162,39,0.25)' }}>
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#C9A227' }} />
+                      <p className="text-xs text-amber-800">Se creará un <b>expediente provisional</b>. Completa sus datos personales después en Contactos.</p>
+                    </div>
+                    <input value={npNombre} onChange={e => setNpNombre(e.target.value)} placeholder="Nombre(s)" className={INPUT} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input value={npPaterno} onChange={e => setNpPaterno(e.target.value)} placeholder="Apellido paterno" className={INPUT} />
+                      <input value={npMaterno} onChange={e => setNpMaterno(e.target.value)} placeholder="Apellido materno" className={INPUT} />
+                    </div>
+                    <input value={npTel} onChange={e => setNpTel(e.target.value)} placeholder="Teléfono (opcional)" className={INPUT} />
+                  </div>
+                )}
               </div>
 
               {/* Doctor + consultorio */}
@@ -229,14 +302,14 @@ export default function CrearEventoModal({
 
             {/* Pie */}
             <div className="px-7 py-4 flex items-center justify-between border-t border-white/40" style={{ background: 'rgba(255,255,255,0.25)' }}>
-              <button onClick={cerrar} disabled={crear.isPending} className="btn-secondary disabled:opacity-60">Cancelar</button>
+              <button onClick={cerrar} disabled={guardando} className="btn-secondary disabled:opacity-60">Cancelar</button>
               <button
                 onClick={guardar}
-                disabled={crear.isPending}
+                disabled={guardando}
                 className="px-8 py-2.5 inline-flex items-center gap-2 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
                 style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
               >
-                {crear.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Agendando…</> : 'Agendar cita'}
+                {guardando ? <><Loader2 className="w-4 h-4 animate-spin" /> Agendando…</> : 'Agendar cita'}
               </button>
             </div>
           </motion.div>

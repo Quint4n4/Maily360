@@ -20,20 +20,20 @@ export function useAppointmentsForDay(dayKey: string) {
   })
 }
 
-/** Catálogo de doctores (cambia poco → staleTime alto). */
+/** Catálogo de doctores activos (cambia poco → staleTime alto). */
 export function useDoctors() {
   return useQuery({
-    queryKey: ['personal', 'doctores'],
-    queryFn: listDoctors,
+    queryKey: ['personal', 'doctores', 'activos'],
+    queryFn: () => listDoctors(true),
     staleTime: 5 * 60_000,
   })
 }
 
-/** Catálogo de consultorios (cambia poco → staleTime alto). */
+/** Catálogo de consultorios activos (cambia poco → staleTime alto). */
 export function useConsultorios() {
   return useQuery({
-    queryKey: ['personal', 'consultorios'],
-    queryFn: listConsultorios,
+    queryKey: ['personal', 'consultorios', 'activos'],
+    queryFn: () => listConsultorios(true),
     staleTime: 5 * 60_000,
   })
 }

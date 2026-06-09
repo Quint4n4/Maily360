@@ -15,6 +15,7 @@ import type {
   Paginated,
   PatientCreateInput,
   PatientOut,
+  PatientQuickCreateInput,
   PatientUpdateInput,
 } from '../types/paciente'
 
@@ -40,6 +41,11 @@ export async function getPatient(id: string): Promise<PatientOut> {
 /** POST /pacientes/ — crea un paciente. El número de expediente lo asigna el backend. */
 export async function createPatient(input: PatientCreateInput): Promise<PatientOut> {
   return request<PatientOut>('/pacientes/', { method: 'POST', body: input })
+}
+
+/** POST /pacientes/rapido/ — alta provisional con datos mínimos (desde la agenda). */
+export async function createPatientQuick(input: PatientQuickCreateInput): Promise<PatientOut> {
+  return request<PatientOut>('/pacientes/rapido/', { method: 'POST', body: input })
 }
 
 /** PATCH /pacientes/<id>/ — actualización parcial. */

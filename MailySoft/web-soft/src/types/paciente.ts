@@ -13,8 +13,8 @@ export interface PatientOut {
   first_name: string
   paternal_surname: string
   maternal_surname: string
-  date_of_birth: string // ISO yyyy-mm-dd
-  sex: Sex
+  date_of_birth: string | null // ISO yyyy-mm-dd; null en provisionales
+  sex: Sex | '' // '' en provisionales
   sex_display: string
   curp: string
   phone: string
@@ -22,7 +22,17 @@ export interface PatientOut {
   record_number: string
   notes: string
   is_active: boolean
+  /** true = expediente provisional creado al vuelo desde la agenda; faltan datos personales. */
+  is_provisional: boolean
   created_at: string // ISO datetime
+}
+
+/** Cuerpo para el alta rápida/provisional (POST /pacientes/rapido/). */
+export interface PatientQuickCreateInput {
+  first_name: string
+  paternal_surname: string
+  maternal_surname?: string
+  phone?: string
 }
 
 /** Cuerpo para crear un paciente (POST). El expediente lo asigna el backend. */

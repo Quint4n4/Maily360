@@ -1,10 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Phone, Mail, Fingerprint, Pencil, CalendarPlus,
-  CalendarClock, StickyNote, ClipboardList, Lock, UserX, Loader2,
+  CalendarClock, StickyNote, ClipboardList, Lock, UserX, Loader2, AlertTriangle,
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
-import { initialsOf, edad, SEX_LABEL } from '../../lib/paciente'
+import { initialsOf, edad } from '../../lib/paciente'
 
 interface ExpedienteDrawerProps {
   paciente: PatientOut | null
@@ -53,7 +53,7 @@ export default function ExpedienteDrawer({
   paciente, onClose, verClinico = true,
   puedeEditar = false, onEditar, onDarDeBaja, dandoDeBaja = false,
 }: ExpedienteDrawerProps) {
-  const years = paciente ? edad(paciente.date_of_birth) : null
+  const years = paciente ? edad(paciente.date_of_birth ?? '') : null
   return (
     <AnimatePresence>
       {paciente && (
@@ -81,6 +81,20 @@ export default function ExpedienteDrawer({
 
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-700/70 mb-5">Expediente del paciente</p>
 
+            {/* Aviso de expediente provisional */}
+            {paciente.is_provisional && (
+              <div className="flex items-start gap-3 rounded-2xl px-5 py-4 mb-5" style={{ background: '#FBF1D9', border: '1px solid rgba(201,162,39,0.4)' }}>
+                <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#9A7B1E' }} />
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: '#9A7B1E' }}>Expediente provisional</p>
+                  <p className="text-xs" style={{ color: '#9A7B1E' }}>
+                    Este paciente se creó al agendar con datos mínimos. Falta completar su información personal
+                    (fecha de nacimiento, sexo, contacto). {puedeEditar ? 'Usa “Editar” para completarlo.' : ''}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* ════ Grid principal: cards alrededor del rostro ════ */}
             <div className="grid gap-5 items-stretch" style={{ gridTemplateColumns: '1fr 1.15fr 1fr' }}>
 
@@ -101,9 +115,9 @@ export default function ExpedienteDrawer({
 
                 <Card title="Identificación" icon={Fingerprint}>
                   <Linea label="CURP" value={paciente.curp} />
-                  <Linea label="Nacimiento" value={paciente.date_of_birth} />
+                  <Linea label="Nacimiento" value={paciente.date_of_birth ?? ''} />
                   <Linea label="Edad" value={years !== null ? `${years} años` : '—'} />
-                  <Linea label="Sexo" value={paciente.sex_display || SEX_LABEL[paciente.sex]} />
+                  <Linea label="Sexo" value={paciente.sex_display || '—'} />
                 </Card>
               </div>
 

@@ -1,23 +1,78 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check } from 'lucide-react'
+import { X, Check, AlertCircle, Loader2 } from 'lucide-react'
+import { useCreateConsultorio, useUpdateConsultorio } from '../../hooks/personal'
+import { ApiError } from '../../lib/http'
+
+export interface ConsultorioEdit {
+  id: string
+  name: string
+  location: string
+  color_hex: string
+}
 
 interface Props {
   open: boolean
   onClose: () => void
+  /** Si se provee, el drawer entra en modo edición (PATCH). */
+  editing?: ConsultorioEdit | null
 }
 
 const COLORES = ['#C9A227', '#3A6EA5', '#2E7D5B', '#B23A48', '#7E57C2', '#E8924E', '#0E9594', '#8A6A14']
 
-export default function NuevoConsultorioDrawer({ open, onClose }: Props) {
-  const [nombre, setNombre]   = useState('')
-  const [ubicacion, setUbic]  = useState('')
-  const [color, setColor]     = useState(COLORES[0])
+function erroresDe(err: unknown): string[] {
+  if (!(err instanceof ApiError)) return ['No se pudo guardar el consultorio.']
+  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
+  const body = err.body
+  if (!body) return [`Error ${err.status}.`]
+  const msgs: string[] = []
+  for (const [campo, valor] of Object.entries(body)) {
+    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
+    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
+  }
+  return msgs.length ? msgs : [`Error ${err.status}.`]
+}
 
-  const guardar = () => {
-    /* TODO: POST /api/v1/personal/consultorios/ */
-    alert('✅ Consultorio guardado (demo)')
-    onClose()
+export default function NuevoConsultorioDrawer({ open, onClose, editing }: Props) {
+  const [nombre, setNombre]  = useState('')
+  const [ubicacion, setUbic] = useState('')
+  const [color, setColor]    = useState(COLORES[0])
+  const [errores, setErrores] = useState<string[]>([])
+  const crear = useCreateConsultorio()
+  const actualizar = useUpdateConsultorio()
+  const esEdicion = !!editing
+  const guardando = crear.isPending || actualizar.isPending
+
+  // Precargar al abrir (edición) o limpiar (alta).
+  useEffect(() => {
+    if (!open) return
+    setErrores([])
+    if (editing) {
+      setNombre(editing.name)
+      setUbic(editing.location)
+      setColor(editing.color_hex || COLORES[0])
+    } else {
+      setNombre(''); setUbic(''); setColor(COLORES[0])
+    }
+  }, [open, editing])
+
+  // Paleta: si el color guardado no está entre los presets, agrégalo.
+  const swatches = color && !COLORES.includes(color) ? [color, ...COLORES] : COLORES
+
+  const guardar = async () => {
+    setErrores([])
+    if (!nombre.trim()) { setErrores(['El nombre es obligatorio.']); return }
+    const payload = { name: nombre.trim(), location: ubicacion.trim(), color_hex: color }
+    try {
+      if (editing) {
+        await actualizar.mutateAsync({ id: editing.id, input: payload })
+      } else {
+        await crear.mutateAsync(payload)
+      }
+      onClose()
+    } catch (err) {
+      setErrores(erroresDe(err))
+    }
   }
 
   return (
@@ -34,11 +89,20 @@ export default function NuevoConsultorioDrawer({ open, onClose }: Props) {
             transition={{ type: 'tween', duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
             <div className="flex items-center justify-between px-6 py-5 border-b border-amber-900/10">
-              <h2 className="text-lg font-bold text-gray-900">Nuevo consultorio</h2>
+              <h2 className="text-lg font-bold text-gray-900">{esEdicion ? 'Editar consultorio' : 'Nuevo consultorio'}</h2>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors"><X className="w-5 h-5" /></button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              {errores.length > 0 && (
+                <div className="flex items-start gap-2.5 rounded-xl px-4 py-3" style={{ background: 'rgba(190,40,40,0.10)', border: '1px solid rgba(190,40,40,0.25)' }}>
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
+                  <ul className="text-xs text-red-700 space-y-0.5 list-disc list-inside">
+                    {errores.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </div>
+              )}
+
               <div>
                 <label className="label">Nombre</label>
                 <input className="input" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Consultorio 1" />
@@ -50,7 +114,7 @@ export default function NuevoConsultorioDrawer({ open, onClose }: Props) {
               <div>
                 <label className="label">Color en la agenda</label>
                 <div className="flex flex-wrap gap-2.5 mt-1">
-                  {COLORES.map(c => (
+                  {swatches.map(c => (
                     <button key={c} onClick={() => setColor(c)}
                       className="w-9 h-9 rounded-full flex items-center justify-center transition-transform hover:scale-110"
                       style={{ background: c, boxShadow: color === c ? `0 0 0 3px #fff, 0 0 0 5px ${c}` : 'none' }}>
@@ -71,11 +135,11 @@ export default function NuevoConsultorioDrawer({ open, onClose }: Props) {
             </div>
 
             <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-amber-900/10 bg-white/60">
-              <button onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
-              <button onClick={guardar}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+              <button onClick={onClose} disabled={guardando} className="btn-secondary flex-1 disabled:opacity-60">Cancelar</button>
+              <button onClick={guardar} disabled={guardando}
+                className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
                 style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
-                Guardar consultorio
+                {guardando ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : (esEdicion ? 'Guardar cambios' : 'Guardar consultorio')}
               </button>
             </div>
           </motion.aside>

@@ -6,11 +6,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createPatient,
+  createPatientQuick,
   deactivatePatient,
   listPatients,
   updatePatient,
 } from '../api/pacientes'
-import type { PatientCreateInput, PatientUpdateInput } from '../types/paciente'
+import type {
+  PatientCreateInput,
+  PatientQuickCreateInput,
+  PatientUpdateInput,
+} from '../types/paciente'
 
 /** Claves de caché. Todo lo de pacientes cuelga de ['pacientes']. */
 export const pacientesKeys = {
@@ -31,6 +36,15 @@ export function useCreatePatient() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: PatientCreateInput) => createPatient(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: pacientesKeys.all }),
+  })
+}
+
+/** Alta rápida/provisional. Invalida la lista al terminar. */
+export function useCreatePatientQuick() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PatientQuickCreateInput) => createPatientQuick(input),
     onSuccess: () => qc.invalidateQueries({ queryKey: pacientesKeys.all }),
   })
 }

@@ -42,7 +42,7 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
       first_name: paciente.first_name,
       paternal_surname: paciente.paternal_surname,
       maternal_surname: paciente.maternal_surname,
-      date_of_birth: paciente.date_of_birth,
+      date_of_birth: paciente.date_of_birth ?? '',
       sex: paciente.sex,
       phone: paciente.phone,
       email: paciente.email,
