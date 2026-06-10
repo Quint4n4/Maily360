@@ -9,6 +9,7 @@ Jerarquía de serializers para /me/:
     MeSerializer             — payload completo del endpoint /me/.
 """
 
+import uuid
 from typing import Optional
 
 from rest_framework import serializers
@@ -84,6 +85,9 @@ class MeSerializer(serializers.Serializer):
     active_role_display = serializers.SerializerMethodField()
     # Todas las membresías activas del usuario
     memberships = serializers.SerializerMethodField()
+    # UUID del Doctor del usuario si su rol activo es 'doctor'; null en cualquier otro caso.
+    # Permite que el frontend sepa "qué Doctor soy yo" sin hacer otra llamada.
+    doctor_id = serializers.SerializerMethodField()
 
     def get_active_tenant(self, obj: User) -> Optional[dict]:
         """Retorna la representación del tenant activo o null."""
@@ -110,3 +114,15 @@ class MeSerializer(serializers.Serializer):
         """Retorna la lista serializada de todas las membresías activas del usuario."""
         memberships: list[TenantMembership] = self.context.get("memberships", [])
         return _MembershipSerializer(memberships, many=True).data  # type: ignore[return-value]
+
+    def get_doctor_id(self, obj: User) -> Optional[str]:
+        """Retorna el UUID del Doctor del usuario si su rol activo es 'doctor'.
+
+        El valor se inyecta desde el contexto por MeApi.get() para no duplicar
+        lógica en el serializer. El serializer solo forma la salida.
+        Devuelve el UUID como string para consistencia con el resto de la API.
+        """
+        doctor_id: Optional[uuid.UUID] = self.context.get("doctor_id")
+        if doctor_id is None:
+            return None
+        return str(doctor_id)

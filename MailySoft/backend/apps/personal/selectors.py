@@ -9,10 +9,14 @@ Convención: keyword-only args, nombrado acción+entidad.
 """
 
 import uuid
+from typing import Optional
 
+from django.contrib.auth import get_user_model
 from django.db.models import Q, QuerySet
 
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
+
+_User = get_user_model()
 
 
 def doctor_get(*, doctor_id: uuid.UUID) -> Doctor:
@@ -26,19 +30,26 @@ def doctor_get(*, doctor_id: uuid.UUID) -> Doctor:
         doctor_id: UUID del Doctor a recuperar.
 
     Returns:
-        Instancia de Doctor con membership__user pre-cargado.
+        Instancia de Doctor con membership__user pre-cargado y consultorios
+        prefetchados (M2M) para evitar N+1 al serializar.
 
     Raises:
         Doctor.DoesNotExist: si el doctor no existe en el tenant activo.
     """
-    return Doctor.objects.select_related("membership__user").get(id=doctor_id)
+    return (
+        Doctor.objects
+        .select_related("membership__user")
+        .prefetch_related("consultorios")
+        .get(id=doctor_id)
+    )
 
 
 def doctor_list(*, search: str = "", only_active: bool = True) -> QuerySet[Doctor]:
     """Retorna el QuerySet de doctores del tenant actual.
 
     Evita N+1 con select_related("membership__user") para poder acceder
-    al full_name sin queries adicionales al serializar la lista.
+    al full_name sin queries adicionales, y prefetch_related("consultorios")
+    para el M2M de consultorios asignados.
 
     Args:
         search:      Término libre. Filtra por specialty, nombre, apellido o email
@@ -48,7 +59,11 @@ def doctor_list(*, search: str = "", only_active: bool = True) -> QuerySet[Docto
     Returns:
         QuerySet[Doctor] filtrado y ordenado. Sin paginar (paginación en la vista).
     """
-    qs: QuerySet[Doctor] = Doctor.objects.select_related("membership__user")
+    qs: QuerySet[Doctor] = (
+        Doctor.objects
+        .select_related("membership__user")
+        .prefetch_related("consultorios")
+    )
 
     if only_active:
         qs = qs.filter(is_active=True)
@@ -142,4 +157,44 @@ def schedule_list_for_doctor(*, doctor: Doctor) -> QuerySet[DoctorSchedule]:
         .select_related("consultorio")
         .filter(doctor=doctor, is_active=True)
         .order_by("day_of_week", "start_time")
+    )
+
+
+def doctor_get_for_user(
+    *,
+    user: "_User",  # type: ignore[valid-type]
+    tenant_id: uuid.UUID,
+) -> Optional[Doctor]:
+    """Retorna el Doctor activo del usuario en el tenant dado, o None.
+
+    Busca a través de la FK membership → TenantMembership → user, filtrando
+    por tenant_id explícitamente. Usa all_objects (no el TenantManager) porque
+    esta función puede llamarse sin contexto de tenant activo (p. ej. desde
+    appointment_create o desde /me/).
+
+    Solo retorna el Doctor si:
+    - La membresía es activa (is_active=True, deleted_at IS NULL).
+    - El Doctor no está soft-deleted (deleted_at IS NULL).
+    - El Doctor está activo (is_active=True).
+
+    Args:
+        user:      Usuario del que se busca el Doctor.
+        tenant_id: UUID del tenant en el que buscar.
+
+    Returns:
+        Instancia Doctor o None si el usuario no tiene un Doctor activo en
+        ese tenant.
+    """
+    return (
+        Doctor.all_objects
+        .filter(
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+            membership__user=user,
+            membership__is_active=True,
+            membership__deleted_at__isnull=True,
+        )
+        .select_related("membership__user")
+        .first()
     )

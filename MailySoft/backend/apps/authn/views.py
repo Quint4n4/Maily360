@@ -69,6 +69,10 @@ from apps.authn.serializers import MeSerializer
 from apps.core.tenant_context import resolve_membership_for_user, resolve_tenant_for_user
 from apps.tenancy.models import Tenant, TenantMembership
 
+# Import deferred to avoid circular imports at module load time.
+# doctor_get_for_user is called in MeApi.get() at request time.
+# This is the accepted pattern for cross-app selectors used in authn.
+
 logger = logging.getLogger("apps.authn.views")
 
 
@@ -353,6 +357,8 @@ class MeApi(APIView):
 
     def get(self, request: Request) -> Response:
         """Retorna el perfil del usuario autenticado."""
+        from apps.personal.selectors import doctor_get_for_user
+
         user: User = request.user  # type: ignore[assignment]
 
         # 1. Resolver el tenant activo del usuario.
@@ -370,13 +376,28 @@ class MeApi(APIView):
                     active_membership = m
                     break
 
-        # 4. Serializar y devolver.
+        # 4. Resolver el doctor_id si el rol activo es 'doctor'.
+        #    Solo se incluye si el usuario tiene rol 'doctor' en el tenant activo.
+        #    Para cualquier otro rol (owner, admin, reception, nurse…) será None.
+        import uuid as _uuid_mod
+        doctor_id: Optional[_uuid_mod.UUID] = None
+        if (
+            active_tenant is not None
+            and active_membership is not None
+            and active_membership.role == TenantMembership.Role.DOCTOR
+        ):
+            doctor = doctor_get_for_user(user=user, tenant_id=active_tenant.id)
+            if doctor is not None:
+                doctor_id = doctor.id
+
+        # 5. Serializar y devolver.
         serializer = MeSerializer(
             user,
             context={
                 "active_tenant": active_tenant,
                 "active_membership": active_membership,
                 "memberships": memberships,
+                "doctor_id": doctor_id,
             },
         )
         return Response(serializer.data)

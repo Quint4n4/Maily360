@@ -125,20 +125,26 @@ class TestDoctorListFilters:
     def test_doctor_list_uses_select_related_no_n_plus_1(
         self, db: None, django_assert_num_queries: Any
     ) -> None:
-        """Listar N doctores NO debe disparar N queries extra para acceder a full_name.
+        """Listar N doctores NO debe disparar N queries extra.
 
-        doctor_list() usa select_related('membership__user'). Verificamos que
-        acceder al full_name de cada doctor NO emite queries adicionales.
+        doctor_list() usa select_related('membership__user') y
+        prefetch_related('consultorios'). Se esperan exactamente 2 queries
+        para N doctores (una JOIN para el queryset + una para el prefetch M2M),
+        independientemente de N. Esto sigue siendo O(1) en queries, no O(N).
         """
         # Arrange — 5 doctores en el mismo tenant
         tenant = TenantFactory()
         DoctorFactory.create_batch(5, tenant=tenant, is_active=True)
 
-        # Act & Assert — exactamente 1 query (SELECT con JOIN) para traer los 5
-        with django_assert_num_queries(1):
+        # Act & Assert — exactamente 2 queries para N doctores:
+        #   1. SELECT personal_doctors JOIN tenancy_memberships JOIN authn_users
+        #   2. SELECT personal_doctors_consultorios (prefetch M2M)
+        with django_assert_num_queries(2):
             qs = doctor_list()
             # Forzar evaluación y acceso a la relación encadenada
             names = [d.full_name for d in qs]
+            # Acceso a consultorios (prefetchado, sin queries extra)
+            _ = [list(d.consultorios.all()) for d in qs]
 
         assert len(names) == 5
 

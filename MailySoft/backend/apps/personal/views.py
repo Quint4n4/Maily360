@@ -45,6 +45,7 @@ from apps.personal.services import (
     consultorio_update,
     doctor_create,
     doctor_deactivate,
+    doctor_set_consultorios,
     doctor_update,
     schedule_create,
     schedule_deactivate,
@@ -159,6 +160,10 @@ class DoctorDetailApi(TenantAPIView):
     """GET    /api/v1/personal/doctores/<uuid:doctor_id>/  — detalle de un médico.
     PATCH  /api/v1/personal/doctores/<uuid:doctor_id>/  — actualización parcial.
     DELETE /api/v1/personal/doctores/<uuid:doctor_id>/  — desactivación (soft).
+
+    El campo `consultorio_ids` en PATCH es opcional: si se provee, llama a
+    doctor_set_consultorios para reemplazar la lista completa de consultorios
+    asignados al médico. Una lista vacía [] elimina todas las restricciones.
     """
 
     permission_classes = [IsAuthenticated, PersonalPermission]
@@ -188,6 +193,15 @@ class DoctorDetailApi(TenantAPIView):
         # La (des)activación solo ocurre vía DELETE → doctor_deactivate.
         # Cualquier intento de cambiar is_active vía PATCH es rechazado
         # por _DOCTOR_IMMUTABLE_FIELDS en doctor_update (services.py).
+
+        # Asignación de consultorios (M2M): opcional.
+        # Si se provee, se llama a doctor_set_consultorios separado de doctor_update.
+        # Lista vacía = sin restricción de consultorio.
+        consultorio_ids = serializers.ListField(
+            child=serializers.UUIDField(),
+            required=False,
+            allow_empty=True,
+        )
 
     def _get_doctor_or_404(
         self, doctor_id: uuid.UUID
@@ -222,18 +236,36 @@ class DoctorDetailApi(TenantAPIView):
             )
 
         try:
-            updated_doctor = doctor_update(
-                doctor=doctor,  # type: ignore[arg-type]
-                user=request.user,
-                **s.validated_data,
+            # Separar el campo M2M (no va a doctor_update que usa setattr sobre campos de modelo).
+            consultorio_ids: "list[uuid.UUID] | None" = s.validated_data.pop(
+                "consultorio_ids", None
             )
+
+            # Actualizar campos escalares del doctor si vienen en el payload.
+            if s.validated_data:
+                doctor = doctor_update(
+                    doctor=doctor,  # type: ignore[arg-type]
+                    user=request.user,
+                    **s.validated_data,
+                )
+
+            # Actualizar la asignación M2M de consultorios si se envió el campo.
+            if consultorio_ids is not None:
+                doctor = doctor_set_consultorios(
+                    doctor=doctor,  # type: ignore[arg-type]
+                    user=request.user,
+                    consultorio_ids=consultorio_ids,
+                )
+
         except DjangoValidationError as exc:
             return Response(
                 {"detail": exc.messages},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(DoctorOutputSerializer(updated_doctor).data)
+        # Re-fetch con prefetch para que el serializer no haga N+1.
+        doctor = doctor_get(doctor_id=doctor.id)  # type: ignore[arg-type]
+        return Response(DoctorOutputSerializer(doctor).data)
 
     def delete(self, request: Request, doctor_id: uuid.UUID) -> Response:
         doctor, error_response = self._get_doctor_or_404(doctor_id)

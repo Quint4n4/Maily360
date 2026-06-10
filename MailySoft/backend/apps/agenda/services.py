@@ -54,7 +54,7 @@ from apps.audit.services import audit_record
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
 from apps.personal.models import Consultorio, Doctor
-from apps.personal.selectors import consultorio_get, doctor_get
+from apps.personal.selectors import consultorio_get, doctor_get, doctor_get_for_user
 from apps.tenancy.models import Tenant, TenantMembership
 
 logger = logging.getLogger("apps.agenda.services")
@@ -337,7 +337,53 @@ def appointment_create(
     if consultorio is not None and not consultorio.is_active:
         raise ValidationError("El consultorio no está activo.")
 
-    # -- 2c. Resolver y validar el tipo de cita (opcional)
+    # -- 2c. Regla A — un médico con rol 'doctor' solo puede agendar para sí mismo.
+    #
+    # Resolución del rol del usuario en ESTE tenant: buscamos su TenantMembership
+    # con is_active=True para el tenant dado. No usamos el contexto thread-local
+    # (que puede no estar poblado si el service se llama desde Celery/commands).
+    # Si no tiene membresía activa en este tenant, se asume que es un staff de
+    # plataforma (is_platform_staff) y se salta la restricción.
+    try:
+        caller_membership = TenantMembership.objects.get(
+            user=user,
+            tenant=tenant,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+        caller_role: Optional[str] = caller_membership.role
+    except TenantMembership.DoesNotExist:
+        caller_role = None
+
+    if caller_role == TenantMembership.Role.DOCTOR:
+        # Buscar el Doctor activo de este usuario en este tenant.
+        caller_doctor = doctor_get_for_user(user=user, tenant_id=tenant.id)
+        if caller_doctor is None:
+            raise ValidationError(
+                "No se encontró un perfil de médico activo para tu usuario en esta clínica."
+            )
+        if caller_doctor.id != doctor.id:
+            raise ValidationError(
+                "Como médico, solo puedes agendar citas para ti."
+            )
+
+    # -- 2d. Regla B — el consultorio de la cita debe estar asignado al médico.
+    #
+    # Si el doctor tiene consultorios asignados (M2M no vacío) y se pasó un
+    # consultorio_id, ese consultorio DEBE estar entre los del médico.
+    # Si el doctor no tiene consultorios asignados → sin restricción.
+    # Si consultorio_id es None (telemedicina/fuera) → regla no aplica.
+    if consultorio is not None:
+        # Evaluamos la existencia de asignaciones sin traer objetos completos.
+        assigned_ids = set(
+            doctor.consultorios.values_list("id", flat=True)
+        )
+        if assigned_ids and consultorio.id not in assigned_ids:
+            raise ValidationError(
+                "Ese consultorio no está asignado al médico."
+            )
+
+    # -- 2f. Resolver y validar el tipo de cita (opcional)
     appointment_type = None
     if appointment_type_id is not None:
         try:

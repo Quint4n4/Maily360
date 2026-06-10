@@ -63,6 +63,7 @@ class ActionType(models.TextChoices):
     DOCTOR_CREATE = "DOCTOR_CREATE", "Crear médico"
     DOCTOR_UPDATE = "DOCTOR_UPDATE", "Actualizar médico"
     DOCTOR_DEACTIVATE = "DOCTOR_DEACTIVATE", "Desactivar médico"
+    DOCTOR_CONSULTORIOS = "DOCTOR_CONSULTORIOS", "Asignar consultorios a médico"
     CONSULTORIO_CREATE = "CONSULTORIO_CREATE", "Crear consultorio"
     CONSULTORIO_UPDATE = "CONSULTORIO_UPDATE", "Actualizar consultorio"
     CONSULTORIO_DEACTIVATE = "CONSULTORIO_DEACTIVATE", "Desactivar consultorio"

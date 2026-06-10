@@ -16,17 +16,34 @@ from rest_framework import serializers
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
 
 
+class _ConsultorioMinimalSerializer(serializers.ModelSerializer):
+    """Representación mínima de Consultorio para el M2M del Doctor.
+
+    Se usa en DoctorOutputSerializer.consultorios para evitar N+1.
+    El queryset debe ser prefetched en el selector antes de serializar.
+    """
+
+    class Meta:
+        model = Consultorio
+        fields = ["id", "name"]
+        read_only_fields = fields
+
+
 class DoctorOutputSerializer(serializers.ModelSerializer):
     """Serializer de salida para Doctor.
 
-    Expone full_name (propiedad del modelo), y user_email / role derivados
-    de la membresía para que la UI los pueda mostrar sin una query extra.
+    Expone full_name (propiedad del modelo), user_email / role derivados
+    de la membresía, y la lista mínima de consultorios asignados ({id, name}).
     No expone membership_id directo (implementación interna).
+
+    Requiere que el queryset haya llamado prefetch_related("consultorios")
+    para evitar N+1 al listar múltiples doctores.
     """
 
     full_name = serializers.SerializerMethodField()
     user_email = serializers.CharField(source="membership.user.email", read_only=True)
     role = serializers.CharField(source="membership.role", read_only=True)
+    consultorios = _ConsultorioMinimalSerializer(many=True, read_only=True)
 
     def get_full_name(self, obj: Doctor) -> str:
         return obj.full_name
@@ -43,6 +60,7 @@ class DoctorOutputSerializer(serializers.ModelSerializer):
             "default_appointment_duration",
             "bio_short",
             "is_active",
+            "consultorios",
             "created_at",
         ]
         read_only_fields = fields

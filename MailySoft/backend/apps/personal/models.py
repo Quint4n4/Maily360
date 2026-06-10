@@ -67,6 +67,16 @@ class Doctor(TenantAwareModel):
         db_index=True,
         help_text="False = médico inactivo (soft). No borra el registro.",
     )
+    consultorios = models.ManyToManyField(
+        "personal.Consultorio",
+        blank=True,
+        related_name="doctores",
+        help_text=(
+            "Consultorios donde ESTE médico puede atender. "
+            "Vacío = sin restricción (puede usar cualquiera). "
+            "Todos deben pertenecer al mismo tenant que el doctor."
+        ),
+    )
 
     class Meta:
         db_table = "personal_doctors"

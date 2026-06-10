@@ -761,11 +761,19 @@ class TestAppointmentPermissionPOST:
     def test_post_cita_allowed(self, db: None, role: str) -> None:
         """owner, admin, doctor, reception reciben 201 al crear una cita."""
         # Arrange
+        from apps.tenancy.models import TenantMembership
+
         tenant = TenantFactory()
-        # Un doctor por role para que el exclusion constraint de anti-empalme no falle
-        doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         client, user = _make_member_client(tenant, role)
+
+        # Regla de negocio: un médico solo puede agendar para SÍ MISMO. Para el caso
+        # 'doctor', el perfil Doctor de la cita debe ser el del usuario que agenda.
+        if role == "doctor":
+            membership = TenantMembership.objects.get(user=user, tenant=tenant)
+            doctor = DoctorFactory(tenant=tenant, membership=membership)
+        else:
+            doctor = DoctorFactory(tenant=tenant)
 
         role_offset = {"owner": 0, "admin": 1, "doctor": 2, "reception": 3}
         starts = _BASE_DT + datetime.timedelta(hours=role_offset[role])

@@ -8,6 +8,7 @@ Convención: keyword-only args en toda firma, nombrado acción+entidad.
 """
 
 import datetime
+import uuid
 from typing import Optional
 
 from django.contrib.auth import get_user_model
@@ -198,6 +199,83 @@ def doctor_deactivate(
         tenant=doctor.tenant,
         resource_id=doctor.id,
         resource_repr=str(doctor),
+    )
+    return doctor
+
+
+def doctor_set_consultorios(
+    *,
+    doctor: Doctor,
+    user: "User",  # type: ignore[valid-type]
+    consultorio_ids: list[uuid.UUID],
+) -> Doctor:
+    """Fija (reemplaza) la lista de consultorios asignados al médico.
+
+    Una lista vacía elimina todas las restricciones de consultorio para ese
+    médico (puede usar cualquier consultorio del tenant).
+
+    Valida:
+    - Que cada consultorio exista y pertenezca al mismo tenant que el doctor.
+    - Que cada consultorio esté activo (un médico no puede atender en un
+      consultorio desactivado).
+
+    Usa doctor.consultorios.set() que es atómico: primero borra las asignaciones
+    anteriores y luego inserta las nuevas en una sola operación.
+
+    Args:
+        doctor:           Instancia Doctor a modificar.
+        user:             Usuario que realiza el cambio (para auditoría).
+        consultorio_ids:  Lista de UUIDs de Consultorio. Puede ser vacía para
+                          eliminar todas las restricciones.
+
+    Returns:
+        La instancia Doctor con la relación M2M actualizada.
+
+    Raises:
+        ValidationError: si algún consultorio no existe, no pertenece al tenant
+                         del doctor, o está desactivado.
+    """
+    if consultorio_ids:
+        # Recuperar los consultorios activos del mismo tenant en una sola query.
+        consultorios = list(
+            Consultorio.all_objects.filter(
+                id__in=consultorio_ids,
+                tenant_id=doctor.tenant_id,
+                deleted_at__isnull=True,
+            )
+        )
+
+        # Verificar que todos los IDs solicitados fueron encontrados.
+        found_ids = {c.id for c in consultorios}
+        missing = set(consultorio_ids) - found_ids
+        if missing:
+            raise ValidationError(
+                "Uno o más consultorios no existen en esta clínica: "
+                f"{', '.join(str(i) for i in missing)}."
+            )
+
+        # Verificar que todos estén activos.
+        inactive = [c for c in consultorios if not c.is_active]
+        if inactive:
+            names = ", ".join(c.name for c in inactive)
+            raise ValidationError(
+                f"Los siguientes consultorios están inactivos: {names}."
+            )
+    else:
+        consultorios = []
+
+    doctor.consultorios.set(consultorios)
+
+    audit_record(
+        action=ActionType.DOCTOR_CONSULTORIOS,
+        resource_type="Doctor",
+        actor=user,
+        tenant=doctor.tenant,
+        resource_id=doctor.id,
+        resource_repr=str(doctor),
+        metadata={
+            "consultorio_ids": [str(c_id) for c_id in consultorio_ids],
+        },
     )
     return doctor
 
