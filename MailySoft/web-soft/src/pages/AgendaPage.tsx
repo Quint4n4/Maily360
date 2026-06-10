@@ -6,7 +6,7 @@ import DetalleCitaModal, { CitaDetalle, EstadoCita } from '../components/agenda/
 import EventoDetalleModal from '../components/agenda/EventoDetalleModal'
 import RecordatoriosWidget from '../components/agenda/RecordatoriosWidget'
 import ReagendarModal from '../components/agenda/ReagendarModal'
-import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus, useAgendaBlocksForDay, useReactivateAppointment } from '../hooks/agenda'
+import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus, useAgendaBlocksForDay, useReactivateAppointment, useDoctors } from '../hooks/agenda'
 import {
   addDays, addMonths, formatLargo, formatMedio, formatFechaHora, localHM, localHHMM,
   durationMin, monthGrid, sameDay, toDayKey,
@@ -74,14 +74,22 @@ export default function AgendaPage() {
   const { data: apptData, isLoading: loadingCitas, isError } = useAppointmentsForDay(dayKey)
   const { data: consData, isLoading: loadingCons } = useConsultorios()
   const { data: eventos } = useAgendaBlocksForDay(dayKey)
+  const { data: docData } = useDoctors()
 
-  const citas: Appointment[] = apptData?.results ?? []
+  // Consultorios asignados al médico logueado (si los tiene).
+  const miDoctor = soyDoctor ? (docData?.results ?? []).find(d => d.id === user?.doctor_id) : undefined
+  const misConsultorioIds = (miDoctor?.consultorios ?? []).map(c => c.id)
+  const doctorRestringido = soyDoctor && misConsultorioIds.length > 0
+
   const bloques: AgendaBlock[] = eventos ?? []
-  const consultorios = (consData?.results ?? []).filter(c => c.is_active)
-  // Citas del médico logueado (para su cuadro "Mis citas de hoy").
-  const misCitas = soyDoctor
-    ? [...citas].filter(a => a.doctor.id === user?.doctor_id).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-    : []
+  // Un médico solo ve SUS citas; el resto ve todas.
+  const todasCitas: Appointment[] = apptData?.results ?? []
+  const citas: Appointment[] = soyDoctor ? todasCitas.filter(a => a.doctor.id === user?.doctor_id) : todasCitas
+  // Un médico con consultorios asignados solo ve ESOS consultorios; el resto, todos.
+  const consultoriosActivos = (consData?.results ?? []).filter(c => c.is_active)
+  const consultorios = doctorRestringido ? consultoriosActivos.filter(c => misConsultorioIds.includes(c.id)) : consultoriosActivos
+  // Citas del médico logueado, ordenadas (para su cuadro "Mis citas de hoy").
+  const misCitas = soyDoctor ? [...citas].sort((a, b) => a.starts_at.localeCompare(b.starts_at)) : []
 
   // Columnas del tablero = consultorios; + "Sin consultorio" si hay citas sin asignar.
   type Col = { id: string; name: string; color: string }
