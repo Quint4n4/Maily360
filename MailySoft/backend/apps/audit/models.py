@@ -51,6 +51,7 @@ class ActionType(models.TextChoices):
     APPOINTMENT_UPDATE = "APPOINTMENT_UPDATE", "Actualizar cita"
     APPOINTMENT_STATUS = "APPOINTMENT_STATUS", "Cambiar estado de cita"
     APPOINTMENT_RESCHEDULE = "APPOINTMENT_RESCHEDULE", "Reagendar cita"
+    APPOINTMENT_REACTIVATE = "APPOINTMENT_REACTIVATE", "Reactivar cita cancelada"
     APPOINTMENT_TYPE_CREATE = "APPOINTMENT_TYPE_CREATE", "Crear tipo de cita"
     APPOINTMENT_TYPE_UPDATE = "APPOINTMENT_TYPE_UPDATE", "Actualizar tipo de cita"
     APPOINTMENT_TYPE_DEACTIVATE = "APPOINTMENT_TYPE_DEACTIVATE", "Desactivar tipo de cita"

@@ -52,6 +52,7 @@ from apps.agenda.services import (
     agenda_item_note_delete,
     appointment_change_status,
     appointment_create,
+    appointment_reactivate,
     appointment_reschedule,
     appointment_type_create,
     appointment_type_deactivate,
@@ -363,6 +364,34 @@ class AppointmentRescheduleApi(TenantAPIView):
             )
 
         return Response(AppointmentOutputSerializer(updated).data)
+
+
+# ---------------------------------------------------------------------------
+# AppointmentReactivateApi
+# ---------------------------------------------------------------------------
+
+
+class AppointmentReactivateApi(TenantAPIView):
+    """POST /api/v1/agenda/citas/<appointment_id>/reactivar/
+
+    Reactiva una cita CANCELADA al mismo horario (vuelve a 'Agendada').
+    Revalida anti-empalme; si el hueco ya está ocupado, 400.
+    """
+
+    permission_classes = [IsAuthenticated, AppointmentPermission]
+
+    def post(self, request: Request, appointment_id: uuid.UUID) -> Response:
+        try:
+            appointment = appointment_get(appointment_id=appointment_id)
+        except Appointment.DoesNotExist:
+            return Response({"detail": "Cita no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            appointment = appointment_reactivate(appointment=appointment, user=request.user)
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(AppointmentOutputSerializer(appointment).data)
 
 
 # ---------------------------------------------------------------------------

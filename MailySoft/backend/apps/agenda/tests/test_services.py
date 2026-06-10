@@ -32,6 +32,7 @@ from apps.agenda.services import (
     agenda_config_update,
     appointment_change_status,
     appointment_create,
+    appointment_reactivate,
     appointment_reschedule,
 )
 from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
@@ -796,14 +797,16 @@ class TestAppointmentReschedule:
             Appointment.Status.ARRIVED,
             Appointment.Status.IN_PROGRESS,
             Appointment.Status.ATTENDED,
-            Appointment.Status.CANCELLED,
             Appointment.Status.NO_SHOW,
         ],
     )
-    def test_appointment_reschedule_only_from_scheduled_or_confirmed(
+    def test_appointment_reschedule_rejects_non_reagendable(
         self, db: None, non_reagendable_status: str
     ) -> None:
-        """Reagendar citas en estado distinto a SCHEDULED/CONFIRMED lanza ValidationError."""
+        """Reagendar citas en estado en curso/terminal (no cancelada) lanza ValidationError.
+
+        SCHEDULED/CONFIRMED y CANCELLED sí son reagendables (cancelada = reactivar+mover).
+        """
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
@@ -817,11 +820,61 @@ class TestAppointmentReschedule:
         user = UserFactory()
 
         # Act & Assert
-        with pytest.raises(ValidationError, match="[Ss]olo"):
+        with pytest.raises(ValidationError, match="reagendar"):
             appointment_reschedule(
                 appointment=appt, user=user,
                 starts_at=_BASE_DT + datetime.timedelta(days=1)
             )
+
+    def test_appointment_reschedule_reactivates_cancelled(self, db: None) -> None:
+        """Reagendar una cita CANCELADA la reactiva (vuelve a Agendada) en el nuevo horario."""
+        tenant = TenantFactory()
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+        appt = AppointmentFactory(
+            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            status=Appointment.Status.CANCELLED,
+            cancellation_reason="me equivoqué",
+            starts_at=_BASE_DT,
+            ends_at=_BASE_DT + datetime.timedelta(hours=1),
+        )
+        user = UserFactory()
+
+        nuevo = appointment_reschedule(
+            appointment=appt, user=user,
+            starts_at=_BASE_DT + datetime.timedelta(days=1),
+        )
+
+        assert nuevo.status == Appointment.Status.SCHEDULED
+        assert nuevo.cancellation_reason == ""
+        assert nuevo.cancelled_by is None
+
+    def test_appointment_reactivate_ok(self, db: None) -> None:
+        """Reactivar una cita cancelada la vuelve a Agendada en su mismo horario."""
+        tenant = TenantFactory()
+        appt = AppointmentFactory(
+            tenant=tenant, consultorio=None,
+            status=Appointment.Status.CANCELLED, cancellation_reason="error",
+            starts_at=_BASE_DT, ends_at=_BASE_DT + datetime.timedelta(hours=1),
+        )
+        reactivada = appointment_reactivate(appointment=appt, user=UserFactory())
+        assert reactivada.status == Appointment.Status.SCHEDULED
+        assert reactivada.starts_at == _BASE_DT  # mismo horario
+        assert reactivada.cancellation_reason == ""
+
+    @pytest.mark.parametrize(
+        "estado",
+        [Appointment.Status.SCHEDULED, Appointment.Status.ATTENDED, Appointment.Status.NO_SHOW],
+    )
+    def test_appointment_reactivate_rejects_non_cancelled(self, db: None, estado: str) -> None:
+        """Solo se reactiva una cita CANCELADA; otros estados lanzan ValidationError."""
+        tenant = TenantFactory()
+        appt = AppointmentFactory(
+            tenant=tenant, consultorio=None, status=estado,
+            starts_at=_BASE_DT, ends_at=_BASE_DT + datetime.timedelta(hours=1),
+        )
+        with pytest.raises(ValidationError, match="cancelada"):
+            appointment_reactivate(appointment=appt, user=UserFactory())
 
     def test_appointment_reschedule_revalidates_overlap(self, db: None) -> None:
         """Reagendar a un horario ocupado (por otra cita activa) lanza ValidationError."""

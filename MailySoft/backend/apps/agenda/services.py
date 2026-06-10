@@ -575,12 +575,19 @@ def appointment_reschedule(
         ValidationError: si la cita no está en un estado reagendable,
                          si ends_at <= starts_at, o si hay solapamiento.
     """
-    reagendable_statuses = {Appointment.Status.SCHEDULED, Appointment.Status.CONFIRMED}
+    # Se puede reagendar una cita activa (Agendada/Confirmada) o una CANCELADA
+    # (reagendar una cancelada = reactivarla en el nuevo horario).
+    reagendable_statuses = {
+        Appointment.Status.SCHEDULED,
+        Appointment.Status.CONFIRMED,
+        Appointment.Status.CANCELLED,
+    }
     if appointment.status not in reagendable_statuses:
         raise ValidationError(
-            f"Solo se pueden reagendar citas en estado 'Agendada' o 'Confirmada'. "
-            f"La cita está en estado '{appointment.get_status_display()}'."
+            f"No se puede reagendar una cita en estado "
+            f"'{appointment.get_status_display()}'."
         )
+    was_cancelled = appointment.status == Appointment.Status.CANCELLED
 
     # Resolver consultorio: usar el nuevo si se provee, o mantener el actual
     if consultorio_id is not None:
@@ -629,6 +636,15 @@ def appointment_reschedule(
                     exclude_appointment_id=appointment.id,
                 )
 
+            # Anti-empalme contra eventos (reuniones/bloqueos) en el nuevo horario.
+            _check_block_overlap(
+                tenant=appointment.tenant,
+                doctor_id=appointment.doctor_id,  # type: ignore[arg-type]
+                consultorio_id=new_consultorio_id,
+                starts_at=starts_at,
+                ends_at=ends_at,
+            )
+
             appointment.starts_at = starts_at
             appointment.ends_at = ends_at
             if consultorio_id is not None:
@@ -637,6 +653,13 @@ def appointment_reschedule(
             update_fields = ["starts_at", "ends_at", "updated_at"]
             if consultorio_id is not None:
                 update_fields.append("consultorio")
+
+            # Si venía CANCELADA, reagendar la reactiva (vuelve a Agendada).
+            if was_cancelled:
+                appointment.status = Appointment.Status.SCHEDULED
+                appointment.cancelled_by = None
+                appointment.cancellation_reason = ""
+                update_fields += ["status", "cancelled_by", "cancellation_reason"]
 
             appointment.save(update_fields=update_fields)
 
@@ -681,6 +704,77 @@ def appointment_reschedule(
             "new_starts_at": appointment.starts_at.isoformat() if appointment.starts_at else "",
             "new_ends_at": appointment.ends_at.isoformat() if appointment.ends_at else "",
         },
+    )
+    return appointment
+
+
+def appointment_reactivate(
+    *,
+    appointment: Appointment,
+    user: "User",  # type: ignore[valid-type]
+) -> Appointment:
+    """Reactiva una cita CANCELADA: vuelve a 'Agendada' en su MISMO horario.
+
+    Revalida el anti-empalme (médico, consultorio y eventos) porque el hueco
+    pudo haberse ocupado mientras la cita estuvo cancelada. Si ya está ocupado,
+    lanza ValidationError (el usuario deberá reagendar a otro horario).
+
+    Raises:
+        ValidationError: si la cita no está cancelada o el horario ya está ocupado.
+    """
+    if appointment.status != Appointment.Status.CANCELLED:
+        raise ValidationError(
+            f"Solo se puede reactivar una cita cancelada. "
+            f"La cita está en estado '{appointment.get_status_display()}'."
+        )
+
+    with transaction.atomic():
+        _check_doctor_overlap(
+            tenant=appointment.tenant,
+            doctor_id=appointment.doctor_id,  # type: ignore[arg-type]
+            starts_at=appointment.starts_at,
+            ends_at=appointment.ends_at,
+            exclude_appointment_id=appointment.id,
+        )
+        if appointment.consultorio_id is not None:
+            _check_consultorio_overlap(
+                tenant=appointment.tenant,
+                consultorio_id=appointment.consultorio_id,
+                starts_at=appointment.starts_at,
+                ends_at=appointment.ends_at,
+                exclude_appointment_id=appointment.id,
+            )
+        _check_block_overlap(
+            tenant=appointment.tenant,
+            doctor_id=appointment.doctor_id,  # type: ignore[arg-type]
+            consultorio_id=appointment.consultorio_id,
+            starts_at=appointment.starts_at,
+            ends_at=appointment.ends_at,
+        )
+
+        appointment.status = Appointment.Status.SCHEDULED
+        appointment.cancelled_by = None
+        appointment.cancellation_reason = ""
+        appointment.save(
+            update_fields=["status", "cancelled_by", "cancellation_reason", "updated_at"]
+        )
+
+    # Reprogramar recordatorios (best-effort, fuera del atomic).
+    try:
+        schedule_reminders_for_appointment(appointment=appointment)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "appointment_reactivate: error reprogramando recordatorios para cita %s — %s",
+            appointment.id, exc, exc_info=True,
+        )
+
+    audit_record(
+        action=ActionType.APPOINTMENT_REACTIVATE,
+        resource_type="Appointment",
+        actor=user,
+        tenant=appointment.tenant,
+        resource_id=appointment.id,
+        resource_repr=str(appointment),
     )
     return appointment
 

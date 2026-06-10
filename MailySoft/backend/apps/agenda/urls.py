@@ -26,6 +26,7 @@ from apps.agenda.views import (
     AppointmentDetailApi,
     AppointmentListCreateApi,
     AppointmentNotesApi,
+    AppointmentReactivateApi,
     AppointmentRescheduleApi,
     AppointmentTypeDetailApi,
     AppointmentTypeListCreateApi,
@@ -54,6 +55,12 @@ urlpatterns = [
         "agenda/citas/<uuid:appointment_id>/reagendar/",
         AppointmentRescheduleApi.as_view(),
         name="appointment-reschedule",
+    ),
+    # Reactivar una cita cancelada (mismo horario)
+    path(
+        "agenda/citas/<uuid:appointment_id>/reactivar/",
+        AppointmentReactivateApi.as_view(),
+        name="appointment-reactivate",
     ),
     # Configuración de agenda de la clínica
     path(
