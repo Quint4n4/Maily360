@@ -39,6 +39,8 @@ export interface Me {
   avatar: string | null
   is_platform_staff: boolean
   platform_role: string
+  /** Si el usuario es médico, el id de su perfil Doctor en el tenant activo; null si no. */
+  doctor_id: string | null
   active_tenant: TenantBrief | null
   active_role: ClinicRole | null
   active_role_display: string | null

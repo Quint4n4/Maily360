@@ -14,6 +14,7 @@ import {
 import { ApiError } from '../lib/http'
 import type { Appointment, AppointmentStatus, AgendaBlock } from '../types/agenda'
 import { useRole } from '../auth/RoleContext'
+import { useAuth } from '../auth/AuthContext'
 import { puedeEditar } from '../auth/permisos'
 
 /* ─── Rejilla horaria 9:00–17:30 ─────────────────────────────────────────── */
@@ -62,7 +63,10 @@ export default function AgendaPage() {
   const [reagendarCita, setReagendarCita] = useState<Appointment | null>(null)
   const [modalMode, setModalMode] = useState<'cita' | 'block' | 'meeting'>('cita')
   const { role } = useRole()
+  const { user } = useAuth()
   const editar = puedeEditar(role, 'agenda')
+  const gestor = role === 'owner' || role === 'admin'
+  const soyDoctor = !!user?.doctor_id
   const cambiarEstado = useChangeAppointmentStatus()
   const reactivar = useReactivateAppointment()
 
@@ -74,6 +78,10 @@ export default function AgendaPage() {
   const citas: Appointment[] = apptData?.results ?? []
   const bloques: AgendaBlock[] = eventos ?? []
   const consultorios = (consData?.results ?? []).filter(c => c.is_active)
+  // Citas del médico logueado (para su cuadro "Mis citas de hoy").
+  const misCitas = soyDoctor
+    ? [...citas].filter(a => a.doctor.id === user?.doctor_id).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    : []
 
   // Columnas del tablero = consultorios; + "Sin consultorio" si hay citas sin asignar.
   type Col = { id: string; name: string; color: string }
@@ -204,17 +212,51 @@ export default function AgendaPage() {
           {/* Mis recordatorios (personal, del día seleccionado) */}
           <RecordatoriosWidget dayKey={dayKey} />
 
-          {/* Accesos rápidos */}
-          <div className="glass-card rounded-2xl overflow-hidden">
-            {QUICK_LINKS.map(({ icon: Icon, label, color }, i) => (
-              <button key={label}
-                className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/40 transition-colors text-left"
-                style={{ borderTop: i > 0 ? '1px solid rgba(255,255,255,0.45)' : 'none' }}>
-                <Icon className="w-5 h-5 shrink-0" style={{ color }} />
-                <span className="text-sm font-medium" style={{ color }}>{label}</span>
-              </button>
-            ))}
-          </div>
+          {/* Médico → sus citas del día. Dueño/Admin → accesos rápidos. */}
+          {soyDoctor ? (
+            <div className="glass-card rounded-2xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-white/40 flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <CalendarCheck className="w-4 h-4" style={{ color: '#C9A227' }} /> Mis citas de hoy
+                </span>
+                {misCitas.length > 0 && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(201,162,39,0.15)', color: '#B8860B' }}>{misCitas.length}</span>
+                )}
+              </div>
+              {misCitas.length === 0 ? (
+                <p className="px-5 py-6 text-center text-xs text-gray-400 italic">No tienes citas este día.</p>
+              ) : (
+                <div className="max-h-[320px] overflow-y-auto">
+                  {misCitas.map((a, i) => {
+                    const est = estiloEstado(a.status)
+                    return (
+                      <button key={a.id} onClick={() => setCitaSel(a)}
+                        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/40 transition-colors text-left"
+                        style={{ borderTop: i > 0 ? '1px solid rgba(255,255,255,0.45)' : 'none' }}>
+                        <span className="text-xs font-bold text-gray-700 tabular-nums shrink-0">{localHHMM(a.starts_at)}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-medium text-gray-800 truncate">{a.patient.full_name}</span>
+                          <span className="block text-[11px] truncate" style={{ color: a.appointment_type?.color_hex || '#9CA3AF' }}>{a.appointment_type?.name || a.modality_display}</span>
+                        </span>
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0" style={{ background: est.bg, color: est.color }}>{a.status_display}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ) : gestor ? (
+            <div className="glass-card rounded-2xl overflow-hidden">
+              {QUICK_LINKS.map(({ icon: Icon, label, color }, i) => (
+                <button key={label}
+                  className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/40 transition-colors text-left"
+                  style={{ borderTop: i > 0 ? '1px solid rgba(255,255,255,0.45)' : 'none' }}>
+                  <Icon className="w-5 h-5 shrink-0" style={{ color }} />
+                  <span className="text-sm font-medium" style={{ color }}>{label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </aside>
 
         {/* ════════ Panel derecho — rejilla ════════ */}

@@ -45,6 +45,10 @@ export interface MemberUpdateInput {
   blocked?: boolean
 }
 
+export interface ConsultorioRefMin {
+  id: string
+  name: string
+}
 export interface Doctor {
   id: string
   full_name: string
@@ -54,6 +58,8 @@ export interface Doctor {
   specialty: string
   default_appointment_duration: number
   bio_short: string
+  /** Consultorios asignados al médico (vacío = puede usar cualquiera). */
+  consultorios: ConsultorioRefMin[]
   is_active: boolean
   created_at: string
 }
@@ -84,6 +90,8 @@ export interface DoctorUpdateInput {
   specialty?: string
   default_appointment_duration?: number
   bio_short?: string
+  /** Lista de ids de consultorios asignados al médico. */
+  consultorio_ids?: string[]
 }
 
 /** Cuerpo para crear un perfil de médico (POST). Liga a la membresía con rol doctor. */

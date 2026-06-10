@@ -5,7 +5,7 @@ import {
   Lock, Unlock, KeyRound, Eye, EyeOff, Loader2, AlertCircle, Check,
 } from 'lucide-react'
 import { useUpdateMember, useUploadMemberAvatar } from '../../hooks/miembros'
-import { useDoctorsManage, useCreateDoctor, useUpdateDoctor } from '../../hooks/personal'
+import { useDoctorsManage, useCreateDoctor, useUpdateDoctor, useConsultoriosManage } from '../../hooks/personal'
 import { useAuth } from '../../auth/AuthContext'
 import AvatarUploader from '../common/AvatarUploader'
 import { ApiError } from '../../lib/http'
@@ -73,8 +73,11 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
   const [especialidad, setEspecialidad] = useState('')
   const [duracion, setDuracion] = useState('30')
   const [bio, setBio] = useState('')
+  const [consSel, setConsSel] = useState<string[]>([])
   const actualizar = useUpdateMember()
   const { data: docData } = useDoctorsManage()
+  const { data: consData } = useConsultoriosManage()
+  const consultorios = (consData?.results ?? []).filter(c => c.is_active)
   const crearDoctor = useCreateDoctor()
   const actualizarDoctor = useUpdateDoctor()
   const subirAvatar = useUploadMemberAvatar()
@@ -98,6 +101,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
     setEspecialidad(doctorPerfil?.specialty ?? '')
     setDuracion(String(doctorPerfil?.default_appointment_duration ?? 30))
     setBio(doctorPerfil?.bio_short ?? '')
+    setConsSel((doctorPerfil?.consultorios ?? []).map(c => c.id))
   }, [doctorPerfil])
 
   if (!miembro) return <AnimatePresence />
@@ -142,7 +146,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
     }
     try {
       if (doctorPerfil) {
-        await actualizarDoctor.mutateAsync({ id: doctorPerfil.id, input: payload })
+        await actualizarDoctor.mutateAsync({ id: doctorPerfil.id, input: { ...payload, consultorio_ids: consSel } })
       } else {
         await crearDoctor.mutateAsync({ membership_id: miembro.id, ...payload })
       }
@@ -330,6 +334,29 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                       <label className="label">Biografía <span className="text-gray-400 font-normal">(opcional)</span></label>
                       <textarea className="input resize-none" rows={2} value={bio} onChange={e => setBio(e.target.value)} placeholder="Breve descripción profesional…" />
                     </div>
+                    {doctorPerfil && (
+                      <div className="mt-3">
+                        <label className="label">Consultorios asignados <span className="text-gray-400 font-normal">(vacío = puede usar cualquiera)</span></label>
+                        {consultorios.length === 0 ? (
+                          <p className="text-xs text-gray-400">No hay consultorios. Créalos en Personal → Consultorios.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {consultorios.map(c => {
+                              const on = consSel.includes(c.id)
+                              return (
+                                <button key={c.id} type="button"
+                                  onClick={() => setConsSel(s => s.includes(c.id) ? s.filter(x => x !== c.id) : [...s, c.id])}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                                  style={on ? { background: '#C9A227', color: '#fff' } : { background: 'rgba(255,255,255,0.6)', color: '#7A756C', border: '1px solid rgba(201,162,39,0.3)' }}>
+                                  {on && <Check className="w-3.5 h-3.5" />} {c.name}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <p className="text-[11px] text-gray-400 mt-1.5">Solo podrá agendar citas en los consultorios marcados.</p>
+                      </div>
+                    )}
                     <button onClick={guardarProfesional} disabled={guardandoDoctor}
                       className="w-full mt-3 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
                       style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>

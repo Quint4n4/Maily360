@@ -5,6 +5,7 @@ import { usePatients, useCreatePatientQuick } from '../../hooks/pacientes'
 import { useDoctors, useConsultorios, useCreateAppointment, useAppointmentTypes, useCreateAgendaBlock } from '../../hooks/agenda'
 import { combineToISO } from '../../lib/fecha'
 import { ApiError } from '../../lib/http'
+import { useAuth } from '../../auth/AuthContext'
 import type { AppointmentModality } from '../../types/agenda'
 
 type Modo = 'cita' | 'block' | 'meeting'
@@ -116,9 +117,14 @@ export default function CrearEventoModal({
   const crearRapido = useCreatePatientQuick()
   const crearEvento = useCreateAgendaBlock()
 
+  const { user } = useAuth()
+  const soyDoctor = !!user?.doctor_id
   const pacientes = pacData?.results ?? []
   const doctores = (docData?.results ?? []).filter(d => d.is_active)
   const consultorios = (consData?.results ?? []).filter(c => c.is_active)
+  // Consultorios permitidos: si el médico seleccionado tiene asignados, solo esos.
+  const docSel = doctores.find(d => d.id === doctorId)
+  const consPermitidos = (docSel && docSel.consultorios.length > 0) ? docSel.consultorios : consultorios
   const guardando = crearCita.isPending || crearRapido.isPending || enviando
 
   useEffect(() => {
@@ -133,13 +139,21 @@ export default function CrearEventoModal({
     // cita
     setSearch(''); setDebounced(''); setModoPaciente('existente'); setPacienteId('')
     setNpNombre(''); setNpPaterno(''); setNpMaterno(''); setNpTel('')
-    setDoctorId(''); setConsId(consultorioId ?? ''); setModalidad('office'); setDuracion(30); setTipoId(''); setNotas('')
+    setDoctorId(user?.doctor_id ?? ''); setConsId(consultorioId ?? ''); setModalidad('office'); setDuracion(30); setTipoId(''); setNotas('')
     // evento (prefill desde el slot clicado)
     setEvTitulo(''); setEvNotas(''); setEvDoctores([]); setEvTodoDia(false)
     setEvAlcance(consultorioId ? 'consultorios' : 'clinica')
     setEvCons(consultorioId ? [consultorioId] : [])
     setEvIni(horaInicio); setEvFin(addMin(horaInicio, 60))
   }, [open, initialMode, consultorioId, horaInicio])
+
+  // Si el médico cambia y el consultorio elegido ya no le pertenece, lo limpiamos.
+  useEffect(() => {
+    if (consId && docSel && docSel.consultorios.length > 0 && !docSel.consultorios.some(c => c.id === consId)) {
+      setConsId('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctorId])
 
   const activarNuevoPaciente = () => {
     if (!npNombre && !npPaterno && search.trim()) {
@@ -175,7 +189,7 @@ export default function CrearEventoModal({
       const doctorSel = doctores.find(d => d.id === doctorId)
       await crearCita.mutateAsync({
         patient_id: patientId, doctor_id: doctorId,
-        consultorio_id: modalidad === 'office' ? (consId || null) : null,
+        consultorio_id: modalidad === 'office' ? (consPermitidos.some(c => c.id === consId) ? consId : null) : null,
         modality: modalidad,
         appointment_type_id: tipoId || null, starts_at: startISO, ends_at: endISO,
         specialty: doctorSel?.specialty ?? '', notes: notas.trim(),
@@ -312,10 +326,17 @@ export default function CrearEventoModal({
 
                   <div>
                     <label className={LABEL}>Doctor</label>
-                    <select value={doctorId} onChange={e => setDoctorId(e.target.value)} className={INPUT}>
-                      <option value="">Selecciona…</option>
-                      {doctores.map(d => <option key={d.id} value={d.id}>{d.full_name}</option>)}
-                    </select>
+                    {soyDoctor ? (
+                      <div className={`${INPUT} flex items-center justify-between`} style={{ background: 'rgba(255,255,255,0.4)' }}>
+                        <span>{docSel?.full_name || user?.full_name}</span>
+                        <span className="text-xs font-semibold" style={{ color: '#C9A227' }}>Tú</span>
+                      </div>
+                    ) : (
+                      <select value={doctorId} onChange={e => setDoctorId(e.target.value)} className={INPUT}>
+                        <option value="">Selecciona…</option>
+                        {doctores.map(d => <option key={d.id} value={d.id}>{d.full_name}</option>)}
+                      </select>
+                    )}
                   </div>
 
                   <div>
@@ -337,7 +358,7 @@ export default function CrearEventoModal({
                     {modalidad === 'office' && (
                       <select value={consId} onChange={e => setConsId(e.target.value)} className={`${INPUT} mt-2`}>
                         <option value="">Sin consultorio</option>
-                        {consultorios.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {consPermitidos.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     )}
                   </div>
