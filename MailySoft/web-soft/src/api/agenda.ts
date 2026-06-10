@@ -105,6 +105,19 @@ export async function deleteAgendaNote(noteId: string): Promise<void> {
   await request<void>(`/agenda/notas/${noteId}/`, { method: 'DELETE' })
 }
 
+/** POST /agenda/citas/<id>/reagendar/ — cambia día/horario (reactiva si estaba cancelada). */
+export async function rescheduleAppointment(
+  id: string,
+  input: { starts_at: string; ends_at?: string | null; consultorio_id?: string | null },
+): Promise<Appointment> {
+  return request<Appointment>(`/agenda/citas/${id}/reagendar/`, { method: 'POST', body: input })
+}
+
+/** POST /agenda/citas/<id>/reactivar/ — reactiva una cita cancelada (mismo horario). */
+export async function reactivateAppointment(id: string): Promise<Appointment> {
+  return request<Appointment>(`/agenda/citas/${id}/reactivar/`, { method: 'POST' })
+}
+
 /** POST /agenda/citas/<id>/estado/ — cambia el estado (valida la transición en backend). */
 export async function changeAppointmentStatus(
   id: string,

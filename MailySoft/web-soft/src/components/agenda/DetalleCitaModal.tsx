@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX } from 'lucide-react'
+import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock } from 'lucide-react'
 import NotasHilo from './NotasHilo'
 
 export type EstadoCita =
@@ -33,6 +33,11 @@ interface Props {
   soloLectura?: boolean
   onCambiarEstado?: (nuevo: EstadoCita) => void
   cambiando?: boolean
+  /** Reactivar una cita cancelada (mismo horario). */
+  onReactivar?: () => void
+  reactivando?: boolean
+  /** Abrir el modal de reagendar (nuevo día/hora). */
+  onReagendar?: () => void
 }
 
 const FLUJO: EstadoCita[] = ['agendada', 'confirmada', 'llego', 'en_consulta', 'atendida']
@@ -92,7 +97,7 @@ function Dato({ icon: Icon, label, value, dot }: { icon: typeof User; label: str
   )
 }
 
-export default function DetalleCitaModal({ cita, onClose, soloLectura = false, onCambiarEstado, cambiando = false }: Props) {
+export default function DetalleCitaModal({ cita, onClose, soloLectura = false, onCambiarEstado, cambiando = false, onReactivar, reactivando = false, onReagendar }: Props) {
   const [estado, setEstado] = useState<EstadoCita>('agendada')
   useEffect(() => { if (cita) setEstado(cita.estadoInicial) }, [cita])
 
@@ -105,6 +110,7 @@ export default function DetalleCitaModal({ cita, onClose, soloLectura = false, o
   const siguiente = SIGUIENTE[estado]
   const permitidas = TRANSICIONES[estado]
   const m = META[estado]
+  const esReagendable = estado === 'agendada' || estado === 'confirmada'
   const recordatorios = cita.recordatorios ?? []
 
   const cambiar = (nuevo: EstadoCita) => {
@@ -240,6 +246,26 @@ export default function DetalleCitaModal({ cita, onClose, soloLectura = false, o
             <div className="px-7 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
               {soloLectura ? (
                 <p className="text-sm text-gray-500 w-full text-center">Estás viendo esta cita en modo solo lectura.</p>
+              ) : estado === 'cancelada' ? (
+                <>
+                  <p className="text-sm font-medium" style={{ color: '#C0392B' }}>Cita cancelada</p>
+                  <div className="flex items-center gap-2.5">
+                    {onReagendar && (
+                      <button onClick={onReagendar} disabled={reactivando}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:bg-gray-200 disabled:opacity-50"
+                        style={{ color: '#6B7280', background: '#F3F4F6' }}>
+                        <CalendarClock className="w-4 h-4" /> Reagendar
+                      </button>
+                    )}
+                    {onReactivar && (
+                      <button onClick={onReactivar} disabled={reactivando}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                        style={{ background: '#2E7D5B', boxShadow: '0 4px 14px rgba(46,125,91,0.4)' }}>
+                        {reactivando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />} Reactivar cita
+                      </button>
+                    )}
+                  </div>
+                </>
               ) : terminal ? (
                 <p className="text-sm font-medium w-full text-center" style={{ color: m.color }}>
                   {estado === 'atendida' ? '✓ Cita atendida' : `Cita ${m.label.toLowerCase()}`}
@@ -263,6 +289,13 @@ export default function DetalleCitaModal({ cita, onClose, soloLectura = false, o
                     )}
                   </div>
                   <div className="flex items-center gap-3">
+                    {esReagendable && onReagendar && (
+                      <button onClick={onReagendar} disabled={cambiando}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:bg-gray-200 disabled:opacity-50"
+                        style={{ color: '#6B7280', background: '#F3F4F6' }}>
+                        <CalendarClock className="w-4 h-4" /> Reagendar
+                      </button>
+                    )}
                     {siguiente && (
                       <button onClick={() => cambiar(siguiente.next)} disabled={cambiando}
                         className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"

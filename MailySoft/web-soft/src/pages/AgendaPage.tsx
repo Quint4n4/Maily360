@@ -5,7 +5,8 @@ import CrearEventoModal from '../components/agenda/CrearEventoModal'
 import DetalleCitaModal, { CitaDetalle, EstadoCita } from '../components/agenda/DetalleCitaModal'
 import EventoDetalleModal from '../components/agenda/EventoDetalleModal'
 import RecordatoriosWidget from '../components/agenda/RecordatoriosWidget'
-import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus, useAgendaBlocksForDay } from '../hooks/agenda'
+import ReagendarModal from '../components/agenda/ReagendarModal'
+import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus, useAgendaBlocksForDay, useReactivateAppointment } from '../hooks/agenda'
 import {
   addDays, addMonths, formatLargo, formatMedio, formatFechaHora, localHM, localHHMM,
   durationMin, monthGrid, sameDay, toDayKey,
@@ -58,10 +59,12 @@ export default function AgendaPage() {
   )
   const [citaSel, setCitaSel] = useState<Appointment | null>(null)
   const [eventoSel, setEventoSel] = useState<AgendaBlock | null>(null)
+  const [reagendarCita, setReagendarCita] = useState<Appointment | null>(null)
   const [modalMode, setModalMode] = useState<'cita' | 'block' | 'meeting'>('cita')
   const { role } = useRole()
   const editar = puedeEditar(role, 'agenda')
   const cambiarEstado = useChangeAppointmentStatus()
+  const reactivar = useReactivateAppointment()
 
   const dayKey = toDayKey(selectedDate)
   const { data: apptData, isLoading: loadingCitas, isError } = useAppointmentsForDay(dayKey)
@@ -327,6 +330,7 @@ export default function AgendaPage() {
                   if (ci < 0) return null
                   const col = cols[ci]
                   const est = estiloEstado(a.status)
+                  const esCancelada = a.status === 'cancelled'
                   // Color del TIPO de cita: tiñe toda la tarjeta (gris si no tiene tipo).
                   const tipoColor = a.appointment_type?.color_hex || '#9A958C'
                   const subtitulo = a.appointment_type?.name || a.reason || ''
@@ -338,23 +342,34 @@ export default function AgendaPage() {
                       style={{
                         gridColumn: ci + 2,
                         gridRow: `${startIdx + 1} / span ${span}`,
-                        background: `${tipoColor}26`,
-                        borderLeft: `4px solid ${tipoColor}`,
+                        background: esCancelada
+                          ? 'repeating-linear-gradient(45deg, rgba(192,57,43,0.12), rgba(192,57,43,0.12) 8px, rgba(192,57,43,0.24) 8px, rgba(192,57,43,0.24) 16px)'
+                          : `${tipoColor}26`,
+                        borderLeft: `4px solid ${esCancelada ? '#C0392B' : tipoColor}`,
                         backdropFilter: 'blur(6px)',
                         boxShadow: '0 2px 10px rgba(60,42,12,0.12)',
                         zIndex: 5,
                       }}
                     >
-                      {/* punto del consultorio (la columna también lo indica) */}
-                      <span className="absolute top-2.5 right-3 w-2.5 h-2.5 rounded-full"
-                        style={{ background: col.color, boxShadow: `0 0 0 3px ${col.color}22` }} />
-                      <p className="text-xs font-semibold text-gray-900 leading-tight truncate w-full px-3">{a.patient.full_name}</p>
-                      {subtitulo && <p className="text-[11px] font-medium truncate w-full" style={{ color: tipoColor }}>{subtitulo}</p>}
-                      {span >= 2 && (
-                        <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
-                          style={{ background: est.bg, color: est.color }}>
-                          {a.status_display}
-                        </span>
+                      {esCancelada ? (
+                        <>
+                          <p className="text-[11px] font-medium text-gray-500 line-through truncate w-full px-2">{a.patient.full_name}</p>
+                          <p className="font-extrabold" style={{ color: '#C0392B', fontSize: span >= 2 ? '1.05rem' : '0.72rem', letterSpacing: '0.06em' }}>CANCELADA</p>
+                        </>
+                      ) : (
+                        <>
+                          {/* punto del consultorio (la columna también lo indica) */}
+                          <span className="absolute top-2.5 right-3 w-2.5 h-2.5 rounded-full"
+                            style={{ background: col.color, boxShadow: `0 0 0 3px ${col.color}22` }} />
+                          <p className="text-xs font-semibold text-gray-900 leading-tight truncate w-full px-3">{a.patient.full_name}</p>
+                          {subtitulo && <p className="text-[11px] font-medium truncate w-full" style={{ color: tipoColor }}>{subtitulo}</p>}
+                          {span >= 2 && (
+                            <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                              style={{ background: est.bg, color: est.color }}>
+                              {a.status_display}
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   )
@@ -382,7 +397,12 @@ export default function AgendaPage() {
         soloLectura={!editar}
         onCambiarEstado={handleCambiarEstado}
         cambiando={cambiarEstado.isPending}
+        reactivando={reactivar.isPending}
+        onReactivar={citaSel ? () => { const id = citaSel.id; reactivar.mutate(id, { onError: e => window.alert(e instanceof ApiError ? (Array.isArray(e.body?.detail) ? e.body.detail.join(' ') : e.body?.detail ?? 'No se pudo reactivar.') : 'No se pudo reactivar.') }); setCitaSel(null) } : undefined}
+        onReagendar={citaSel ? () => { setReagendarCita(citaSel); setCitaSel(null) } : undefined}
       />
+
+      <ReagendarModal cita={reagendarCita} onClose={() => setReagendarCita(null)} />
 
       <EventoDetalleModal
         evento={eventoSel}

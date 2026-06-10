@@ -16,6 +16,8 @@ import {
   listAgendaBlocks,
   listAppointments,
   listAppointmentTypes,
+  reactivateAppointment,
+  rescheduleAppointment,
   updateAgendaBlock,
   updateAppointmentType,
 } from '../api/agenda'
@@ -186,6 +188,25 @@ export function useUpdateAppointmentType() {
 }
 export function useDeactivateAppointmentType() {
   return useTipoMutation((id: string) => deactivateAppointmentType(id))
+}
+
+/** Reagendar una cita (nuevo día/horario; reactiva si estaba cancelada). */
+export function useRescheduleAppointment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: { starts_at: string; ends_at?: string | null } }) =>
+      rescheduleAppointment(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: agendaKeys.all }),
+  })
+}
+
+/** Reactivar una cita cancelada (mismo horario). */
+export function useReactivateAppointment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => reactivateAppointment(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: agendaKeys.all }),
+  })
 }
 
 /** Cambio de estado de una cita. Devuelve la cita actualizada e invalida la agenda. */
