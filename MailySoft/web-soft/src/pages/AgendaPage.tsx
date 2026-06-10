@@ -108,6 +108,7 @@ export default function AgendaPage() {
       doctor: a.doctor.full_name,
       consultorioName: a.consultorio?.name ?? 'Sin consultorio',
       consultorioColor: col?.color ?? '#C9A227',
+      modalidad: a.modality_display,
       horario: `${localHHMM(a.starts_at)} – ${localHHMM(a.ends_at)}`,
       fecha: formatLargo(selectedDate),
       motivo: a.appointment_type?.name || a.reason,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock } from 'lucide-react'
+import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock, Video } from 'lucide-react'
 import NotasHilo from './NotasHilo'
 
 export type EstadoCita =
@@ -18,6 +18,7 @@ export interface CitaDetalle {
   doctor: string
   consultorioName: string
   consultorioColor: string
+  modalidad: string
   horario: string   // "9:00 – 10:00"
   fecha: string     // "Jueves 4 de Junio, 2026"
   motivo: string
@@ -201,6 +202,7 @@ export default function DetalleCitaModal({ cita, onClose, soloLectura = false, o
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-2">Detalles de la cita</p>
                 <Dato icon={User}        label="Doctor"       value={cita.doctor} />
+                <Dato icon={Video}       label="Modalidad"    value={cita.modalidad} />
                 <Dato icon={MapPin}      label="Consultorio"  value={cita.consultorioName} dot={cita.consultorioColor} />
                 <Dato icon={FileText}    label="Motivo"       value={cita.motivo} />
                 <Dato icon={Stethoscope} label="Especialidad" value={cita.especialidad} />

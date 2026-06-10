@@ -14,6 +14,9 @@ export interface AppointmentRef {
   full_name: string
 }
 
+/** Modalidad de la cita (dónde/cómo se realiza). */
+export type AppointmentModality = 'office' | 'phone' | 'video' | 'offsite'
+
 export interface ConsultorioRef {
   id: string
   name: string
@@ -109,6 +112,8 @@ export interface Appointment {
   doctor: AppointmentRef
   consultorio: ConsultorioRef | null
   appointment_type: AppointmentTypeRef | null
+  modality: AppointmentModality
+  modality_display: string
   starts_at: string // ISO UTC
   ends_at: string // ISO UTC
   status: AppointmentStatus
@@ -126,6 +131,7 @@ export interface CreateAppointmentInput {
   doctor_id: string
   consultorio_id?: string | null
   appointment_type_id?: string | null
+  modality?: AppointmentModality
   starts_at: string // ISO UTC
   ends_at?: string | null
   reason?: string

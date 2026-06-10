@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check } from 'lucide-react'
+import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check, Building2, Phone, Video, MapPin } from 'lucide-react'
 import { usePatients, useCreatePatientQuick } from '../../hooks/pacientes'
 import { useDoctors, useConsultorios, useCreateAppointment, useAppointmentTypes, useCreateAgendaBlock } from '../../hooks/agenda'
 import { combineToISO } from '../../lib/fecha'
 import { ApiError } from '../../lib/http'
+import type { AppointmentModality } from '../../types/agenda'
 
 type Modo = 'cita' | 'block' | 'meeting'
+
+const MODALIDADES: { key: AppointmentModality; label: string; icon: typeof Phone }[] = [
+  { key: 'office', label: 'Consultorio u Oficina', icon: Building2 },
+  { key: 'phone', label: 'Telefónica', icon: Phone },
+  { key: 'video', label: 'Video Llamada', icon: Video },
+  { key: 'offsite', label: 'Fuera de la Instalación', icon: MapPin },
+]
 type ModoPaciente = 'existente' | 'nuevo'
 type Alcance = 'clinica' | 'consultorios' | 'doctores'
 
@@ -82,6 +90,7 @@ export default function CrearEventoModal({
   const [npTel, setNpTel] = useState('')
   const [doctorId, setDoctorId] = useState('')
   const [consId, setConsId] = useState('')
+  const [modalidad, setModalidad] = useState<AppointmentModality>('office')
   const [duracion, setDuracion] = useState(30)
   const [tipoId, setTipoId] = useState('')
   const [notas, setNotas] = useState('')
@@ -124,7 +133,7 @@ export default function CrearEventoModal({
     // cita
     setSearch(''); setDebounced(''); setModoPaciente('existente'); setPacienteId('')
     setNpNombre(''); setNpPaterno(''); setNpMaterno(''); setNpTel('')
-    setDoctorId(''); setConsId(consultorioId ?? ''); setDuracion(30); setTipoId(''); setNotas('')
+    setDoctorId(''); setConsId(consultorioId ?? ''); setModalidad('office'); setDuracion(30); setTipoId(''); setNotas('')
     // evento (prefill desde el slot clicado)
     setEvTitulo(''); setEvNotas(''); setEvDoctores([]); setEvTodoDia(false)
     setEvAlcance(consultorioId ? 'consultorios' : 'clinica')
@@ -165,7 +174,9 @@ export default function CrearEventoModal({
       const endISO = new Date(new Date(startISO).getTime() + duracion * 60_000).toISOString()
       const doctorSel = doctores.find(d => d.id === doctorId)
       await crearCita.mutateAsync({
-        patient_id: patientId, doctor_id: doctorId, consultorio_id: consId || null,
+        patient_id: patientId, doctor_id: doctorId,
+        consultorio_id: modalidad === 'office' ? (consId || null) : null,
+        modality: modalidad,
         appointment_type_id: tipoId || null, starts_at: startISO, ends_at: endISO,
         specialty: doctorSel?.specialty ?? '', notes: notas.trim(),
       })
@@ -299,21 +310,36 @@ export default function CrearEventoModal({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={LABEL}>Doctor</label>
-                      <select value={doctorId} onChange={e => setDoctorId(e.target.value)} className={INPUT}>
-                        <option value="">Selecciona…</option>
-                        {doctores.map(d => <option key={d.id} value={d.id}>{d.full_name}</option>)}
-                      </select>
+                  <div>
+                    <label className={LABEL}>Doctor</label>
+                    <select value={doctorId} onChange={e => setDoctorId(e.target.value)} className={INPUT}>
+                      <option value="">Selecciona…</option>
+                      {doctores.map(d => <option key={d.id} value={d.id}>{d.full_name}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={LABEL}>Modalidad</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {MODALIDADES.map(({ key, label, icon: Icon }) => {
+                        const sel = modalidad === key
+                        return (
+                          <button key={key} type="button" onClick={() => setModalidad(key)}
+                            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left"
+                            style={sel
+                              ? { background: '#4FB0DA', color: '#fff', boxShadow: '0 4px 14px rgba(79,176,218,0.4)' }
+                              : { background: 'rgba(255,255,255,0.6)', color: '#5A6B73', border: '1px solid rgba(79,176,218,0.35)' }}>
+                            <Icon className="w-4 h-4 shrink-0" /> <span className="truncate">{label}</span>
+                          </button>
+                        )
+                      })}
                     </div>
-                    <div>
-                      <label className={LABEL}>Consultorio</label>
-                      <select value={consId} onChange={e => setConsId(e.target.value)} className={INPUT}>
+                    {modalidad === 'office' && (
+                      <select value={consId} onChange={e => setConsId(e.target.value)} className={`${INPUT} mt-2`}>
                         <option value="">Sin consultorio</option>
                         {consultorios.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
-                    </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-end gap-4">
