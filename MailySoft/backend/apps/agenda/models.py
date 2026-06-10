@@ -244,6 +244,14 @@ class Appointment(TenantAwareModel):
         CANCELLED = "cancelled", "Cancelada"
         NO_SHOW = "no_show", "No se presentó"
 
+    class Modality(models.TextChoices):
+        """Modalidad de la cita (dónde/cómo se realiza)."""
+
+        OFFICE = "office", "Consultorio u Oficina"
+        PHONE = "phone", "Telefónica"
+        VIDEO = "video", "Video Llamada"
+        OFFSITE = "offsite", "Fuera de la Instalación"
+
     # ---- Relaciones principales ----
 
     patient = models.ForeignKey(
@@ -268,6 +276,13 @@ class Appointment(TenantAwareModel):
             "Consultorio donde se realizará la cita. "
             "Opcional (puede ser telemedicina o domicilio)."
         ),
+    )
+    modality = models.CharField(
+        max_length=12,
+        choices=Modality.choices,
+        default=Modality.OFFICE,
+        db_index=True,
+        help_text="Modalidad: consultorio, telefónica, video o fuera de la instalación.",
     )
 
     # ---- Horario ----

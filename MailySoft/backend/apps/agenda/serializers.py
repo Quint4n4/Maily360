@@ -150,6 +150,7 @@ class AppointmentOutputSerializer(serializers.ModelSerializer):
     consultorio = _ConsultorioNestedSerializer(read_only=True, allow_null=True)
     appointment_type = _AppointmentTypeNestedSerializer(read_only=True, allow_null=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    modality_display = serializers.CharField(source="get_modality_display", read_only=True)
     reminders = AppointmentReminderOutputSerializer(many=True, read_only=True)
 
     class Meta:
@@ -160,6 +161,8 @@ class AppointmentOutputSerializer(serializers.ModelSerializer):
             "doctor",
             "consultorio",
             "appointment_type",
+            "modality",
+            "modality_display",
             "starts_at",
             "ends_at",
             "status",

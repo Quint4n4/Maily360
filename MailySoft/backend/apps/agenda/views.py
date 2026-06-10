@@ -93,6 +93,11 @@ class AppointmentListCreateApi(TenantAPIView):
         doctor_id = serializers.UUIDField()
         consultorio_id = serializers.UUIDField(required=False, allow_null=True, default=None)
         appointment_type_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        modality = serializers.ChoiceField(
+            choices=Appointment.Modality.choices,
+            required=False,
+            default=Appointment.Modality.OFFICE,
+        )
         starts_at = serializers.DateTimeField()
         ends_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
         reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
