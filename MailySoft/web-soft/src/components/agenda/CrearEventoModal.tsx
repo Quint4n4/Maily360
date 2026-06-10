@@ -29,6 +29,8 @@ interface CrearEventoModalProps {
   consultorioName?: string
   /** Modo inicial al abrir (cita por defecto). */
   initialMode?: Modo
+  /** Modalidad inicial de la cita (office por defecto; 'video' al abrir desde Telemedicina). */
+  initialModality?: AppointmentModality
 }
 
 const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
@@ -76,7 +78,7 @@ function Pill({ label, selected, onClick }: { label: string; selected: boolean; 
 }
 
 export default function CrearEventoModal({
-  open, onClose, dayKey, fechaLarga, horaInicio, consultorioId, consultorioName, initialMode = 'cita',
+  open, onClose, dayKey, fechaLarga, horaInicio, consultorioId, consultorioName, initialMode = 'cita', initialModality = 'office',
 }: CrearEventoModalProps) {
   const [modo, setModo] = useState<Modo>(initialMode)
 
@@ -139,13 +141,13 @@ export default function CrearEventoModal({
     // cita
     setSearch(''); setDebounced(''); setModoPaciente('existente'); setPacienteId('')
     setNpNombre(''); setNpPaterno(''); setNpMaterno(''); setNpTel('')
-    setDoctorId(user?.doctor_id ?? ''); setConsId(consultorioId ?? ''); setModalidad('office'); setDuracion(30); setTipoId(''); setNotas('')
+    setDoctorId(user?.doctor_id ?? ''); setConsId(consultorioId ?? ''); setModalidad(initialModality); setDuracion(30); setTipoId(''); setNotas('')
     // evento (prefill desde el slot clicado)
     setEvTitulo(''); setEvNotas(''); setEvDoctores([]); setEvTodoDia(false)
     setEvAlcance(consultorioId ? 'consultorios' : 'clinica')
     setEvCons(consultorioId ? [consultorioId] : [])
     setEvIni(horaInicio); setEvFin(addMin(horaInicio, 60))
-  }, [open, initialMode, consultorioId, horaInicio])
+  }, [open, initialMode, initialModality, consultorioId, horaInicio])
 
   // Si el médico cambia y el consultorio elegido ya no le pertenece, lo limpiamos.
   useEffect(() => {

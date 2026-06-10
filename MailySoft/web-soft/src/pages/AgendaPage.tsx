@@ -12,7 +12,7 @@ import {
   durationMin, monthGrid, sameDay, toDayKey,
 } from '../lib/fecha'
 import { ApiError } from '../lib/http'
-import type { Appointment, AppointmentStatus, AgendaBlock } from '../types/agenda'
+import type { Appointment, AppointmentStatus, AgendaBlock, AppointmentModality } from '../types/agenda'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
 import { puedeEditar } from '../auth/permisos'
@@ -55,8 +55,8 @@ const NONE_COL = '__none__'
 export default function AgendaPage() {
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [modalOpen, setModalOpen] = useState(false)
-  const [slotSel, setSlotSel] = useState<{ hora: string; consultorioId: string | null; consultorioName: string }>(
-    { hora: '09:00', consultorioId: null, consultorioName: '' },
+  const [slotSel, setSlotSel] = useState<{ hora: string; consultorioId: string | null; consultorioName: string; modality: AppointmentModality }>(
+    { hora: '09:00', consultorioId: null, consultorioName: '', modality: 'office' },
   )
   const [citaSel, setCitaSel] = useState<Appointment | null>(null)
   const [eventoSel, setEventoSel] = useState<AgendaBlock | null>(null)
@@ -91,11 +91,11 @@ export default function AgendaPage() {
   // Citas del médico logueado, ordenadas (para su cuadro "Mis citas de hoy").
   const misCitas = soyDoctor ? [...citas].sort((a, b) => a.starts_at.localeCompare(b.starts_at)) : []
 
-  // Columnas del tablero = consultorios; + "Sin consultorio" si hay citas sin asignar.
+  // Columnas del tablero = consultorios + una columna FIJA para citas no presenciales
+  // (telefónica / video / fuera de la instalación) y cualquier cita sin sala.
   type Col = { id: string; name: string; color: string }
   const cols: Col[] = consultorios.map(c => ({ id: c.id, name: c.name, color: c.color_hex || '#C9A227' }))
-  const hayHuerfanas = citas.some(a => !a.consultorio || !cols.find(c => c.id === a.consultorio!.id))
-  if (hayHuerfanas) cols.push({ id: NONE_COL, name: 'Sin consultorio', color: '#9A958C' })
+  cols.push({ id: NONE_COL, name: 'Telemedicina / Externo', color: '#3A6EA5' })
 
   const colIndexDe = (a: Appointment): number => {
     const id = a.consultorio?.id
@@ -106,10 +106,13 @@ export default function AgendaPage() {
 
   const abrirCrear = (hora: string, col: Col) => {
     if (!editar) return
+    const esTele = col.id === NONE_COL
     setSlotSel({
       hora: hora.length === 4 ? `0${hora}` : hora,
-      consultorioId: col.id === NONE_COL ? null : col.id,
-      consultorioName: col.id === NONE_COL ? '' : col.name,
+      consultorioId: esTele ? null : col.id,
+      consultorioName: esTele ? '' : col.name,
+      // La columna Telemedicina/Externo crea una cita NO presencial (sin consultorio).
+      modality: esTele ? 'video' : 'office',
     })
     setModalMode('cita')
     setModalOpen(true)
@@ -440,6 +443,7 @@ export default function AgendaPage() {
         consultorioId={slotSel.consultorioId}
         consultorioName={slotSel.consultorioName}
         initialMode={modalMode}
+        initialModality={slotSel.modality}
       />
 
       <DetalleCitaModal
