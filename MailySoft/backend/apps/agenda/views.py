@@ -52,6 +52,7 @@ from apps.agenda.services import (
     agenda_item_note_delete,
     appointment_change_status,
     appointment_create,
+    appointment_create_with_new_patient,
     appointment_reactivate,
     appointment_reschedule,
     appointment_type_create,
@@ -75,6 +76,15 @@ from apps.core.views import TenantAPIView
 # ---------------------------------------------------------------------------
 
 
+class _NewPatientInputSerializer(serializers.Serializer):
+    """Datos mínimos para crear un expediente PROVISIONAL junto con la cita."""
+
+    first_name = serializers.CharField(max_length=100)
+    paternal_surname = serializers.CharField(max_length=100)
+    maternal_surname = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
+
+
 class AppointmentListCreateApi(TenantAPIView):
     """GET  /api/v1/agenda/citas/    — lista paginada de citas con filtros.
     POST /api/v1/agenda/citas/    — crea una cita nueva.
@@ -85,11 +95,16 @@ class AppointmentListCreateApi(TenantAPIView):
     class InputSerializer(serializers.Serializer):
         """Campos para crear una cita (POST).
 
+        Se indica un paciente EXISTENTE (patient_id) O uno NUEVO (new_patient),
+        nunca ambos. Si es nuevo, el expediente provisional y la cita se crean en
+        una sola transacción (si la cita falla, el paciente NO se crea).
+
         NOTA: `status` NO está aquí. El estado inicial siempre es SCHEDULED.
         Solo AppointmentChangeStatusApi cambia el estado.
         """
 
-        patient_id = serializers.UUIDField()
+        patient_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        new_patient = _NewPatientInputSerializer(required=False)
         doctor_id = serializers.UUIDField()
         consultorio_id = serializers.UUIDField(required=False, allow_null=True, default=None)
         appointment_type_id = serializers.UUIDField(required=False, allow_null=True, default=None)
@@ -103,6 +118,19 @@ class AppointmentListCreateApi(TenantAPIView):
         reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
         specialty = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
         notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+        def validate(self, attrs: dict) -> dict:
+            tiene_id = bool(attrs.get("patient_id"))
+            tiene_nuevo = bool(attrs.get("new_patient"))
+            if not tiene_id and not tiene_nuevo:
+                raise serializers.ValidationError(
+                    "Indica un paciente existente (patient_id) o los datos de uno nuevo (new_patient)."
+                )
+            if tiene_id and tiene_nuevo:
+                raise serializers.ValidationError(
+                    "Elige un paciente existente O uno nuevo, no ambos."
+                )
+            return attrs
 
     def get(self, request: Request) -> Response:
         """Lista paginada de citas del tenant con filtros opcionales.
@@ -155,12 +183,26 @@ class AppointmentListCreateApi(TenantAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        data = dict(s.validated_data)
+        new_patient = data.pop("new_patient", None)
+        patient_id = data.pop("patient_id", None)
+
         try:
-            appointment = appointment_create(
-                tenant=tenant,
-                user=request.user,
-                **s.validated_data,
-            )
+            if new_patient:
+                # Paciente nuevo: expediente provisional + cita en UNA transacción.
+                appointment = appointment_create_with_new_patient(
+                    tenant=tenant,
+                    user=request.user,
+                    new_patient=dict(new_patient),
+                    **data,
+                )
+            else:
+                appointment = appointment_create(
+                    tenant=tenant,
+                    user=request.user,
+                    patient_id=patient_id,
+                    **data,
+                )
         except DjangoValidationError as exc:
             return Response(
                 {"detail": exc.messages},

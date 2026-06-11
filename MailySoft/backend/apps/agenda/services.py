@@ -53,6 +53,7 @@ from apps.audit.models import ActionType
 from apps.audit.services import audit_record
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
+from apps.pacientes.services import patient_create_quick
 from apps.personal.models import Consultorio, Doctor
 from apps.personal.selectors import consultorio_get, doctor_get, doctor_get_for_user
 from apps.tenancy.models import Tenant, TenantMembership
@@ -493,6 +494,30 @@ def appointment_create(
             "patient_id": str(patient_id),
         },
     )
+    return appointment
+
+
+def appointment_create_with_new_patient(
+    *,
+    tenant: Tenant,
+    user: "User",  # type: ignore[valid-type]
+    new_patient: dict,
+    **cita_kwargs: object,
+) -> Appointment:
+    """Crea un expediente PROVISIONAL y su cita en UNA sola transacción.
+
+    Si la creación de la cita falla (empalme, reglas de médico/consultorio, etc.),
+    el expediente provisional NO se crea (rollback). Esto evita expedientes
+    huérfanos cuando se agenda "paciente nuevo" desde la agenda.
+    """
+    with transaction.atomic():
+        patient = patient_create_quick(tenant=tenant, user=user, **new_patient)
+        appointment = appointment_create(
+            tenant=tenant,
+            user=user,
+            patient_id=patient.id,
+            **cita_kwargs,  # type: ignore[arg-type]
+        )
     return appointment
 
 
