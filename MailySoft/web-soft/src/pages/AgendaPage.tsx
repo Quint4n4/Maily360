@@ -81,7 +81,15 @@ export default function AgendaPage() {
   const misConsultorioIds = (miDoctor?.consultorios ?? []).map(c => c.id)
   const doctorRestringido = soyDoctor && misConsultorioIds.length > 0
 
-  const bloques: AgendaBlock[] = eventos ?? []
+  // Un médico restringido solo ve eventos de su alcance: de toda la clínica,
+  // suyos, o de SUS consultorios. Así no se cuelan bandas de otros consultorios.
+  const todosBloques: AgendaBlock[] = eventos ?? []
+  const bloques: AgendaBlock[] = doctorRestringido
+    ? todosBloques.filter(b =>
+        (!b.doctor && !b.consultorio) ||
+        b.doctor?.id === user?.doctor_id ||
+        (!!b.consultorio && misConsultorioIds.includes(b.consultorio.id)))
+    : todosBloques
   // Un médico solo ve SUS citas; el resto ve todas.
   const todasCitas: Appointment[] = apptData?.results ?? []
   const citas: Appointment[] = soyDoctor ? todasCitas.filter(a => a.doctor.id === user?.doctor_id) : todasCitas
