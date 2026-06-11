@@ -126,8 +126,19 @@ export interface Appointment {
 }
 
 /** Cuerpo para crear una cita (POST). El estado inicial siempre es 'scheduled'. */
+/** Paciente nuevo (provisional) creado junto con la cita, en una sola transacción. */
+export interface NewPatientInline {
+  first_name: string
+  paternal_surname: string
+  maternal_surname?: string
+  phone?: string
+}
+
 export interface CreateAppointmentInput {
-  patient_id: string
+  /** Paciente existente (uno de patient_id o new_patient, no ambos). */
+  patient_id?: string
+  /** Paciente nuevo provisional (se crea atómicamente con la cita). */
+  new_patient?: NewPatientInline
   doctor_id: string
   consultorio_id?: string | null
   appointment_type_id?: string | null

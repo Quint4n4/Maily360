@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check, Building2, Phone, Video, MapPin } from 'lucide-react'
-import { usePatients, useCreatePatientQuick } from '../../hooks/pacientes'
+import { usePatients } from '../../hooks/pacientes'
 import { useDoctors, useConsultorios, useCreateAppointment, useAppointmentTypes, useCreateAgendaBlock } from '../../hooks/agenda'
 import { combineToISO } from '../../lib/fecha'
 import { ApiError } from '../../lib/http'
@@ -116,7 +116,6 @@ export default function CrearEventoModal({
   const { data: consData } = useConsultorios()
   const { data: tipos } = useAppointmentTypes()
   const crearCita = useCreateAppointment()
-  const crearRapido = useCreatePatientQuick()
   const crearEvento = useCreateAgendaBlock()
 
   const { user } = useAuth()
@@ -127,7 +126,7 @@ export default function CrearEventoModal({
   // Consultorios permitidos: si el médico seleccionado tiene asignados, solo esos.
   const docSel = doctores.find(d => d.id === doctorId)
   const consPermitidos = (docSel && docSel.consultorios.length > 0) ? docSel.consultorios : consultorios
-  const guardando = crearCita.isPending || crearRapido.isPending || enviando
+  const guardando = crearCita.isPending || enviando
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300)
@@ -168,7 +167,6 @@ export default function CrearEventoModal({
   const guardarCita = async () => {
     setErrores([])
     const faltan: string[] = []
-    let patientId = pacienteId
     if (modoPaciente === 'existente') {
       if (!pacienteId) faltan.push('Selecciona un paciente.')
     } else {
@@ -179,18 +177,16 @@ export default function CrearEventoModal({
     if (faltan.length) { setErrores(faltan); return }
 
     try {
-      if (modoPaciente === 'nuevo') {
-        const nuevo = await crearRapido.mutateAsync({
-          first_name: npNombre.trim(), paternal_surname: npPaterno.trim(),
-          maternal_surname: npMaterno.trim(), phone: npTel.trim(),
-        })
-        patientId = nuevo.id
-      }
       const startISO = combineToISO(dayKey, horaInicio)
       const endISO = new Date(new Date(startISO).getTime() + duracion * 60_000).toISOString()
       const doctorSel = doctores.find(d => d.id === doctorId)
+      // Paciente existente → patient_id; nuevo → new_patient (paciente + cita en UNA transacción).
+      const pacienteRef = modoPaciente === 'nuevo'
+        ? { new_patient: { first_name: npNombre.trim(), paternal_surname: npPaterno.trim(), maternal_surname: npMaterno.trim(), phone: npTel.trim() } }
+        : { patient_id: pacienteId }
       await crearCita.mutateAsync({
-        patient_id: patientId, doctor_id: doctorId,
+        ...pacienteRef,
+        doctor_id: doctorId,
         consultorio_id: modalidad === 'office' ? (consPermitidos.some(c => c.id === consId) ? consId : null) : null,
         modality: modalidad,
         appointment_type_id: tipoId || null, starts_at: startISO, ends_at: endISO,
