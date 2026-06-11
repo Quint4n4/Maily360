@@ -22,7 +22,7 @@ import {
   updateAppointmentType,
 } from '../api/agenda'
 import { listConsultorios, listDoctors } from '../api/personal'
-import { dayRangeUTC } from '../lib/fecha'
+import { dayRangeUTC, toDayKey } from '../lib/fecha'
 import type {
   AgendaBlockCreateInput,
   AgendaBlockUpdateInput,
@@ -43,6 +43,18 @@ export function useAppointmentsForDay(dayKey: string) {
   return useQuery({
     queryKey: agendaKeys.day(dayKey),
     queryFn: () => listAppointments({ date_from: from, date_to: to }),
+  })
+}
+
+/** Citas de HOY en vivo (refresca cada 60s) para el vigilante de alertas de citas. */
+export function useTodayAppointmentsLive(enabled: boolean) {
+  const today = toDayKey(new Date())
+  const { from, to } = dayRangeUTC(today)
+  return useQuery({
+    queryKey: agendaKeys.day(today),
+    queryFn: () => listAppointments({ date_from: from, date_to: to }),
+    enabled,
+    refetchInterval: enabled ? 60_000 : false,
   })
 }
 

@@ -12,6 +12,7 @@ import ContactosPage from './pages/ContactosPage'
 import PersonalPage from './pages/PersonalPage'
 import FinanzasPage from './pages/FinanzasPage'
 import NotasPage from './pages/NotasPage'
+import AlertaCitas from './components/agenda/AlertaCitas'
 import DashboardPlataformaPage from './pages/plataforma/DashboardPage'
 import ClinicasPage from './pages/plataforma/ClinicasPage'
 import SuscripcionesPage from './pages/plataforma/SuscripcionesPage'
@@ -66,6 +67,9 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
+
+          {/* Vigilante global: alerta cuando una cita de hoy se queda atrás de su estado */}
+          <AlertaCitas />
         </PlatformRoleProvider>
       </RoleProvider>
     </AuthProvider>
