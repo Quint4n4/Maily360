@@ -51,6 +51,15 @@ export const accesoModulo = (role: ClinicRole, m: Modulo): Acceso | undefined =>
 export const puedeEditar  = (role: ClinicRole, m: Modulo): boolean => PERMISOS[role][m] === 'edit'
 export const puedeVerExpedienteClinico = (role: ClinicRole): boolean => PERMISOS[role].expedienteClinico
 
+/* Capacidades finas de la AGENDA (deben reflejar el backend):
+   - Agendar/reagendar/cancelar-reserva → recepción + clínicos, NO enfermería.
+   - Cambiar el estado de una cita (En sala, En consulta…) → incluye enfermería. */
+export const puedeAgendar = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor' || role === 'reception'
+
+export const puedeCambiarEstadoCita = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor' || role === 'nurse' || role === 'reception'
+
 /** Ruta de inicio según el rol (a dónde llega al entrar / cambiar de rol). */
 export const inicioDeRol = (role: ClinicRole): string =>
   role === 'finance' ? '/finanzas' : '/agenda'

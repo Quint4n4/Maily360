@@ -31,7 +31,10 @@ export interface CitaDetalle {
 interface Props {
   cita: CitaDetalle | null
   onClose: () => void
-  soloLectura?: boolean
+  /** Puede mover el estado (En sala/En consulta/Atendida/Cancelar/No asistió). Incluye enfermería. */
+  puedeCambiarEstado?: boolean
+  /** Puede reagendar/reactivar (acciones de agendado). Excluye enfermería. */
+  puedeAgendar?: boolean
   onCambiarEstado?: (nuevo: EstadoCita) => void
   cambiando?: boolean
   /** Reactivar una cita cancelada (mismo horario). */
@@ -98,7 +101,7 @@ function Dato({ icon: Icon, label, value, dot }: { icon: typeof User; label: str
   )
 }
 
-export default function DetalleCitaModal({ cita, onClose, soloLectura = false, onCambiarEstado, cambiando = false, onReactivar, reactivando = false, onReagendar }: Props) {
+export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = false, puedeAgendar = false, onCambiarEstado, cambiando = false, onReactivar, reactivando = false, onReagendar }: Props) {
   const [estado, setEstado] = useState<EstadoCita>('agendada')
   useEffect(() => { if (cita) setEstado(cita.estadoInicial) }, [cita])
 
@@ -246,20 +249,20 @@ export default function DetalleCitaModal({ cita, onClose, soloLectura = false, o
 
             {/* ── Acciones ── */}
             <div className="px-7 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
-              {soloLectura ? (
+              {(!puedeCambiarEstado && !puedeAgendar) ? (
                 <p className="text-sm text-gray-500 w-full text-center">Estás viendo esta cita en modo solo lectura.</p>
               ) : estado === 'cancelada' ? (
                 <>
                   <p className="text-sm font-medium" style={{ color: '#C0392B' }}>Cita cancelada</p>
                   <div className="flex items-center gap-2.5">
-                    {onReagendar && (
+                    {puedeAgendar && onReagendar && (
                       <button onClick={onReagendar} disabled={reactivando}
                         className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:bg-gray-200 disabled:opacity-50"
                         style={{ color: '#6B7280', background: '#F3F4F6' }}>
                         <CalendarClock className="w-4 h-4" /> Reagendar
                       </button>
                     )}
-                    {onReactivar && (
+                    {puedeAgendar && onReactivar && (
                       <button onClick={onReactivar} disabled={reactivando}
                         className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
                         style={{ background: '#2E7D5B', boxShadow: '0 4px 14px rgba(46,125,91,0.4)' }}>
@@ -275,14 +278,14 @@ export default function DetalleCitaModal({ cita, onClose, soloLectura = false, o
               ) : (
                 <>
                   <div className="flex items-center gap-2">
-                    {permitidas.includes('cancelada') && (
+                    {puedeCambiarEstado && permitidas.includes('cancelada') && (
                       <button onClick={() => cambiar('cancelada')} disabled={cambiando}
                         className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:brightness-95 disabled:opacity-50"
                         style={{ color: '#C0392B', background: '#FDE8E8' }}>
                         Cancelar
                       </button>
                     )}
-                    {permitidas.includes('no_asistio') && (
+                    {puedeCambiarEstado && permitidas.includes('no_asistio') && (
                       <button onClick={() => cambiar('no_asistio')} disabled={cambiando}
                         className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:bg-gray-200 disabled:opacity-50"
                         style={{ color: '#6B7280', background: '#F3F4F6' }}>
@@ -291,14 +294,14 @@ export default function DetalleCitaModal({ cita, onClose, soloLectura = false, o
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    {esReagendable && onReagendar && (
+                    {puedeAgendar && esReagendable && onReagendar && (
                       <button onClick={onReagendar} disabled={cambiando}
                         className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:bg-gray-200 disabled:opacity-50"
                         style={{ color: '#6B7280', background: '#F3F4F6' }}>
                         <CalendarClock className="w-4 h-4" /> Reagendar
                       </button>
                     )}
-                    {siguiente && (
+                    {puedeCambiarEstado && siguiente && (
                       <button onClick={() => cambiar(siguiente.next)} disabled={cambiando}
                         className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
                         style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>

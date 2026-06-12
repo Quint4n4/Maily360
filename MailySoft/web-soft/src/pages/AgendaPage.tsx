@@ -15,7 +15,7 @@ import { ApiError } from '../lib/http'
 import type { Appointment, AppointmentStatus, AgendaBlock, AppointmentModality } from '../types/agenda'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
-import { puedeEditar } from '../auth/permisos'
+import { puedeAgendar, puedeCambiarEstadoCita } from '../auth/permisos'
 
 /* ─── Rejilla horaria 9:00–17:30 ─────────────────────────────────────────── */
 const SLOTS = Array.from({ length: 18 }, (_, i) => {
@@ -64,7 +64,8 @@ export default function AgendaPage() {
   const [modalMode, setModalMode] = useState<'cita' | 'block' | 'meeting'>('cita')
   const { role } = useRole()
   const { user } = useAuth()
-  const editar = puedeEditar(role, 'agenda')
+  const agendar = puedeAgendar(role)           // crear/reagendar/eventos (NO enfermería)
+  const cambiarStatus = puedeCambiarEstadoCita(role) // cambiar estado (incluye enfermería)
   const gestor = role === 'owner' || role === 'admin'
   const soyDoctor = !!user?.doctor_id
   const cambiarEstado = useChangeAppointmentStatus()
@@ -113,7 +114,7 @@ export default function AgendaPage() {
   }
 
   const abrirCrear = (hora: string, col: Col) => {
-    if (!editar) return
+    if (!agendar) return
     const esTele = col.id === NONE_COL
     setSlotSel({
       hora: hora.length === 4 ? `0${hora}` : hora,
@@ -334,8 +335,8 @@ export default function AgendaPage() {
                     {cols.map((c, ci) => (
                       <button
                         key={`cell-${r}-${ci}`}
-                        onClick={editar ? () => abrirCrear(s.label, c) : undefined}
-                        className={`border-b border-l border-white/40 transition-colors ${editar ? 'hover:bg-white/40 cursor-pointer' : 'cursor-default'}`}
+                        onClick={agendar ? () => abrirCrear(s.label, c) : undefined}
+                        className={`border-b border-l border-white/40 transition-colors ${agendar ? 'hover:bg-white/40 cursor-pointer' : 'cursor-default'}`}
                         style={{ gridColumn: ci + 2, gridRow: r + 1 }}
                       />
                     ))}
@@ -457,7 +458,8 @@ export default function AgendaPage() {
       <DetalleCitaModal
         cita={citaSel ? toDetalle(citaSel) : null}
         onClose={() => setCitaSel(null)}
-        soloLectura={!editar}
+        puedeCambiarEstado={cambiarStatus}
+        puedeAgendar={agendar}
         onCambiarEstado={handleCambiarEstado}
         cambiando={cambiarEstado.isPending}
         reactivando={reactivar.isPending}
@@ -470,7 +472,7 @@ export default function AgendaPage() {
       <EventoDetalleModal
         evento={eventoSel}
         onClose={() => setEventoSel(null)}
-        soloLectura={!editar}
+        soloLectura={!agendar}
       />
     </div>
   )
