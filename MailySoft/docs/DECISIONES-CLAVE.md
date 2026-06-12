@@ -2,7 +2,7 @@
 
 > Registro de las decisiones importantes tomadas durante el desarrollo, con su **porqué** y sus **implicaciones**.
 > Las decisiones de arquitectura más formales tienen su propio ADR en `docs/adr/`. Este documento las consolida y agrega las decisiones de producto/UX y de frontend.
-> Actualizado: **2026-06-09**.
+> Actualizado: **2026-06-12**.
 
 ---
 
@@ -65,7 +65,40 @@
 ## D-12 · Especialidades como plugins (DECISIÓN DIFERIDA)
 **Decisión:** las especialidades clínicas se modelarán como **plugins/extensiones por clínica**, pero **se construirán después del expediente clínico**.
 **Por qué:** el expediente clínico es la base; las especialidades extienden sobre él. Orden correcto de construcción.
-**Implicación:** pendiente; no bloquea el MVP actual.
+**Implicación:** pendiente; no bloquea el MVP actual. **Hoy** la especialidad es un campo de **texto libre** en el perfil del médico (ficha → Datos profesionales), copiado a la cita al agendar (snapshot). Un **catálogo configurable** de especialidades es ese paso futuro.
+
+## D-13 · Modalidad de la cita (presencial / teléfono / video / fuera)
+**Decisión:** cada cita tiene una **modalidad** (`Appointment.modality`: office / phone / video / offsite). Solo la presencial usa consultorio; las demás no. En el tablero hay una **columna fija "Telemedicina / Externo"** (siempre visible, para todos) donde caen las citas no presenciales y sin sala; al hacer clic ahí, el formulario abre sin consultorio y con modalidad de video por defecto.
+**Por qué:** las clínicas atienden por teléfono/video/domicilio; el sistema debe distinguirlo y darle un lugar visible. Resuelve además el hueco de "¿dónde agenda telemedicina un médico acotado a consultorios?".
+**Implicación:** la regla de consultorio (D-15) NO aplica a citas sin consultorio, así que un médico siempre puede hacer telemedicina.
+
+## D-14 · Reactivar y reagendar citas + estilo "Cancelada"
+**Decisión:** "Cancelada" sigue siendo terminal en la máquina de estados, pero se agregaron acciones explícitas: **Reactivar** (cancelled → scheduled, mismo horario, revalida anti-empalme) y **Reagendar** (cambia día/hora; si la cita estaba cancelada, la reactiva y mueve en un paso). En el tablero, una cita cancelada se ve con **rayas rojas + "CANCELADA"** y el nombre tachado. Reagendar existe en citas activas (agendada/confirmada) y canceladas; pide **solo el nuevo día y hora** (no recaptura todo).
+**Por qué:** cancelar por error pasaba (y era irreversible); el usuario necesita deshacerlo y mover citas con un cambio mínimo.
+**Implicación:** endpoint `POST /agenda/citas/<id>/reactivar/`; `appointment_reschedule` acepta canceladas; auditoría `APPOINTMENT_REACTIVATE`. También se permitió **`Agendada → En sala`** directo (walk-in sin confirmación previa) para que la alerta de seguimiento funcione.
+
+## D-15 · El médico se acota a sí mismo y a sus consultorios
+**Decisión:** un usuario con rol **médico** solo puede agendar **para sí mismo** (no para otros médicos), y solo en los **consultorios que tiene asignados** (M2M `Doctor.consultorios`, que el dueño/admin gestiona en la ficha; vacío = cualquiera). En su agenda, el tablero **esconde los consultorios ajenos** y muestra **solo sus citas** y eventos de su alcance. `/me/` incluye `doctor_id` para que el frontend sepa qué médico es.
+**Por qué:** privacidad y orden — cada médico administra lo suyo; el dueño/recepción ven todo.
+**Implicación:** reglas A y B en `appointment_create` (rechazo 400 si viola); las reglas se aplican a CUALQUIER rol que agende para ese médico (es sobre sus consultorios).
+
+## D-16 · Alerta de seguimiento de citas (mantener el estado al día)
+**Decisión:** un vigilante in-app (global) detecta citas de **hoy** cuyo estado se quedó atrás del reloj y lanza un modal que **guía la transición** ("¿Ya llegó X?" → En sala → "¿Pasó a consulta?" → En consulta → "¿Se atendió?"). El texto cambia según la modalidad (en video pregunta "¿Iniciaste la videollamada?"). **Nunca cambia estados solo** — siempre lo confirma una persona. Solo le salta a **recepción** (todas las citas) o al **médico de esa cita** (las suyas). El "Aún no" (pospone 5 min) y la pausa tras confirmar persisten en **localStorage** (sobreviven al refresco).
+**Por qué:** el estado es manual y se olvidaba; esto lo mantiene al día sin trabajo extra, y libera al doctor.
+**Implicación:** in-app por ahora; el envío real (push/WhatsApp cuando nadie está en la app) se reusará del motor Celery de recordatorios, a futuro.
+
+## D-17 · Permisos finos de agenda: agendar ≠ cambiar estado
+**Decisión:** se separan dos capacidades:
+- **Agendar/reagendar/reactivar/editar eventos** → Dueño, Admin, Médico, Recepción (la **enfermería NO**).
+- **Cambiar el estado** de una cita (En sala, En consulta, Atendida, Cancelar, No asistió) → incluye **enfermería**.
+Así la enfermera **ayuda al doctor moviendo al paciente** por el flujo, pero **no reserva citas** (eso es de recepción).
+**Por qué:** agendar es tarea de front desk; la enfermería es soporte clínico.
+**Implicación:** el backend ya lo distinguía (`AppointmentPermission` POST sin enfermería vs `AppointmentStatusPermission` con enfermería); se alineó el frontend con helpers `puedeAgendar` / `puedeCambiarEstadoCita`.
+
+## D-18 · Crear paciente provisional + cita de forma ATÓMICA
+**Decisión:** al agendar "paciente nuevo", el expediente provisional y la cita se crean en **una sola transacción** (`appointment_create_with_new_patient`; el POST de cita acepta `new_patient` además de `patient_id`). Si la cita falla, el paciente **no se crea** (rollback).
+**Por qué:** antes se creaban en dos llamadas; si la cita fallaba (empalme, reglas de médico), el expediente quedaba **huérfano** y cada reintento lo **duplicaba**. Las reglas nuevas (D-15) hicieron que fallara más seguido → más duplicados.
+**Implicación:** se eliminó la causa raíz de los expedientes duplicados; quedan como pendiente la **detección/fusión de duplicados de persona** (mismo nombre/teléfono) al agendar.
 
 ---
 

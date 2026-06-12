@@ -1,6 +1,6 @@
 # Estado del Proyecto — Maily Soft / Maily360
 
-> Foto consolidada **full-stack** (backend + frontend). Actualizado: **2026-06-09**.
+> Foto consolidada **full-stack** (backend + frontend). Actualizado: **2026-06-12**.
 > Referencia rápida para entender **dónde está el proyecto hoy** — para el dueño y para cualquier dev nuevo.
 > Decisiones técnicas detalladas en [`DECISIONES-CLAVE.md`](DECISIONES-CLAVE.md).
 
@@ -15,7 +15,7 @@
 | **Stack backend** | Django 5 + DRF · PostgreSQL 16 · Redis · Celery · Docker |
 | **Stack frontend** | React 18 + Vite + TypeScript + Tailwind + TanStack Query (carpeta `web-soft/`) |
 | **Apps Django** | 8 (core, tenancy, authn, pacientes, personal, agenda, audit, **notas**) |
-| **Tests backend** | **1009 pasando** (código commiteado, endurecido) |
+| **Tests backend** | **1013 pasando** (código commiteado, endurecido) |
 | **Repo** | github.com/Quint4n4/Maily360 · rama `main` |
 | **Cumplimiento** | NOM-024 / LFPDPPP (bitácora, minimización de PII, Argon2) |
 
@@ -47,7 +47,7 @@
 | **tenancy** | Tenants (clínicas) + `TenantMembership` (usuario↔clínica↔rol). **API de gestión de miembros** (alta, rol, bloqueo, restablecer contraseña, avatar). |
 | **authn** | `User` custom (email login, Argon2), JWT híbrido (login/refresh/logout/verify), endpoint `/me/`, avatar de usuario. |
 | **pacientes** | Expedientes (CRUD, búsqueda, baja lógica, número de expediente seguro). **Alta provisional** (al vuelo desde agenda). Avatar de paciente. |
-| **personal** | Doctores, consultorios, horarios (CRUD). |
+| **personal** | Doctores (con **consultorios asignados** M2M y especialidad), consultorios, horarios (CRUD). |
 | **agenda** | Citas (crear, estados con máquina de estados, reagendar, anti-empalme doble). **Tipos de cita** configurables con color. **Eventos** (reuniones/bloqueos) con bloqueo real. Recordatorios (Celery). Config de agenda. |
 | **audit** | Bitácora NOM-024: registra create/update/delete/login/bloqueo/etc. por actor, rol y tenant. |
 | **notas** | Notas y tareas: personales (privadas, con recordatorio), globales del Dueño (a un rol o a todos), y tareas (hecho/pendiente). Notas colaborativas (hilo con autor) viven en `agenda` (AgendaItemNote). |
@@ -60,7 +60,7 @@
 |---|---|---|
 | **Login / sesión** | ✅ Real | Login JWT híbrido, rol real desde `/me/`, logout, refresh automático, avatar en Topbar. |
 | **Pacientes** (antes "Contactos") | ✅ Real | Lista, búsqueda server-side, alta, **edición**, **baja**, **avatar**. Expediente con **próxima cita + historial reales** (conectado a la agenda). Alerta de "expediente provisional". |
-| **Agenda** | ✅ Real | Calendario navegable, citas coloreadas por **tipo de cita**, **agendar** (paciente existente o **nuevo provisional**), **cambiar estado** (máquina de estados), **bloqueos/reuniones** (card unificado Cita/Bloqueo/Reunión, editable), **hilo de notas del equipo** en cada cita/evento, y widget **"Mis recordatorios"** (personal). |
+| **Agenda** | ✅ Real | Calendario navegable; citas por **tipo de cita** (color) y **modalidad** (presencial/teléfono/video/fuera, con columna fija **Telemedicina/Externo**); **agendar** (existente o **nuevo provisional atómico**); **cambiar estado** (máquina de estados); **reactivar/reagendar** (cancelada se ve con rayas rojas + "CANCELADA"); **bloqueos/reuniones** (card unificado, editable); **hilo de notas del equipo**; widget **"Mis recordatorios"**; **alerta de seguimiento** que guía el estado de las citas del día. El **médico** ve solo sus consultorios y citas; la **enfermería** cambia estado pero no agenda. |
 | **Notas y Tareas** | ✅ Real | Tarjetas de colores: **Mis notas/tareas** (con recordatorio, fijar, marcar hecha) y **Avisos de la clínica** (globales del Dueño a un rol o a todos). |
 | **Personal** | ✅ Real | Pestañas: **Equipo** (miembros por rol → ficha → editar/bloquear/contraseña/avatar/perfil médico), **Consultorios** (CRUD), **Tipos de cita** (CRUD con color). |
 | **Finanzas** | 🔴 Mock | Sin backend conectado. |
@@ -81,10 +81,10 @@
 | **Personal** — crear/editar/desactivar | Dueño, Admin |
 | **Tipos de cita** — ver | Todos · **crear/editar/borrar** | Dueño, Admin |
 | **Citas** — ver | Todos menos Finanzas |
-| **Citas** — crear/editar | Dueño, Admin, Médico, Recepción |
-| **Citas** — cancelar | Dueño, Admin, Recepción |
-| **Citas** — cambiar estado | Dueño, Admin, Médico, Enfermería, Recepción |
-| **Eventos** (reuniones/bloqueos) — crear/borrar | Dueño, Admin, Médico, Recepción |
+| **Citas** — **agendar** / reagendar / reactivar | Dueño, Admin, Médico, Recepción **(enfermería NO)** |
+| **Citas** — **cambiar estado** (En sala/En consulta/Atendida/Cancelar/No asistió) | Dueño, Admin, Médico, **Enfermería**, Recepción |
+| **Eventos** (reuniones/bloqueos) — crear/editar/borrar | Dueño, Admin, Médico, Recepción |
+| El **médico** agenda solo para sí mismo y solo en sus consultorios asignados | — |
 | **Miembros** (gestión de equipo) | Solo Dueño, Admin |
 | **Config de agenda · Bitácora** | Solo Dueño, Admin |
 
@@ -146,14 +146,15 @@ El proxy de Vite reenvía `/api` y `/media` al backend. Entra con un usuario de 
 
 ## 9. Pendientes / próximos pasos
 
-- **Tests automatizados** de las features recientes (tipos de cita, eventos/bloqueos, expediente↔agenda). El resto del backend tiene 754 tests.
-- **Commit + push** del bloque acumulado (tipos de cita, expediente↔agenda, eventos, card unificado).
-- **Editar perfil médico** ya existe; falta **horarios del doctor** (UI).
-- **Reagendar cita** (endpoint backend existe; falta UI).
+- **django-tester del último bloque**: reactivar/reagendar, modalidad, reglas del médico (self + consultorios M2M), creación atómica paciente+cita, alerta de seguimiento — aún sin suite formal (el resto del backend: 1013 tests).
+- **Detección/fusión de duplicados de persona** al agendar "paciente nuevo" (avisar si ya existe alguien con ese nombre/teléfono y ofrecer usar el existente).
+- **Recordatorios reales**: hoy el envío de WhatsApp es `SimulatedWhatsAppAdapter` (solo loguea). Falta `MetaWhatsAppAdapter` con credenciales. Mismo motor serviría para los **avisos de cita offline** (push) de la alerta de seguimiento.
+- **Especialidad/cédula al alta del médico** (quick win): hoy se capturan en la ficha, no en el form de "Nuevo miembro".
+- **Catálogo configurable de especialidades** (D-12): después del expediente clínico.
+- **Horarios del doctor** (UI). **Reagendar cita** ya tiene UI.
 - **Finanzas**: conectar al backend (módulo por construir).
 - **Panel de plataforma** (dueño SaaS): construir backend + conectar.
 - **Expediente clínico** (notas médicas, padecimientos): módulo médico por construir.
-- **Especialidades como plugins**: pendiente (después del expediente clínico).
 - **Endurecimiento prod**: IP real de auditoría vía proxy confiable (XFF), CSP, revisar `/verify/`.
 
 ---
