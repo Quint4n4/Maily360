@@ -88,21 +88,25 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
     ? (docData?.results ?? []).find(d => d.user_email === miembro.user.email)
     : undefined
 
+  // Depender del ID (no del objeto) para no reiniciar los campos cuando la
+  // lista se refetchea (foco de ventana, etc.) y borrar lo que el usuario escribe.
   useEffect(() => {
     if (!miembro) return
     setErrores([]); setOkMsg(''); setNewPass(''); setVerPass(false)
     setFirstName(miembro.user.first_name)
     setLastName(miembro.user.last_name)
     setRol(miembro.role)
-  }, [miembro])
+  }, [miembro?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Igual que arriba: depender del ID del perfil, no del objeto, para que un
+  // refetch de la lista de doctores no borre lo que se está editando.
   useEffect(() => {
     setCedula(doctorPerfil?.cedula_profesional ?? '')
     setEspecialidad(doctorPerfil?.specialty ?? '')
     setDuracion(String(doctorPerfil?.default_appointment_duration ?? 30))
     setBio(doctorPerfil?.bio_short ?? '')
     setConsSel((doctorPerfil?.consultorios ?? []).map(c => c.id))
-  }, [doctorPerfil])
+  }, [doctorPerfil?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!miembro) return <AnimatePresence />
 
