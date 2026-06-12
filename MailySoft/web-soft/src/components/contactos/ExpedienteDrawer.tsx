@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Phone, Mail, Fingerprint, Pencil, CalendarPlus,
-  CalendarClock, StickyNote, ClipboardList, Lock, UserX, Loader2, AlertTriangle, User,
+  CalendarClock, StickyNote, ClipboardList, UserX, Loader2, AlertTriangle, User,
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { initialsOf, edad } from '../../lib/paciente'
@@ -238,9 +238,8 @@ export default function ExpedienteDrawer({
               </div>
             </div>
 
-            {/* ════ Fila inferior: historial clínico (ancho completo) ════ */}
+            {/* ════ Fila inferior: historial de citas (administrativo — lo ve también recepción) ════ */}
             <div className="mt-5">
-              {verClinico ? (
                 <Card title="Historial de citas" icon={ClipboardList}>
                   {citasLoading ? (
                     <p className="text-sm text-gray-400 italic py-3 text-center">Cargando…</p>
@@ -269,17 +268,6 @@ export default function ExpedienteDrawer({
                     </div>
                   )}
                 </Card>
-              ) : (
-                <div className="rounded-2xl p-6 flex items-center gap-3" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.7)' }}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(120,113,108,0.12)' }}>
-                    <Lock className="w-5 h-5 text-gray-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700">Expediente clínico restringido</p>
-                    <p className="text-xs text-gray-500">Tu rol puede ver los datos de contacto, pero no el historial ni las notas clínicas del paciente.</p>
-                  </div>
-                </div>
-              )}
             </div>
           </motion.div>
         </motion.div>
