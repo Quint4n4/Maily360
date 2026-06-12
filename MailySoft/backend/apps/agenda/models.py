@@ -430,6 +430,9 @@ class Appointment(TenantAwareModel):
 VALID_TRANSITIONS: dict[str, set[str]] = {
     Appointment.Status.SCHEDULED: {
         Appointment.Status.CONFIRMED,
+        # El paciente puede LLEGAR sin confirmación previa (walk-in / no se confirmó):
+        # se permite Agendada → En sala directamente.
+        Appointment.Status.ARRIVED,
         Appointment.Status.CANCELLED,
         Appointment.Status.NO_SHOW,
     },

@@ -505,6 +505,7 @@ class TestAppointmentCreateTenantValidation:
 # Transiciones VÁLIDAS según VALID_TRANSITIONS del modelo
 _VALID_TRANSITION_CASES = [
     ("scheduled", "confirmed"),
+    ("scheduled", "arrived"),  # llegada directa (walk-in, sin confirmar)
     ("scheduled", "cancelled"),
     ("scheduled", "no_show"),
     ("confirmed", "arrived"),
@@ -519,7 +520,6 @@ _VALID_TRANSITION_CASES = [
 # Transiciones INVÁLIDAS — origen → destino que no está permitido
 _INVALID_TRANSITION_CASES = [
     ("scheduled", "attended"),
-    ("scheduled", "arrived"),
     ("scheduled", "in_progress"),
     ("confirmed", "attended"),
     ("confirmed", "in_progress"),

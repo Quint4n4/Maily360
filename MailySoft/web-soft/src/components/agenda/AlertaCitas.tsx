@@ -5,6 +5,7 @@ import { useTodayAppointmentsLive, useChangeAppointmentStatus } from '../../hook
 import { useAuth } from '../../auth/AuthContext'
 import { useRole } from '../../auth/RoleContext'
 import { localHHMM } from '../../lib/fecha'
+import { ApiError } from '../../lib/http'
 import type { Appointment, AppointmentStatus } from '../../types/agenda'
 
 const SNOOZE_MS = 5 * 60_000   // "Aún no" → recuerda en 5 min
@@ -73,6 +74,7 @@ export default function AlertaCitas() {
   const cambiar = useChangeAppointmentStatus()
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [snooze, setSnooze] = useState<Record<string, number>>(() => loadSnooze(uid))
+  const [errorMsg, setErrorMsg] = useState('')
 
   // Cargar/persistir la pausa por usuario (sobrevive al refresco).
   useEffect(() => { setSnooze(loadSnooze(uid)) }, [uid])
@@ -99,19 +101,26 @@ export default function AlertaCitas() {
     return null
   }, [citas, nowMs, snooze])
 
+  // Limpia el error al cambiar de cita/paso.
+  useEffect(() => { setErrorMsg('') }, [pendiente?.cita.id, pendiente?.acc.stage])
+
   if (!activo || !pendiente) return null
   const { cita, acc } = pendiente
 
   const avanzar = (status: AppointmentStatus) => {
+    setErrorMsg('')
     cambiar.mutate(
       { id: cita.id, status },
       {
         onSuccess: () => setSnooze(s => ({ ...s, [cita.id]: Date.now() + COOLDOWN_MS })),
-        onError: () => setSnooze(s => ({ ...s, [cita.id]: Date.now() + 60_000 })),
+        onError: (e) => {
+          const d = e instanceof ApiError ? e.body?.detail : null
+          setErrorMsg(Array.isArray(d) ? d.join(' ') : (d ?? 'No se pudo actualizar el estado. Intenta de nuevo.'))
+        },
       },
     )
   }
-  const posponer = () => setSnooze(s => ({ ...s, [cita.id]: Date.now() + SNOOZE_MS }))
+  const posponer = () => { setErrorMsg(''); setSnooze(s => ({ ...s, [cita.id]: Date.now() + SNOOZE_MS })) }
 
   return (
     <AnimatePresence>
@@ -137,6 +146,9 @@ export default function AlertaCitas() {
               <Clock className="w-3.5 h-3.5" /> {localHHMM(cita.starts_at)} · {cita.doctor.full_name}
               {cita.modality !== 'office' && ` · ${cita.modality_display}`}
             </p>
+            {errorMsg && (
+              <p className="text-sm text-red-600 mt-3 px-3 py-2 rounded-lg" style={{ background: 'rgba(190,40,40,0.10)' }}>{errorMsg}</p>
+            )}
           </div>
 
           <div className="px-8 pb-7 pt-2 space-y-2.5">
