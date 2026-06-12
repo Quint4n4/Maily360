@@ -7,10 +7,29 @@ import { useRole } from '../../auth/RoleContext'
 import { localHHMM } from '../../lib/fecha'
 import type { Appointment, AppointmentStatus } from '../../types/agenda'
 
-/** Roles que pueden gestionar el estado de las citas (les salta la alerta). */
-const GESTORES = new Set(['owner', 'admin', 'doctor', 'nurse', 'reception'])
 const SNOOZE_MS = 5 * 60_000   // "Aún no" → recuerda en 5 min
 const COOLDOWN_MS = 3 * 60_000 // tras avanzar, pausa antes del siguiente paso
+
+// La pausa (snooze / cooldown) se guarda en localStorage por usuario para que
+// sobreviva al refresco de la página (antes vivía en memoria y reaparecía).
+const STORAGE_KEY = (uid: string) => `maily.alertaCitas.snooze.${uid}`
+
+function loadSnooze(uid: string): Record<string, number> {
+  if (!uid) return {}
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY(uid))
+    if (!raw) return {}
+    const obj = JSON.parse(raw) as Record<string, number>
+    const now = Date.now()
+    const fresh: Record<string, number> = {}
+    for (const [k, v] of Object.entries(obj)) if (typeof v === 'number' && v > now) fresh[k] = v
+    return fresh
+  } catch { return {} }
+}
+function saveSnooze(uid: string, snooze: Record<string, number>) {
+  if (!uid) return
+  try { localStorage.setItem(STORAGE_KEY(uid), JSON.stringify(snooze)) } catch { /* cuota llena, ignora */ }
+}
 
 type Stage = 'llegada' | 'consulta' | 'cierre'
 interface Accion { stage: Stage; next: AppointmentStatus; titulo: string; mensaje: string; primario: string }
@@ -43,12 +62,21 @@ function accionPendiente(a: Appointment, nowMs: number): Accion | null {
 export default function AlertaCitas() {
   const { user } = useAuth()
   const { role } = useRole()
-  const activo = !!user && GESTORES.has(role)
+  // Solo recepción (todas las citas) o el médico de la cita (las suyas) reciben la
+  // alerta. Dueño/admin/enfermería NO — ellos no están "atendiendo" al paciente.
+  const esRecepcion = role === 'reception'
+  const esDoctor = !!user?.doctor_id
+  const activo = !!user && (esRecepcion || esDoctor)
+  const uid = user?.id ?? ''
 
   const { data } = useTodayAppointmentsLive(activo)
   const cambiar = useChangeAppointmentStatus()
   const [nowMs, setNowMs] = useState(() => Date.now())
-  const [snooze, setSnooze] = useState<Record<string, number>>({})
+  const [snooze, setSnooze] = useState<Record<string, number>>(() => loadSnooze(uid))
+
+  // Cargar/persistir la pausa por usuario (sobrevive al refresco).
+  useEffect(() => { setSnooze(loadSnooze(uid)) }, [uid])
+  useEffect(() => { if (uid) saveSnooze(uid, snooze) }, [uid, snooze])
 
   useEffect(() => {
     if (!activo) return
@@ -58,9 +86,9 @@ export default function AlertaCitas() {
 
   const citas = useMemo(() => {
     const all = data?.results ?? []
-    // El médico solo se alerta de SUS citas; el resto, de todas.
-    return user?.doctor_id ? all.filter(a => a.doctor.id === user.doctor_id) : all
-  }, [data, user?.doctor_id])
+    // El médico solo se alerta de SUS citas; recepción, de todas.
+    return esDoctor ? all.filter(a => a.doctor.id === user?.doctor_id) : all
+  }, [data, esDoctor, user?.doctor_id])
 
   const pendiente = useMemo(() => {
     const ordenadas = [...citas].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
