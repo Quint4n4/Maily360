@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, CreditCard, UserCog, Activity, ChevronDown, LogOut, User, Check } from 'lucide-react'
+import { LayoutDashboard, Building2, CreditCard, UserCog, Activity, ChevronDown, LogOut, User, Check, Stethoscope } from 'lucide-react'
 import { usePlatformRole } from './PlatformRoleContext'
 import { PlatModulo, accesoModuloPlat, inicioPlat, ROLES_PLAT, ROLE_PLAT_LABEL } from './permisos'
+import { useAuth } from '../auth/AuthContext'
+import { inicioDeRol } from '../auth/permisos'
 
 interface Props {
   active?: PlatModulo
@@ -19,12 +21,24 @@ const NAV: { key: PlatModulo; label: string; icon: typeof LayoutDashboard }[] = 
 export default function PlatformTopbar({ active = 'dashboard' }: Props) {
   const navigate = useNavigate()
   const { role, setRole } = usePlatformRole()
+  const { user, clinicRole, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [cerrando, setCerrando] = useState(false)
 
   const visibles = NAV.filter(n => accesoModuloPlat(role, n.key))
 
   const cambiarRol = (r: typeof role) => {
     setRole(r); setMenuOpen(false); navigate(inicioPlat(r))
+  }
+
+  const cerrarSesion = async () => {
+    if (cerrando) return
+    setCerrando(true)
+    try {
+      await logout()
+    } finally {
+      navigate('/login', { replace: true })
+    }
   }
 
   return (
@@ -63,7 +77,7 @@ export default function PlatformTopbar({ active = 'dashboard' }: Props) {
             <User className="w-4 h-4" style={{ color: '#C9A227' }} />
           </div>
           <div className="text-left leading-tight">
-            <p className="text-sm font-medium" style={{ color: '#2A241B' }}>Equipo Maily</p>
+            <p className="text-sm font-medium" style={{ color: '#2A241B' }}>{user?.full_name?.trim() || 'Equipo Maily'}</p>
             <p className="text-xs" style={{ color: '#9A958C' }}>{ROLE_PLAT_LABEL[role]}</p>
           </div>
           <ChevronDown className="w-4 h-4" style={{ color: '#9A958C' }} />
@@ -85,9 +99,16 @@ export default function PlatformTopbar({ active = 'dashboard' }: Props) {
                   {r.key === role && <Check className="w-4 h-4" style={{ color: '#C9A227' }} />}
                 </button>
               ))}
-              <button onClick={() => navigate('/login')}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100">
-                <LogOut className="w-4 h-4" /> Cerrar sesión
+              {clinicRole && (
+                <button onClick={() => { setMenuOpen(false); navigate(inicioDeRol(clinicRole)) }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-amber-50 transition-colors border-t border-gray-100"
+                  style={{ color: '#B8860B', fontWeight: 600 }}>
+                  <Stethoscope className="w-4 h-4" /> Ir a mi clínica
+                </button>
+              )}
+              <button onClick={cerrarSesion} disabled={cerrando}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100 disabled:opacity-60">
+                <LogOut className="w-4 h-4" /> {cerrando ? 'Cerrando…' : 'Cerrar sesión'}
               </button>
             </div>
           </>
