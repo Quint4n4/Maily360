@@ -1,18 +1,50 @@
 import { useState, useEffect } from 'react'
-import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle, AlertTriangle } from 'lucide-react'
+import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle, AlertTriangle, Star, Crown, CalendarRange } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import NuevoPacienteDrawer from '../components/contactos/NuevoPacienteDrawer'
 import EditarPacienteDrawer from '../components/contactos/EditarPacienteDrawer'
 import ExpedienteDrawer from '../components/contactos/ExpedienteDrawer'
-import { usePatients, useDeactivatePatient } from '../hooks/pacientes'
+import MiniCalendario from '../components/agenda/MiniCalendario'
+import { usePatients, useDeactivatePatient, useSetPatientClassification } from '../hooks/pacientes'
 import { initialsOf } from '../lib/paciente'
-import type { PatientOut } from '../types/paciente'
+import { formatFechaCorta } from '../lib/fecha'
+import type { PatientOut, PatientSegment } from '../types/paciente'
 import { useRole } from '../auth/RoleContext'
 import { puedeEditar, puedeVerExpedienteClinico } from '../auth/permisos'
+
+/** Segmentos de filtrado (reflejan el selector del backend). */
+const SEGMENTOS: { key: PatientSegment; label: string }[] = [
+  { key: 'all', label: 'Todos' },
+  { key: 'recent', label: 'Recientes' },
+  { key: 'week', label: 'Esta semana' },
+  { key: 'month', label: 'Este mes' },
+  { key: 'date', label: 'Por fecha' },
+  { key: 'potential', label: 'Clientes potenciales' },
+  { key: 'favorites', label: 'Favoritos' },
+  { key: 'vip', label: 'VIP' },
+]
+
+/** Mensaje de "sin resultados" según el segmento activo. */
+function mensajeVacio(segment: PatientSegment, hayBusqueda: boolean): string {
+  if (hayBusqueda) return 'No encontramos pacientes con ese criterio.'
+  switch (segment) {
+    case 'recent': return 'Aún no hay pacientes atendidos recientemente.'
+    case 'week': return 'Nadie ha sido atendido esta semana.'
+    case 'month': return 'Nadie ha sido atendido este mes.'
+    case 'date': return 'Nadie fue atendido en el rango de fechas elegido.'
+    case 'potential': return 'No hay clientes potenciales por ahora (pacientes que cancelaron o reagendaron y nunca se atendieron).'
+    case 'favorites': return 'Aún no marcas pacientes favoritos. Usa la ⭐ en cada tarjeta.'
+    case 'vip': return 'Aún no marcas pacientes VIP. Usa la 👑 en cada tarjeta.'
+    default: return 'Aún no hay pacientes registrados. Crea el primero con “Nuevo paciente”.'
+  }
+}
 
 export default function ContactosPage() {
   const [query, setQuery]         = useState('')
   const [debounced, setDebounced] = useState('')
+  const [segment, setSegment]     = useState<PatientSegment>('all')
+  const [dateFrom, setDateFrom]   = useState('')
+  const [dateTo, setDateTo]       = useState('')
   const [nuevoOpen, setNuevo]     = useState(false)
   const [verPaciente, setVer]     = useState<PatientOut | null>(null)
   const [editarPaciente, setEditar] = useState<PatientOut | null>(null)
@@ -20,6 +52,7 @@ export default function ContactosPage() {
   const editar = puedeEditar(role, 'contactos')
   const verClinico = puedeVerExpedienteClinico(role)
   const baja = useDeactivatePatient()
+  const clasificar = useSetPatientClassification()
 
   const abrirEdicion = () => {
     if (!verPaciente) return
@@ -36,13 +69,19 @@ export default function ContactosPage() {
     baja.mutate(verPaciente.id, { onSuccess: () => setVer(null) })
   }
 
+  const toggleFavorito = (p: PatientOut) =>
+    clasificar.mutate({ id: p.id, input: { is_favorite: !p.is_favorite } })
+  const toggleVip = (p: PatientOut) =>
+    clasificar.mutate({ id: p.id, input: { is_vip: !p.is_vip } })
+
   // Debounce de la búsqueda: 350 ms tras dejar de teclear → menos llamadas al backend.
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 350)
     return () => clearTimeout(t)
   }, [query])
 
-  const { data, isLoading, isError, error } = usePatients(debounced)
+  const esperandoFechas = segment === 'date' && (!dateFrom || !dateTo)
+  const { data, isLoading, isError, error } = usePatients({ search: debounced, segment, dateFrom, dateTo })
   const lista = data?.results ?? []
   const total = data?.count ?? 0
 
@@ -58,13 +97,13 @@ export default function ContactosPage() {
 
       <div className="p-5 max-w-[1300px] mx-auto">
 
-        {/* ════ Cabecera: título + buscador ════ */}
+        {/* ════ Cabecera: título + buscador + filtros ════ */}
         <div className="glass-card rounded-2xl px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Pacientes</h1>
               <p className="text-sm text-gray-500">
-                {isLoading ? 'Cargando…' : `${total} paciente${total === 1 ? '' : 's'} registrado${total === 1 ? '' : 's'}`}
+                {isLoading ? 'Cargando…' : `${total} paciente${total === 1 ? '' : 's'}`}
               </p>
             </div>
             {editar && (
@@ -89,7 +128,56 @@ export default function ContactosPage() {
               />
             </div>
           </div>
+
+          {/* Chips de segmento */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {SEGMENTOS.map(s => {
+              const activo = segment === s.key
+              return (
+                <button key={s.key} type="button" onClick={() => setSegment(s.key)}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+                  style={activo
+                    ? { background: '#C9A227', color: '#fff', boxShadow: '0 2px 8px rgba(201,162,39,0.35)' }
+                    : { background: 'rgba(255,255,255,0.6)', color: '#7A756C' }}>
+                  {s.key === 'date' && <CalendarRange className="w-3.5 h-3.5" />}
+                  {s.key === 'favorites' && <Star className="w-3.5 h-3.5" />}
+                  {s.key === 'vip' && <Crown className="w-3.5 h-3.5" />}
+                  {s.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
+
+        {/* ════ Panel de rango de fechas (solo segmento "Por fecha") ════ */}
+        {segment === 'date' && (
+          <div className="glass-card rounded-2xl mt-4 px-6 py-5">
+            <p className="text-sm text-gray-600 mb-3">
+              Elige un <strong>rango de fechas</strong>: verás los pacientes atendidos entre esos días.
+            </p>
+            <div className="flex flex-wrap gap-5">
+              <div>
+                <label className="label mb-1.5 block">Desde</label>
+                <MiniCalendario value={dateFrom || null} onPick={setDateFrom} accent="gold"
+                  footer={<div className="text-center text-[11px] font-medium" style={{ color: '#9A7B1E' }}>
+                    {dateFrom ? formatFechaCorta(dateFrom) : 'Sin elegir'}
+                  </div>} />
+              </div>
+              <div>
+                <label className="label mb-1.5 block">Hasta</label>
+                <MiniCalendario value={dateTo || null} onPick={setDateTo} min={dateFrom || undefined} accent="gold"
+                  footer={<div className="text-center text-[11px] font-medium" style={{ color: '#9A7B1E' }}>
+                    {dateTo ? formatFechaCorta(dateTo) : 'Sin elegir'}
+                  </div>} />
+              </div>
+            </div>
+            {esperandoFechas && (
+              <p className="text-xs mt-3" style={{ color: '#9A7B1E' }}>
+                Elige <strong>ambas</strong> fechas para ver los resultados.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* ════ Estado de error ════ */}
         {isError && (
@@ -102,14 +190,14 @@ export default function ContactosPage() {
         )}
 
         {/* ════ Estado de carga ════ */}
-        {isLoading && !isError && (
+        {isLoading && !isError && !esperandoFechas && (
           <div className="flex items-center justify-center gap-2 mt-16 text-amber-700">
             <Loader2 className="w-5 h-5 animate-spin" /> Cargando pacientes…
           </div>
         )}
 
         {/* ════ Cuadrícula de carpetas (folders) ════ */}
-        {!isLoading && !isError && (
+        {!isLoading && !isError && !esperandoFechas && (
           <div className="grid gap-5 mt-7" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {lista.map(p => (
               <div key={p.id} className="group relative pt-6 transition-transform duration-200 hover:-translate-y-1.5">
@@ -129,26 +217,43 @@ export default function ContactosPage() {
                   {p.record_number}
                 </div>
 
+                {/* Acciones rápidas: favorito / VIP (overlay, fuera del botón del cuerpo) */}
+                {editar && (
+                  <div className="absolute top-7 right-3 z-20 flex gap-1">
+                    <button type="button" title={p.is_favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                      onClick={e => { e.stopPropagation(); toggleFavorito(p) }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-amber-50"
+                      style={{ background: 'rgba(255,255,255,0.7)' }}>
+                      <Star className="w-4 h-4" style={{ fill: p.is_favorite ? '#C9A227' : 'transparent', color: p.is_favorite ? '#C9A227' : '#9aa0a6' }} />
+                    </button>
+                    <button type="button" title={p.is_vip ? 'Quitar VIP' : 'Marcar como VIP'}
+                      onClick={e => { e.stopPropagation(); toggleVip(p) }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-amber-50"
+                      style={{ background: 'rgba(255,255,255,0.7)' }}>
+                      <Crown className="w-4 h-4" style={{ fill: p.is_vip ? '#C9A227' : 'transparent', color: p.is_vip ? '#B8860B' : '#9aa0a6' }} />
+                    </button>
+                  </div>
+                )}
+
                 {/* Cuerpo de la carpeta */}
                 <button
                   onClick={() => setVer(p)}
                   className="relative z-10 glass-card rounded-2xl p-5 w-full text-left transition-shadow duration-200 group-hover:shadow-xl"
+                  style={{ outline: p.is_vip ? '2px solid #C9A227' : 'none', outlineOffset: 2 }}
                 >
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="mb-3">
                     <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold shrink-0"
                       style={{ background: 'rgba(201,162,39,0.16)', color: '#B8860B' }}>
                       {p.avatar ? <img src={p.avatar} alt="" className="w-full h-full object-cover" /> : initialsOf(p)}
                     </div>
-                    {p.is_provisional ? (
-                      <span className="badge" style={{ background: '#FBF1D9', color: '#9A7B1E' }}>Por completar</span>
-                    ) : (
-                      <span className={`badge ${p.is_active ? 'badge-success' : 'badge-neutral'}`}>
-                        {p.is_active ? 'Activo' : 'Inactivo'}
-                      </span>
-                    )}
                   </div>
 
-                  <h3 className="text-base font-semibold text-gray-900 leading-tight truncate">{p.full_name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-gray-900 leading-tight truncate">{p.full_name}</h3>
+                    {p.is_vip && (
+                      <span className="badge shrink-0" style={{ background: '#FBF1D9', color: '#9A7B1E' }}>VIP</span>
+                    )}
+                  </div>
                   {p.is_provisional ? (
                     <div className="flex items-center gap-1 text-[11px] mb-3" style={{ color: '#9A7B1E' }}>
                       <AlertTriangle className="w-3 h-3 shrink-0" /> Falta completar datos personales
@@ -162,7 +267,8 @@ export default function ContactosPage() {
                       <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {p.phone || '—'}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-600">
-                      <CalendarDays className="w-3.5 h-3.5 text-gray-400 shrink-0" /> Última: —
+                      <CalendarDays className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      {p.last_seen_at ? `Última: ${formatFechaCorta(p.last_seen_at)}` : 'Sin citas atendidas'}
                     </div>
                   </div>
                 </button>
@@ -172,11 +278,7 @@ export default function ContactosPage() {
             {/* Estado vacío */}
             {lista.length === 0 && (
               <div className="col-span-full glass-card rounded-2xl py-16 text-center">
-                <p className="text-gray-500 text-sm">
-                  {debounced
-                    ? 'No encontramos pacientes con ese criterio.'
-                    : 'Aún no hay pacientes registrados. Crea el primero con “Nuevo paciente”.'}
-                </p>
+                <p className="text-gray-500 text-sm">{mensajeVacio(segment, !!debounced)}</p>
               </div>
             )}
           </div>
