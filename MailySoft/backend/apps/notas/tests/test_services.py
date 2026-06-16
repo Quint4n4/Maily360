@@ -178,16 +178,32 @@ class TestNoteCreateValidations:
         with pytest.raises(ValidationError, match="dueño"):
             note_create(tenant=tenant, user=doctor, title="Aviso", scope=NoteScope.ALL)
 
-    def test_scope_role_by_non_owner_raises(self, db):
-        """Un no-owner NO puede crear nota scope=role."""
+    def test_scope_role_by_staff_allowed(self, db):
+        """El staff clínico (p. ej. enfermería) SÍ puede dirigir una nota a un rol."""
         tenant = TenantFactory()
         nurse = _make_member(tenant, role="nurse")
 
-        with pytest.raises(ValidationError, match="dueño"):
+        note = note_create(
+            tenant=tenant,
+            user=nurse,
+            title="Aviso enfermería",
+            scope=NoteScope.ROLE,
+            target_role="reception",
+        )
+
+        assert note.scope == NoteScope.ROLE
+        assert note.target_role == "reception"
+
+    def test_scope_role_by_finance_raises(self, db):
+        """Un rol no-staff (finance) NO puede dirigir notas a un rol."""
+        tenant = TenantFactory()
+        finance = _make_member(tenant, role="finance")
+
+        with pytest.raises(ValidationError, match="dirigir"):
             note_create(
                 tenant=tenant,
-                user=nurse,
-                title="Aviso enfermería",
+                user=finance,
+                title="Aviso",
                 scope=NoteScope.ROLE,
                 target_role="nurse",
             )

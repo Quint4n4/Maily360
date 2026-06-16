@@ -1,6 +1,6 @@
 import { ReactElement } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './auth/AuthContext'
+import { AuthProvider, useAuth } from './auth/AuthContext'
 import { RequireAuth } from './auth/RequireAuth'
 import { RoleProvider, useRole } from './auth/RoleContext'
 import { Modulo, accesoModulo, inicioDeRol } from './auth/permisos'
@@ -13,6 +13,7 @@ import PersonalPage from './pages/PersonalPage'
 import FinanzasPage from './pages/FinanzasPage'
 import NotasPage from './pages/NotasPage'
 import AlertaCitas from './components/agenda/AlertaCitas'
+import LuzRecordatorios from './components/agenda/LuzRecordatorios'
 import DashboardPlataformaPage from './pages/plataforma/DashboardPage'
 import ClinicasPage from './pages/plataforma/ClinicasPage'
 import SuscripcionesPage from './pages/plataforma/SuscripcionesPage'
@@ -35,11 +36,23 @@ function ClinicRoute({ modulo, children }: { modulo: Modulo; children: ReactElem
   )
 }
 
-/* Panel de plataforma: protege por rol de plataforma (aún con datos mock, sin backend) */
+/* Panel de plataforma: exige sesión + ser staff de Maily + rol de plataforma */
 function PlatGuard({ modulo, children }: { modulo: PlatModulo; children: ReactElement }) {
+  const { isPlatformStaff, clinicRole } = useAuth()
   const { role } = usePlatformRole()
+  // No es staff de Maily → de vuelta a su app de clínica (o al login).
+  if (!isPlatformStaff) return <Navigate to={clinicRole ? inicioDeRol(clinicRole) : '/login'} replace />
   if (!accesoModuloPlat(role, modulo)) return <Navigate to={inicioPlat(role)} replace />
   return children
+}
+
+/* Atajo: ruta de plataforma protegida por sesión + staff + rol */
+function PlatformRoute({ modulo, children }: { modulo: PlatModulo; children: ReactElement }) {
+  return (
+    <RequireAuth>
+      <PlatGuard modulo={modulo}>{children}</PlatGuard>
+    </RequireAuth>
+  )
 }
 
 export default function App() {
@@ -57,19 +70,21 @@ export default function App() {
             <Route path="/notas"     element={<ClinicRoute modulo="notas"><NotasPage /></ClinicRoute>} />
             <Route path="/finanzas"  element={<ClinicRoute modulo="finanzas"><FinanzasPage /></ClinicRoute>} />
 
-            {/* ── Panel interno de Maily (mock; sin backend todavía) ── */}
+            {/* ── Panel interno de Maily (datos reales: dashboard/clínicas/usuarios) ── */}
             <Route path="/plataforma" element={<Navigate to="/plataforma/dashboard" replace />} />
-            <Route path="/plataforma/dashboard"     element={<PlatGuard modulo="dashboard"><DashboardPlataformaPage /></PlatGuard>} />
-            <Route path="/plataforma/clinicas"      element={<PlatGuard modulo="clinicas"><ClinicasPage /></PlatGuard>} />
-            <Route path="/plataforma/suscripciones" element={<PlatGuard modulo="suscripciones"><SuscripcionesPage /></PlatGuard>} />
-            <Route path="/plataforma/usuarios"      element={<PlatGuard modulo="usuarios"><UsuariosPage /></PlatGuard>} />
-            <Route path="/plataforma/sistema"       element={<PlatGuard modulo="sistema"><SistemaPage /></PlatGuard>} />
+            <Route path="/plataforma/dashboard"     element={<PlatformRoute modulo="dashboard"><DashboardPlataformaPage /></PlatformRoute>} />
+            <Route path="/plataforma/clinicas"      element={<PlatformRoute modulo="clinicas"><ClinicasPage /></PlatformRoute>} />
+            <Route path="/plataforma/suscripciones" element={<PlatformRoute modulo="suscripciones"><SuscripcionesPage /></PlatformRoute>} />
+            <Route path="/plataforma/usuarios"      element={<PlatformRoute modulo="usuarios"><UsuariosPage /></PlatformRoute>} />
+            <Route path="/plataforma/sistema"       element={<PlatformRoute modulo="sistema"><SistemaPage /></PlatformRoute>} />
 
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
 
           {/* Vigilante global: alerta cuando una cita de hoy se queda atrás de su estado */}
           <AlertaCitas />
+          {/* Luz amarilla global: recordatorios de hoy ya vencidos y pendientes */}
+          <LuzRecordatorios />
         </PlatformRoleProvider>
       </RoleProvider>
     </AuthProvider>

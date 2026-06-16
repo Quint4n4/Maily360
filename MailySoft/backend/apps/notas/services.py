@@ -8,7 +8,9 @@ Convención: keyword-only args en toda firma, nombrado acción+entidad.
 
 Reglas críticas:
   1. Al menos uno de title/body debe tener contenido.
-  2. scope role/all SOLO puede crearlo el OWNER del tenant.
+  2. scope=all (aviso a toda la clínica) SOLO puede crearlo el OWNER.
+     scope=role (nota dirigida a un rol) lo puede crear cualquier miembro de
+     ROLE_NOTE_SENDERS (owner, admin, doctor, nurse, reception).
      La restricción se aplica aquí (service), no en el permiso HTTP.
      Razón: el service puede llamarse desde Celery/commands sin contexto HTTP.
   3. target_role obligatorio cuando scope=role; forzado a "" en otros scopes.
@@ -31,6 +33,13 @@ from django.utils import timezone
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
 from apps.notas.models import Note, NoteScope
+from apps.notificaciones.models import NotificationKind, NotificationTarget
+from apps.notificaciones.recipients import (
+    ROLE_NOTE_SENDERS,
+    all_tenant_users,
+    users_with_role,
+)
+from apps.notificaciones.services import notification_fanout
 from apps.tenancy.models import Tenant, TenantMembership
 
 logger = logging.getLogger("apps.notas.services")
@@ -117,14 +126,13 @@ def _can_mutate(*, note: Note, user: Any, tenant: Tenant) -> bool:
 
     Regla:
       - Nota personal (scope=personal): solo el author.
-      - Nota global (scope=role|all): solo el author (owner) o cualquier owner del tenant.
+      - Nota global (scope=role|all): el author, o cualquier owner del tenant.
     """
     if note.author_id == user.pk:
         return True
-    # Para notas globales, el owner del tenant puede editarlas aunque no las haya creado
-    # (caso raro pero posible si el owner cambia o hay un admin con acceso especial en el futuro).
-    # En v1 solo el owner puede crear notas globales, así que author siempre es el owner.
-    # Dejamos esta comprobación como defensa en profundidad.
+    # Para notas globales, el owner del tenant puede editarlas/borrarlas aunque no
+    # las haya creado (supervisión). El autor de una nota scope=role puede ser
+    # cualquier miembro de ROLE_NOTE_SENDERS; el de scope=all siempre es el owner.
     if note.scope in (NoteScope.ROLE, NoteScope.ALL) and _is_owner(
         user=user, tenant=tenant
     ):
@@ -154,7 +162,8 @@ def note_create(
 
     Valida:
         - title o body deben tener contenido.
-        - scope role/all solo para el owner (ValidationError si otro lo intenta).
+        - scope=all solo para el owner; scope=role para ROLE_NOTE_SENDERS
+          (ValidationError si un rol sin permiso lo intenta).
         - target_role obligatorio y válido cuando scope=role.
         - target_role forzado a "" cuando scope != role.
 
@@ -186,11 +195,19 @@ def note_create(
     # 2. Validar contenido
     _validate_content(title=title, body=body)
 
-    # 3. Validar scope vs rol del usuario
-    if scope in (NoteScope.ROLE, NoteScope.ALL):
+    # 3. Validar quién puede usar cada scope.
+    actor_role = _get_role(user=user, tenant=tenant)
+    if scope == NoteScope.ALL:
+        # El aviso a TODA la clínica sigue siendo exclusivo del dueño.
         if not _is_owner(user=user, tenant=tenant):
             raise ValidationError(
-                "Solo el dueño de la clínica puede crear notas globales (scope='role' o 'all')."
+                "Solo el dueño de la clínica puede enviar un aviso a toda la clínica (scope='all')."
+            )
+    elif scope == NoteScope.ROLE:
+        # Dirigir una nota a un rol lo puede hacer el staff clínico (no finance/readonly).
+        if actor_role not in ROLE_NOTE_SENDERS:
+            raise ValidationError(
+                "Tu rol no puede dirigir notas a un rol específico."
             )
 
     # 4. Validar target_role
@@ -224,7 +241,6 @@ def note_create(
     )
 
     # 6. Auditar
-    actor_role = _get_role(user=user, tenant=tenant)
     action = (
         ActionType.NOTE_GLOBAL_SEND
         if scope in (NoteScope.ROLE, NoteScope.ALL)
@@ -249,6 +265,32 @@ def note_create(
         },
         actor_role=actor_role,
     )
+
+    # 7. Reparto de notificaciones para notas globales (campana).
+    #    El fanout excluye al propio autor (no auto-notificación).
+    if scope == NoteScope.ROLE:
+        role_label = TenantMembership.Role(target_role).label
+        notification_fanout(
+            tenant=tenant,
+            recipients=users_with_role(tenant=tenant, role=target_role),
+            kind=NotificationKind.ROLE_NOTE,
+            title=title or f"Nueva nota para {role_label}",
+            body=body[:200],
+            actor=user,
+            target_type=NotificationTarget.NOTE,
+            target_id=note.id,
+        )
+    elif scope == NoteScope.ALL:
+        notification_fanout(
+            tenant=tenant,
+            recipients=all_tenant_users(tenant=tenant),
+            kind=NotificationKind.BROADCAST,
+            title=title or "Aviso para toda la clínica",
+            body=body[:200],
+            actor=user,
+            target_type=NotificationTarget.NOTE,
+            target_id=note.id,
+        )
 
     return note
 
@@ -328,11 +370,16 @@ def note_update(
     # 5. Validar contenido resultante
     _validate_content(title=new_title, body=new_body)
 
-    # 6. Validar cambio de scope a global: solo owner
-    if "scope" in update_data and new_scope in (NoteScope.ROLE, NoteScope.ALL):
-        if not _is_owner(user=user, tenant=tenant):
+    # 6. Validar cambio de scope (mismas reglas que note_create):
+    #    scope=all → solo owner; scope=role → ROLE_NOTE_SENDERS.
+    if "scope" in update_data:
+        if new_scope == NoteScope.ALL and not _is_owner(user=user, tenant=tenant):
             raise ValidationError(
-                "Solo el dueño puede cambiar el alcance de una nota a global."
+                "Solo el dueño puede convertir una nota en aviso a toda la clínica."
+            )
+        if new_scope == NoteScope.ROLE and _get_role(user=user, tenant=tenant) not in ROLE_NOTE_SENDERS:
+            raise ValidationError(
+                "Tu rol no puede dirigir notas a un rol específico."
             )
 
     # 7. Validar target_role según nuevo scope

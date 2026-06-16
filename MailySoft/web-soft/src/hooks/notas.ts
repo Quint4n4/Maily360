@@ -14,11 +14,14 @@ export function useNotes(filters: { is_task?: boolean; done?: boolean } = {}) {
   })
 }
 
-/** Mis recordatorios en un rango de fechas (para el widget de la agenda). */
-export function useReminders(params: { date_from?: string; date_to?: string }) {
+/** Mis recordatorios en un rango de fechas (para el widget de la agenda y la luz).
+ *  `enabled` permite NO consultar hasta tener sesión (evita pegarle a la API
+ *  durante el bootstrap de auth y provocar un refresh en paralelo). */
+export function useReminders(params: { date_from?: string; date_to?: string }, enabled = true) {
   return useQuery({
     queryKey: [...notasKey, 'recordatorios', params],
     queryFn: () => listReminders(params),
+    enabled,
   })
 }
 

@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ChevronDown, LogOut, User } from 'lucide-react'
+import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ChevronDown, LogOut, User, Building2 } from 'lucide-react'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
 import { Modulo, accesoModulo, ROLE_LABEL } from '../auth/permisos'
+import CampanaNotificaciones from './CampanaNotificaciones'
 
 interface TopbarProps {
   active?: Modulo
@@ -20,7 +21,7 @@ const NAV: { key: Modulo; label: string; icon: typeof BarChart3 }[] = [
 export default function Topbar({ active = 'agenda' }: TopbarProps) {
   const navigate = useNavigate()
   const { role } = useRole()
-  const { user, logout } = useAuth()
+  const { user, logout, isPlatformStaff } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [cerrando, setCerrando] = useState(false)
 
@@ -68,8 +69,10 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
         </nav>
       </div>
 
-      {/* ── Derecha: perfil ── */}
-      <div className="relative">
+      {/* ── Derecha: notificaciones + perfil ── */}
+      <div className="flex items-center gap-1.5">
+        <CampanaNotificaciones />
+        <div className="relative">
         <button
           onClick={() => setMenuOpen(v => !v)}
           className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition-colors hover:bg-black/5"
@@ -107,6 +110,16 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
                 <User className="w-4 h-4 text-gray-400" /> Mi perfil
               </button>
 
+              {isPlatformStaff && (
+                <button
+                  onClick={() => { setMenuOpen(false); navigate('/plataforma/dashboard') }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-amber-50 transition-colors border-t border-gray-100"
+                  style={{ color: '#B8860B', fontWeight: 600 }}
+                >
+                  <Building2 className="w-4 h-4" /> Panel de Maily
+                </button>
+              )}
+
               <button
                 onClick={cerrarSesion}
                 disabled={cerrando}
@@ -117,6 +130,7 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
             </div>
           </>
         )}
+        </div>
       </div>
     </header>
   )
