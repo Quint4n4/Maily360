@@ -2,7 +2,7 @@
 
 > Registro de las decisiones importantes tomadas durante el desarrollo, con su **porqué** y sus **implicaciones**.
 > Las decisiones de arquitectura más formales tienen su propio ADR en `docs/adr/`. Este documento las consolida y agrega las decisiones de producto/UX y de frontend.
-> Actualizado: **2026-06-12**.
+> Actualizado: **2026-06-15**.
 
 ---
 
@@ -99,6 +99,36 @@ Así la enfermera **ayuda al doctor moviendo al paciente** por el flujo, pero **
 **Decisión:** al agendar "paciente nuevo", el expediente provisional y la cita se crean en **una sola transacción** (`appointment_create_with_new_patient`; el POST de cita acepta `new_patient` además de `patient_id`). Si la cita falla, el paciente **no se crea** (rollback).
 **Por qué:** antes se creaban en dos llamadas; si la cita fallaba (empalme, reglas de médico), el expediente quedaba **huérfano** y cada reintento lo **duplicaba**. Las reglas nuevas (D-15) hicieron que fallara más seguido → más duplicados.
 **Implicación:** se eliminó la causa raíz de los expedientes duplicados; quedan como pendiente la **detección/fusión de duplicados de persona** (mismo nombre/teléfono) al agendar.
+
+## D-19 · Sistema de notificaciones in-app (campana + luz amarilla)
+
+**Decisión:** un sistema de notificaciones en tiempo casi real basado en **polling cada 30 s** (sin WebSockets), con una app Django nueva `apps/notificaciones/` y dos componentes visuales en el frontend: campana en el Topbar y luz amarilla para recordatorios.
+
+**Por qué:** los WebSockets añaden complejidad operativa (Redis Channels, cambio en ASGI) que no justifica el MVP. El polling a 30 s es suficiente para los tres casos de uso (notas de equipo, reuniones, notas a un rol) y aprovecha la infraestructura HTTP existente. El sistema es **best-effort**: los disparadores van dentro de `try/except` para que un fallo en las notificaciones nunca tumbe la acción principal (agendar una reunión, escribir una nota).
+
+**Diseño: quién envía y quién recibe por tipo de notificación:**
+
+| `kind` | Evento disparador | Destinatarios |
+|---|---|---|
+| `meeting` | Se crea un `AgendaBlock` con `kind=meeting` | Depende del alcance: `medico` → ese médico; `consultorio` → sus médicos; `clinica` → todo el staff (owner/admin/doctor/nurse/reception). Los bloqueos simples **no** notifican. |
+| `team_note` | Se agrega una `AgendaItemNote` a una cita | El médico de la cita + recepción + quienes ya comentaron el hilo. |
+| `role_note` | Se crea una `Note` con `scope=role` | Todos los usuarios del tenant con ese rol. |
+| `broadcast` | Se crea una `Note` con `scope=all` | Todos los usuarios del tenant. |
+
+Regla transversal: el **actor** (quien dispara) siempre se excluye del reparto.
+
+**Cambio de permisos en notas (parte de esta feature):** antes, `scope=role` y `scope=all` eran exclusivos del Dueño. Ahora:
+- `scope=role` → lo pueden crear owner, admin, doctor, nurse, reception (`ROLE_NOTE_SENDERS`).
+- `scope=all` → sigue siendo exclusivo del Dueño.
+La decisión fue del dueño del producto: el staff clínico necesita avisarle a un rol específico sin requerir al dueño.
+
+**Aislamiento multi-tenant:** `Notification` hereda de `TenantAwareModel`; tiene RLS (migración `0002_enable_rls`, mismo patrón que pacientes). El selector filtra por `tenant` **y** `recipient` (doble barrera; el IDOR está testeado).
+
+**Frontend:** `CampanaNotificaciones.tsx` (badge de no leídas, dropdown, marcar una/todas, navega al objeto destino) montado en el Topbar; `LuzRecordatorios.tsx` (luz parpadeante de recordatorios de hoy vencidos, snooze 4 h) montado en `App.tsx`. Ambos usan hooks de polling a 30 s.
+
+**Implicación:** todo el código de negocio que crea eventos (notas, reuniones) llama a `notification_fanout` al final de su service, dentro de `try/except` (no bloquea). Nuevos endpoints: `GET /api/v1/notificaciones/`, `GET /api/v1/notificaciones/conteo/`, `POST /api/v1/notificaciones/leidas/`, `POST /api/v1/notificaciones/<id>/leida/`.
+
+**PII pendiente a revisar:** el título de la notificación de `team_note` incluye el nombre del paciente (facilita la UX pero es PII). El equipo debe decidir si anonimizarlo o aceptarlo documentado.
 
 ---
 

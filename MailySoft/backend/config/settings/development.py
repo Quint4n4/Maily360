@@ -13,7 +13,7 @@ from .base import env
 
 DEBUG: bool = env.bool("DJANGO_DEBUG", default=True)
 
-ALLOWED_HOSTS: list[str] = env.list("DJANGO_ALLOWED_HOSTS", default=["*"])
+ALLOWED_HOSTS: list[str] = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 # ---------------------------------------------------------------------------
 # Django Debug Toolbar (instalar como dev dep si se requiere)

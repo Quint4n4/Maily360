@@ -30,7 +30,7 @@ from apps.core.files import validate_avatar
 from apps.core.permissions import PatientPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
-from apps.pacientes.models import Patient, Sex
+from apps.pacientes.models import BloodType, Education, MaritalStatus, Patient, Sex
 from apps.pacientes.selectors import patient_get, patient_list
 from apps.pacientes.serializers import PatientOutputSerializer
 from apps.pacientes.services import (
@@ -39,6 +39,7 @@ from apps.pacientes.services import (
     patient_create_quick,
     patient_deactivate,
     patient_set_avatar,
+    patient_set_classification,
     patient_update,
 )
 
@@ -98,12 +99,47 @@ def _validate_phone(value: str) -> str:
     return value
 
 
+_VALID_SEGMENTS = frozenset(
+    {"all", "recent", "week", "month", "date", "potential", "favorites", "vip"}
+)
+
+
 class PatientListCreateApi(TenantAPIView):
     """GET /api/v1/pacientes/ — lista paginada de pacientes activos.
     POST /api/v1/pacientes/ — crea un paciente nuevo.
     """
 
     permission_classes = [IsAuthenticated, PatientPermission]
+
+    class FilterSerializer(serializers.Serializer):
+        """Parámetros de query para GET /pacientes/."""
+
+        search = serializers.CharField(default="", allow_blank=True, required=False)
+        segment = serializers.ChoiceField(
+            choices=[
+                ("all", "Todos"),
+                ("recent", "Recientes"),
+                ("week", "Esta semana"),
+                ("month", "Este mes"),
+                ("date", "Rango de fechas"),
+                ("potential", "Potenciales"),
+                ("favorites", "Favoritos"),
+                ("vip", "VIP"),
+            ],
+            default="all",
+            required=False,
+        )
+        date_from = serializers.DateField(required=False, allow_null=True)
+        date_to = serializers.DateField(required=False, allow_null=True)
+
+        def validate(self, attrs: dict) -> dict:  # type: ignore[override]
+            if attrs.get("segment") == "date":
+                if not attrs.get("date_from") or not attrs.get("date_to"):
+                    raise serializers.ValidationError(
+                        "Los parámetros date_from y date_to son obligatorios "
+                        "cuando segment='date'."
+                    )
+            return attrs
 
     class InputSerializer(serializers.Serializer):
         first_name = serializers.CharField(max_length=120)
@@ -125,9 +161,17 @@ class PatientListCreateApi(TenantAPIView):
             return _validate_phone(value)
 
     def get(self, request: Request) -> Response:
-        """Lista paginada de pacientes activos del tenant actual."""
-        search: str = request.query_params.get("search", "")
-        qs = patient_list(search=search)
+        """Lista paginada de pacientes activos del tenant actual, con filtros y segmentos."""
+        f = self.FilterSerializer(data=request.query_params)
+        f.is_valid(raise_exception=True)
+        fd = f.validated_data
+
+        qs = patient_list(
+            search=fd.get("search", ""),
+            segment=fd.get("segment", "all"),
+            date_from=fd.get("date_from"),
+            date_to=fd.get("date_to"),
+        )
 
         # FIX-B6: el paginator siempre pagina; si qs está vacío devuelve página vacía,
         # nunca serializa todos los registros sin paginar.
@@ -234,6 +278,18 @@ class PatientDetailApi(TenantAPIView):
     permission_classes = [IsAuthenticated, PatientPermission]
 
     class InputSerializer(serializers.Serializer):
+        """Valida los datos de entrada del PATCH de Patient.
+
+        ALTO-2 (D-EC-7): rechaza campos no declarados y valida la coherencia
+        is_deceased/deceased_at (misma lógica que PatientNom004InputSerializer,
+        ahora consolidada aquí como fuente única de verdad — MEDIO-4).
+
+        MEDIO-2: phone_secondary valida el mismo formato que phone (si se provee).
+
+        FIX-B3: is_active ELIMINADO — la activación/desactivación solo ocurre
+        vía DELETE (patient_deactivate). Los campos inmutables tampoco se exponen.
+        """
+
         first_name = serializers.CharField(max_length=120, required=False)
         paternal_surname = serializers.CharField(max_length=120, required=False)
         maternal_surname = serializers.CharField(max_length=120, required=False, allow_blank=True)
@@ -245,14 +301,76 @@ class PatientDetailApi(TenantAPIView):
         curp = serializers.CharField(max_length=18, required=False, allow_blank=True)
         email = serializers.EmailField(required=False, allow_blank=True)
         notes = serializers.CharField(required=False, allow_blank=True)
-        # FIX-B3: is_active ELIMINADO del InputSerializer del PATCH.
-        # La activación/desactivación solo ocurre vía DELETE (patient_deactivate).
+        # Campos NOM-004 expediente A1 (plan §3.1) — todos opcionales en PATCH.
+        address_street = serializers.CharField(max_length=255, required=False, allow_blank=True)
+        address_neighborhood = serializers.CharField(max_length=120, required=False, allow_blank=True)
+        city = serializers.CharField(max_length=120, required=False, allow_blank=True)
+        state = serializers.CharField(max_length=120, required=False, allow_blank=True)
+        postal_code = serializers.CharField(max_length=10, required=False, allow_blank=True)
+        birthplace = serializers.CharField(max_length=160, required=False, allow_blank=True)
+        marital_status = serializers.ChoiceField(
+            choices=[("", "Sin especificar")] + list(MaritalStatus.choices),
+            required=False,
+            allow_blank=True,
+        )
+        education = serializers.ChoiceField(
+            choices=[("", "Sin especificar")] + list(Education.choices),
+            required=False,
+            allow_blank=True,
+        )
+        occupation = serializers.CharField(max_length=120, required=False, allow_blank=True)
+        religion = serializers.CharField(max_length=80, required=False, allow_blank=True)
+        blood_type = serializers.ChoiceField(
+            choices=[("", "Sin especificar")] + list(BloodType.choices),
+            required=False,
+            allow_blank=True,
+        )
+        # MEDIO-2: phone_secondary con validación de formato (misma regex que phone).
+        phone_secondary = serializers.CharField(max_length=20, required=False, allow_blank=True)
+        phone_label = serializers.CharField(max_length=40, required=False, allow_blank=True)
+        is_deceased = serializers.BooleanField(required=False)
+        deceased_at = serializers.DateField(required=False, allow_null=True)
+        custom_consultation_fee = serializers.DecimalField(
+            max_digits=10, decimal_places=2, required=False, allow_null=True
+        )
+        category = serializers.CharField(max_length=60, required=False, allow_blank=True)
 
         def validate_curp(self, value: str) -> str:
             return _validate_curp(value)
 
         def validate_phone(self, value: str) -> str:
             return _validate_phone(value)
+
+        def validate_phone_secondary(self, value: str) -> str:
+            """MEDIO-2: valida el formato del teléfono secundario. Permite vacío."""
+            if not value:
+                return value
+            return _validate_phone(value)
+
+        def validate(self, attrs: dict) -> dict:  # type: ignore[override]
+            """ALTO-2 (D-EC-7): rechaza campos desconocidos y valida is_deceased/deceased_at."""
+            # Rechazar campos no declarados (whitelist).
+            declared = set(self.fields.keys())
+            received = set(self.initial_data.keys())  # type: ignore[union-attr]
+            unknown = received - declared
+            if unknown:
+                raise serializers.ValidationError(
+                    {field: ["Campo no permitido."] for field in sorted(unknown)}
+                )
+
+            # Coherencia is_deceased / deceased_at.
+            is_deceased = attrs.get("is_deceased")
+            deceased_at = attrs.get("deceased_at")
+
+            if is_deceased is True and deceased_at is None:
+                raise serializers.ValidationError(
+                    {"deceased_at": "La fecha de defunción es obligatoria cuando is_deceased=True."}
+                )
+            if is_deceased is False:
+                # Limpiar la fecha si se revierte el estado (corrección administrativa).
+                attrs["deceased_at"] = None
+
+            return attrs
 
     def _get_patient_or_404(self, patient_id: uuid.UUID) -> "tuple[Patient | None, Response | None]":
         """Recupera el paciente o devuelve una respuesta 404."""
@@ -367,3 +485,41 @@ class PatientAvatarApi(TenantAPIView):
 
         patient = patient_clear_avatar(patient=patient, user=request.user)
         return Response(PatientOutputSerializer(patient).data)
+
+
+class PatientClassifyApi(TenantAPIView):
+    """POST /api/v1/pacientes/<uuid:patient_id>/clasificacion/
+
+    Marca o desmarca un paciente como favorito y/o VIP.
+    Solo actualiza los flags que se envíen en el cuerpo. Un campo ausente
+    (no enviado) no modifica el flag correspondiente.
+
+    Permisos: mismos roles que POST de pacientes (owner, admin, doctor, nurse, reception).
+    """
+
+    permission_classes = [IsAuthenticated, PatientPermission]
+
+    class InputSerializer(serializers.Serializer):
+        is_favorite = serializers.BooleanField(required=False)
+        is_vip = serializers.BooleanField(required=False)
+
+    def post(self, request: Request, patient_id: uuid.UUID) -> Response:
+        """Clasifica un paciente actualizando is_favorite y/o is_vip."""
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        try:
+            patient = patient_get(patient_id=patient_id)
+        except Patient.DoesNotExist:
+            return Response(
+                {"detail": "Paciente no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        updated_patient = patient_set_classification(
+            patient=patient,
+            user=request.user,
+            is_favorite=s.validated_data.get("is_favorite"),
+            is_vip=s.validated_data.get("is_vip"),
+        )
+        return Response(PatientOutputSerializer(updated_patient).data, status=status.HTTP_200_OK)

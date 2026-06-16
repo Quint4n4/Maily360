@@ -13,15 +13,23 @@
 import { request } from '../lib/http'
 import type {
   Paginated,
+  PatientClassifyInput,
   PatientCreateInput,
   PatientOut,
   PatientQuickCreateInput,
+  PatientSegment,
   PatientUpdateInput,
 } from '../types/paciente'
 
 export interface ListPatientsParams {
   search?: string
   page?: number
+  /** Segmento de filtrado (recientes, semana, mes, rango, potenciales, favoritos, vip). */
+  segment?: PatientSegment
+  /** Solo con segment='date': inicio del rango 'yyyy-mm-dd'. */
+  date_from?: string
+  /** Solo con segment='date': fin del rango 'yyyy-mm-dd' (inclusive). */
+  date_to?: string
 }
 
 /** GET /pacientes/ — lista paginada de pacientes activos del tenant. */
@@ -29,6 +37,9 @@ export async function listPatients(params: ListPatientsParams = {}): Promise<Pag
   const qs = new URLSearchParams()
   if (params.search) qs.set('search', params.search)
   if (params.page) qs.set('page', String(params.page))
+  if (params.segment && params.segment !== 'all') qs.set('segment', params.segment)
+  if (params.date_from) qs.set('date_from', params.date_from)
+  if (params.date_to) qs.set('date_to', params.date_to)
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
   return request<Paginated<PatientOut>>(`/pacientes/${suffix}`)
 }
@@ -63,4 +74,12 @@ export async function uploadPatientAvatar(id: string, file: File): Promise<Patie
   const fd = new FormData()
   fd.append('avatar', file)
   return request<PatientOut>(`/pacientes/${id}/avatar/`, { method: 'POST', body: fd })
+}
+
+/** POST /pacientes/<id>/clasificacion/ — marca/desmarca favorito y/o VIP. */
+export async function setPatientClassification(
+  id: string,
+  input: PatientClassifyInput,
+): Promise<PatientOut> {
+  return request<PatientOut>(`/pacientes/${id}/clasificacion/`, { method: 'POST', body: input })
 }

@@ -9,11 +9,13 @@ import type { Me } from '../types/api'
 
 interface LoginForm { email: string; password: string }
 
-/** Destino tras login: a dónde iba (state.from), o el inicio según el rol real. */
+/** Destino tras login: a dónde iba (state.from), o el inicio según el rol real.
+ *  El staff de Maily entra al panel de plataforma; si además tiene clínica,
+ *  puede saltar a ella desde el menú del topbar. */
 function destinoTrasLogin(profile: Me, from: string | null): string {
   if (from && from !== '/login') return from
-  if (profile.active_role) return inicioDeRol(profile.active_role)
   if (profile.is_platform_staff) return '/plataforma/dashboard'
+  if (profile.active_role) return inicioDeRol(profile.active_role)
   return '/agenda'
 }
 

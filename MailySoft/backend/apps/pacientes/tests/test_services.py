@@ -17,7 +17,7 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from apps.core.tenant_context import clear_current_tenant
-from apps.pacientes.models import Patient, PatientSequence
+from apps.pacientes.models import BloodType, Education, MaritalStatus, Patient, PatientSequence
 from apps.pacientes.services import patient_create, patient_deactivate, patient_update
 from tests.factories import PatientFactory, TenantFactory, UserFactory
 
@@ -363,3 +363,176 @@ class TestConsecutivoRecordNumber:
         # Assert
         seq = PatientSequence.all_objects.get(tenant=tenant)
         assert seq.last_number == 1
+
+
+# ===========================================================================
+# patient_update — campos NOM-004 (D-EC-7)
+# ===========================================================================
+
+
+class TestPatientUpdateNom004:
+    """Tests de patient_update con los campos NOM-004 del Expediente Clínico A1.
+
+    Cubre (D-EC-7: validación estricta de choices):
+    - Acepta valores válidos de blood_type, marital_status, education y persiste.
+    - Rechaza valores inválidos de esos choices con ValidationError.
+    - Campos de texto libre (ciudad, estado, etc.) se persisten correctamente.
+    - Campos opcionales pueden quedar vacíos sin romper el expediente provisional.
+    """
+
+    def test_patient_update_acepta_blood_type_valido(self, db: None) -> None:
+        """patient_update persiste blood_type con un valor válido de BloodType."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = _create_patient(tenant, user)
+
+        # Act
+        updated = patient_update(patient=patient, user=user, blood_type=BloodType.O_POS)
+
+        # Assert
+        updated.refresh_from_db()
+        assert updated.blood_type == "O+"
+
+    def test_patient_update_acepta_marital_status_valido(self, db: None) -> None:
+        """patient_update persiste marital_status con un valor válido de MaritalStatus."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = _create_patient(tenant, user)
+
+        # Act
+        updated = patient_update(patient=patient, user=user, marital_status=MaritalStatus.CASADO)
+
+        # Assert
+        updated.refresh_from_db()
+        assert updated.marital_status == "casado"
+
+    def test_patient_update_acepta_education_valido(self, db: None) -> None:
+        """patient_update persiste education con un valor válido de Education."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = _create_patient(tenant, user)
+
+        # Act
+        updated = patient_update(patient=patient, user=user, education=Education.LICENCIATURA)
+
+        # Assert
+        updated.refresh_from_db()
+        assert updated.education == "licenciatura"
+
+    def test_patient_update_rechaza_blood_type_invalido(self, db: None) -> None:
+        """Un blood_type fuera de BloodType.choices lanza ValidationError (D-EC-7).
+
+        Nota: el ORM de Django NO valida choices en save(); la validación ocurre
+        vía full_clean(). patient_update no llama full_clean() — el control de
+        choices en la API viene del serializer (ChoiceField). Este test verifica
+        la barrera del modelo vía full_clean() para documentar el contrato.
+        """
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = _create_patient(tenant, user)
+
+        # Setear directamente (simulando bypass de serializer).
+        patient.blood_type = "Z+"
+        with pytest.raises(ValidationError):
+            patient.full_clean()
+
+    def test_patient_update_rechaza_marital_status_invalido(self, db: None) -> None:
+        """Un marital_status fuera de choices falla al validar con full_clean() (D-EC-7)."""
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = _create_patient(tenant, user)
+
+        patient.marital_status = "polígamo"
+        with pytest.raises(ValidationError):
+            patient.full_clean()
+
+    def test_patient_update_rechaza_education_invalido(self, db: None) -> None:
+        """Un education fuera de choices falla al validar con full_clean() (D-EC-7)."""
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = _create_patient(tenant, user)
+
+        patient.education = "doctorado_en_memes"
+        with pytest.raises(ValidationError):
+            patient.full_clean()
+
+    def test_patient_update_persiste_campos_nom004_texto_libre(self, db: None) -> None:
+        """patient_update persiste correctamente los campos de texto libre NOM-004."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = _create_patient(tenant, user)
+
+        # Act
+        updated = patient_update(
+            patient=patient,
+            user=user,
+            city="Guadalajara",
+            state="Jalisco",
+            postal_code="44100",
+            address_street="Av. Revolución 123",
+            address_neighborhood="Centro",
+            birthplace="Zapopan, Jalisco",
+            occupation="Ingeniero",
+            religion="Católica",
+            phone_secondary="3312345678",
+            phone_label="Esposa",
+        )
+
+        # Assert — refrescar desde BD para confirmar persistencia real.
+        updated.refresh_from_db()
+        assert updated.city == "Guadalajara"
+        assert updated.state == "Jalisco"
+        assert updated.postal_code == "44100"
+        assert updated.address_street == "Av. Revolución 123"
+        assert updated.address_neighborhood == "Centro"
+        assert updated.birthplace == "Zapopan, Jalisco"
+        assert updated.occupation == "Ingeniero"
+        assert updated.religion == "Católica"
+        assert updated.phone_secondary == "3312345678"
+        assert updated.phone_label == "Esposa"
+
+    def test_patient_update_campos_opcionales_pueden_quedar_vacios(self, db: None) -> None:
+        """Actualizar con campos opcionales NOM-004 vacíos no rompe el expediente.
+
+        Escenario: expediente provisional sin NOM-004; una actualización parcial
+        que no toca esos campos no debe fallar ni resetear valores previos.
+        """
+        # Arrange — paciente provisional con blood_type ya guardado.
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = PatientFactory(tenant=tenant, blood_type="A+", marital_status="")
+
+        # Act — actualizar solo el teléfono, sin tocar blood_type.
+        updated = patient_update(patient=patient, user=user, phone="5500001111")
+
+        # Assert — blood_type no cambia, sigue como "A+".
+        updated.refresh_from_db()
+        assert updated.phone == "5500001111"
+        assert updated.blood_type == "A+"
+        assert updated.marital_status == ""
+
+    def test_patient_update_todos_choices_nom004_simultaneous(self, db: None) -> None:
+        """patient_update persiste blood_type, marital_status y education en una sola llamada."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = _create_patient(tenant, user)
+
+        # Act
+        updated = patient_update(
+            patient=patient,
+            user=user,
+            blood_type=BloodType.AB_NEG,
+            marital_status=MaritalStatus.VIUDO,
+            education=Education.POSGRADO,
+        )
+
+        # Assert
+        updated.refresh_from_db()
+        assert updated.blood_type == "AB-"
+        assert updated.marital_status == "viudo"
+        assert updated.education == "posgrado"

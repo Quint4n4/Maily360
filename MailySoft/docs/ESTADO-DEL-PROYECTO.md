@@ -1,6 +1,6 @@
 # Estado del Proyecto — Maily Soft / Maily360
 
-> Foto consolidada **full-stack** (backend + frontend). Actualizado: **2026-06-12**.
+> Foto consolidada **full-stack** (backend + frontend). Actualizado: **2026-06-15**.
 > Referencia rápida para entender **dónde está el proyecto hoy** — para el dueño y para cualquier dev nuevo.
 > Decisiones técnicas detalladas en [`DECISIONES-CLAVE.md`](DECISIONES-CLAVE.md).
 
@@ -14,8 +14,8 @@
 |---|---|
 | **Stack backend** | Django 5 + DRF · PostgreSQL 16 · Redis · Celery · Docker |
 | **Stack frontend** | React 18 + Vite + TypeScript + Tailwind + TanStack Query (carpeta `web-soft/`) |
-| **Apps Django** | 8 (core, tenancy, authn, pacientes, personal, agenda, audit, **notas**) |
-| **Tests backend** | **1013 pasando** (código commiteado, endurecido) |
+| **Apps Django** | 9 (core, tenancy, authn, pacientes, personal, agenda, audit, notas, **notificaciones**) |
+| **Tests backend** | **1047 pasando** (1013 base + 34 de notificaciones) |
 | **Repo** | github.com/Quint4n4/Maily360 · rama `main` |
 | **Cumplimiento** | NOM-024 / LFPDPPP (bitácora, minimización de PII, Argon2) |
 
@@ -50,7 +50,8 @@
 | **personal** | Doctores (con **consultorios asignados** M2M y especialidad), consultorios, horarios (CRUD). |
 | **agenda** | Citas (crear, estados con máquina de estados, reagendar, anti-empalme doble). **Tipos de cita** configurables con color. **Eventos** (reuniones/bloqueos) con bloqueo real. Recordatorios (Celery). Config de agenda. |
 | **audit** | Bitácora NOM-024: registra create/update/delete/login/bloqueo/etc. por actor, rol y tenant. |
-| **notas** | Notas y tareas: personales (privadas, con recordatorio), globales del Dueño (a un rol o a todos), y tareas (hecho/pendiente). Notas colaborativas (hilo con autor) viven en `agenda` (AgendaItemNote). |
+| **notas** | Notas y tareas: personales (privadas, con recordatorio), globales a un rol o a todos, y tareas (hecho/pendiente). Notas colaborativas (hilo con autor) viven en `agenda` (AgendaItemNote). |
+| **notificaciones** | Avisos in-app por fan-out on write. Modelo `Notification` con RLS. Cuatro tipos: `meeting`, `team_note`, `role_note`, `broadcast`. Services: `notification_fanout`, `notification_mark_read`, `notification_mark_all_read`. Selectors: `notification_list_for_user`, `notification_unread_count`. 34 tests. |
 
 ---
 
@@ -63,6 +64,8 @@
 | **Agenda** | ✅ Real | Calendario navegable; citas por **tipo de cita** (color) y **modalidad** (presencial/teléfono/video/fuera, con columna fija **Telemedicina/Externo**); **agendar** (existente o **nuevo provisional atómico**); **cambiar estado** (máquina de estados); **reactivar/reagendar** (cancelada se ve con rayas rojas + "CANCELADA"); **bloqueos/reuniones** (card unificado, editable); **hilo de notas del equipo**; widget **"Mis recordatorios"**; **alerta de seguimiento** que guía el estado de las citas del día. El **médico** ve solo sus consultorios y citas; la **enfermería** cambia estado pero no agenda. |
 | **Notas y Tareas** | ✅ Real | Tarjetas de colores: **Mis notas/tareas** (con recordatorio, fijar, marcar hecha) y **Avisos de la clínica** (globales del Dueño a un rol o a todos). |
 | **Personal** | ✅ Real | Pestañas: **Equipo** (miembros por rol → ficha → editar/bloquear/contraseña/avatar/perfil médico), **Consultorios** (CRUD), **Tipos de cita** (CRUD con color). |
+| **Notificaciones — Campana** | ✅ Real | `CampanaNotificaciones.tsx` en Topbar: badge de no leídas, dropdown, marcar una/todas leídas, navega a `/agenda` o `/notas` según el `target_type`. Polling 30 s. |
+| **Notificaciones — Luz recordatorios** | ✅ Real | `LuzRecordatorios.tsx` en `App.tsx`: luz amarilla parpadeante cuando hay recordatorios de hoy vencidos. Snooze de 4 h persiste en localStorage. |
 | **Finanzas** | 🔴 Mock | Sin backend conectado. |
 | **Panel de plataforma** (dueño SaaS) | 🔴 Mock | Sin backend (Fase 4 — pendiente de construir). |
 
@@ -105,6 +108,17 @@
 - **Expediente ↔ Agenda**: el expediente del paciente muestra su **próxima cita** y su **historial** reales; al cambiar el estado en la agenda, se refleja en el expediente.
 - **Gestión de miembros (Equipo)**: alta de miembro con **contraseña robusta**, cambiar nombre/rol, **bloquear/reactivar** cuenta, **restablecer contraseña**, **perfil médico** (cédula/especialidad). Navegación: roles → usuarios → ficha.
 - **Avatares**: subir foto de pacientes y personal (validación segura de imágenes), mostradas en tarjetas, fichas y Topbar.
+- **Notificaciones in-app** (fan-out on write, polling 30 s):
+  - Campana en Topbar: badge de no leídas, dropdown con lista, marcar leídas, navegación al objeto destino.
+  - Luz amarilla parpadeante (`LuzRecordatorios`): recordatorios personales vencidos del día, con snooze de 4 h.
+  - Cuatro endpoints bajo `api/v1/notificaciones/`:
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `GET` | `/api/v1/notificaciones/` | Lista de notificaciones del usuario. Acepta `?only_unread=true`. |
+| `GET` | `/api/v1/notificaciones/conteo/` | Número de notificaciones no leídas (para el badge). |
+| `POST` | `/api/v1/notificaciones/leidas/` | Marca **todas** las notificaciones del usuario como leídas. |
+| `POST` | `/api/v1/notificaciones/<id>/leida/` | Marca **una** notificación como leída (idempotente). |
 
 ---
 
@@ -156,6 +170,9 @@ El proxy de Vite reenvía `/api` y `/media` al backend. Entra con un usuario de 
 - **Panel de plataforma** (dueño SaaS): construir backend + conectar.
 - **Expediente clínico** (notas médicas, padecimientos): módulo médico por construir.
 - **Endurecimiento prod**: IP real de auditoría vía proxy confiable (XFF), CSP, revisar `/verify/`.
+- **Dependencias con CVE (seguridad — prioridad alta)**: actualizar **Django 5.2.14 → 5.2.15** y **Pillow 10.4.0 → 12.2.0**.
+- **Limpieza de tooling backend**: ruff/black/mypy no forman parte del flujo de CI actual; alinear configuración y agregar a `Makefile`. En `web-soft/`: migrar ESLint a configuración flat v9.
+- **PII en títulos de notificación**: el título de una `team_note` incluye el nombre del paciente. Decidir si se mantiene (UX) o se anonimiza (LFPDPPP) y documentarlo en un ADR.
 
 ---
 

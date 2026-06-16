@@ -51,6 +51,17 @@ export const accesoModulo = (role: ClinicRole, m: Modulo): Acceso | undefined =>
 export const puedeEditar  = (role: ClinicRole, m: Modulo): boolean => PERMISOS[role][m] === 'edit'
 export const puedeVerExpedienteClinico = (role: ClinicRole): boolean => PERMISOS[role].expedienteClinico
 
+/* Capacidades finas del EXPEDIENTE CLÍNICO (deben reflejar el backend).
+   Solo son UX: ocultan botones. El backend es la autoridad (devuelve 403). */
+
+/** Editar HC, crear evoluciones/addenda y diagnósticos → owner/admin/doctor. */
+export const puedeEditarClinico = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor'
+
+/** Capturar signos vitales → owner/admin/doctor/nurse (enfermería incluida). */
+export const puedeCapturarSignos = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor' || role === 'nurse'
+
 /* Capacidades finas de la AGENDA (deben reflejar el backend):
    - Agendar/reagendar/cancelar-reserva → recepción + clínicos, NO enfermería.
    - Cambiar el estado de una cita (En sala, En consulta…) → incluye enfermería. */

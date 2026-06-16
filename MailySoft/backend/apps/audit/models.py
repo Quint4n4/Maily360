@@ -87,6 +87,24 @@ class ActionType(models.TextChoices):
     AGENDA_NOTE_ADD = "AGENDA_NOTE_ADD", "Agregar nota a evento de agenda"
     AGENDA_NOTE_DELETE = "AGENDA_NOTE_DELETE", "Eliminar nota de evento de agenda"
 
+    # Expediente clínico
+    ALLERGY_CREATE = "ALLERGY_CREATE", "Registrar alergia"
+    ALLERGY_RESOLVE = "ALLERGY_RESOLVE", "Resolver alergia"
+    MEDICAL_HISTORY_READ = "MEDICAL_HISTORY_READ", "Leer historia clínica"
+    MEDICAL_HISTORY_UPDATE = "MEDICAL_HISTORY_UPDATE", "Actualizar historia clínica"
+    VITALSIGNS_CREATE = "VITALSIGNS_CREATE", "Registrar signos vitales"
+    VITALSIGNS_READ = "VITALSIGNS_READ", "Consultar signos vitales"
+    EVOLUTION_CREATE = "EVOLUTION_CREATE", "Crear nota de evolución"
+    EVOLUTION_READ = "EVOLUTION_READ", "Consultar notas de evolución"
+    ADDENDUM_CREATE = "ADDENDUM_CREATE", "Agregar addendum a nota de evolución"
+    DIAGNOSIS_CREATE = "DIAGNOSIS_CREATE", "Registrar diagnóstico"
+    DIAGNOSIS_RESOLVE = "DIAGNOSIS_RESOLVE", "Resolver diagnóstico"
+    DIAGNOSIS_READ = "DIAGNOSIS_READ", "Consultar diagnósticos"
+
+    # Plataforma (panel interno del equipo Maily — cross-tenant)
+    TENANT_CREATE = "TENANT_CREATE", "Crear clínica nueva"
+    TENANT_STATUS_CHANGE = "TENANT_STATUS_CHANGE", "Cambiar estado de clínica"
+
     # Autenticación
     LOGIN = "LOGIN", "Inicio de sesión"
     LOGOUT = "LOGOUT", "Cierre de sesión"

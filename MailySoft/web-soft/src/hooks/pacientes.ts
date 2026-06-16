@@ -9,26 +9,41 @@ import {
   createPatientQuick,
   deactivatePatient,
   listPatients,
+  setPatientClassification,
   updatePatient,
   uploadPatientAvatar,
 } from '../api/pacientes'
 import type {
+  PatientClassifyInput,
   PatientCreateInput,
   PatientQuickCreateInput,
+  PatientSegment,
   PatientUpdateInput,
 } from '../types/paciente'
+
+export interface UsePatientsParams {
+  search?: string
+  segment?: PatientSegment
+  dateFrom?: string
+  dateTo?: string
+}
 
 /** Claves de caché. Todo lo de pacientes cuelga de ['pacientes']. */
 export const pacientesKeys = {
   all: ['pacientes'] as const,
-  list: (search: string) => ['pacientes', 'list', search] as const,
+  list: (p: UsePatientsParams) =>
+    ['pacientes', 'list', p.segment ?? 'all', p.search ?? '', p.dateFrom ?? '', p.dateTo ?? ''] as const,
 }
 
-/** Lista paginada (primera página) con búsqueda server-side. */
-export function usePatients(search: string) {
+/** Lista paginada (primera página) con búsqueda + segmento server-side.
+ *  Con segment='date' la consulta queda deshabilitada hasta tener ambas fechas. */
+export function usePatients(params: UsePatientsParams = {}) {
+  const { search = '', segment = 'all', dateFrom, dateTo } = params
+  const faltanFechas = segment === 'date' && (!dateFrom || !dateTo)
   return useQuery({
-    queryKey: pacientesKeys.list(search),
-    queryFn: () => listPatients({ search }),
+    queryKey: pacientesKeys.list(params),
+    queryFn: () => listPatients({ search, segment, date_from: dateFrom, date_to: dateTo }),
+    enabled: !faltanFechas,
   })
 }
 
@@ -73,6 +88,16 @@ export function useDeactivatePatient() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deactivatePatient(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: pacientesKeys.all }),
+  })
+}
+
+/** Marca/desmarca favorito y/o VIP. Invalida la lista al terminar. */
+export function useSetPatientClassification() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: PatientClassifyInput }) =>
+      setPatientClassification(id, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: pacientesKeys.all }),
   })
 }

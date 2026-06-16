@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maily 360 — Roles, Agenda y Notas</title>
+<style>
+  :root { --oro:#C9A227; --tinta:#2A241B; --gris:#6B6457; --verde:#2E7D5B; --rojo:#C0392B; --azul:#3A6EA5; --celeste:#4FB0DA; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; color:var(--tinta);
+         background:linear-gradient(135deg,#b89a52 0%,#d8c690 45%,#f1e8cf 100%); padding:40px 20px; line-height:1.55; }
+  .wrap { max-width:1080px; margin:0 auto; }
+  .card { background:rgba(255,255,255,0.92); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.7);
+          border-radius:24px; box-shadow:0 10px 40px rgba(60,42,12,0.15); padding:34px; margin-bottom:24px; }
+  h1 { font-size:32px; font-weight:800; letter-spacing:-0.5px; }
+  h1 .x { color:var(--oro); }
+  h2 { font-size:21px; font-weight:700; margin-bottom:6px; display:flex; align-items:center; gap:10px; }
+  .lead { color:var(--gris); font-size:15px; margin-bottom:20px; }
+  .sub { color:var(--gris); font-size:15px; margin-top:6px; font-style:italic; }
+  .badge { display:inline-block; background:rgba(201,162,39,0.15); color:#9A7B1E; font-size:12px; font-weight:700;
+           padding:5px 13px; border-radius:999px; margin-top:14px; }
+  /* roles */
+  .roles { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
+  .rol { border-radius:16px; padding:16px 18px; background:rgba(255,255,255,0.6); border-left:5px solid var(--oro); }
+  .rol h3 { font-size:16px; display:flex; align-items:center; gap:8px; }
+  .rol p { font-size:13.5px; color:var(--gris); margin-top:4px; }
+  .rol .em { font-size:22px; }
+  /* flujo agenda */
+  .flow { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin-top:6px; }
+  .step { flex:1; min-width:150px; text-align:center; position:relative; padding:6px 8px; }
+  .dot { width:46px; height:46px; border-radius:50%; margin:0 auto 10px; display:flex; align-items:center;
+         justify-content:center; color:#fff; font-weight:800; font-size:17px; box-shadow:0 4px 12px rgba(60,42,12,0.18); }
+  .step .st { font-weight:700; font-size:14.5px; }
+  .step .who { font-size:12px; color:var(--gris); margin-top:3px; }
+  .step:not(:last-child)::after { content:"→"; position:absolute; right:-8px; top:14px; color:#C9A22799; font-size:22px; font-weight:700; }
+  .pill-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+  .pill { font-size:12.5px; font-weight:600; padding:6px 13px; border-radius:999px; }
+  /* notas */
+  .notas { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:16px; }
+  .nota { border-radius:16px; padding:18px; }
+  .nota h3 { font-size:15.5px; margin-bottom:5px; }
+  .nota p { font-size:13.5px; color:#5A5246; }
+  .nota .ic { font-size:24px; margin-bottom:6px; display:block; }
+  /* hilo */
+  .hilo { background:rgba(255,255,255,0.6); border-radius:14px; padding:14px 16px; margin-top:14px; }
+  .msg { display:flex; gap:10px; align-items:flex-start; padding:8px 0; }
+  .av { width:34px; height:34px; border-radius:50%; background:var(--oro); color:#fff; font-weight:700; font-size:12px;
+        display:flex; align-items:center; justify-content:center; shrink:0; }
+  .msg .b p:first-child { font-size:12px; color:var(--gris); }
+  .msg .b p:last-child { font-size:14px; color:var(--tinta); }
+  .foot { font-size:12.5px; color:var(--gris); text-align:center; margin-top:8px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:6px; }
+  th,td { padding:11px 10px; text-align:left; border-bottom:1px solid rgba(0,0,0,0.07); }
+  th { font-size:11.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--gris); }
+  .yes { color:var(--verde); font-weight:700; } .no { color:#C0392B; font-weight:600; }
+  td .dash { color:#B0A99A; }
+  /* metricas */
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:14px; margin-top:18px; }
+  .stat { text-align:center; background:rgba(201,162,39,0.09); border-radius:16px; padding:18px 10px; }
+  .stat .num { font-size:30px; font-weight:800; color:var(--oro); line-height:1; }
+  .stat .lbl { font-size:12.5px; color:var(--gris); margin-top:6px; }
+  /* seguridad */
+  .sec { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:14px; margin-top:6px; }
+  .secitem { background:rgba(255,255,255,0.6); border-radius:14px; padding:14px 16px; border-left:5px solid var(--verde); }
+  .secitem h3 { font-size:14.5px; display:flex; gap:8px; align-items:center; }
+  .secitem p { font-size:13px; color:var(--gris); margin-top:3px; }
+  .cbadges { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; justify-content:center; }
+  .cbadge { font-size:13px; font-weight:700; padding:8px 16px; border-radius:999px; background:rgba(46,125,91,0.12); color:var(--verde); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Portada -->
+  <div class="card" style="text-align:center;">
+    <h1>maily<span class="x">360</span> — Roles, Agenda y Notas</h1>
+    <p class="sub">Cómo trabaja cada persona de la clínica en el sistema, paso a paso.</p>
+    <span class="badge">Presentación de avances · Junio 2026</span>
+  </div>
+
+  <!-- Roles -->
+  <div class="card">
+    <h2>👥 Cada rol y qué puede hacer</h2>
+    <p class="lead">El sistema sabe quién es cada quien y le muestra solo lo que le toca — más orden y más seguridad.</p>
+    <div class="roles">
+      <div class="rol"><h3><span class="em">👑</span> Dueño</h3><p>Control total: configura la clínica, da de alta al personal, ve finanzas y la bitácora de todo lo que pasa.</p></div>
+      <div class="rol"><h3><span class="em">🛠️</span> Administrador</h3><p>Casi como el dueño: gestiona personal, consultorios, agenda y pacientes.</p></div>
+      <div class="rol"><h3><span class="em">🩺</span> Médico</h3><p>Atiende. Ve <b>solo sus citas y sus consultorios</b>, agenda para sí mismo, mueve el estado de sus citas y deja notas.</p></div>
+      <div class="rol"><h3><span class="em">💉</span> Enfermería</h3><p>Apoya el flujo: recibe al paciente y lo mueve por la agenda (En sala → En consulta). <b>No agenda citas.</b></p></div>
+      <div class="rol"><h3><span class="em">🛎️</span> Recepción</h3><p>El front desk: <b>agenda y reagenda</b>, registra pacientes, ve el expediente administrativo y el historial de citas.</p></div>
+      <div class="rol"><h3><span class="em">💰</span> Finanzas</h3><p>Verá el área financiera <span style="color:#B8860B">(en construcción)</span>.</p></div>
+      <div class="rol"><h3><span class="em">👁️</span> Solo lectura</h3><p>Consulta la información sin poder modificar nada.</p></div>
+    </div>
+    <p class="foot">🔒 Lo <b>clínico</b> del paciente (notas médicas, diagnósticos) queda reservado a los clínicos — recepción no lo ve.</p>
+  </div>
+
+  <!-- Flujo de la agenda -->
+  <div class="card">
+    <h2>🗓️ El recorrido de una cita (quién hace qué)</h2>
+    <p class="lead">Desde que se agenda hasta que se atiende, cada paso lo da quien corresponde — y el sistema avisa para que nada se quede atrás.</p>
+    <div class="flow">
+      <div class="step"><div class="dot" style="background:#C9A227">1</div><div class="st">Agendada</div><div class="who">Recepción</div></div>
+      <div class="step"><div class="dot" style="background:#3A6EA5">2</div><div class="st">Confirmada</div><div class="who">Recepción</div></div>
+      <div class="step"><div class="dot" style="background:#2E7D5B">3</div><div class="st">En sala</div><div class="who">Recepción / Enfermería</div></div>
+      <div class="step"><div class="dot" style="background:#2E7D5B">4</div><div class="st">En consulta</div><div class="who">Enfermería</div></div>
+      <div class="step"><div class="dot" style="background:#1F6E47">5</div><div class="st">Atendida</div><div class="who">Médico</div></div>
+    </div>
+    <div class="pill-row">
+      <span class="pill" style="background:rgba(201,162,39,0.15);color:#9A7B1E">🔔 Alerta automática: si una cita se atrasa, el sistema pregunta "¿Ya llegó el paciente?" y va avanzando el estado</span>
+    </div>
+    <div class="pill-row">
+      <span class="pill" style="background:rgba(192,57,43,0.12);color:#C0392B">↩️ Si se cancela por error → Reactivar</span>
+      <span class="pill" style="background:rgba(58,110,165,0.12);color:#3A6EA5">📅 Mover de día/hora → Reagendar</span>
+      <span class="pill" style="background:rgba(79,176,218,0.15);color:#2c7da0">📹 Modalidades: Consultorio · Telefónica · Video · Fuera</span>
+      <span class="pill" style="background:rgba(120,113,108,0.12);color:#6B6457">🚫 Bloquear días/horas (festivos, juntas)</span>
+    </div>
+  </div>
+
+  <!-- Notas y Tareas -->
+  <div class="card">
+    <h2>📝 Notas y Tareas — lo nuevo</h2>
+    <p class="lead">Un espacio para que la clínica no olvide nada y se comunique mejor.</p>
+    <div class="notas">
+      <div class="nota" style="background:#FEF3C7"><span class="ic">🗒️</span><h3>Notas personales</h3><p>Cada quien guarda sus propias notas y tareas (privadas). Puede marcarlas como hechas y ponerles un <b>recordatorio</b>.</p></div>
+      <div class="nota" style="background:#E3F2FD"><span class="ic">⏰</span><h3>Recordatorios en la agenda</h3><p>Las notas con recordatorio aparecen en tu panel de agenda el día que toca — "no se te olvida".</p></div>
+      <div class="nota" style="background:#FCE4EC"><span class="ic">📣</span><h3>Avisos del Dueño</h3><p>El dueño manda un aviso a <b>un rol</b> (ej. solo recepción) o a <b>toda la clínica</b> a la vez. Les llega a su bandeja.</p></div>
+    </div>
+  </div>
+
+  <!-- Notas del equipo en la cita -->
+  <div class="card">
+    <h2>💬 Notas del equipo en cada cita</h2>
+    <p class="lead">Dentro de cada cita, el médico y el equipo dejan notas que <b>todos ven</b> — con la foto y el nombre de quién la escribió. Perfecto para coordinarse sin perder nada entre turnos.</p>
+    <div class="hilo">
+      <div class="msg"><div class="av">DD</div><div class="b"><p><b>Diego Doctor</b> · hoy 9:25</p><p>El paciente viene para valoración y estudios; pedirle ayuno.</p></div></div>
+      <div class="msg"><div class="av" style="background:#3A6EA5">RR</div><div class="b"><p><b>Rosa Recepción</b> · hoy 9:40</p><p>Confirmado por teléfono, llega 10 min antes.</p></div></div>
+    </div>
+    <p class="foot">Así el doctor deja indicaciones, recepción y enfermería las leen, y queda registro de quién dijo qué.</p>
+  </div>
+
+  <!-- Comparativa vs legacy -->
+  <div class="card">
+    <h2>📊 Cómo vamos vs el sistema anterior</h2>
+    <p class="lead">El sistema nuevo no es una mejora pequeña: es una plataforma moderna pensada para crecer.</p>
+    <table>
+      <tr><th>Característica</th><th>Sistema anterior</th><th>Maily 360</th></tr>
+      <tr><td>Roles y permisos</td><td class="no">Limitados</td><td class="yes">7 roles con permisos finos</td></tr>
+      <tr><td>Varias clínicas en un mismo sistema</td><td><span class="dash">—</span></td><td class="yes">Sí, con datos aislados</td></tr>
+      <tr><td>Agenda con estados y alertas</td><td class="no">Básica</td><td class="yes">Flujo completo + alertas</td></tr>
+      <tr><td>Telemedicina (video / teléfono)</td><td><span class="dash">—</span></td><td class="yes">Sí</td></tr>
+      <tr><td>Notas, tareas y avisos</td><td><span class="dash">—</span></td><td class="yes">Sí</td></tr>
+      <tr><td>Notas de equipo por cita / paciente</td><td><span class="dash">—</span></td><td class="yes">Sí</td></tr>
+      <tr><td>Bitácora de auditoría (NOM-024)</td><td><span class="dash">—</span></td><td class="yes">Sí</td></tr>
+      <tr><td>Pruebas automáticas de calidad</td><td><span class="dash">—</span></td><td class="yes">810 en cada cambio</td></tr>
+    </table>
+    <div class="stats">
+      <div class="stat"><div class="num">8</div><div class="lbl">Módulos funcionando</div></div>
+      <div class="stat"><div class="num">7</div><div class="lbl">Roles con permisos</div></div>
+      <div class="stat"><div class="num">810</div><div class="lbl">Pruebas automáticas</div></div>
+      <div class="stat"><div class="num">32</div><div class="lbl">Conexiones (API)</div></div>
+      <div class="stat"><div class="num">100%</div><div class="lbl">Multi-clínica</div></div>
+    </div>
+    <p class="foot">Las 810 pruebas se ejecutan solas en cada cambio: si algo se rompe, lo sabemos antes de que llegue al cliente.</p>
+  </div>
+
+  <!-- Seguridad -->
+  <div class="card">
+    <h2>🔐 Seguridad y cumplimiento</h2>
+    <p class="lead">El sistema maneja datos clínicos: la seguridad está construida desde el cimiento, no agregada al final.</p>
+    <div class="sec">
+      <div class="secitem"><h3>🔑 Contraseñas cifradas</h3><p>Con Argon2, el estándar más fuerte hoy. Ni nosotros podemos leerlas.</p></div>
+      <div class="secitem"><h3>🛡️ Sesiones protegidas</h3><p>Token en memoria + cookie segura (httpOnly) + protección anti-fraude (CSRF).</p></div>
+      <div class="secitem"><h3>🏥 Datos aislados entre clínicas</h3><p>Doble barrera (aplicación + base de datos). Una clínica jamás ve datos de otra.</p></div>
+      <div class="secitem"><h3>📋 Bitácora inmutable</h3><p>38 tipos de acción quedan registradas: quién, qué y cuándo. No se pueden borrar.</p></div>
+      <div class="secitem"><h3>👮 Permisos en el servidor</h3><p>11 reglas por rol validadas en el servidor. El navegador nunca decide solo.</p></div>
+      <div class="secitem"><h3>🖼️ Archivos verificados</h3><p>Solo se aceptan imágenes reales; se rechazan archivos potencialmente peligrosos.</p></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="num">38</div><div class="lbl">Acciones auditadas</div></div>
+      <div class="stat"><div class="num">11</div><div class="lbl">Reglas de permiso</div></div>
+      <div class="stat"><div class="num">0</div><div class="lbl">Contraseñas en texto plano</div></div>
+      <div class="stat"><div class="num">2</div><div class="lbl">Barreras de aislamiento</div></div>
+    </div>
+    <div class="cbadges">
+      <span class="cbadge">✓ NOM-024 (expediente clínico)</span>
+      <span class="cbadge">✓ LFPDPPP (datos personales)</span>
+      <span class="cbadge">✓ Buenas prácticas OWASP</span>
+    </div>
+    <p class="foot">Cada módulo pasa por una auditoría de seguridad antes de publicarse.</p>
+  </div>
+
+  <!-- Cierre -->
+  <div class="card" style="text-align:center;">
+    <h2 style="justify-content:center;">✅ En resumen</h2>
+    <p class="lead" style="margin-bottom:0;">Cada persona ve y hace <b>solo lo suyo</b>, la cita avanza ordenada de principio a fin, el sistema <b>recuerda</b> los pendientes, y el equipo <b>se comunica</b> dentro de cada paciente y cita.</p>
+  </div>
+
+</div>
+</body>
+</html>

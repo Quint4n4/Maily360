@@ -1,5 +1,9 @@
 """
-Sistema declarativo de permisos por rol clínico para Maily Platform.
+Sistema declarativo de permisos para Maily Platform.
+
+Incluye:
+  - HasClinicRole: permisos por rol clínico (para endpoints de clínica).
+  - PlatformPermission: permisos para el panel interno del equipo Maily (cross-tenant).
 
 Diseño:
     - HasClinicRole es la clase base method-aware. Las subclases solo declaran
@@ -43,6 +47,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
+from apps.authn.models import User
 from apps.tenancy.models import TenantMembership
 
 Role = TenantMembership.Role
@@ -304,3 +309,274 @@ class NotePermission(HasClinicRole):
         "PATCH": ALL_ROLES,
         "DELETE": ALL_ROLES,
     }
+
+
+# ---------------------------------------------------------------------------
+# Expediente Clínico — permisos (plan §5, sub-fase A1)
+# ---------------------------------------------------------------------------
+
+# Conjunto para lectura de contenido clínico.
+# Recepción (RECEPTION) y finanzas (FINANCE) NO tienen acceso al contenido clínico.
+# Las alergias son la excepción: son una bandera de seguridad visible para TODOS.
+CLINICAL_READ: frozenset[str] = frozenset(
+    {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.READONLY}
+)
+
+
+class AllergyPermission(HasClinicRole):
+    """Permisos para el recurso Alergia (bandera de seguridad).
+
+    Las alergias son visibles para TODOS los roles activos de la clínica porque
+    constituyen una bandera de seguridad que cualquier miembro (incluso recepción
+    y finanzas) debe poder ver en la ficha del paciente.
+
+    Matriz:
+        GET    → todos los roles (ALL_ROLES): bandera de seguridad, visible siempre.
+        POST   → owner, admin, doctor, nurse (personal clínico y directivo).
+        PATCH  → owner, admin, doctor, nurse.
+        DELETE → owner, admin, doctor, nurse (baja lógica, no borrado físico).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": ALL_ROLES,
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE}),
+        "PATCH": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE}),
+        "DELETE": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE}),
+    }
+
+
+class MedicalHistoryPermission(HasClinicRole):
+    """Permisos para la Historia Clínica formal (A2).
+
+    La HC es contenido clínico sensible protegido por NOM-004. Solo el personal
+    clínico cualificado puede leerla o actualizarla. Recepción y finanzas no tienen
+    acceso (a diferencia de las alergias, que son una bandera de seguridad para todos).
+
+    Enfermería puede LEER la HC (consulta de antecedentes antes de la toma de signos)
+    pero NO escribirla (la HC la redacta el médico tratante).
+
+    CLINICAL_READ = {owner, admin, doctor, nurse, readonly}.
+    Recepción y Finanzas quedan fuera tanto de lectura como de escritura.
+
+    Matriz:
+        GET → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
+        PUT → owner, admin, doctor (upsert de la historia clínica).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
+        "PUT": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class VitalSignsPermission(HasClinicRole):
+    """Permisos para el módulo de Signos Vitales (A3 — sección Enfermería).
+
+    Diferencia clave con MedicalHistoryPermission:
+        Enfermería (NURSE) SÍ puede registrar tomas de signos vitales (POST).
+        Recepción y Finanzas NO tienen acceso (lectura ni escritura).
+
+    Append-only: no hay PATCH, PUT ni DELETE; solo GET y POST.
+
+    Matriz:
+        GET  → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
+        POST → owner, admin, doctor, nurse (enfermería captura signos — A3 core).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE}),
+    }
+
+
+class EvolutionPermission(HasClinicRole):
+    """Permisos para las Notas de Evolución (A4 — D-EC-1 inmutable).
+
+    La nota de evolución es contenido clínico de alta sensibilidad:
+    solo personal clínico cualificado puede leer (CLINICAL_READ) o crear
+    (owner, admin, doctor). Recepción y finanzas NO tienen acceso.
+
+    Inmutabilidad: no existen PATCH, PUT ni DELETE. Si el cliente envía esos
+    métodos, DRF responde 405 (método no ruteado). La regla del médico
+    (doctor solo puede crear sobre citas propias) se valida en el service,
+    no en el permiso HTTP.
+
+    Matriz:
+        GET  → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
+        POST → owner, admin, doctor (nurse y readonly NO crean evoluciones).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class AddendumPermission(HasClinicRole):
+    """Permisos para los Addenda sobre notas de evolución (A4).
+
+    Solo crear y listar (append-only). Quien puede escribir addenda es
+    el mismo conjunto que puede crear evoluciones (owner, admin, doctor).
+
+    Matriz:
+        GET  → CLINICAL_READ.
+        POST → owner, admin, doctor.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class DiagnosisPermission(HasClinicRole):
+    """Permisos para el módulo de Diagnósticos (A4).
+
+    Lectura: CLINICAL_READ (mismo conjunto que evolución y signos).
+    Escritura y resolución: owner, admin, doctor. Recepción, finanzas y
+    readonly NO escriben diagnósticos.
+
+    Matriz:
+        GET  → CLINICAL_READ.
+        POST → owner, admin, doctor (create + resolver).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class NotificationPermission(HasClinicRole):
+    """Permisos para la campana de notificaciones.
+
+    Una notificación es PRIVADA de su destinatario. La autoridad real no es el
+    permiso HTTP sino:
+        - el selector notification_list_for_user (filtra recipient=request.user);
+        - el service notification_mark_read (verifica recipient == user).
+
+    Por eso el permiso HTTP solo exige autenticación + membresía activa y abre
+    todos los métodos a cualquier rol (cada quien opera SOLO sobre lo suyo).
+
+    Matriz:
+        GET  → todos los roles (listar mis avisos / contar no leídas).
+        POST → todos los roles (marcar mías como leídas).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": ALL_ROLES,
+        "POST": ALL_ROLES,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Permisos del panel interno de plataforma (cross-tenant)
+# ---------------------------------------------------------------------------
+
+# Módulos de plataforma y qué roles pueden acceder en GET.
+# Super-admin puede hacer todo. Sales puede ver clínicas y cambiar estado.
+# Engineering puede ver métricas y clínicas, pero no cambiar estado ni ver staff.
+_PLATFORM_ROLES_ALL: frozenset[str] = frozenset(
+    {
+        User.PlatformRole.SUPER_ADMIN,
+        User.PlatformRole.SALES,
+        User.PlatformRole.ENGINEERING,
+    }
+)
+_PLATFORM_ROLES_MANAGE_CLINICS: frozenset[str] = frozenset(
+    {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.SALES}
+)
+_PLATFORM_ROLES_SUPER_ADMIN_ONLY: frozenset[str] = frozenset(
+    {User.PlatformRole.SUPER_ADMIN}
+)
+
+
+class IsPlatformStaff(BasePermission):
+    """Permiso base para el panel interno: exige is_platform_staff=True.
+
+    Esta clase es la puerta de entrada a CUALQUIER endpoint de plataforma.
+    Las subclases refinan qué platform_role es necesario.
+
+    Devuelve 403 (no 404) cuando el usuario está autenticado pero no es staff
+    de plataforma: la existencia del panel no es un secreto para los usuarios
+    de clínicas. Si el usuario no está autenticado, también devuelve 403
+    (IsAuthenticated en permission_classes ya habrá devuelto 401 antes).
+    """
+
+    message: str = "Acceso denegado: se requiere ser staff de la plataforma Maily."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if request.method == "OPTIONS":
+            return True
+        user = request.user
+        return bool(
+            getattr(user, "is_authenticated", False)
+            and getattr(user, "is_platform_staff", False)
+        )
+
+
+class PlatformMetricsPermission(IsPlatformStaff):
+    """Métricas del dashboard: ven los tres roles de plataforma."""
+
+    message: str = "Solo el equipo de plataforma puede ver las métricas."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        role: str = getattr(request.user, "platform_role", "")
+        return role in _PLATFORM_ROLES_ALL
+
+
+class PlatformClinicReadPermission(IsPlatformStaff):
+    """Lectura de clínicas (GET/HEAD): ven los tres roles de plataforma.
+
+    Solo lectura. El cambio de estado usa PlatformClinicWritePermission.
+    """
+
+    message: str = "Acceso denegado al módulo de clínicas de plataforma."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        method = "GET" if request.method == "HEAD" else (request.method or "")
+        role: str = getattr(request.user, "platform_role", "")
+        if method in ("GET",):
+            return role in _PLATFORM_ROLES_ALL
+        return False
+
+
+class PlatformClinicWritePermission(IsPlatformStaff):
+    """Cambio de estado de una clínica (suspender/reactivar): super_admin y sales.
+
+    Permiso dedicado para escrituras sobre clínicas. Separado de
+    PlatformClinicReadPermission a propósito: así una modificación futura del
+    permiso de lectura no relaja por accidente el control del endpoint de escritura.
+    """
+
+    message: str = "Solo super_admin y sales pueden cambiar el estado de una clínica."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        role: str = getattr(request.user, "platform_role", "")
+        return role in _PLATFORM_ROLES_MANAGE_CLINICS
+
+
+class PlatformStaffListPermission(IsPlatformStaff):
+    """Listado de usuarios de plataforma: solo super_admin."""
+
+    message: str = "Solo el super_admin puede ver la lista de usuarios de plataforma."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        role: str = getattr(request.user, "platform_role", "")
+        return role in _PLATFORM_ROLES_SUPER_ADMIN_ONLY

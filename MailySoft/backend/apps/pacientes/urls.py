@@ -8,6 +8,7 @@ from django.urls import path
 
 from apps.pacientes.views import (
     PatientAvatarApi,
+    PatientClassifyApi,
     PatientDetailApi,
     PatientListCreateApi,
     PatientQuickCreateApi,
@@ -19,4 +20,9 @@ urlpatterns = [
     path("pacientes/rapido/", PatientQuickCreateApi.as_view(), name="patient-quick-create"),
     path("pacientes/<uuid:patient_id>/", PatientDetailApi.as_view(), name="patient-detail"),
     path("pacientes/<uuid:patient_id>/avatar/", PatientAvatarApi.as_view(), name="patient-avatar"),
+    path(
+        "pacientes/<uuid:patient_id>/clasificacion/",
+        PatientClassifyApi.as_view(),
+        name="patient-classify",
+    ),
 ]

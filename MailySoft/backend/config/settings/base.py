@@ -70,6 +70,12 @@ LOCAL_APPS: list[str] = [
     "apps.audit",
     # Notas y Tareas (Fase 1)
     "apps.notas",
+    # Notificaciones (campana de avisos)
+    "apps.notificaciones",
+    # Expediente Clínico (Fase A)
+    "apps.expediente",
+    # Panel interno de plataforma (cross-tenant, equipo Maily)
+    "apps.plataforma",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

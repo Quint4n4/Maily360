@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maily 360 — Reporte de Métricas y Modernización</title>
+<style>
+  :root { --oro:#C9A227; --oro-claro:#E8D48A; --tinta:#2A241B; --gris:#6B6457; --verde:#2E7D5B; --rojo:#C0392B; --azul:#3A6EA5; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; color:var(--tinta);
+         background:linear-gradient(135deg,#b89a52 0%,#d8c690 45%,#f1e8cf 100%); padding:40px 20px; line-height:1.5; }
+  .wrap { max-width:1040px; margin:0 auto; }
+  .card { background:rgba(255,255,255,0.9); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.7);
+          border-radius:24px; box-shadow:0 10px 40px rgba(60,42,12,0.15); padding:34px; margin-bottom:24px; }
+  h1 { font-size:34px; font-weight:800; letter-spacing:-0.5px; }
+  h1 .x { color:var(--oro); }
+  h2 { font-size:20px; font-weight:700; margin-bottom:18px; display:flex; align-items:center; gap:9px; }
+  .sub { color:var(--gris); font-size:15px; margin-top:6px; font-style:italic; }
+  .badge { display:inline-block; background:rgba(201,162,39,0.15); color:#9A7B1E; font-size:12px; font-weight:700;
+           padding:5px 13px; border-radius:999px; margin-top:14px; }
+  /* métricas */
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:16px; }
+  .metric { background:linear-gradient(160deg,#fff,#fdf8e9); border:1px solid rgba(201,162,39,0.25);
+            border-radius:18px; padding:22px; text-align:center; }
+  .metric .n { font-size:38px; font-weight:800; color:var(--oro); line-height:1; }
+  .metric .l { font-size:13px; color:var(--gris); margin-top:8px; font-weight:600; }
+  /* progreso */
+  .bar { background:rgba(0,0,0,0.07); border-radius:999px; height:30px; overflow:hidden; margin:6px 0 4px; }
+  .fill { height:100%; border-radius:999px; display:flex; align-items:center; padding-left:16px; color:#fff;
+          font-weight:700; font-size:14px; }
+  .row-lbl { display:flex; justify-content:space-between; font-weight:600; font-size:15px; margin-top:18px; }
+  .row-lbl .pct { color:var(--oro); }
+  /* tabla */
+  table { width:100%; border-collapse:collapse; font-size:14.5px; }
+  th,td { padding:13px 12px; text-align:left; border-bottom:1px solid rgba(0,0,0,0.07); vertical-align:top; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--gris); }
+  th.new { color:var(--oro); } th.old { color:var(--gris); }
+  td.feat { font-weight:600; }
+  .yes { color:var(--verde); font-weight:700; }
+  .no { color:var(--rojo); font-weight:600; }
+  .meh { color:#B8860B; font-weight:600; }
+  /* mejoras */
+  .mejoras { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:16px; }
+  .mejora { border-left:4px solid var(--oro); background:rgba(255,255,255,0.6); border-radius:0 14px 14px 0;
+            padding:16px 18px; }
+  .mejora h3 { font-size:15px; margin-bottom:5px; }
+  .mejora p { font-size:13.5px; color:var(--gris); }
+  .foot { font-size:12.5px; color:var(--gris); text-align:center; margin-top:10px; }
+  .pillrow { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .pill { background:rgba(46,125,91,0.12); color:var(--verde); font-size:12.5px; font-weight:600;
+          padding:6px 13px; border-radius:999px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Portada -->
+  <div class="card" style="text-align:center;">
+    <h1>maily<span class="x">360</span> — Reporte de Modernización</h1>
+    <p class="sub">Reconstrucción del sistema legacy <b>app.maily.mx</b> (PHP) como un SaaS clínico moderno, seguro y probado.</p>
+    <span class="badge">Actualizado: 9 de junio de 2026 · MVP clínico funcional de punta a punta</span>
+  </div>
+
+  <!-- Métricas duras -->
+  <div class="card">
+    <h2>📊 El sistema nuevo en números</h2>
+    <div class="metrics">
+      <div class="metric"><div class="n">1,013</div><div class="l">Pruebas automatizadas (en verde)</div></div>
+      <div class="metric"><div class="n">8</div><div class="l">Módulos de backend</div></div>
+      <div class="metric"><div class="n">32</div><div class="l">Endpoints de API</div></div>
+      <div class="metric"><div class="n">~39k</div><div class="l">Líneas de código</div></div>
+      <div class="metric"><div class="n">45</div><div class="l">Commits respaldados en GitHub</div></div>
+    </div>
+    <p class="foot" style="margin-top:18px;">Backend ≈ 31,700 líneas (Django/DRF, incluye pruebas) · Frontend ≈ 7,700 líneas (React + TypeScript) · 36 migraciones de base de datos.</p>
+  </div>
+
+  <!-- Avance -->
+  <div class="card">
+    <h2>🚀 Avance de la reconstrucción</h2>
+    <div class="row-lbl"><span>Núcleo clínico operativo <span style="font-weight:400;color:var(--gris)">(agendar, pacientes, personal, notas, acceso por rol)</span></span><span class="pct">100%</span></div>
+    <div class="bar"><div class="fill" style="width:100%;background:linear-gradient(90deg,#2E7D5B,#3FA873)">Listo y conectado a datos reales</div></div>
+
+    <div class="row-lbl"><span>Plataforma completa <span style="font-weight:400;color:var(--gris)">(+ Finanzas y panel del dueño SaaS)</span></span><span class="pct">~70%</span></div>
+    <div class="bar"><div class="fill" style="width:70%;background:linear-gradient(90deg,#C9A227,#E8D48A)">En progreso</div></div>
+
+    <div class="pillrow">
+      <span class="pill">✓ Login / sesión</span>
+      <span class="pill">✓ Pacientes</span>
+      <span class="pill">✓ Agenda</span>
+      <span class="pill">✓ Personal</span>
+      <span class="pill">✓ Notas y Tareas</span>
+      <span class="pill" style="background:rgba(120,113,108,0.12);color:#6B6457">⏳ Finanzas</span>
+      <span class="pill" style="background:rgba(120,113,108,0.12);color:#6B6457">⏳ Panel plataforma</span>
+      <span class="pill" style="background:rgba(120,113,108,0.12);color:#6B6457">⏳ Expediente clínico</span>
+    </div>
+  </div>
+
+  <!-- Comparación -->
+  <div class="card">
+    <h2>⚖️ Legacy (PHP) vs. Maily 360</h2>
+    <table>
+      <tr><th>Capacidad</th><th class="old">Legacy app.maily.mx</th><th class="new">Maily 360 (nuevo)</th></tr>
+      <tr><td class="feat">Arquitectura</td><td class="meh">Monolito PHP, lógica mezclada</td><td class="yes">Arquitectura por capas + API REST desacoplada</td></tr>
+      <tr><td class="feat">Multi-clínica (multi-tenant)</td><td class="no">Sin aislamiento formal</td><td class="yes">Aislamiento doble: filtro app + RLS de PostgreSQL</td></tr>
+      <tr><td class="feat">Pruebas automatizadas</td><td class="no">Prácticamente ninguna</td><td class="yes">1,013 pruebas en verde</td></tr>
+      <tr><td class="feat">Seguridad de contraseñas</td><td class="meh">Esquema heredado débil</td><td class="yes">Argon2 + validadores + JWT híbrido</td></tr>
+      <tr><td class="feat">Permisos por rol</td><td class="meh">Revisiones ad-hoc, dispersas</td><td class="yes">Matriz declarativa de 7 roles, el backend es la autoridad</td></tr>
+      <tr><td class="feat">Bitácora / cumplimiento</td><td class="no">Sin trazabilidad formal</td><td class="yes">Auditoría NOM-024 (quién, qué, cuándo) inmutable</td></tr>
+      <tr><td class="feat">Interfaz</td><td class="meh">PHP renderizando HTML</td><td class="yes">React + TypeScript, refresco automático, glassmorphism</td></tr>
+      <tr><td class="feat">Respaldo / versionado</td><td class="meh">Limitado</td><td class="yes">Git + GitHub, 45 commits descriptivos</td></tr>
+    </table>
+    <p class="foot">Las columnas del legacy describen un monolito PHP heredado (caracterización cualitativa); las del sistema nuevo son métricas medidas.</p>
+  </div>
+
+  <!-- Mejoras significativas -->
+  <div class="card">
+    <h2>✨ Mejoras significativas que ya tenemos</h2>
+    <div class="mejoras">
+      <div class="mejora"><h3>🔒 Seguridad de grado salud</h3><p>Aislamiento real entre clínicas, contraseñas Argon2, tokens híbridos y validación segura de imágenes — auditado por agentes de seguridad.</p></div>
+      <div class="mejora"><h3>🗓️ Agenda muy superior</h3><p>Estados de cita, anti-empalme real, tipos de cita con color, bloqueos/reuniones, reactivar/reagendar, modalidades (presencial/tel/video) y recordatorios.</p></div>
+      <div class="mejora"><h3>👥 Gestión de equipo</h3><p>Alta de miembros por rol, bloqueo de cuentas, contraseñas robustas, perfil médico y avatares — todo con bitácora.</p></div>
+      <div class="mejora"><h3>📝 Notas y Tareas (nuevo)</h3><p>Notas personales, avisos globales del dueño y notas colaborativas del equipo dentro de cada cita. No existía en el legacy.</p></div>
+      <div class="mejora"><h3>🧾 Expediente conectado</h3><p>El expediente del paciente muestra su próxima cita e historial reales; al cambiar un estado se refleja al instante.</p></div>
+      <div class="mejora"><h3>✅ Calidad comprobable</h3><p>1,013 pruebas + revisión de código + auditoría de seguridad en cada bloque. El sistema no avanza con deuda silenciosa.</p></div>
+    </div>
+  </div>
+
+  <!-- Lo que sigue -->
+  <div class="card">
+    <h2>🛣️ Lo que sigue</h2>
+    <div class="pillrow">
+      <span class="pill" style="background:rgba(58,110,165,0.12);color:var(--azul)">Conectar Finanzas</span>
+      <span class="pill" style="background:rgba(58,110,165,0.12);color:var(--azul)">Expediente clínico</span>
+      <span class="pill" style="background:rgba(58,110,165,0.12);color:var(--azul)">Panel del dueño SaaS</span>
+      <span class="pill" style="background:rgba(58,110,165,0.12);color:var(--azul)">Especialidades como plugins</span>
+      <span class="pill" style="background:rgba(58,110,165,0.12);color:var(--azul)">Recordatorios por WhatsApp</span>
+    </div>
+    <p class="foot" style="margin-top:18px;">Construido con Django + DRF · PostgreSQL · React + TypeScript · Docker — y respaldado en GitHub (Quint4n4/Maily360).</p>
+  </div>
+
+</div>
+</body>
+</html>

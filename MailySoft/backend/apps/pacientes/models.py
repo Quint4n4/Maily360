@@ -5,6 +5,10 @@ Patient        — expediente del paciente dentro de un tenant (clínica).
 PatientSequence — mecanismo de consecutivo seguro por tenant (SELECT FOR UPDATE).
 
 Ambos heredan de TenantAwareModel: tienen tenant FK, created_by, soft-delete, UUIDs.
+
+Campos NOM-004 agregados en A1 (expediente-clinico-plan §3.1):
+  Todos opcionales (blank/null=True) para convivir con expedientes provisionales.
+  Usa TextChoices para estado civil, escolaridad y tipo de sangre (D-EC-8).
 """
 
 from django.db import models
@@ -20,6 +24,42 @@ class Sex(models.TextChoices):
     MALE = "M", "Masculino"
     FEMALE = "F", "Femenino"
     OTHER = "X", "Otro"
+
+
+class MaritalStatus(models.TextChoices):
+    """Estado civil del paciente (D-EC-8: respuestas precargadas)."""
+
+    SOLTERO = "soltero", "Soltero/a"
+    CASADO = "casado", "Casado/a"
+    UNION_LIBRE = "union_libre", "Unión libre"
+    DIVORCIADO = "divorciado", "Divorciado/a"
+    VIUDO = "viudo", "Viudo/a"
+    OTRO = "otro", "Otro"
+
+
+class Education(models.TextChoices):
+    """Escolaridad del paciente (D-EC-8: respuestas precargadas)."""
+
+    NINGUNA = "ninguna", "Ninguna"
+    PRIMARIA = "primaria", "Primaria"
+    SECUNDARIA = "secundaria", "Secundaria"
+    PREPARATORIA = "preparatoria", "Preparatoria / Bachillerato"
+    LICENCIATURA = "licenciatura", "Licenciatura"
+    POSGRADO = "posgrado", "Posgrado"
+
+
+class BloodType(models.TextChoices):
+    """Tipo de sangre ABO/Rh (D-EC-8: respuestas precargadas)."""
+
+    A_POS = "A+", "A+"
+    A_NEG = "A-", "A-"
+    B_POS = "B+", "B+"
+    B_NEG = "B-", "B-"
+    AB_POS = "AB+", "AB+"
+    AB_NEG = "AB-", "AB-"
+    O_POS = "O+", "O+"
+    O_NEG = "O-", "O-"
+    DESCONOCIDO = "desconocido", "Desconocido"
 
 
 class Patient(TenantAwareModel):
@@ -98,11 +138,133 @@ class Patient(TenantAwareModel):
             "Falta completar la información personal (fecha nac., sexo, etc.)."
         ),
     )
+    is_favorite = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Marcado como favorito (visible para toda la clínica).",
+    )
+    is_vip = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Paciente VIP (visible para toda la clínica).",
+    )
     avatar = models.ImageField(
         upload_to=patient_avatar_path,
         null=True,
         blank=True,
         help_text="Foto del paciente (opcional).",
+    )
+
+    # -----------------------------------------------------------------------
+    # Campos NOM-004 — Expediente Clínico A1 (plan §3.1)
+    # Todos opcionales: conviven con expedientes provisionales (D-06).
+    # -----------------------------------------------------------------------
+
+    address_street = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Calle y número del domicilio.",
+    )
+    address_neighborhood = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Colonia del domicilio.",
+    )
+    city = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Ciudad de residencia.",
+    )
+    state = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Estado de residencia.",
+    )
+    postal_code = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="Código postal (CP).",
+    )
+    birthplace = models.CharField(
+        max_length=160,
+        blank=True,
+        default="",
+        help_text="Lugar de nacimiento.",
+    )
+    marital_status = models.CharField(
+        max_length=20,
+        choices=MaritalStatus.choices,
+        blank=True,
+        default="",
+        help_text="Estado civil (D-EC-8: opciones predefinidas).",
+    )
+    education = models.CharField(
+        max_length=20,
+        choices=Education.choices,
+        blank=True,
+        default="",
+        help_text="Escolaridad (D-EC-8: opciones predefinidas).",
+    )
+    occupation = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Ocupación del paciente.",
+    )
+    religion = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        help_text="Religión (opcional, libre).",
+    )
+    blood_type = models.CharField(
+        max_length=12,
+        choices=BloodType.choices,
+        blank=True,
+        default="",
+        help_text="Tipo de sangre ABO/Rh (D-EC-8: opciones predefinidas).",
+    )
+    phone_secondary = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Segundo teléfono de contacto (opcional).",
+    )
+    phone_label = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="Etiqueta del segundo teléfono (ej. 'hija', 'esposo').",
+    )
+    is_deceased = models.BooleanField(
+        default=False,
+        help_text="True si el paciente ha fallecido (campo 'Finado').",
+    )
+    deceased_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fecha de defunción. Null si is_deceased=False.",
+    )
+    custom_consultation_fee = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Costo de consulta personalizado para este paciente. "
+            "Null = usa la tarifa estándar de la clínica. Lo usará Finanzas."
+        ),
+    )
+    category = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        help_text="Categoría libre del paciente (uso interno de la clínica, v1).",
     )
 
     class Meta:

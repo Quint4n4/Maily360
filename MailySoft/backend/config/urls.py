@@ -32,6 +32,10 @@ urlpatterns = [
     path("api/v1/", include("apps.agenda.urls")),
     path("api/v1/audit/", include("apps.audit.urls")),
     path("api/v1/", include("apps.notas.urls")),
+    path("api/v1/", include("apps.notificaciones.urls")),
+    path("api/v1/", include("apps.expediente.urls")),
+    # Panel interno de plataforma (cross-tenant, equipo Maily)
+    path("api/v1/", include("apps.plataforma.urls")),
 ]
 
 # FIX-8: exponer la documentación OpenAPI SOLO en desarrollo.

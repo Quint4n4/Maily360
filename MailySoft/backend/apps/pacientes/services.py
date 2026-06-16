@@ -402,6 +402,64 @@ def patient_clear_avatar(*, patient: Patient, user: "User") -> Patient:  # type:
 
 
 # ---------------------------------------------------------------------------
+# patient_set_classification
+# ---------------------------------------------------------------------------
+
+
+def patient_set_classification(
+    *,
+    patient: Patient,
+    user: "User",  # type: ignore[valid-type]
+    is_favorite: Optional[bool] = None,
+    is_vip: Optional[bool] = None,
+) -> Patient:
+    """Actualiza las clasificaciones de un paciente (favorito y/o VIP).
+
+    Solo modifica los flags que no sean None. Si ambos son None no hace
+    ninguna escritura ni auditoría y devuelve el paciente sin cambios.
+
+    Usa save(update_fields=[...]) para actualizar únicamente los campos
+    modificados, minimizando el impacto en columnas indexadas.
+
+    Args:
+        patient:     Instancia Patient a clasificar (ya recuperada por selector).
+        user:        Usuario que realiza la acción (para auditoría).
+        is_favorite: True/False para marcar/desmarcar como favorito. None = sin cambio.
+        is_vip:      True/False para marcar/desmarcar como VIP. None = sin cambio.
+
+    Returns:
+        La instancia Patient (actualizada si hubo cambios, sin modificar si no).
+    """
+    update_fields: list[str] = []
+
+    if is_favorite is not None:
+        patient.is_favorite = is_favorite
+        update_fields.append("is_favorite")
+
+    if is_vip is not None:
+        patient.is_vip = is_vip
+        update_fields.append("is_vip")
+
+    if not update_fields:
+        # Nada que cambiar: devolvemos sin tocar la BD.
+        return patient
+
+    update_fields.append("updated_at")
+    patient.save(update_fields=update_fields)
+
+    audit_record(
+        action=ActionType.PATIENT_UPDATE,
+        resource_type="Patient",
+        actor=user,
+        tenant=patient.tenant,
+        resource_id=patient.id,
+        resource_repr=patient.record_number,
+        metadata={"changed_fields": sorted(f for f in update_fields if f != "updated_at")},
+    )
+    return patient
+
+
+# ---------------------------------------------------------------------------
 # patient_deactivate
 # ---------------------------------------------------------------------------
 

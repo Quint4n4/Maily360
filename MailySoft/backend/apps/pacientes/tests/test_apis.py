@@ -28,6 +28,7 @@ Nota sobre el contexto de tenant en tests de API con force_authenticate:
 Patrón: AAA. Todas tocan BD → fixture db.
 """
 
+import datetime
 import uuid as uuid_module
 from contextlib import contextmanager
 from typing import Any, Generator
@@ -593,6 +594,145 @@ class TestPatientDeleteApi:
 
         # Assert
         assert response.status_code == 404
+
+
+# ===========================================================================
+# Verificación de FIX-A2: JWT real + aislamiento de tenant
+# ===========================================================================
+
+
+# ===========================================================================
+# ALTO-2 — Validación estricta del PATCH de Patient (D-EC-7)
+# ===========================================================================
+
+
+class TestPatientPatchStrictValidation:
+    """ALTO-2: verifica la validación estricta agregada al InputSerializer del PATCH.
+
+    Cubre:
+    - Campo desconocido → 400.
+    - is_deceased=True sin deceased_at → 400.
+    - is_deceased=False limpia deceased_at.
+    - MEDIO-2: phone_secondary inválido → 400; vacío → permitido.
+    """
+
+    def test_campo_desconocido_da_400(self, db: None) -> None:
+        """PATCH con campo no declarado en el InputSerializer → 400 (D-EC-7)."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        client = _make_member_client(tenant, role="reception")
+
+        with _tenant_context(tenant):
+            response = client.patch(
+                _detail_url(patient.id),
+                data={"first_name": "Maria", "campo_trampa": "inyeccion"},
+                format="json",
+            )
+
+        assert response.status_code == 400
+        # El error debe señalar el campo desconocido.
+        detail = response.json()
+        assert "campo_trampa" in str(detail)
+
+    def test_is_deceased_true_sin_deceased_at_da_400(self, db: None) -> None:
+        """PATCH con is_deceased=True y sin deceased_at → 400."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        client = _make_member_client(tenant, role="reception")
+
+        with _tenant_context(tenant):
+            response = client.patch(
+                _detail_url(patient.id),
+                data={"is_deceased": True},
+                format="json",
+            )
+
+        assert response.status_code == 400
+        detail_str = str(response.json())
+        assert "deceased_at" in detail_str
+
+    def test_is_deceased_true_con_deceased_at_da_200(self, db: None) -> None:
+        """PATCH con is_deceased=True y deceased_at provisto → 200."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        client = _make_member_client(tenant, role="reception")
+
+        with _tenant_context(tenant):
+            response = client.patch(
+                _detail_url(patient.id),
+                data={"is_deceased": True, "deceased_at": "2024-01-15"},
+                format="json",
+            )
+
+        assert response.status_code == 200
+
+    def test_is_deceased_false_limpia_deceased_at(self, db: None) -> None:
+        """PATCH con is_deceased=False limpia deceased_at aunque se envíe una fecha."""
+        tenant = TenantFactory()
+        # Paciente previamente marcado como fallecido.
+        patient = PatientFactory(
+            tenant=tenant, is_deceased=True, deceased_at=datetime.date(2024, 1, 15)
+        )
+        client = _make_member_client(tenant, role="reception")
+
+        with _tenant_context(tenant):
+            response = client.patch(
+                _detail_url(patient.id),
+                data={"is_deceased": False, "deceased_at": "2024-01-15"},
+                format="json",
+            )
+
+        assert response.status_code == 200
+        patient.refresh_from_db()
+        assert patient.is_deceased is False
+        assert patient.deceased_at is None
+
+    # MEDIO-2 — phone_secondary
+
+    def test_phone_secondary_invalido_da_400(self, db: None) -> None:
+        """MEDIO-2: phone_secondary con formato inválido → 400."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        client = _make_member_client(tenant, role="reception")
+
+        with _tenant_context(tenant):
+            response = client.patch(
+                _detail_url(patient.id),
+                data={"phone_secondary": "NO-ES-UN-TELEFONO!!!@@##"},
+                format="json",
+            )
+
+        assert response.status_code == 400
+
+    def test_phone_secondary_vacio_permitido(self, db: None) -> None:
+        """MEDIO-2: phone_secondary vacío → 200 (campo opcional)."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        client = _make_member_client(tenant, role="reception")
+
+        with _tenant_context(tenant):
+            response = client.patch(
+                _detail_url(patient.id),
+                data={"phone_secondary": ""},
+                format="json",
+            )
+
+        assert response.status_code == 200
+
+    def test_phone_secondary_valido_da_200(self, db: None) -> None:
+        """MEDIO-2: phone_secondary con formato válido → 200."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        client = _make_member_client(tenant, role="reception")
+
+        with _tenant_context(tenant):
+            response = client.patch(
+                _detail_url(patient.id),
+                data={"phone_secondary": "+52 55 1234 5678"},
+                format="json",
+            )
+
+        assert response.status_code == 200
 
 
 # ===========================================================================

@@ -9,11 +9,22 @@ e importarse aquí si son ampliamente reutilizadas.
 import datetime
 
 import factory
+from django.utils import timezone
 from factory.django import DjangoModelFactory
 
 from apps.agenda.models import AgendaBlock, AgendaItemNote, Appointment, AppointmentReminder, TenantAgendaConfig
 from apps.audit.models import ActionType, AuditLog
 from apps.authn.models import User
+from apps.expediente.models import (
+    Addendum,
+    Allergy,
+    Diagnosis,
+    DiagnosisKind,
+    DiagnosisStatus,
+    EvolutionNote,
+    MedicalHistory,
+    VitalSignsRecord,
+)
 from apps.notas.models import Note, NoteScope
 from apps.pacientes.models import Patient
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
@@ -340,6 +351,90 @@ class AgendaItemNoteFactory(DjangoModelFactory):
     body = factory.Sequence(lambda n: f"Nota colaborativa #{n}")
 
 
+# ---------------------------------------------------------------------------
+# Expediente (Allergy, MedicalHistory)
+# ---------------------------------------------------------------------------
+
+
+class AllergyFactory(DjangoModelFactory):
+    """Alergia de un paciente.
+
+    El tenant de la alergia DEBE coincidir con el del paciente.
+    Por defecto crea alergias vigentes (is_active=True).
+    """
+
+    class Meta:
+        model = Allergy
+
+    tenant = factory.SubFactory(TenantFactory)
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    created_by = factory.SubFactory(UserFactory)
+    substance = factory.Sequence(lambda n: f"Sustancia {n}")
+    reaction = ""
+    severity = ""
+    is_active = True
+
+
+class MedicalHistoryFactory(DjangoModelFactory):
+    """Historia clínica formal de un paciente.
+
+    El tenant de la HC DEBE coincidir con el del paciente.
+    Por defecto crea una HC con todos los bloques vacíos (HC incompleta válida).
+    Úsala cuando necesitas una HC ya persistida sin pasar por el service
+    (p. ej., para tests de selectors o de aislamiento).
+    """
+
+    class Meta:
+        model = MedicalHistory
+
+    tenant = factory.SubFactory(TenantFactory)
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    created_by = factory.SubFactory(UserFactory)
+    heredo_familiares = factory.LazyFunction(dict)
+    personales_patologicos = factory.LazyFunction(dict)
+    no_patologicos = factory.LazyFunction(dict)
+    habitos_alimenticios = factory.LazyFunction(dict)
+    gineco_obstetricos = factory.LazyFunction(dict)
+    exploracion_fisica_basal = factory.LazyFunction(dict)
+    antecedentes_importancia = ""
+    padecimiento_actual = ""
+    tratamientos_actuales = ""
+    prioridad_analisis = ""
+
+
+class VitalSignsRecordFactory(DjangoModelFactory):
+    """Toma de signos vitales de un paciente (A3 — Append-only).
+
+    El tenant de la toma DEBE coincidir con el del paciente.
+    Por defecto crea una toma con measured_at en el pasado (hoy) y sin valores
+    numéricos (toma vacía válida). Pasar los campos numéricos explícitamente
+    cuando el test los necesite.
+
+    Úsala cuando necesitas tomas ya persistidas sin pasar por el service
+    (p. ej., para tests de selectors, series o de aislamiento).
+    """
+
+    class Meta:
+        model = VitalSignsRecord
+
+    tenant = factory.SubFactory(TenantFactory)
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    created_by = factory.SubFactory(UserFactory)
+    appointment = None
+    measured_at = factory.LazyFunction(timezone.now)
+    weight_kg = None
+    height_m = None
+    heart_rate = None
+    resp_rate = None
+    systolic = None
+    diastolic = None
+    temperature_c = None
+    oxygen_saturation = None
+    glucose = None
+    extra_params = factory.LazyFunction(dict)
+    notes = ""
+
+
 class AuditLogFactory(DjangoModelFactory):
     """Registro inmutable de la bitácora (AuditLog).
 
@@ -373,3 +468,86 @@ class AuditLogFactory(DjangoModelFactory):
     user_agent = ""
     request_id = ""
     metadata = factory.LazyFunction(dict)
+
+
+# ---------------------------------------------------------------------------
+# Expediente A4 — EvolutionNote, Addendum, Diagnosis
+# ---------------------------------------------------------------------------
+
+
+class EvolutionNoteFactory(DjangoModelFactory):
+    """Nota de evolución inmutable (A4).
+
+    El tenant, patient, appointment y doctor DEBEN pertenecer al mismo tenant.
+    Por defecto la cita se crea en estado ATTENDED para cumplir D-EC-2.
+
+    IMPORTANTE: En tests que ejercitan evolution_note_create() directamente
+    no se necesita esta factory. Úsala para notas ya persistidas (selectors, API).
+    """
+
+    class Meta:
+        model = EvolutionNote
+
+    # El doctor define el tenant raíz de la nota.
+    doctor = factory.SubFactory(DoctorFactory)
+    tenant = factory.LazyAttribute(lambda obj: obj.doctor.tenant)
+    created_by = factory.LazyAttribute(lambda obj: obj.doctor.created_by)
+
+    # Paciente del MISMO tenant que el doctor.
+    patient = factory.LazyAttribute(
+        lambda obj: PatientFactory(tenant=obj.doctor.tenant)
+    )
+
+    # Cita del mismo tenant, paciente y doctor, en estado ATTENDED (D-EC-2).
+    appointment = factory.LazyAttribute(
+        lambda obj: AppointmentFactory(
+            tenant=obj.doctor.tenant,
+            patient=obj.patient,
+            doctor=obj.doctor,
+            status=Appointment.Status.ATTENDED,
+        )
+    )
+    vital_signs = None
+
+    # Campos clínicos vacíos por defecto (válidos — todos opcionales).
+    antecedentes = ""
+    interrogatorio = ""
+    estudios = ""
+    diagnosticos_texto = ""
+    tratamiento = ""
+    plan_recomendaciones = ""
+    indicaciones_enfermeria = ""
+    exploracion_fisica = factory.LazyFunction(dict)
+    is_locked = True
+
+
+class AddendumFactory(DjangoModelFactory):
+    """Addendum sobre una nota de evolución (A4 — Append-only)."""
+
+    class Meta:
+        model = Addendum
+
+    evolution = factory.SubFactory(EvolutionNoteFactory)
+    tenant = factory.LazyAttribute(lambda obj: obj.evolution.tenant)
+    created_by = factory.LazyAttribute(lambda obj: obj.evolution.created_by)
+    author = factory.LazyAttribute(lambda obj: obj.evolution.created_by)
+    body = factory.Sequence(lambda n: f"Addendum de aclaración #{n}.")
+
+
+class DiagnosisFactory(DjangoModelFactory):
+    """Diagnóstico clínico de un paciente (A4).
+
+    Por defecto crea un diagnóstico presuntivo activo sin vinculación a evolución.
+    """
+
+    class Meta:
+        model = Diagnosis
+
+    tenant = factory.SubFactory(TenantFactory)
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    created_by = factory.SubFactory(UserFactory)
+    evolution = None
+    cie_code = ""
+    description = factory.Sequence(lambda n: f"Diagnóstico de prueba #{n}")
+    kind = DiagnosisKind.PRESUNTIVO
+    status = DiagnosisStatus.ACTIVO
