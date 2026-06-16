@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2 } from 'lucide-react'
 import { useUpdatePatient } from '../../hooks/pacientes'
 import { ApiError } from '../../lib/http'
-import type { PatientOut, Sex } from '../../types/paciente'
+import type { BloodType, Education, MaritalStatus, PatientOut, Sex } from '../../types/paciente'
+import { BLOOD_OPTIONS, EDUCATION_OPTIONS, MARITAL_OPTIONS } from '../expediente/ui'
 
 interface EditarPacienteDrawerProps {
   paciente: PatientOut | null
@@ -30,6 +31,11 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
   const [form, setForm] = useState({
     first_name: '', paternal_surname: '', maternal_surname: '',
     date_of_birth: '', sex: '' as '' | Sex, phone: '', email: '', curp: '', notes: '',
+    // NOM-004
+    address_street: '', address_neighborhood: '', city: '', state: '', postal_code: '',
+    birthplace: '', marital_status: '' as MaritalStatus, education: '' as Education,
+    occupation: '', religion: '', blood_type: '' as BloodType,
+    phone_secondary: '', phone_label: '', category: '',
   })
   const [errores, setErrores] = useState<string[]>([])
   const actualizar = useUpdatePatient()
@@ -48,6 +54,20 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
       email: paciente.email,
       curp: paciente.curp,
       notes: paciente.notes,
+      address_street: paciente.address_street,
+      address_neighborhood: paciente.address_neighborhood,
+      city: paciente.city,
+      state: paciente.state,
+      postal_code: paciente.postal_code,
+      birthplace: paciente.birthplace,
+      marital_status: paciente.marital_status,
+      education: paciente.education,
+      occupation: paciente.occupation,
+      religion: paciente.religion,
+      blood_type: paciente.blood_type,
+      phone_secondary: paciente.phone_secondary,
+      phone_label: paciente.phone_label,
+      category: paciente.category,
     })
   }, [paciente])
 
@@ -78,6 +98,21 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
           curp: form.curp.trim(),
           email: form.email.trim(),
           notes: form.notes.trim(),
+          // NOM-004
+          address_street: form.address_street.trim(),
+          address_neighborhood: form.address_neighborhood.trim(),
+          city: form.city.trim(),
+          state: form.state.trim(),
+          postal_code: form.postal_code.trim(),
+          birthplace: form.birthplace.trim(),
+          marital_status: form.marital_status,
+          education: form.education,
+          occupation: form.occupation.trim(),
+          religion: form.religion.trim(),
+          blood_type: form.blood_type,
+          phone_secondary: form.phone_secondary.trim(),
+          phone_label: form.phone_label.trim(),
+          category: form.category.trim(),
         },
       })
       onClose()
@@ -172,6 +207,16 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
                     <label className="label">Teléfono</label>
                     <input className="input" value={form.phone} onChange={set('phone')} />
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Teléfono secundario <span className="text-gray-400 font-normal">(opcional)</span></label>
+                      <input className="input" value={form.phone_secondary} onChange={set('phone_secondary')} />
+                    </div>
+                    <div>
+                      <label className="label">Etiqueta <span className="text-gray-400 font-normal">(ej. Casa)</span></label>
+                      <input className="input" value={form.phone_label} onChange={set('phone_label')} />
+                    </div>
+                  </div>
                   <div>
                     <label className="label">Email <span className="text-gray-400 font-normal">(opcional)</span></label>
                     <input type="email" className="input" value={form.email} onChange={set('email')} />
@@ -180,10 +225,82 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
               </section>
 
               <section>
-                <p className={SECCION}>Identificación</p>
-                <div>
-                  <label className="label">CURP <span className="text-gray-400 font-normal">(opcional)</span></label>
-                  <input className="input uppercase" maxLength={18} value={form.curp} onChange={set('curp')} />
+                <p className={SECCION}>Domicilio</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="label">Calle y número</label>
+                    <input className="input" value={form.address_street} onChange={set('address_street')} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Colonia</label>
+                      <input className="input" value={form.address_neighborhood} onChange={set('address_neighborhood')} />
+                    </div>
+                    <div>
+                      <label className="label">Código postal</label>
+                      <input className="input" value={form.postal_code} onChange={set('postal_code')} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Ciudad</label>
+                      <input className="input" value={form.city} onChange={set('city')} />
+                    </div>
+                    <div>
+                      <label className="label">Estado</label>
+                      <input className="input" value={form.state} onChange={set('state')} />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <p className={SECCION}>Identificación y datos NOM-004</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="label">CURP <span className="text-gray-400 font-normal">(opcional)</span></label>
+                    <input className="input uppercase" maxLength={18} value={form.curp} onChange={set('curp')} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Lugar de nacimiento</label>
+                      <input className="input" value={form.birthplace} onChange={set('birthplace')} />
+                    </div>
+                    <div>
+                      <label className="label">Tipo de sangre</label>
+                      <select className="input" value={form.blood_type} onChange={set('blood_type')}>
+                        {BLOOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Estado civil</label>
+                      <select className="input" value={form.marital_status} onChange={set('marital_status')}>
+                        {MARITAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Escolaridad</label>
+                      <select className="input" value={form.education} onChange={set('education')}>
+                        {EDUCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Ocupación</label>
+                      <input className="input" value={form.occupation} onChange={set('occupation')} />
+                    </div>
+                    <div>
+                      <label className="label">Religión</label>
+                      <input className="input" value={form.religion} onChange={set('religion')} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Categoría <span className="text-gray-400 font-normal">(opcional)</span></label>
+                    <input className="input" value={form.category} onChange={set('category')} />
+                  </div>
                 </div>
               </section>
 
