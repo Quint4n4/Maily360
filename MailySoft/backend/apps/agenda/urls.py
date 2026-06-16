@@ -21,6 +21,7 @@ from apps.agenda.views import (
     AgendaBlockListCreateApi,
     AgendaBlockNotesApi,
     AgendaConfigApi,
+    AgendaDisponibilidadApi,
     AgendaItemNoteDetailApi,
     AppointmentChangeStatusApi,
     AppointmentDetailApi,
@@ -28,6 +29,7 @@ from apps.agenda.views import (
     AppointmentNotesApi,
     AppointmentReactivateApi,
     AppointmentRescheduleApi,
+    AppointmentSeriesCreateApi,
     AppointmentTypeDetailApi,
     AppointmentTypeListCreateApi,
 )
@@ -38,6 +40,18 @@ urlpatterns = [
         "agenda/citas/",
         AppointmentListCreateApi.as_view(),
         name="appointment-list-create",
+    ),
+    # Serie (multi-cita) — antes de <uuid> para que "serie" no se interprete como id.
+    path(
+        "agenda/citas/serie/",
+        AppointmentSeriesCreateApi.as_view(),
+        name="appointment-series-create",
+    ),
+    # Disponibilidad (horarios ocupados) — para armar series sin choques.
+    path(
+        "agenda/disponibilidad/",
+        AgendaDisponibilidadApi.as_view(),
+        name="agenda-disponibilidad",
     ),
     path(
         "agenda/citas/<uuid:appointment_id>/",

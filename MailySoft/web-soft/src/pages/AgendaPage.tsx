@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, CalendarCheck, Cake, FileText, CircleDollarSign, UserX, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarCheck, Cake, FileText, CircleDollarSign, UserX, Loader2, Users, Ban, Stethoscope, Phone, Video, MapPin, Clock, type LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import CrearEventoModal from '../components/agenda/CrearEventoModal'
 import DetalleCitaModal, { CitaDetalle, EstadoCita } from '../components/agenda/DetalleCitaModal'
@@ -8,8 +8,8 @@ import RecordatoriosWidget from '../components/agenda/RecordatoriosWidget'
 import ReagendarModal from '../components/agenda/ReagendarModal'
 import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus, useAgendaBlocksForDay, useReactivateAppointment, useDoctors } from '../hooks/agenda'
 import {
-  addDays, addMonths, formatLargo, formatMedio, formatFechaHora, localHM, localHHMM,
-  durationMin, monthGrid, sameDay, toDayKey,
+  addDays, addMonths, formatLargo, formatMedio, formatFechaHora, localHM, localHHMM12,
+  durationMin, monthGrid, sameDay, toDayKey, to12h,
 } from '../lib/fecha'
 import { ApiError } from '../lib/http'
 import type { Appointment, AppointmentStatus, AgendaBlock, AppointmentModality } from '../types/agenda'
@@ -21,10 +21,15 @@ import { puedeAgendar, puedeCambiarEstadoCita } from '../auth/permisos'
 const SLOTS = Array.from({ length: 18 }, (_, i) => {
   const h = 9 + Math.floor(i / 2)
   const m = i % 2 === 0 ? 0 : 30
-  return { h, m, label: `${h}:${m === 0 ? '00' : '30'}` }
+  const label = `${h}:${m === 0 ? '00' : '30'}` // valor REAL en 24h (para guardar)
+  return { h, m, label, display: to12h(label) } // texto en 12h (solo para mostrar)
 })
 const ROW_H = 60
 const DIAS_SEMANA = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+
+/* Líneas de la cuadrícula — tono cálido VISIBLE (antes eran blancas casi invisibles). */
+const GRID_LINE = 'rgba(120,113,108,0.30)'
+const GRID_LINE_STRONG = 'rgba(120,113,108,0.45)'
 
 const QUICK_LINKS = [
   { icon: Cake,             label: 'Cumpleaños',           color: '#C9A227' },
@@ -50,11 +55,21 @@ function estiloEstado(s: AppointmentStatus): { bg: string; color: string } {
   return { bg: '#FBF1D9', color: '#9A7B1E' }
 }
 
+/* Icono según la modalidad de la cita (presencial vs fuera de consultorio). */
+function iconoModalidad(m: AppointmentModality): LucideIcon {
+  if (m === 'phone') return Phone
+  if (m === 'video') return Video
+  if (m === 'offsite') return MapPin
+  return Stethoscope // office / consultorio
+}
+
 const NONE_COL = '__none__'
 
 export default function AgendaPage() {
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [modalOpen, setModalOpen] = useState(false)
+  // Confirmación al agendar en un horario que ya pasó (modal glass, no alert nativo).
+  const [pendientePasado, setPendientePasado] = useState<{ hora: string; col: { id: string; name: string; color: string } } | null>(null)
   const [slotSel, setSlotSel] = useState<{ hora: string; consultorioId: string | null; consultorioName: string; modality: AppointmentModality }>(
     { hora: '09:00', consultorioId: null, consultorioName: '', modality: 'office' },
   )
@@ -72,6 +87,13 @@ export default function AgendaPage() {
   const reactivar = useReactivateAppointment()
 
   const dayKey = toDayKey(selectedDate)
+  // Un horario "ya pasó" si su hora de inicio es anterior a ahora (no se agenda en el pasado).
+  const ahora = new Date()
+  const slotEsPasado = (s: { h: number; m: number }): boolean => {
+    const dt = new Date(selectedDate)
+    dt.setHours(s.h, s.m, 0, 0)
+    return dt.getTime() < ahora.getTime()
+  }
   const { data: apptData, isLoading: loadingCitas, isError } = useAppointmentsForDay(dayKey)
   const { data: consData, isLoading: loadingCons } = useConsultorios()
   const { data: eventos } = useAgendaBlocksForDay(dayKey)
@@ -127,6 +149,12 @@ export default function AgendaPage() {
     setModalOpen(true)
   }
 
+  const confirmarPasado = () => {
+    const p = pendientePasado
+    setPendientePasado(null)
+    if (p) abrirCrear(p.hora, p.col)
+  }
+
   // Mapea una cita real al shape de presentación del modal de detalle.
   const toDetalle = (a: Appointment): CitaDetalle => {
     const col = cols[colIndexDe(a)]
@@ -137,7 +165,7 @@ export default function AgendaPage() {
       consultorioName: a.consultorio?.name ?? 'Sin consultorio',
       consultorioColor: col?.color ?? '#C9A227',
       modalidad: a.modality_display,
-      horario: `${localHHMM(a.starts_at)} – ${localHHMM(a.ends_at)}`,
+      horario: `${localHHMM12(a.starts_at)} – ${localHHMM12(a.ends_at)}`,
       fecha: formatLargo(selectedDate),
       motivo: a.appointment_type?.name || a.reason,
       especialidad: a.specialty,
@@ -253,7 +281,7 @@ export default function AgendaPage() {
                       <button key={a.id} onClick={() => setCitaSel(a)}
                         className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/40 transition-colors text-left"
                         style={{ borderTop: i > 0 ? '1px solid rgba(255,255,255,0.45)' : 'none' }}>
-                        <span className="text-xs font-bold text-gray-700 tabular-nums shrink-0">{localHHMM(a.starts_at)}</span>
+                        <span className="text-xs font-bold text-gray-700 tabular-nums shrink-0">{localHHMM12(a.starts_at)}</span>
                         <span className="flex-1 min-w-0">
                           <span className="block text-sm font-medium text-gray-800 truncate">{a.patient.full_name}</span>
                           <span className="block text-[11px] truncate" style={{ color: a.appointment_type?.color_hex || '#9CA3AF' }}>{a.appointment_type?.name || a.modality_display}</span>
@@ -312,10 +340,10 @@ export default function AgendaPage() {
           {!loadingCons && !loadingCitas && cols.length > 0 && (
             <>
               {/* Encabezado de columnas */}
-              <div className="grid border-b border-white/50" style={{ gridTemplateColumns: gridCols }}>
-                <div className="py-3 text-center text-xs font-bold text-gray-500">Hr.</div>
+              <div className="grid border-b" style={{ gridTemplateColumns: gridCols, borderColor: GRID_LINE_STRONG }}>
+                <div className="py-3 text-center text-sm font-bold text-gray-500">Hr.</div>
                 {cols.map(c => (
-                  <div key={c.id} className="py-3 text-center text-sm font-semibold border-l border-white/50" style={{ color: '#374151' }}>
+                  <div key={c.id} className="py-3 text-center text-[15px] font-semibold border-l" style={{ color: '#374151', borderColor: GRID_LINE_STRONG }}>
                     <span className="inline-flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.color }} />
                       {c.name}
@@ -326,22 +354,32 @@ export default function AgendaPage() {
 
               {/* Cuerpo */}
               <div className="relative grid" style={{ gridTemplateColumns: gridCols, gridAutoRows: `${ROW_H}px` }}>
-                {SLOTS.map((s, r) => (
-                  <div key={`row-${r}`} className="contents">
-                    <div className="flex items-start justify-center pt-1 text-xs text-gray-500 border-b border-white/40"
-                      style={{ gridColumn: 1, gridRow: r + 1 }}>
-                      {s.label}
+                {SLOTS.map((s, r) => {
+                  const pasado = slotEsPasado(s)
+                  return (
+                    <div key={`row-${r}`} className="contents">
+                      <div className="flex items-start justify-center pt-1 text-sm border-b"
+                        style={{ gridColumn: 1, gridRow: r + 1, borderColor: GRID_LINE, color: pasado ? '#C4BFB6' : '#6B7280' }}>
+                        {s.display}
+                      </div>
+                      {cols.map((c, ci) => {
+                        const onCell = () => {
+                          if (pasado) { setPendientePasado({ hora: s.label, col: c }); return }
+                          abrirCrear(s.label, c)
+                        }
+                        return (
+                          <button
+                            key={`cell-${r}-${ci}`}
+                            onClick={agendar ? onCell : undefined}
+                            title={pasado ? 'Este horario ya pasó' : undefined}
+                            className={`border-b border-l transition-colors ${agendar ? 'hover:bg-white/40 cursor-pointer' : 'cursor-default'}`}
+                            style={{ gridColumn: ci + 2, gridRow: r + 1, borderColor: GRID_LINE, background: pasado ? 'rgba(120,113,108,0.05)' : undefined }}
+                          />
+                        )
+                      })}
                     </div>
-                    {cols.map((c, ci) => (
-                      <button
-                        key={`cell-${r}-${ci}`}
-                        onClick={agendar ? () => abrirCrear(s.label, c) : undefined}
-                        className={`border-b border-l border-white/40 transition-colors ${agendar ? 'hover:bg-white/40 cursor-pointer' : 'cursor-default'}`}
-                        style={{ gridColumn: ci + 2, gridRow: r + 1 }}
-                      />
-                    ))}
-                  </div>
-                ))}
+                  )
+                })}
 
                 {/* Bloqueos / Reuniones (bandas) */}
                 {bloques.map(b => {
@@ -356,26 +394,30 @@ export default function AgendaPage() {
                   const gridColumn = ci >= 0 ? `${ci + 2}` : `2 / span ${Math.max(1, cols.length)}`
                   const esBloqueo = b.kind === 'block'
                   const sub = b.doctor ? b.doctor.full_name : (b.consultorio ? b.consultorio.name : 'Toda la clínica')
+                  const Icono = esBloqueo ? Ban : Users
+                  const tinta = esBloqueo ? '#A32D2D' : '#3A6EA5'
+                  const subTinta = esBloqueo ? '#C0625C' : '#5B7DA8'
                   return (
                     <div
                       key={b.id}
                       onClick={() => setEventoSel(b)}
                       title="Ver / editar evento"
-                      className="relative m-0.5 rounded-xl px-3 py-1 overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer"
+                      className="relative m-0.5 rounded-xl px-3 py-1 overflow-hidden flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer"
                       style={{
                         gridColumn,
                         gridRow: `${safeStart + 1} / span ${span}`,
                         background: esBloqueo
-                          ? 'repeating-linear-gradient(45deg, rgba(120,113,108,0.16), rgba(120,113,108,0.16) 9px, rgba(120,113,108,0.27) 9px, rgba(120,113,108,0.27) 18px)'
+                          ? 'repeating-linear-gradient(45deg, rgba(192,57,43,0.12), rgba(192,57,43,0.12) 8px, rgba(192,57,43,0.24) 8px, rgba(192,57,43,0.24) 16px)'
                           : 'rgba(58,110,165,0.16)',
-                        border: esBloqueo ? '1px dashed rgba(120,113,108,0.55)' : '1px solid rgba(58,110,165,0.45)',
+                        border: esBloqueo ? '1px dashed rgba(192,57,43,0.6)' : '1px solid rgba(58,110,165,0.45)',
                         zIndex: 3,
                       }}
                     >
-                      <p className="text-[11px] font-bold truncate w-full" style={{ color: esBloqueo ? '#6B7280' : '#3A6EA5' }}>
+                      <Icono className="w-5 h-5 shrink-0" style={{ color: tinta }} strokeWidth={2.2} />
+                      <p className="text-sm font-bold truncate w-full leading-tight" style={{ color: tinta }}>
                         {b.title || b.kind_display}
                       </p>
-                      <p className="text-[10px] truncate w-full" style={{ color: '#9CA3AF' }}>
+                      <p className="text-xs font-medium truncate w-full" style={{ color: subTinta }}>
                         {esBloqueo ? 'Bloqueado' : 'Reunión'} · {sub}
                       </p>
                     </div>
@@ -397,6 +439,7 @@ export default function AgendaPage() {
                   // Color del TIPO de cita: tiñe toda la tarjeta (gris si no tiene tipo).
                   const tipoColor = a.appointment_type?.color_hex || '#9A958C'
                   const subtitulo = a.appointment_type?.name || a.reason || ''
+                  const ModIcon = iconoModalidad(a.modality)
                   return (
                     <div
                       key={a.id}
@@ -407,8 +450,8 @@ export default function AgendaPage() {
                         gridRow: `${startIdx + 1} / span ${span}`,
                         background: esCancelada
                           ? 'repeating-linear-gradient(45deg, rgba(192,57,43,0.12), rgba(192,57,43,0.12) 8px, rgba(192,57,43,0.24) 8px, rgba(192,57,43,0.24) 16px)'
-                          : `${tipoColor}26`,
-                        borderLeft: `4px solid ${esCancelada ? '#C0392B' : tipoColor}`,
+                          : `${tipoColor}3D`,
+                        borderLeft: `5px solid ${esCancelada ? '#C0392B' : tipoColor}`,
                         backdropFilter: 'blur(6px)',
                         boxShadow: '0 2px 10px rgba(60,42,12,0.12)',
                         zIndex: 5,
@@ -416,18 +459,21 @@ export default function AgendaPage() {
                     >
                       {esCancelada ? (
                         <>
-                          <p className="text-[11px] font-medium text-gray-500 line-through truncate w-full px-2">{a.patient.full_name}</p>
-                          <p className="font-extrabold" style={{ color: '#C0392B', fontSize: span >= 2 ? '1.05rem' : '0.72rem', letterSpacing: '0.06em' }}>CANCELADA</p>
+                          <p className="text-xs font-medium text-gray-500 line-through truncate w-full px-2">{a.patient.full_name}</p>
+                          <p className="font-extrabold" style={{ color: '#C0392B', fontSize: span >= 2 ? '1.1rem' : '0.8rem', letterSpacing: '0.06em' }}>CANCELADA</p>
                         </>
                       ) : (
                         <>
                           {/* punto del consultorio (la columna también lo indica) */}
-                          <span className="absolute top-2.5 right-3 w-2.5 h-2.5 rounded-full"
+                          <span className="absolute top-2 right-2.5 w-2.5 h-2.5 rounded-full"
                             style={{ background: col.color, boxShadow: `0 0 0 3px ${col.color}22` }} />
-                          <p className="text-xs font-semibold text-gray-900 leading-tight truncate w-full px-3">{a.patient.full_name}</p>
-                          {subtitulo && <p className="text-[11px] font-medium truncate w-full" style={{ color: tipoColor }}>{subtitulo}</p>}
+                          <div className="flex items-center justify-center gap-1.5 w-full px-2 min-w-0">
+                            <ModIcon className="w-4 h-4 shrink-0" style={{ color: tipoColor }} strokeWidth={2.2} />
+                            <p className="text-sm font-bold text-gray-900 leading-tight truncate min-w-0">{a.patient.full_name}</p>
+                          </div>
+                          {subtitulo && <p className="text-xs font-semibold truncate w-full" style={{ color: tipoColor }}>{subtitulo}</p>}
                           {span >= 2 && (
-                            <span className="inline-block mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                            <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
                               style={{ background: est.bg, color: est.color }}>
                               {a.status_display}
                             </span>
@@ -454,6 +500,39 @@ export default function AgendaPage() {
         initialMode={modalMode}
         initialModality={slotSel.modality}
       />
+
+      {/* Confirmación: agendar en un horario que ya pasó */}
+      {pendientePasado && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4"
+          style={{ background: 'rgba(40,28,8,0.45)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setPendientePasado(null)}>
+          <div className="relative w-full max-w-sm rounded-3xl overflow-hidden text-center"
+            style={{ background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(30px) saturate(160%)', border: '1px solid rgba(255,255,255,0.7)', boxShadow: '0 24px 70px rgba(60,42,12,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="px-7 pt-7 pb-5">
+              <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(201,162,39,0.15)' }}>
+                <Clock className="w-7 h-7" style={{ color: '#C9A227' }} />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Este horario ya pasó</h2>
+              <p className="text-gray-600 text-sm mt-1.5">
+                Las <b>{to12h(pendientePasado.hora)}</b> ya pasaron. ¿Seguro que quieres agendar en este horario?
+              </p>
+            </div>
+            <div className="px-7 pb-7 flex gap-2.5">
+              <button onClick={() => setPendientePasado(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:brightness-95"
+                style={{ color: '#6B7280', background: '#F3F4F6' }}>
+                Cancelar
+              </button>
+              <button onClick={confirmarPasado}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110"
+                style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
+                Sí, agendar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <DetalleCitaModal
         cita={citaSel ? toDetalle(citaSel) : null}

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check, Building2, Phone, Video, MapPin } from 'lucide-react'
+import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check, Building2, Phone, Video, MapPin, ChevronLeft, ChevronRight, Repeat, Plus } from 'lucide-react'
 import { usePatients } from '../../hooks/pacientes'
-import { useDoctors, useConsultorios, useCreateAppointment, useAppointmentTypes, useCreateAgendaBlock } from '../../hooks/agenda'
-import { combineToISO } from '../../lib/fecha'
+import { useDoctors, useConsultorios, useCreateAppointment, useCreateAppointmentSeries, useAppointmentTypes, useCreateAgendaBlock, useAgendaDisponibilidad } from '../../hooks/agenda'
+import { combineToISO, to12h, formatFechaHora, fromDayKey, toDayKey, addDays, seriesDates } from '../../lib/fecha'
+import MiniCalendario from './MiniCalendario'
 import { ApiError } from '../../lib/http'
 import { useAuth } from '../../auth/AuthContext'
-import type { AppointmentModality } from '../../types/agenda'
+import type { AppointmentModality, AppointmentSeriesResult, SeriesFrequency } from '../../types/agenda'
 
 type Modo = 'cita' | 'block' | 'meeting'
 
@@ -81,6 +82,7 @@ export default function CrearEventoModal({
   open, onClose, dayKey, fechaLarga, horaInicio, consultorioId, consultorioName, initialMode = 'cita', initialModality = 'office',
 }: CrearEventoModalProps) {
   const [modo, setModo] = useState<Modo>(initialMode)
+  const [paso, setPaso] = useState<1 | 2>(1) // asistente de la cita (1: quién · 2: cómo/cuándo)
 
   // ── Estado de la CITA ──
   const [search, setSearch] = useState('')
@@ -96,7 +98,16 @@ export default function CrearEventoModal({
   const [modalidad, setModalidad] = useState<AppointmentModality>('office')
   const [duracion, setDuracion] = useState(30)
   const [tipoId, setTipoId] = useState('')
-  const [notas, setNotas] = useState('')
+  const [notas, setNotas] = useState('') // "¿A qué viene?" → se manda como reason
+
+  // ── Repetición (multi-cita) ──
+  const [repetir, setRepetir] = useState(false)
+  const [frecuencia, setFrecuencia] = useState<SeriesFrequency>('weekly') // 'custom' = Personalizado (manual)
+  const [topeTipo, setTopeTipo] = useState<'count' | 'until'>('count')
+  const [topeCount, setTopeCount] = useState(4)
+  const [topeUntil, setTopeUntil] = useState('') // 'yyyy-mm-dd'
+  const [ocurrencias, setOcurrencias] = useState<{ date: string; time: string }[]>([]) // citas de la serie (editables)
+  const [resultado, setResultado] = useState<AppointmentSeriesResult | null>(null)
 
   // ── Estado del EVENTO (bloqueo/reunión) ──
   const [evTitulo, setEvTitulo] = useState('')
@@ -111,11 +122,12 @@ export default function CrearEventoModal({
   const [errores, setErrores] = useState<string[]>([])
   const [enviando, setEnviando] = useState(false)
 
-  const { data: pacData, isLoading: loadingPac } = usePatients(debounced)
+  const { data: pacData, isLoading: loadingPac } = usePatients({ search: debounced })
   const { data: docData } = useDoctors()
   const { data: consData } = useConsultorios()
   const { data: tipos } = useAppointmentTypes()
   const crearCita = useCreateAppointment()
+  const crearSerie = useCreateAppointmentSeries()
   const crearEvento = useCreateAgendaBlock()
 
   const { user } = useAuth()
@@ -126,7 +138,7 @@ export default function CrearEventoModal({
   // Consultorios permitidos: si el médico seleccionado tiene asignados, solo esos.
   const docSel = doctores.find(d => d.id === doctorId)
   const consPermitidos = (docSel && docSel.consultorios.length > 0) ? docSel.consultorios : consultorios
-  const guardando = crearCita.isPending || enviando
+  const guardando = crearCita.isPending || crearSerie.isPending || enviando
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300)
@@ -135,12 +147,14 @@ export default function CrearEventoModal({
 
   useEffect(() => {
     if (!open) return
-    setModo(initialMode)
+    setModo(initialMode); setPaso(1)
     setErrores([]); setEnviando(false)
     // cita
     setSearch(''); setDebounced(''); setModoPaciente('existente'); setPacienteId('')
     setNpNombre(''); setNpPaterno(''); setNpMaterno(''); setNpTel('')
     setDoctorId(user?.doctor_id ?? ''); setConsId(consultorioId ?? ''); setModalidad(initialModality); setDuracion(30); setTipoId(''); setNotas('')
+    // repetición
+    setRepetir(false); setFrecuencia('weekly'); setTopeTipo('count'); setTopeCount(4); setTopeUntil(''); setOcurrencias([]); setResultado(null)
     // evento (prefill desde el slot clicado)
     setEvTitulo(''); setEvNotas(''); setEvDoctores([]); setEvTodoDia(false)
     setEvAlcance(consultorioId ? 'consultorios' : 'clinica')
@@ -156,6 +170,61 @@ export default function CrearEventoModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctorId])
 
+  // ── Repetición: una sola lista de ocurrencias editables (con disponibilidad) ──
+  // Consultorio que usaría la cita (null en telemedicina/fuera).
+  const consultorioCita = modalidad === 'office' ? (consPermitidos.some(c => c.id === consId) ? consId : null) : null
+
+  // En modos automáticos, regenera la lista al cambiar la regla.
+  useEffect(() => {
+    if (!repetir || frecuencia === 'custom') return
+    const base = fromDayKey(dayKey)
+    const [hh, mm] = horaInicio.split(':').map(Number)
+    base.setHours(hh, mm, 0, 0)
+    const fechas = seriesDates({
+      start: base,
+      frequency: frecuencia,
+      count: topeTipo === 'count' ? topeCount : null,
+      until: topeTipo === 'until' && topeUntil ? fromDayKey(topeUntil) : null,
+    })
+    setOcurrencias(fechas.map(d => ({ date: toDayKey(d), time: horaInicio })))
+  }, [repetir, frecuencia, topeTipo, topeCount, topeUntil, dayKey, horaInicio])
+
+  const editarOcc = (i: number, patch: Partial<{ date: string; time: string }>) =>
+    setOcurrencias(prev => prev.map((c, j) => (j === i ? { ...c, ...patch } : c)))
+  const quitarOcc = (i: number) => setOcurrencias(prev => prev.filter((_, j) => j !== i))
+  const agregarOcc = () => setOcurrencias(prev => {
+    const last = prev[prev.length - 1]
+    const next = last ? toDayKey(addDays(fromDayKey(last.date), 7)) : dayKey
+    return [...prev, { date: next, time: last?.time ?? horaInicio }]
+  })
+
+  // Disponibilidad (horarios ocupados) del médico en el rango de las ocurrencias.
+  const diasOrden = [...ocurrencias.map(o => o.date)].sort()
+  const dispFrom = diasOrden.length ? combineToISO(diasOrden[0], '00:00') : ''
+  const dispTo = diasOrden.length ? combineToISO(diasOrden[diasOrden.length - 1], '23:59') : ''
+  const { data: dispData } = useAgendaDisponibilidad({
+    doctorId, consultorioId: consultorioCita, from: dispFrom, to: dispTo,
+    enabled: repetir && modo === 'cita' && !!doctorId,
+  })
+  const busy = dispData?.busy ?? []
+  const slotOcupado = (startISO: string, endISO: string) =>
+    busy.some(b => new Date(startISO).getTime() < new Date(b.end).getTime() && new Date(endISO).getTime() > new Date(b.start).getTime())
+  const ocupadoEn = (date: string, time: string) => {
+    const sISO = combineToISO(date, time)
+    const eISO = new Date(new Date(sISO).getTime() + duracion * 60_000).toISOString()
+    return slotOcupado(sISO, eISO)
+  }
+  // Slots horarios del día (9:00–17:30, cada 30 min).
+  const SLOTS_HORA = Array.from({ length: 18 }, (_, i) => {
+    const h = 9 + Math.floor(i / 2)
+    return `${String(h).padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`
+  })
+  const horaCorta = (t: string) => {
+    const [h, m] = t.split(':').map(Number)
+    const h12 = h % 12 === 0 ? 12 : h % 12
+    return `${h12}${m === 30 ? ':30' : ''}`
+  }
+
   const activarNuevoPaciente = () => {
     if (!npNombre && !npPaterno && search.trim()) {
       const p = partirNombre(search)
@@ -164,8 +233,8 @@ export default function CrearEventoModal({
     setModoPaciente('nuevo')
   }
 
-  const guardarCita = async () => {
-    setErrores([])
+  // Paso 1 del asistente: paciente + médico.
+  const validarPaciente = (): string[] => {
     const faltan: string[] = []
     if (modoPaciente === 'existente') {
       if (!pacienteId) faltan.push('Selecciona un paciente.')
@@ -174,25 +243,56 @@ export default function CrearEventoModal({
       if (!npPaterno.trim()) faltan.push('El apellido paterno es obligatorio.')
     }
     if (!doctorId) faltan.push('Selecciona un doctor.')
+    return faltan
+  }
+
+  const irPaso2 = () => {
+    const faltan = validarPaciente()
     if (faltan.length) { setErrores(faltan); return }
+    setErrores([]); setPaso(2)
+  }
+
+  const guardarCita = async () => {
+    setErrores([])
+    const faltan = validarPaciente()
+    if (faltan.length) { setErrores(faltan); setPaso(1); return }
+
+    if (repetir && ocurrencias.length < 2) {
+      setErrores(['La serie necesita al menos 2 citas (ajusta o agrega fechas).'])
+      return
+    }
 
     try {
       const startISO = combineToISO(dayKey, horaInicio)
       const endISO = new Date(new Date(startISO).getTime() + duracion * 60_000).toISOString()
       const doctorSel = doctores.find(d => d.id === doctorId)
-      // Paciente existente → patient_id; nuevo → new_patient (paciente + cita en UNA transacción).
       const pacienteRef = modoPaciente === 'nuevo'
         ? { new_patient: { first_name: npNombre.trim(), paternal_surname: npPaterno.trim(), maternal_surname: npMaterno.trim(), phone: npTel.trim() } }
         : { patient_id: pacienteId }
-      await crearCita.mutateAsync({
+      const base = {
         ...pacienteRef,
         doctor_id: doctorId,
         consultorio_id: modalidad === 'office' ? (consPermitidos.some(c => c.id === consId) ? consId : null) : null,
         modality: modalidad,
-        appointment_type_id: tipoId || null, starts_at: startISO, ends_at: endISO,
-        specialty: doctorSel?.specialty ?? '', notes: notas.trim(),
-      })
-      onClose()
+        appointment_type_id: tipoId || null,
+        starts_at: startISO,
+        ends_at: endISO,
+        specialty: doctorSel?.specialty ?? '',
+        reason: notas.trim(), // "¿a qué viene?" → reason (se ve en la tarjeta)
+      }
+      if (repetir) {
+        const explicit = ocurrencias.map(o => combineToISO(o.date, o.time))
+        const res = await crearSerie.mutateAsync({
+          ...base,
+          starts_at: explicit[0],
+          ends_at: new Date(new Date(explicit[0]).getTime() + duracion * 60_000).toISOString(),
+          explicit_starts: explicit,
+        })
+        setResultado(res) // muestra el resumen; no cierra el modal
+      } else {
+        await crearCita.mutateAsync(base)
+        onClose()
+      }
     } catch (err) { setErrores(erroresDe(err)) }
   }
 
@@ -230,7 +330,7 @@ export default function CrearEventoModal({
     </button>
   )
   const ModoPill = ({ m, label, icon: Icon }: { m: Modo; label: string; icon: typeof Ban }) => (
-    <button type="button" onClick={() => { setModo(m); setErrores([]) }}
+    <button type="button" onClick={() => { setModo(m); setPaso(1); setErrores([]) }}
       className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
       style={modo === m
         ? { background: '#C9A227', color: '#fff', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }
@@ -260,13 +360,42 @@ export default function CrearEventoModal({
               <div>
                 <h2 className="text-gray-900 text-xl font-bold">{modo === 'cita' ? 'Agendar cita' : 'Nuevo evento'}</h2>
                 <p className="text-gray-500 text-sm italic mt-0.5">
-                  {fechaLarga}{modo === 'cita' ? ` · ${horaInicio} hrs${consultorioName ? ` · ${consultorioName}` : ''}` : ''}
+                  {fechaLarga}{modo === 'cita' ? ` · ${to12h(horaInicio)}${consultorioName ? ` · ${consultorioName}` : ''}` : ''}
                 </p>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors"><X className="w-6 h-6" /></button>
             </div>
 
             <div className="px-7 py-6 space-y-5">
+              {resultado ? (
+                <div className="text-center py-2">
+                  <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-3" style={{ background: 'rgba(46,125,91,0.15)' }}>
+                    <Check className="w-7 h-7" style={{ color: '#2E7D5B' }} />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {resultado.created_count} {resultado.created_count === 1 ? 'cita agendada' : 'citas agendadas'}
+                  </h3>
+                  {resultado.skipped_count > 0 ? (
+                    <>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {resultado.skipped_count === 1 ? '1 no se pudo' : `${resultado.skipped_count} no se pudieron`} (horario ocupado o bloqueado):
+                      </p>
+                      <div className="mt-3 rounded-xl p-3 text-left space-y-1.5 max-h-52 overflow-y-auto" style={{ background: 'rgba(192,57,43,0.07)', border: '1px solid rgba(192,57,43,0.2)' }}>
+                        {resultado.skipped.map((s, i) => (
+                          <div key={i} className="flex items-start gap-2 text-xs" style={{ color: '#A32D2D' }}>
+                            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <span>{formatFechaHora(s.starts_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-2">Puedes agendar esas a mano en otro horario.</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-600 mt-1">Todas se agendaron correctamente.</p>
+                  )}
+                </div>
+              ) : (
+              <>
               {/* Selector de tipo de registro */}
               <div className="flex gap-2.5">
                 <ModoPill m="cita" label="Cita" icon={CalendarPlus} />
@@ -284,6 +413,20 @@ export default function CrearEventoModal({
               {/* ════════ FORM DE CITA ════════ */}
               {modo === 'cita' && (
                 <>
+                  {/* Barra de progreso del asistente */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold" style={{ color: '#9A7B1E' }}>Paso {paso} de 2</span>
+                      <span className="text-xs text-gray-500">{paso === 1 ? '¿A quién y con quién?' : '¿Cómo, cuándo y detalles?'}</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <span className="h-1.5 flex-1 rounded-full" style={{ background: '#C9A227' }} />
+                      <span className="h-1.5 flex-1 rounded-full" style={{ background: paso >= 2 ? '#C9A227' : 'rgba(201,162,39,0.25)' }} />
+                    </div>
+                  </div>
+
+                  {paso === 1 && (
+                  <>
                   <div>
                     <label className={LABEL}>Paciente</label>
                     <div className="flex gap-2 mb-3">
@@ -336,7 +479,11 @@ export default function CrearEventoModal({
                       </select>
                     )}
                   </div>
+                  </>
+                  )}
 
+                  {paso === 2 && (
+                  <>
                   <div>
                     <label className={LABEL}>Modalidad</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -364,7 +511,7 @@ export default function CrearEventoModal({
                   <div className="flex flex-wrap items-end gap-4">
                     <div>
                       <label className={LABEL}>Inicia</label>
-                      <input value={`${horaInicio} hrs`} disabled className="w-28 rounded-xl border border-white/50 bg-white/40 px-4 py-2.5 text-sm text-gray-600" />
+                      <input value={to12h(horaInicio)} disabled className="w-28 rounded-xl border border-white/50 bg-white/40 px-4 py-2.5 text-sm text-gray-600" />
                     </div>
                     <div>
                       <label className={LABEL}>Duración</label>
@@ -396,9 +543,103 @@ export default function CrearEventoModal({
                   </div>
 
                   <div>
-                    <label className={LABEL}>Observaciones <span className="text-gray-400 font-normal">(opcional)</span></label>
-                    <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={3} className={`${INPUT} resize-none`} placeholder="Notas de la cita…" />
+                    <label className={LABEL}>¿A qué viene el paciente? <span className="text-gray-400 font-normal">(opcional)</span></label>
+                    <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={2} maxLength={255} className={`${INPUT} resize-none`} placeholder="Motivo de la consulta…" />
                   </div>
+
+                  {/* ── Repetir esta cita (multi-cita) ── */}
+                  <div className="rounded-xl p-3" style={{ background: repetir ? 'rgba(201,162,39,0.07)' : 'transparent', border: repetir ? '1px solid rgba(201,162,39,0.25)' : '1px solid rgba(0,0,0,0.06)' }}>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={repetir} onChange={e => setRepetir(e.target.checked)} className="w-4 h-4 accent-amber-600" />
+                      <span className="text-sm font-semibold text-gray-700 inline-flex items-center gap-1.5"><Repeat className="w-4 h-4" style={{ color: '#C9A227' }} /> Repetir esta cita (multi-cita)</span>
+                    </label>
+                    {repetir && (
+                      <div className="mt-3 space-y-3">
+                        <div>
+                          <label className={LABEL}>Cada cuánto</label>
+                          <div className="flex flex-wrap gap-2">
+                            {([['weekly', 'Semanal'], ['biweekly', 'Quincenal'], ['monthly', 'Mensual'], ['custom', 'Personalizado']] as [SeriesFrequency, string][]).map(([v, l]) => (
+                              <button key={v} type="button" onClick={() => setFrecuencia(v)}
+                                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                                style={frecuencia === v ? { background: '#C9A227', color: '#fff' } : { background: 'rgba(255,255,255,0.6)', color: '#9A7B1E', border: '1px solid rgba(201,162,39,0.3)' }}>
+                                {l}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {frecuencia !== 'custom' && (
+                          <div>
+                            <label className={LABEL}>¿Hasta cuándo?</label>
+                            <div className="flex gap-2 mb-2">
+                              <Pill label="N veces" selected={topeTipo === 'count'} onClick={() => setTopeTipo('count')} />
+                              <Pill label="Hasta una fecha" selected={topeTipo === 'until'} onClick={() => setTopeTipo('until')} />
+                            </div>
+                            {topeTipo === 'count' ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600">Repetir</span>
+                                <input type="number" min={2} max={52} value={topeCount} onChange={e => setTopeCount(Number(e.target.value))} className={`${INPUT} w-20`} />
+                                <span className="text-sm text-gray-600">veces (citas en total)</span>
+                              </div>
+                            ) : (
+                              <input type="date" value={topeUntil} min={dayKey} onChange={e => setTopeUntil(e.target.value)} className={INPUT} />
+                            )}
+                          </div>
+                        )}
+
+                        <div>
+                          <label className={LABEL}>
+                            Citas de la serie <span className="text-gray-400 font-normal">({ocurrencias.length}) · los horarios <span style={{ color: '#C0392B' }}>ocupados</span> salen en rojo; toca uno libre para mover</span>
+                          </label>
+                          {ocurrencias.length === 0 ? (
+                            <p className="text-xs text-gray-400">Ajusta la frecuencia para ver las citas.</p>
+                          ) : (
+                            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(152px, 1fr))' }}>
+                              {ocurrencias.map((c, i) => {
+                                const ocupado = ocupadoEn(c.date, c.time)
+                                return (
+                                  <MiniCalendario key={i} value={c.date} min={dayKey}
+                                    accent={ocupado ? 'red' : frecuencia === 'custom' ? 'gold' : 'green'}
+                                    onPick={date => editarOcc(i, { date })}
+                                    onRemove={ocurrencias.length > 2 ? () => quitarOcc(i) : undefined}
+                                    footer={
+                                      <div className="flex flex-wrap gap-1 justify-center">
+                                        {SLOTS_HORA.map(t => {
+                                          const ocup = ocupadoEn(c.date, t)
+                                          const sel = c.time === t
+                                          return (
+                                            <button key={t} type="button" disabled={ocup}
+                                              onClick={() => editarOcc(i, { time: t })}
+                                              title={ocup ? 'Ocupado' : to12h(t)}
+                                              className="text-[10px] px-1 py-0.5 rounded transition-colors"
+                                              style={ocup
+                                                ? { background: '#FDE8E8', color: '#C0392B', textDecoration: 'line-through', cursor: 'not-allowed' }
+                                                : sel
+                                                  ? { background: '#C9A227', color: '#fff', fontWeight: 600 }
+                                                  : { background: 'rgba(255,255,255,0.7)', color: '#5A5246', border: '1px solid rgba(0,0,0,0.08)' }}>
+                                              {horaCorta(t)}
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    } />
+                                )
+                              })}
+                              {frecuencia === 'custom' && (
+                                <button type="button" onClick={agregarOcc}
+                                  className="rounded-2xl flex flex-col items-center justify-center gap-1 text-sm text-gray-500 transition-colors hover:bg-black/5"
+                                  style={{ border: '1.5px dashed rgba(0,0,0,0.18)', minHeight: 150 }}>
+                                  <Plus className="w-6 h-6" /> Agregar cita
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  </>
+                  )}
                 </>
               )}
 
@@ -448,16 +689,44 @@ export default function CrearEventoModal({
                   </div>
                 </>
               )}
+              </>
+              )}
             </div>
 
             {/* Pie */}
             <div className="px-7 py-4 flex items-center justify-between border-t border-white/40" style={{ background: 'rgba(255,255,255,0.25)' }}>
-              <button onClick={onClose} disabled={guardando} className="btn-secondary disabled:opacity-60">Cancelar</button>
-              <button onClick={guardar} disabled={guardando}
-                className="px-8 py-2.5 inline-flex items-center gap-2 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
-                style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
-                {guardando ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : (modo === 'cita' ? 'Agendar cita' : 'Guardar evento')}
-              </button>
+              {resultado ? (
+                <button onClick={onClose}
+                  className="mx-auto px-10 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110"
+                  style={{ background: '#2E7D5B', boxShadow: '0 4px 14px rgba(46,125,91,0.4)' }}>
+                  Listo
+                </button>
+              ) : (
+                <>
+                  {modo === 'cita' && paso === 2 ? (
+                    <button onClick={() => { setErrores([]); setPaso(1) }} disabled={guardando}
+                      className="btn-secondary disabled:opacity-60 inline-flex items-center gap-1.5">
+                      <ChevronLeft className="w-4 h-4" /> Atrás
+                    </button>
+                  ) : (
+                    <button onClick={onClose} disabled={guardando} className="btn-secondary disabled:opacity-60">Cancelar</button>
+                  )}
+
+                  {modo === 'cita' && paso === 1 ? (
+                    <button onClick={irPaso2}
+                      className="px-8 py-2.5 inline-flex items-center gap-2 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                      style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
+                      Siguiente <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button onClick={guardar} disabled={guardando}
+                      className="px-8 py-2.5 inline-flex items-center gap-2 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                      style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
+                      {guardando ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : (modo === 'cita' ? (repetir ? 'Agendar serie' : 'Agendar cita') : 'Guardar evento')}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </motion.div>
         </motion.div>

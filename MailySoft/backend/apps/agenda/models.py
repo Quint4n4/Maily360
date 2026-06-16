@@ -363,6 +363,13 @@ class Appointment(TenantAwareModel):
         help_text="Usuario que registró la inasistencia.",
     )
 
+    # ---- Contador de reagendamientos ----
+
+    reschedule_count = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Cuántas veces se ha reagendado esta cita.",
+    )
+
     # ---- Gancho v2 series ----
 
     series_id = models.UUIDField(

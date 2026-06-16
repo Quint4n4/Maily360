@@ -15,9 +15,10 @@ import datetime
 import uuid
 from typing import Optional
 
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 
 from apps.agenda.models import (
+    ACTIVE_STATUSES,
     AgendaBlock,
     AgendaItemNote,
     Appointment,
@@ -225,3 +226,51 @@ def reminder_list_for_appointment(
     """
     # order_by omitted: Meta.ordering already sorts by scheduled_at ASC
     return AppointmentReminder.objects.filter(appointment=appointment)
+
+
+def agenda_busy_intervals(
+    *,
+    doctor_id: uuid.UUID,
+    consultorio_id: Optional[uuid.UUID],
+    date_from: datetime.datetime,
+    date_to: datetime.datetime,
+) -> list[dict]:
+    """Intervalos OCUPADOS de un médico/consultorio en un rango, para pintar
+    disponibilidad en el frontend (qué horarios chocan al armar una serie).
+
+    Incluye:
+      - Citas ACTIVAS del médico (no canceladas / no-show) que solapan el rango.
+      - Eventos de agenda (reuniones/bloqueos) aplicables: de ese médico, de ese
+        consultorio (si se da), o de toda la clínica (doctor y consultorio nulos).
+
+    El TenantManager (objects) filtra por el tenant activo. Solo lectura.
+
+    Args:
+        doctor_id:      médico de la serie.
+        consultorio_id: consultorio de la cita (None en telemedicina/fuera).
+        date_from/to:   rango UTC a inspeccionar (date_from inclusive, date_to exclusivo).
+
+    Returns:
+        Lista de {"start": datetime, "end": datetime} (sin ordenar).
+    """
+    intervalos: list[dict] = []
+
+    citas = Appointment.objects.filter(
+        doctor_id=doctor_id,
+        status__in=ACTIVE_STATUSES,
+        starts_at__lt=date_to,
+        ends_at__gt=date_from,
+    ).values_list("starts_at", "ends_at")
+    intervalos += [{"start": s, "end": e} for s, e in citas]
+
+    alcance = Q(doctor_id=doctor_id) | Q(doctor__isnull=True, consultorio__isnull=True)
+    if consultorio_id is not None:
+        alcance |= Q(consultorio_id=consultorio_id)
+    bloques = AgendaBlock.objects.filter(
+        alcance,
+        starts_at__lt=date_to,
+        ends_at__gt=date_from,
+    ).values_list("starts_at", "ends_at")
+    intervalos += [{"start": s, "end": e} for s, e in bloques]
+
+    return intervalos

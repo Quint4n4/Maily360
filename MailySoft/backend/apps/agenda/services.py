@@ -21,10 +21,11 @@ Reglas críticas:
        y no es garantizado). Lo que importa es que la tarea verifique status=CANCELLED.
 """
 
+import calendar
 import datetime
 import logging
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -51,6 +52,9 @@ from apps.agenda.selectors import (
 )
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
+from apps.notificaciones.models import NotificationKind, NotificationTarget
+from apps.notificaciones.recipients import clinic_staff_users, users_with_role
+from apps.notificaciones.services import notification_fanout
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
 from apps.pacientes.services import patient_create_quick
@@ -273,6 +277,7 @@ def appointment_create(
     reason: str = "",
     specialty: str = "",
     notes: str = "",
+    series_id: Optional[uuid.UUID] = None,
 ) -> Appointment:
     """Crea una cita médica validando disponibilidad (anti-empalme doble).
 
@@ -450,6 +455,7 @@ def appointment_create(
                 reason=reason,
                 specialty=specialty,
                 notes=notes,
+                series_id=series_id,
             )
 
     except IntegrityError as exc:
@@ -519,6 +525,214 @@ def appointment_create_with_new_patient(
             **cita_kwargs,  # type: ignore[arg-type]
         )
     return appointment
+
+
+# ---------------------------------------------------------------------------
+# appointment_create_series — citas recurrentes (multi-cita)
+# ---------------------------------------------------------------------------
+
+#: Frecuencias de repetición soportadas (mirror del frontend).
+SERIES_WEEKLY = "weekly"
+SERIES_BIWEEKLY = "biweekly"
+SERIES_MONTHLY = "monthly"
+SERIES_CUSTOM = "custom"
+_SERIES_FREQUENCIES: frozenset[str] = frozenset(
+    {SERIES_WEEKLY, SERIES_BIWEEKLY, SERIES_MONTHLY, SERIES_CUSTOM}
+)
+
+#: Tope de seguridad: nunca se generan más de estas citas en una serie.
+_SERIES_MAX_OCCURRENCES = 52
+
+
+def _add_one_month(d: datetime.datetime) -> datetime.datetime:
+    """Suma un mes calendario, recortando el día al último válido (31 ene → 28 feb)."""
+    month = d.month + 1
+    year = d.year + (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return d.replace(year=year, month=month, day=min(d.day, last_day))
+
+
+def _series_step(
+    d: datetime.datetime, *, frequency: str, interval_days: Optional[int]
+) -> datetime.datetime:
+    """Avanza una fecha al siguiente turno de la serie según la frecuencia."""
+    if frequency == SERIES_WEEKLY:
+        return d + datetime.timedelta(days=7)
+    if frequency == SERIES_BIWEEKLY:
+        return d + datetime.timedelta(days=14)
+    if frequency == SERIES_MONTHLY:
+        return _add_one_month(d)
+    # custom
+    return d + datetime.timedelta(days=interval_days or 0)
+
+
+def _generate_series_starts(
+    *,
+    starts_at: datetime.datetime,
+    frequency: str,
+    interval_days: Optional[int],
+    count: Optional[int],
+    until: Optional[datetime.date],
+) -> list[datetime.datetime]:
+    """Genera las fechas de inicio de la serie (la primera es `starts_at`).
+
+    Tope debe darse por `count` (número total de citas) O por `until` (fecha
+    límite), exactamente uno. Limitado por _SERIES_MAX_OCCURRENCES.
+    """
+    if frequency not in _SERIES_FREQUENCIES:
+        raise ValidationError(f"Frecuencia de repetición inválida: '{frequency}'.")
+    if frequency == SERIES_CUSTOM and (not interval_days or interval_days < 1):
+        raise ValidationError(
+            "Para repetición personalizada indica cada cuántos días (≥ 1)."
+        )
+    if (count is None) == (until is None):
+        raise ValidationError(
+            "Indica exactamente uno: número de repeticiones o fecha límite."
+        )
+    if count is not None and count < 2:
+        raise ValidationError("Una serie debe tener al menos 2 citas.")
+
+    starts: list[datetime.datetime] = [starts_at]
+    cur = starts_at
+    while len(starts) < _SERIES_MAX_OCCURRENCES:
+        if count is not None and len(starts) >= count:
+            break
+        cur = _series_step(cur, frequency=frequency, interval_days=interval_days)
+        if until is not None and cur.date() > until:
+            break
+        starts.append(cur)
+    return starts
+
+
+def appointment_create_series(
+    *,
+    tenant: Tenant,
+    user: "User",  # type: ignore[valid-type]
+    starts_at: datetime.datetime,
+    ends_at: datetime.datetime,
+    doctor_id: uuid.UUID,
+    frequency: Optional[str] = None,
+    explicit_starts: Optional[list[datetime.datetime]] = None,
+    patient_id: Optional[uuid.UUID] = None,
+    new_patient: Optional[dict] = None,
+    interval_days: Optional[int] = None,
+    count: Optional[int] = None,
+    until: Optional[datetime.date] = None,
+    consultorio_id: Optional[uuid.UUID] = None,
+    appointment_type_id: Optional[uuid.UUID] = None,
+    modality: str = Appointment.Modality.OFFICE,
+    reason: str = "",
+    specialty: str = "",
+    notes: str = "",
+) -> dict[str, Any]:
+    """Crea una SERIE de citas recurrentes (multi-cita), best-effort.
+
+    Genera las fechas según la regla de repetición y crea una cita por fecha,
+    todas con el MISMO `series_id`. Cada cita conserva la misma duración, médico,
+    consultorio, modalidad, motivo, etc.; solo cambia la fecha.
+
+    Best-effort (decisión de producto): las citas que choquen (empalme, bloqueo,
+    festivo, reglas de médico/consultorio) se SALTAN y se reportan; el resto se
+    crea. Si el paciente es NUEVO y NINGUNA cita pudo crearse, se hace rollback
+    del expediente provisional para no dejarlo huérfano.
+
+    Args:
+        tenant/user:        contexto.
+        starts_at/ends_at:  primera cita (la duración se deriva de la diferencia).
+        doctor_id:          médico de toda la serie.
+        frequency:          weekly | biweekly | monthly | custom.
+        patient_id:         paciente existente (XOR new_patient).
+        new_patient:        datos de un expediente provisional (XOR patient_id).
+        interval_days:      días entre citas cuando frequency=custom.
+        count / until:      tope de la serie (exactamente uno).
+        resto:              mismos campos que appointment_create.
+
+    Returns:
+        {"series_id": UUID, "created": [Appointment, ...],
+         "skipped": [{"starts_at": datetime, "error": str}, ...]}
+
+    Raises:
+        ValidationError: parámetros inválidos, o paciente nuevo sin ninguna cita creada.
+    """
+    if (patient_id is None) == (new_patient is None):
+        raise ValidationError(
+            "Indica un paciente existente o uno nuevo, no ambos ni ninguno."
+        )
+
+    duracion = ends_at - starts_at
+    if duracion <= datetime.timedelta(0):
+        raise ValidationError("La hora de fin debe ser posterior a la de inicio.")
+
+    # Dos modos: lista explícita de fechas (Personalizado / vista previa editada),
+    # o regla de recurrencia (semanal/quincenal/mensual + count/until).
+    if explicit_starts:
+        starts = sorted(set(explicit_starts))
+        if len(starts) < 2:
+            raise ValidationError("Una serie debe tener al menos 2 citas.")
+        if len(starts) > _SERIES_MAX_OCCURRENCES:
+            raise ValidationError(
+                f"Una serie no puede tener más de {_SERIES_MAX_OCCURRENCES} citas."
+            )
+    elif frequency:
+        starts = _generate_series_starts(
+            starts_at=starts_at,
+            frequency=frequency,
+            interval_days=interval_days,
+            count=count,
+            until=until,
+        )
+    else:
+        raise ValidationError(
+            "Indica una frecuencia de repetición o una lista de fechas."
+        )
+
+    series_id = uuid.uuid4()
+    created: list[Appointment] = []
+    skipped: list[dict[str, Any]] = []
+
+    with transaction.atomic():
+        # Resolver el paciente una sola vez (nuevo provisional o existente).
+        if new_patient is not None:
+            patient = patient_create_quick(tenant=tenant, user=user, **new_patient)
+            pid: uuid.UUID = patient.id
+        else:
+            pid = patient_id  # type: ignore[assignment]
+
+        for s in starts:
+            try:
+                appt = appointment_create(
+                    tenant=tenant,
+                    user=user,
+                    patient_id=pid,
+                    doctor_id=doctor_id,
+                    starts_at=s,
+                    ends_at=s + duracion,
+                    consultorio_id=consultorio_id,
+                    appointment_type_id=appointment_type_id,
+                    modality=modality,
+                    reason=reason,
+                    specialty=specialty,
+                    notes=notes,
+                    series_id=series_id,
+                )
+                created.append(appt)
+            except ValidationError as exc:
+                skipped.append({"starts_at": s, "error": " ".join(exc.messages)})
+
+        # No dejar un expediente provisional huérfano si nada se pudo agendar.
+        if new_patient is not None and not created:
+            raise ValidationError(
+                "Ninguna de las citas pudo agendarse (los horarios elegidos están ocupados)."
+            )
+
+    logger.info(
+        "appointment_create_series: serie %s — %d creadas, %d saltadas",
+        series_id,
+        len(created),
+        len(skipped),
+    )
+    return {"series_id": series_id, "created": created, "skipped": skipped}
 
 
 # ---------------------------------------------------------------------------
@@ -723,7 +937,11 @@ def appointment_reschedule(
             if consultorio_id is not None:
                 appointment.consultorio_id = consultorio_id  # type: ignore[assignment]
 
-            update_fields = ["starts_at", "ends_at", "updated_at"]
+            # Incrementar el contador de reagendamientos (aplica tanto a citas
+            # activas como a las canceladas que se reactivan vía reschedule).
+            appointment.reschedule_count += 1
+
+            update_fields = ["starts_at", "ends_at", "reschedule_count", "updated_at"]
             if consultorio_id is not None:
                 update_fields.append("consultorio")
 
@@ -1209,6 +1427,40 @@ def agenda_block_create(
         resource_repr=block.title or block.get_kind_display(),
         metadata={"kind": kind},
     )
+
+    # Notificar SOLO las reuniones (no los bloqueos), según su alcance.
+    # Best-effort: una falla aquí no debe tumbar la creación del evento.
+    if kind == AgendaBlock.Kind.MEETING:
+        try:
+            if doctor is not None:
+                recipients = [doctor.membership.user]
+            elif consultorio is not None:
+                recipients = [
+                    d.membership.user
+                    for d in consultorio.doctores.filter(
+                        is_active=True, deleted_at__isnull=True
+                    ).select_related("membership__user")
+                ]
+            else:
+                recipients = clinic_staff_users(tenant=tenant)
+            notification_fanout(
+                tenant=tenant,
+                recipients=recipients,
+                kind=NotificationKind.MEETING,
+                title=f"Reunión: {title or 'Junta'}",
+                body=notes[:200],
+                actor=user,
+                target_type=NotificationTarget.AGENDA_BLOCK,
+                target_id=block.id,
+            )
+        except Exception as exc:
+            logger.error(
+                "agenda_block_create: error notificando reunión %s — %s",
+                block.id,
+                exc,
+                exc_info=True,
+            )
+
     return block
 
 
@@ -1358,6 +1610,61 @@ def agenda_item_note_create(
             "block_id": str(block_id) if block_id else None,
         },
     )
+
+    # Reparto de "nota de equipo" (campana). Destinatarios:
+    #   - cita:   médico de la cita + recepción + quienes ya comentaron el hilo.
+    #   - evento: médico del evento (si lo hay) + quienes ya comentaron el hilo.
+    # El fanout excluye al propio autor. Best-effort: no debe tumbar la nota.
+    try:
+        if appointment is not None:
+            recipients = [appointment.doctor.membership.user]
+            recipients += users_with_role(
+                tenant=tenant, role=TenantMembership.Role.RECEPTION
+            )
+            recipients += [
+                n.author
+                for n in AgendaItemNote.objects.filter(appointment=appointment)
+                .exclude(author=user)
+                .select_related("author")
+            ]
+            notification_fanout(
+                tenant=tenant,
+                recipients=recipients,
+                kind=NotificationKind.TEAM_NOTE,
+                title=f"Nueva nota en la cita de {appointment.patient.full_name}",
+                body=body[:200],
+                actor=user,
+                target_type=NotificationTarget.APPOINTMENT,
+                target_id=appointment.id,
+            )
+        elif agenda_block is not None:
+            recipients = []
+            if agenda_block.doctor_id is not None:
+                recipients.append(agenda_block.doctor.membership.user)
+            recipients += [
+                n.author
+                for n in AgendaItemNote.objects.filter(agenda_block=agenda_block)
+                .exclude(author=user)
+                .select_related("author")
+            ]
+            notification_fanout(
+                tenant=tenant,
+                recipients=recipients,
+                kind=NotificationKind.TEAM_NOTE,
+                title=f"Nueva nota en {agenda_block.title or 'un evento'}",
+                body=body[:200],
+                actor=user,
+                target_type=NotificationTarget.AGENDA_BLOCK,
+                target_id=agenda_block.id,
+            )
+    except Exception as exc:
+        logger.error(
+            "agenda_item_note_create: error notificando nota de equipo %s — %s",
+            note.id,
+            exc,
+            exc_info=True,
+        )
+
     return note
 
 

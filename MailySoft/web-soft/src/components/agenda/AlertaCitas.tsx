@@ -4,7 +4,7 @@ import { BellRing, Check, UserX, Loader2, Clock } from 'lucide-react'
 import { useTodayAppointmentsLive, useChangeAppointmentStatus } from '../../hooks/agenda'
 import { useAuth } from '../../auth/AuthContext'
 import { useRole } from '../../auth/RoleContext'
-import { localHHMM } from '../../lib/fecha'
+import { localHHMM12 } from '../../lib/fecha'
 import { ApiError } from '../../lib/http'
 import type { Appointment, AppointmentStatus } from '../../types/agenda'
 
@@ -40,7 +40,7 @@ function accionPendiente(a: Appointment, nowMs: number): Accion | null {
   if (a.status === 'cancelled' || a.status === 'attended' || a.status === 'no_show') return null
   const start = new Date(a.starts_at).getTime()
   const end = new Date(a.ends_at).getTime()
-  const hora = localHHMM(a.starts_at)
+  const hora = localHHMM12(a.starts_at)
   const n = a.patient.full_name
 
   if (a.status === 'in_progress' && nowMs >= end) {
@@ -143,7 +143,7 @@ export default function AlertaCitas() {
             <h2 className="text-xl font-bold text-gray-900">{acc.titulo}</h2>
             <p className="text-gray-600 mt-2">{acc.mensaje}</p>
             <p className="text-xs text-gray-400 mt-3 inline-flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" /> {localHHMM(cita.starts_at)} · {cita.doctor.full_name}
+              <Clock className="w-3.5 h-3.5" /> {localHHMM12(cita.starts_at)} · {cita.doctor.full_name}
               {cita.modality !== 'office' && ` · ${cita.modality_display}`}
             </p>
             {errorMsg && (

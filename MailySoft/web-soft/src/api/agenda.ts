@@ -6,13 +6,16 @@ import type {
   AgendaBlock,
   AgendaBlockCreateInput,
   AgendaBlockUpdateInput,
+  AgendaDisponibilidad,
   AgendaItemNote,
   Appointment,
   AppointmentStatus,
   AppointmentType,
   AppointmentTypeCreateInput,
   AppointmentTypeUpdateInput,
+  AppointmentSeriesResult,
   CreateAppointmentInput,
+  CreateAppointmentSeriesInput,
 } from '../types/agenda'
 
 export interface ListAppointmentsParams {
@@ -36,6 +39,26 @@ export async function listAppointments(params: ListAppointmentsParams = {}): Pro
 /** POST /agenda/citas/ — crea una cita. */
 export async function createAppointment(input: CreateAppointmentInput): Promise<Appointment> {
   return request<Appointment>('/agenda/citas/', { method: 'POST', body: input })
+}
+
+/** POST /agenda/citas/serie/ — crea una SERIE de citas recurrentes (best-effort). */
+export async function createAppointmentSeries(input: CreateAppointmentSeriesInput): Promise<AppointmentSeriesResult> {
+  return request<AppointmentSeriesResult>('/agenda/citas/serie/', { method: 'POST', body: input })
+}
+
+/** GET /agenda/disponibilidad/ — intervalos ocupados de un médico/consultorio en un rango. */
+export async function getAgendaDisponibilidad(params: {
+  doctor_id: string
+  consultorio_id?: string | null
+  date_from: string // ISO UTC
+  date_to: string // ISO UTC
+}): Promise<AgendaDisponibilidad> {
+  const qs = new URLSearchParams()
+  qs.set('doctor_id', params.doctor_id)
+  if (params.consultorio_id) qs.set('consultorio_id', params.consultorio_id)
+  qs.set('date_from', params.date_from)
+  qs.set('date_to', params.date_to)
+  return request<AgendaDisponibilidad>(`/agenda/disponibilidad/?${qs.toString()}`)
 }
 
 // ── Tipos de cita (catálogo configurable) ──────────────────────────────────

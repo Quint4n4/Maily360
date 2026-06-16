@@ -7,6 +7,8 @@ import {
   changeAppointmentStatus,
   createAgendaBlock,
   createAppointment,
+  createAppointmentSeries,
+  getAgendaDisponibilidad,
   deleteAgendaNote,
   listAppointmentNotes,
   listBlockNotes,
@@ -30,6 +32,7 @@ import type {
   AppointmentTypeCreateInput,
   AppointmentTypeUpdateInput,
   CreateAppointmentInput,
+  CreateAppointmentSeriesInput,
 } from '../types/agenda'
 
 export const agendaKeys = {
@@ -156,6 +159,35 @@ export function useCreateAppointment() {
   return useMutation({
     mutationFn: (input: CreateAppointmentInput) => createAppointment(input),
     onSuccess: () => qc.invalidateQueries({ queryKey: agendaKeys.all }),
+  })
+}
+
+export function useCreateAppointmentSeries() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateAppointmentSeriesInput) => createAppointmentSeries(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: agendaKeys.all }),
+  })
+}
+
+/** Intervalos ocupados de un médico/consultorio en un rango (para pintar disponibilidad). */
+export function useAgendaDisponibilidad(params: {
+  doctorId: string
+  consultorioId: string | null
+  from: string // ISO
+  to: string // ISO
+  enabled: boolean
+}) {
+  return useQuery({
+    queryKey: ['agenda', 'disponibilidad', params.doctorId, params.consultorioId, params.from, params.to],
+    queryFn: () => getAgendaDisponibilidad({
+      doctor_id: params.doctorId,
+      consultorio_id: params.consultorioId,
+      date_from: params.from,
+      date_to: params.to,
+    }),
+    enabled: params.enabled && !!params.doctorId && !!params.from && !!params.to,
+    staleTime: 30_000,
   })
 }
 

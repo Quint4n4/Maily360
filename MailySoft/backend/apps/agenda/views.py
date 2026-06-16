@@ -28,6 +28,7 @@ from apps.agenda.models import AgendaBlock, AgendaItemNote, Appointment, Appoint
 from apps.agenda.selectors import (
     agenda_block_get,
     agenda_block_list,
+    agenda_busy_intervals,
     agenda_config_get,
     agenda_item_note_get,
     agenda_item_note_list,
@@ -52,6 +53,7 @@ from apps.agenda.services import (
     agenda_item_note_delete,
     appointment_change_status,
     appointment_create,
+    appointment_create_series,
     appointment_create_with_new_patient,
     appointment_reactivate,
     appointment_reschedule,
@@ -212,6 +214,158 @@ class AppointmentListCreateApi(TenantAPIView):
         return Response(
             AppointmentOutputSerializer(appointment).data,
             status=status.HTTP_201_CREATED,
+        )
+
+
+# ---------------------------------------------------------------------------
+# AppointmentSeriesCreateApi — citas recurrentes (multi-cita)
+# ---------------------------------------------------------------------------
+
+
+class AppointmentSeriesCreateApi(TenantAPIView):
+    """POST /api/v1/agenda/citas/serie/ — crea una SERIE de citas recurrentes.
+
+    Best-effort: crea las que se puedan y devuelve un resumen con las que se
+    saltaron (horario ocupado, bloqueo, etc.) para reacomodarlas a mano.
+    """
+
+    permission_classes = [IsAuthenticated, AppointmentPermission]
+
+    class InputSerializer(serializers.Serializer):
+        """Misma cita base que la creación simple + la regla de repetición."""
+
+        # --- paciente (existente XOR nuevo) ---
+        patient_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        new_patient = _NewPatientInputSerializer(required=False)
+        # --- cita base ---
+        doctor_id = serializers.UUIDField()
+        consultorio_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        appointment_type_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        modality = serializers.ChoiceField(
+            choices=Appointment.Modality.choices,
+            required=False,
+            default=Appointment.Modality.OFFICE,
+        )
+        starts_at = serializers.DateTimeField()
+        ends_at = serializers.DateTimeField()
+        reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+        specialty = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+        notes = serializers.CharField(required=False, allow_blank=True, default="")
+        # --- recurrencia: regla (weekly/biweekly/monthly + count|until)
+        #     O lista explícita de fechas (Personalizado / vista previa editada) ---
+        frequency = serializers.ChoiceField(
+            choices=["weekly", "biweekly", "monthly"], required=False
+        )
+        explicit_starts = serializers.ListField(
+            child=serializers.DateTimeField(),
+            required=False,
+            allow_empty=False,
+            max_length=52,
+        )
+        count = serializers.IntegerField(
+            required=False, allow_null=True, default=None, min_value=2, max_value=52
+        )
+        until = serializers.DateField(required=False, allow_null=True, default=None)
+
+        def validate(self, attrs: dict) -> dict:
+            tiene_id = bool(attrs.get("patient_id"))
+            tiene_nuevo = bool(attrs.get("new_patient"))
+            if tiene_id == tiene_nuevo:
+                raise serializers.ValidationError(
+                    "Indica un paciente existente (patient_id) O uno nuevo (new_patient), no ambos ni ninguno."
+                )
+            # Modo lista explícita: no requiere frecuencia ni tope.
+            if attrs.get("explicit_starts"):
+                return attrs
+            # Modo regla: requiere frecuencia + exactamente uno de count/until.
+            if not attrs.get("frequency"):
+                raise serializers.ValidationError(
+                    "Indica una frecuencia de repetición o una lista de fechas."
+                )
+            if bool(attrs.get("count")) == bool(attrs.get("until")):
+                raise serializers.ValidationError(
+                    "Indica exactamente uno: número de repeticiones (count) o fecha límite (until)."
+                )
+            return attrs
+
+    def post(self, request: Request) -> Response:
+        """Crea la serie y devuelve {series_id, created[], skipped[]}."""
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo para este request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        data = dict(s.validated_data)
+        new_patient = data.pop("new_patient", None)
+
+        try:
+            result = appointment_create_series(
+                tenant=tenant,
+                user=request.user,
+                new_patient=dict(new_patient) if new_patient else None,
+                **data,
+            )
+        except DjangoValidationError as exc:
+            return Response(
+                {"detail": exc.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "series_id": str(result["series_id"]),
+                "created_count": len(result["created"]),
+                "created": AppointmentOutputSerializer(result["created"], many=True).data,
+                "skipped_count": len(result["skipped"]),
+                "skipped": [
+                    {"starts_at": x["starts_at"].isoformat(), "error": x["error"]}
+                    for x in result["skipped"]
+                ],
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+# ---------------------------------------------------------------------------
+# AgendaDisponibilidadApi — horarios ocupados (para armar series sin choques)
+# ---------------------------------------------------------------------------
+
+
+class AgendaDisponibilidadApi(TenantAPIView):
+    """GET /api/v1/agenda/disponibilidad/?doctor_id=&consultorio_id=&date_from=&date_to=
+
+    Devuelve los intervalos OCUPADOS del médico/consultorio en el rango (citas
+    activas + reuniones/bloqueos aplicables). El frontend lo usa para pintar en
+    rojo los días/horarios que chocan al armar una serie de citas.
+    """
+
+    permission_classes = [IsAuthenticated, AppointmentPermission]
+
+    def get(self, request: Request) -> Response:
+        """Devuelve {"busy": [{"start": iso, "end": iso}, ...]}."""
+
+        class _FilterSerializer(serializers.Serializer):
+            doctor_id = serializers.UUIDField()
+            consultorio_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+            date_from = serializers.DateTimeField()
+            date_to = serializers.DateTimeField()
+
+        filter_s = _FilterSerializer(data=request.query_params)
+        filter_s.is_valid(raise_exception=True)
+
+        intervalos = agenda_busy_intervals(**filter_s.validated_data)
+        return Response(
+            {
+                "busy": [
+                    {"start": i["start"].isoformat(), "end": i["end"].isoformat()}
+                    for i in intervalos
+                ]
+            }
         )
 
 

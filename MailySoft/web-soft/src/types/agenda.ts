@@ -149,3 +149,39 @@ export interface CreateAppointmentInput {
   specialty?: string
   notes?: string
 }
+
+/** Frecuencia de una serie de citas recurrentes. */
+export type SeriesFrequency = 'weekly' | 'biweekly' | 'monthly' | 'custom'
+
+/** Crear una SERIE de citas (multi-cita). ends_at es obligatorio (deriva la duración).
+ *  Dos modos: regla (frequency + count|until) o lista explícita (explicit_starts). */
+export interface CreateAppointmentSeriesInput extends Omit<CreateAppointmentInput, 'ends_at'> {
+  ends_at: string // ISO UTC
+  frequency?: SeriesFrequency // modo regla
+  count?: number | null // tope por número de citas (XOR until)
+  until?: string | null // tope por fecha 'yyyy-mm-dd' (XOR count)
+  explicit_starts?: string[] // modo lista explícita: fechas+horas ISO UTC
+}
+
+export interface AppointmentSeriesSkipped {
+  starts_at: string // ISO UTC de la cita que NO se pudo crear
+  error: string
+}
+
+export interface AppointmentSeriesResult {
+  series_id: string
+  created_count: number
+  created: Appointment[]
+  skipped_count: number
+  skipped: AppointmentSeriesSkipped[]
+}
+
+/** Un intervalo ocupado (cita activa o bloqueo) — para pintar disponibilidad. */
+export interface BusyInterval {
+  start: string // ISO UTC
+  end: string // ISO UTC
+}
+
+export interface AgendaDisponibilidad {
+  busy: BusyInterval[]
+}

@@ -1,6 +1,6 @@
 import { Bell, Check, Loader2 } from 'lucide-react'
 import { useReminders, useToggleNoteDone } from '../../hooks/notas'
-import { dayRangeUTC, localHHMM } from '../../lib/fecha'
+import { dayRangeUTC, localHHMM12 } from '../../lib/fecha'
 
 interface Props {
   /** Día seleccionado en la agenda (yyyy-mm-dd local). */
@@ -52,7 +52,7 @@ export default function RecordatoriosWidget({ dayKey }: Props) {
                   <p className={`text-sm font-medium leading-tight truncate ${hecha ? 'line-through text-gray-400' : 'text-gray-800'}`}>
                     {n.title || (n.is_task ? 'Tarea' : 'Nota')}
                   </p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">{localHHMM(n.remind_at!)} hrs{n.scope !== 'personal' ? ' · aviso' : ''}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">{localHHMM12(n.remind_at!)}{n.scope !== 'personal' ? ' · aviso' : ''}</p>
                 </div>
               </div>
             )
