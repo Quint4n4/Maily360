@@ -1435,3 +1435,243 @@ class TestSecurityFixes:
         assert row is not None, (
             "La CheckConstraint 'evolution_is_locked_always' no existe en la BD."
         )
+
+
+# ===========================================================================
+# Validación nota de evolución vacía
+# ===========================================================================
+
+
+class TestEvolutionNoteNoVacia:
+    """Tests que verifican que no se puede crear una nota de evolución vacía.
+
+    Regla: si todos los campos clínicos de texto están vacíos/solo espacios Y
+    exploracion_fisica no tiene ningún aparato con estado != 'no_evaluado',
+    el serializer rechaza la creación con 400.
+
+    La selección de la cita (appointment_id, doctor_id, vital_signs_id) no
+    cuenta como contenido clínico.
+    """
+
+    def _setup_doctor_api(
+        self,
+    ) -> tuple[Any, Any, Any, Any, Any]:
+        """Crea doctor, tenant, patient, cita ATTENDED y user autenticado."""
+        doctor = DoctorFactory()
+        tenant = doctor.tenant
+        patient = PatientFactory(tenant=tenant)
+        appt = _attended_appointment(tenant, patient, doctor)
+        user = doctor.membership.user
+        return doctor, tenant, patient, appt, user
+
+    # ------------------------------------------------------------------
+    # Caso 1: completamente vacía → 400
+    # ------------------------------------------------------------------
+
+    def test_nota_completamente_vacia_da_400(self, db: Any) -> None:
+        """POST sin ningún campo clínico → 400 (serializer rechaza)."""
+        doctor, tenant, patient, appt, user = self._setup_doctor_api()
+
+        with api_tenant_ctx(tenant):
+            client = _auth_client(user)
+            resp = client.post(
+                _evoluciones_url(patient.id),
+                data={
+                    "appointment_id": str(appt.id),
+                    "doctor_id": str(doctor.id),
+                    # Sin ningún campo clínico — solo la selección de cita.
+                },
+                format="json",
+            )
+
+        assert resp.status_code == 400
+        # Verificar mensaje orientativo en la respuesta.
+        body = resp.json()
+        error_text = str(body)
+        assert "vacía" in error_text or "vac" in error_text.lower()
+
+    def test_nota_solo_espacios_da_400(self, db: Any) -> None:
+        """POST con todos los campos de texto en blanco (solo espacios) → 400."""
+        doctor, tenant, patient, appt, user = self._setup_doctor_api()
+
+        with api_tenant_ctx(tenant):
+            client = _auth_client(user)
+            resp = client.post(
+                _evoluciones_url(patient.id),
+                data={
+                    "appointment_id": str(appt.id),
+                    "doctor_id": str(doctor.id),
+                    "antecedentes": "   ",
+                    "interrogatorio": "  ",
+                    "estudios": " ",
+                    "diagnosticos_texto": "",
+                    "tratamiento": "   ",
+                    "plan_recomendaciones": "",
+                    "indicaciones_enfermeria": "  ",
+                },
+                format="json",
+            )
+
+        assert resp.status_code == 400
+
+    def test_nota_vacia_no_crea_registro(self, db: Any) -> None:
+        """POST vacío → no se crea ninguna EvolutionNote en BD."""
+        doctor, tenant, patient, appt, user = self._setup_doctor_api()
+        count_antes = EvolutionNote.objects.count()
+
+        with api_tenant_ctx(tenant):
+            client = _auth_client(user)
+            client.post(
+                _evoluciones_url(patient.id),
+                data={
+                    "appointment_id": str(appt.id),
+                    "doctor_id": str(doctor.id),
+                },
+                format="json",
+            )
+
+        assert EvolutionNote.objects.count() == count_antes
+
+    # ------------------------------------------------------------------
+    # Caso 2: al menos un campo de texto con contenido → 201
+    # ------------------------------------------------------------------
+
+    def test_nota_con_antecedentes_crea_ok(self, db: Any) -> None:
+        """POST con 'antecedentes' relleno → 201."""
+        doctor, tenant, patient, appt, user = self._setup_doctor_api()
+
+        with api_tenant_ctx(tenant):
+            client = _auth_client(user)
+            resp = client.post(
+                _evoluciones_url(patient.id),
+                data={
+                    "appointment_id": str(appt.id),
+                    "doctor_id": str(doctor.id),
+                    "antecedentes": "Paciente sin antecedentes de importancia.",
+                },
+                format="json",
+            )
+
+        assert resp.status_code == 201
+
+    def test_nota_con_solo_indicaciones_crea_ok(self, db: Any) -> None:
+        """POST con solo 'indicaciones_enfermeria' → 201 (cualquier campo basta)."""
+        doctor, tenant, patient, appt, user = self._setup_doctor_api()
+
+        with api_tenant_ctx(tenant):
+            client = _auth_client(user)
+            resp = client.post(
+                _evoluciones_url(patient.id),
+                data={
+                    "appointment_id": str(appt.id),
+                    "doctor_id": str(doctor.id),
+                    "indicaciones_enfermeria": "Reposo relativo 48 horas.",
+                },
+                format="json",
+            )
+
+        assert resp.status_code == 201
+
+    # ------------------------------------------------------------------
+    # Caso 3: texto vacío pero exploración física evaluada → 201
+    # ------------------------------------------------------------------
+
+    def test_nota_vacia_con_aparato_evaluado_crea_ok(self, db: Any) -> None:
+        """POST sin texto pero con un aparato con estado != 'no_evaluado' → 201."""
+        doctor, tenant, patient, appt, user = self._setup_doctor_api()
+
+        with api_tenant_ctx(tenant):
+            client = _auth_client(user)
+            resp = client.post(
+                _evoluciones_url(patient.id),
+                data={
+                    "appointment_id": str(appt.id),
+                    "doctor_id": str(doctor.id),
+                    # Todos los textos ausentes; solo exploración evaluada.
+                    "exploracion_fisica": {
+                        "corazon": {
+                            "estado": "normal",
+                            "detalle": "Ritmo sinusal regular.",
+                        }
+                    },
+                },
+                format="json",
+            )
+
+        assert resp.status_code == 201
+
+    def test_nota_vacia_con_aparato_solo_no_evaluado_da_400(self, db: Any) -> None:
+        """Exploración con todos los aparatos en 'no_evaluado' no cuenta como contenido."""
+        doctor, tenant, patient, appt, user = self._setup_doctor_api()
+
+        with api_tenant_ctx(tenant):
+            client = _auth_client(user)
+            resp = client.post(
+                _evoluciones_url(patient.id),
+                data={
+                    "appointment_id": str(appt.id),
+                    "doctor_id": str(doctor.id),
+                    "exploracion_fisica": {
+                        "corazon": {"estado": "no_evaluado"},
+                        "pulmon": {"estado": "no_evaluado"},
+                    },
+                },
+                format="json",
+            )
+
+        assert resp.status_code == 400
+
+    # ------------------------------------------------------------------
+    # Validación directa del serializer (sin BD ni HTTP)
+    # ------------------------------------------------------------------
+
+    def test_serializer_directo_vacio_invalido(self) -> None:
+        """EvolutionNoteInputSerializer.is_valid() → False cuando nota está vacía."""
+        import uuid  # noqa: PLC0415
+
+        from apps.expediente.serializers import EvolutionNoteInputSerializer  # noqa: PLC0415
+
+        data: dict[str, Any] = {
+            "appointment_id": str(uuid.uuid4()),
+            "doctor_id": str(uuid.uuid4()),
+        }
+        s = EvolutionNoteInputSerializer(data=data)
+        assert not s.is_valid()
+        # El error debe estar en non_field_errors (ValidationError de nivel serializer).
+        errors = s.errors
+        assert "non_field_errors" in errors or any(
+            "vacía" in str(v) for v in errors.values()
+        )
+
+    def test_serializer_directo_con_texto_valido(self) -> None:
+        """EvolutionNoteInputSerializer.is_valid() → True con al menos un campo."""
+        import uuid  # noqa: PLC0415
+
+        from apps.expediente.serializers import EvolutionNoteInputSerializer  # noqa: PLC0415
+
+        data: dict[str, Any] = {
+            "appointment_id": str(uuid.uuid4()),
+            "doctor_id": str(uuid.uuid4()),
+            "tratamiento": "Paracetamol 500 mg cada 8 horas.",
+        }
+        s = EvolutionNoteInputSerializer(data=data)
+        assert s.is_valid(), s.errors
+
+    def test_serializer_directo_exploracion_evaluada_valido(self) -> None:
+        """EvolutionNoteInputSerializer.is_valid() → True con aparato evaluado.
+
+        Usa 'respiratorio' (nombre de sistema válido según la whitelist de validators.py).
+        """
+        import uuid  # noqa: PLC0415
+
+        from apps.expediente.serializers import EvolutionNoteInputSerializer  # noqa: PLC0415
+
+        data: dict[str, Any] = {
+            "appointment_id": str(uuid.uuid4()),
+            "doctor_id": str(uuid.uuid4()),
+            "exploracion_fisica": {
+                "respiratorio": {"estado": "alterado", "detalle": "Estertores basales."}
+            },
+        }
+        s = EvolutionNoteInputSerializer(data=data)
+        assert s.is_valid(), s.errors

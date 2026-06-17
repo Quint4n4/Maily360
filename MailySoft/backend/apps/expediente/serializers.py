@@ -582,9 +582,57 @@ class EvolutionNoteInputSerializer(serializers.Serializer):
         validate_exploracion_evolucion(value)
         return value
 
+    # Campos de texto clínico que determinan si una nota tiene contenido.
+    # appointment_id, doctor_id y vital_signs_id son selección de cita, no contenido.
+    _CLINICAL_TEXT_FIELDS: tuple[str, ...] = (
+        "antecedentes",
+        "interrogatorio",
+        "estudios",
+        "diagnosticos_texto",
+        "tratamiento",
+        "plan_recomendaciones",
+        "indicaciones_enfermeria",
+    )
+
+    # Valor de estado que indica aparato "sin evaluar" en exploracion_fisica.
+    _ESTADO_NO_EVALUADO: str = "no_evaluado"
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Validación de nivel serializer: rechaza campos desconocidos (D-EC-7)."""
+        """Validación de nivel serializer: rechaza campos desconocidos (D-EC-7)
+        y rechaza notas completamente vacías (D-EC contenido mínimo).
+
+        Una nota está vacía cuando:
+        - Todos los campos de texto clínico están ausentes o contienen solo espacios.
+        - Y exploracion_fisica no tiene ningún aparato con estado != 'no_evaluado'.
+
+        En ese caso lanza ValidationError con 400.
+        La selección de cita (appointment_id, doctor_id, vital_signs_id) no cuenta
+        como contenido clínico.
+        """
+        # D-EC-7: rechazar campos de nivel raíz no declarados.
         _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+
+        # Verificar si hay al menos un campo de texto con contenido real.
+        has_text_content = any(
+            attrs.get(field, "").strip()
+            for field in self._CLINICAL_TEXT_FIELDS
+        )
+
+        # Verificar si exploracion_fisica tiene al menos un aparato evaluado
+        # (estado distinto de 'no_evaluado').
+        exploracion: dict[str, Any] = attrs.get("exploracion_fisica") or {}
+        has_exploracion_content = any(
+            isinstance(aparato, dict)
+            and aparato.get("estado") != self._ESTADO_NO_EVALUADO
+            for aparato in exploracion.values()
+        )
+
+        if not has_text_content and not has_exploracion_content:
+            raise serializers.ValidationError(
+                "La nota de evolución no puede estar vacía: "
+                "escribe al menos un campo clínico o evalúa un aparato."
+            )
+
         return attrs
 
 
