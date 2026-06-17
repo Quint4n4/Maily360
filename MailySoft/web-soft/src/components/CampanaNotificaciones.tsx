@@ -4,6 +4,7 @@ import {
   Bell,
   CalendarClock,
   CheckCheck,
+  ClipboardList,
   Loader2,
   Megaphone,
   MessageSquare,
@@ -24,6 +25,7 @@ const META: Record<NotificationKind, { icon: LucideIcon; color: string; bg: stri
   team_note: { icon: MessageSquare, color: '#2E7D5B', bg: 'rgba(46,125,91,0.12)' },
   role_note: { icon: Send, color: '#B8860B', bg: 'rgba(201,162,39,0.16)' },
   broadcast: { icon: Megaphone, color: '#B45309', bg: 'rgba(180,83,9,0.12)' },
+  nursing_instruction: { icon: ClipboardList, color: '#0E7C7B', bg: 'rgba(14,124,123,0.12)' },
 }
 
 /** Tiempo relativo legible ("hace 5 min"). */
@@ -43,6 +45,8 @@ function hace(iso: string): string {
 function rutaDe(n: Notification): string | null {
   if (n.target_type === 'appointment' || n.target_type === 'agenda_block') return '/agenda'
   if (n.target_type === 'note') return '/notas'
+  // Indicación para enfermería (u otro destino de paciente): abrir su expediente.
+  if (n.target_type === 'patient' && n.target_id) return `/contactos?paciente=${n.target_id}`
   return null
 }
 

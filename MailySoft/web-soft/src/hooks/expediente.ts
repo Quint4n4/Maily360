@@ -12,7 +12,10 @@ import {
   createDiagnosis,
   createEvolutionNote,
   createVitalSigns,
+  deleteEvolutionImage,
+  getEvolutionImages,
   getMedicalHistory,
+  getNursingInstructions,
   getVitalSignsSeries,
   listAllergies,
   listDiagnoses,
@@ -20,6 +23,7 @@ import {
   listVitalSigns,
   resolveAllergy,
   resolveDiagnosis,
+  uploadEvolutionImage,
   upsertMedicalHistory,
 } from '../api/expediente'
 import type {
@@ -41,6 +45,10 @@ export const expedienteKeys = {
   signosSeries: (patientId: string, since: string) =>
     ['expediente', patientId, 'signos', 'series', since] as const,
   evoluciones: (patientId: string) => ['expediente', patientId, 'evoluciones'] as const,
+  evolucionImagenes: (evolutionId: string) =>
+    ['expediente', 'evolucion', evolutionId, 'imagenes'] as const,
+  indicacionesEnfermeria: (patientId: string) =>
+    ['expediente', patientId, 'indicaciones-enfermeria'] as const,
   diagnosticos: (patientId: string, onlyActive: boolean) =>
     ['expediente', patientId, 'diagnosticos', onlyActive] as const,
 }
@@ -150,6 +158,49 @@ export function useCreateAddendum(patientId: string) {
     mutationFn: ({ evolutionId, input }: { evolutionId: string; input: AddendumInput }) =>
       createAddendum(evolutionId, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: expedienteKeys.evoluciones(patientId) }),
+  })
+}
+
+// ── A4 — Imágenes de la nota de evolución ─────────────────────────────────────
+
+/** Imágenes adjuntas a una nota de evolución. Se carga al montar el NotaCard. */
+export function useEvolutionImages(evolutionId: string | null) {
+  return useQuery({
+    queryKey: expedienteKeys.evolucionImagenes(evolutionId ?? ''),
+    queryFn: () => getEvolutionImages(evolutionId as string),
+    enabled: !!evolutionId,
+  })
+}
+
+/** Sube una imagen (multipart) a la nota. Invalida la lista de imágenes de esa nota. */
+export function useUploadEvolutionImage(evolutionId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ file, caption }: { file: File; caption?: string }) =>
+      uploadEvolutionImage(evolutionId, file, caption),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: expedienteKeys.evolucionImagenes(evolutionId) }),
+  })
+}
+
+/** Baja lógica de una imagen. Invalida la lista de imágenes de esa nota. */
+export function useDeleteEvolutionImage(evolutionId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (imageId: string) => deleteEvolutionImage(imageId),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: expedienteKeys.evolucionImagenes(evolutionId) }),
+  })
+}
+
+// ── A4 — Indicaciones para enfermería ─────────────────────────────────────────
+
+/** Indicaciones para enfermería del paciente (derivadas de las evoluciones). */
+export function useNursingInstructions(patientId: string | null) {
+  return useQuery({
+    queryKey: expedienteKeys.indicacionesEnfermeria(patientId ?? ''),
+    queryFn: () => getNursingInstructions(patientId as string),
+    enabled: !!patientId,
   })
 }
 

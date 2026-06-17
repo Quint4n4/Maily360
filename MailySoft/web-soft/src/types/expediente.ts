@@ -317,6 +317,19 @@ export interface Addendum {
   created_at: string
 }
 
+/**
+ * Imagen adjunta a una nota de evolución (EvolutionImageOutputSerializer).
+ * Salida de GET/POST /expediente/evoluciones/<evolution_id>/imagenes/.
+ */
+export interface EvolutionImage {
+  id: string
+  /** URL absoluta/relativa servida por el backend para mostrar la imagen. */
+  image_url: string
+  /** Pie de foto opcional ('' si no se capturó). */
+  caption: string
+  created_at: string
+}
+
 /** Salida de una nota de evolución (EvolutionNoteOutputSerializer). Inmutable. */
 export interface EvolutionNote {
   id: string
@@ -358,6 +371,19 @@ export interface EvolutionNoteInput {
 /** Cuerpo para agregar un addendum (AddendumInputSerializer). */
 export interface AddendumInput {
   body: string
+}
+
+/**
+ * Indicación para enfermería — vista derivada de las notas de evolución.
+ * Salida de GET /expediente/<patient_id>/indicaciones-enfermeria/.
+ */
+export interface NursingInstruction {
+  id: string
+  /** ISO datetime de la evolución que originó la indicación. */
+  fecha: string
+  /** Nombre del médico que firmó la evolución. */
+  doctor: string
+  indicaciones: string
 }
 
 /** Tipo de diagnóstico (models.DiagnosisKind). */

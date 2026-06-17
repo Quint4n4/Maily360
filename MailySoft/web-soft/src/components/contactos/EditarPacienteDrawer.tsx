@@ -2,122 +2,35 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2 } from 'lucide-react'
 import { useUpdatePatient } from '../../hooks/pacientes'
-import { ApiError } from '../../lib/http'
-import type { BloodType, Education, MaritalStatus, PatientOut, Sex } from '../../types/paciente'
-import { BLOOD_OPTIONS, EDUCATION_OPTIONS, MARITAL_OPTIONS } from '../expediente/ui'
+import type { PatientOut } from '../../types/paciente'
+import {
+  CamposContacto, CamposDatosPersonales, CamposDomicilio, CamposNom004,
+  SECCION_LABEL, erroresDePaciente, usePacienteForm,
+} from './pacienteForm'
 
 interface EditarPacienteDrawerProps {
   paciente: PatientOut | null
   onClose: () => void
 }
 
-const SECCION = 'text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-3'
-
-/** Extrae mensajes de error legibles de un ApiError de DRF. */
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
-}
-
 export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacienteDrawerProps) {
-  const [form, setForm] = useState({
-    first_name: '', paternal_surname: '', maternal_surname: '',
-    date_of_birth: '', sex: '' as '' | Sex, phone: '', email: '', curp: '', notes: '',
-    // NOM-004
-    address_street: '', address_neighborhood: '', city: '', state: '', postal_code: '',
-    birthplace: '', marital_status: '' as MaritalStatus, education: '' as Education,
-    occupation: '', religion: '', blood_type: '' as BloodType,
-    phone_secondary: '', phone_label: '', category: '',
-  })
+  const { form, set, setForm, validar, construirInput } = usePacienteForm(paciente)
   const [errores, setErrores] = useState<string[]>([])
   const actualizar = useUpdatePatient()
 
-  // Precargar el formulario cuando cambia el paciente seleccionado.
-  useEffect(() => {
-    if (!paciente) return
-    setErrores([])
-    setForm({
-      first_name: paciente.first_name,
-      paternal_surname: paciente.paternal_surname,
-      maternal_surname: paciente.maternal_surname,
-      date_of_birth: paciente.date_of_birth ?? '',
-      sex: paciente.sex,
-      phone: paciente.phone,
-      email: paciente.email,
-      curp: paciente.curp,
-      notes: paciente.notes,
-      address_street: paciente.address_street,
-      address_neighborhood: paciente.address_neighborhood,
-      city: paciente.city,
-      state: paciente.state,
-      postal_code: paciente.postal_code,
-      birthplace: paciente.birthplace,
-      marital_status: paciente.marital_status,
-      education: paciente.education,
-      occupation: paciente.occupation,
-      religion: paciente.religion,
-      blood_type: paciente.blood_type,
-      phone_secondary: paciente.phone_secondary,
-      phone_label: paciente.phone_label,
-      category: paciente.category,
-    })
-  }, [paciente])
-
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    setForm(prev => ({ ...prev, [k]: e.target.value }))
+  // Limpiar errores al cambiar de paciente.
+  useEffect(() => { setErrores([]) }, [paciente])
 
   const guardar = async () => {
     if (!paciente) return
-    setErrores([])
-    const faltan: string[] = []
-    if (!form.first_name.trim()) faltan.push('El nombre es obligatorio.')
-    if (!form.paternal_surname.trim()) faltan.push('El apellido paterno es obligatorio.')
-    if (!form.date_of_birth) faltan.push('La fecha de nacimiento es obligatoria.')
-    if (!form.sex) faltan.push('El sexo es obligatorio.')
-    if (!form.phone.trim()) faltan.push('El teléfono es obligatorio.')
+    const faltan = validar()
     if (faltan.length) { setErrores(faltan); return }
-
+    setErrores([])
     try {
-      await actualizar.mutateAsync({
-        id: paciente.id,
-        input: {
-          first_name: form.first_name.trim(),
-          paternal_surname: form.paternal_surname.trim(),
-          maternal_surname: form.maternal_surname.trim(),
-          date_of_birth: form.date_of_birth,
-          sex: form.sex as Sex,
-          phone: form.phone.trim(),
-          curp: form.curp.trim(),
-          email: form.email.trim(),
-          notes: form.notes.trim(),
-          // NOM-004
-          address_street: form.address_street.trim(),
-          address_neighborhood: form.address_neighborhood.trim(),
-          city: form.city.trim(),
-          state: form.state.trim(),
-          postal_code: form.postal_code.trim(),
-          birthplace: form.birthplace.trim(),
-          marital_status: form.marital_status,
-          education: form.education,
-          occupation: form.occupation.trim(),
-          religion: form.religion.trim(),
-          blood_type: form.blood_type,
-          phone_secondary: form.phone_secondary.trim(),
-          phone_label: form.phone_label.trim(),
-          category: form.category.trim(),
-        },
-      })
+      await actualizar.mutateAsync({ id: paciente.id, input: construirInput() })
       onClose()
     } catch (err) {
-      setErrores(erroresDe(err))
+      setErrores(erroresDePaciente(err))
     }
   }
 
@@ -166,146 +79,27 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
               )}
 
               <section>
-                <p className={SECCION}>Datos personales</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="label">Nombre(s)</label>
-                    <input className="input" value={form.first_name} onChange={set('first_name')} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Apellido paterno</label>
-                      <input className="input" value={form.paternal_surname} onChange={set('paternal_surname')} />
-                    </div>
-                    <div>
-                      <label className="label">Apellido materno</label>
-                      <input className="input" value={form.maternal_surname} onChange={set('maternal_surname')} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Fecha de nacimiento</label>
-                      <input type="date" className="input" value={form.date_of_birth} onChange={set('date_of_birth')} />
-                    </div>
-                    <div>
-                      <label className="label">Sexo</label>
-                      <select className="input" value={form.sex} onChange={set('sex')}>
-                        <option value="">Selecciona…</option>
-                        <option value="F">Femenino</option>
-                        <option value="M">Masculino</option>
-                        <option value="X">Otro</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
+                <p className={SECCION_LABEL}>Datos personales</p>
+                <CamposDatosPersonales form={form} set={set} setForm={setForm} />
               </section>
 
               <section>
-                <p className={SECCION}>Contacto</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="label">Teléfono</label>
-                    <input className="input" value={form.phone} onChange={set('phone')} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Teléfono secundario <span className="text-gray-400 font-normal">(opcional)</span></label>
-                      <input className="input" value={form.phone_secondary} onChange={set('phone_secondary')} />
-                    </div>
-                    <div>
-                      <label className="label">Etiqueta <span className="text-gray-400 font-normal">(ej. Casa)</span></label>
-                      <input className="input" value={form.phone_label} onChange={set('phone_label')} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label">Email <span className="text-gray-400 font-normal">(opcional)</span></label>
-                    <input type="email" className="input" value={form.email} onChange={set('email')} />
-                  </div>
-                </div>
+                <p className={SECCION_LABEL}>Contacto</p>
+                <CamposContacto form={form} set={set} setForm={setForm} />
               </section>
 
               <section>
-                <p className={SECCION}>Domicilio</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="label">Calle y número</label>
-                    <input className="input" value={form.address_street} onChange={set('address_street')} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Colonia</label>
-                      <input className="input" value={form.address_neighborhood} onChange={set('address_neighborhood')} />
-                    </div>
-                    <div>
-                      <label className="label">Código postal</label>
-                      <input className="input" value={form.postal_code} onChange={set('postal_code')} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Ciudad</label>
-                      <input className="input" value={form.city} onChange={set('city')} />
-                    </div>
-                    <div>
-                      <label className="label">Estado</label>
-                      <input className="input" value={form.state} onChange={set('state')} />
-                    </div>
-                  </div>
-                </div>
+                <p className={SECCION_LABEL}>Domicilio</p>
+                <CamposDomicilio form={form} set={set} setForm={setForm} />
               </section>
 
               <section>
-                <p className={SECCION}>Identificación y datos NOM-004</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="label">CURP <span className="text-gray-400 font-normal">(opcional)</span></label>
-                    <input className="input uppercase" maxLength={18} value={form.curp} onChange={set('curp')} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Lugar de nacimiento</label>
-                      <input className="input" value={form.birthplace} onChange={set('birthplace')} />
-                    </div>
-                    <div>
-                      <label className="label">Tipo de sangre</label>
-                      <select className="input" value={form.blood_type} onChange={set('blood_type')}>
-                        {BLOOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Estado civil</label>
-                      <select className="input" value={form.marital_status} onChange={set('marital_status')}>
-                        {MARITAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label">Escolaridad</label>
-                      <select className="input" value={form.education} onChange={set('education')}>
-                        {EDUCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Ocupación</label>
-                      <input className="input" value={form.occupation} onChange={set('occupation')} />
-                    </div>
-                    <div>
-                      <label className="label">Religión</label>
-                      <input className="input" value={form.religion} onChange={set('religion')} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="label">Categoría <span className="text-gray-400 font-normal">(opcional)</span></label>
-                    <input className="input" value={form.category} onChange={set('category')} />
-                  </div>
-                </div>
+                <p className={SECCION_LABEL}>Identificación y datos NOM-004</p>
+                <CamposNom004 form={form} set={set} setForm={setForm} />
               </section>
 
               <section>
-                <p className={SECCION}>Notas</p>
+                <p className={SECCION_LABEL}>Notas</p>
                 <textarea className="input resize-none" rows={3} value={form.notes} onChange={set('notes')} />
               </section>
             </div>

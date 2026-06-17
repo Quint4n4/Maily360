@@ -4,7 +4,10 @@
  */
 
 import { useState } from 'react'
-import { Activity, Plus, Loader2, TrendingUp } from 'lucide-react'
+import {
+  Activity, Plus, Loader2, TrendingUp,
+  Scale, Ruler, Heart, Wind, Gauge, Thermometer, Droplet, FlaskConical, ClipboardList,
+} from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type { ExtraParamKey, SeriesKey, VitalSignsInput, VitalSignsRecord } from '../../types/expediente'
 import { useCreateVitalSigns, useVitalSigns, useVitalSignsSeries } from '../../hooks/expediente'
@@ -72,7 +75,7 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
   const crear = useCreateVitalSigns(paciente.id)
   const [form, setForm] = useState<SignosForm>(FORM_VACIO)
   const [errores, setErrores] = useState<string[]>([])
-  const [abierto, setAbierto] = useState(false)
+  const [abierto, setAbierto] = useState(true)
   const [graficaSel, setGraficaSel] = useState<SeriesKey>('weight_kg')
 
   const tomas: VitalSignsRecord[] = tomasData?.results ?? []
@@ -129,30 +132,27 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
           {abierto ? (
             <div className="space-y-3">
               <ErroresAlerta errores={errores} />
+              <Campo label="Fecha/hora de la toma" type="datetime-local" value={form.measured_at} onChange={set('measured_at')} />
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-                <Campo label="Fecha/hora de la toma" type="datetime-local" value={form.measured_at} onChange={set('measured_at')} />
-                <Campo label="Peso (kg)" value={form.weight_kg} onChange={set('weight_kg')} />
-                <Campo label="Talla (m)" value={form.height_m} onChange={set('height_m')} />
-                <Campo label="FC (lpm)" value={form.heart_rate} onChange={set('heart_rate')} />
-                <Campo label="FR (rpm)" value={form.resp_rate} onChange={set('resp_rate')} />
-                <Campo label="Sistólica (mmHg)" value={form.systolic} onChange={set('systolic')} />
-                <Campo label="Diastólica (mmHg)" value={form.diastolic} onChange={set('diastolic')} />
-                <Campo label="Temperatura (°C)" value={form.temperature_c} onChange={set('temperature_c')} />
-                <Campo label="SatO₂ (%)" value={form.oxygen_saturation} onChange={set('oxygen_saturation')} />
-                <Campo label="Glucosa (mg/dL)" value={form.glucose} onChange={set('glucose')} />
+                <Campo label="Peso" value={form.weight_kg} onChange={set('weight_kg')} icon={Scale} iconColor="#16a34a" placeholder="Ej. 70.5 kg" />
+                <Campo label="Estatura" value={form.height_m} onChange={set('height_m')} icon={Ruler} iconColor="#2563eb" placeholder="Ej. 1.65 m" />
+                <Campo label="Frecuencia Cardiaca" value={form.heart_rate} onChange={set('heart_rate')} icon={Heart} iconColor="#dc2626" placeholder="Ej. 72 lpm" />
+                <Campo label="Frecuencia Respiratoria" value={form.resp_rate} onChange={set('resp_rate')} icon={Wind} iconColor="#7c3aed" placeholder="Ej. 16 rpm" />
+                <Campo label="Presión Sistólica" value={form.systolic} onChange={set('systolic')} icon={Gauge} iconColor="#ea580c" placeholder="Ej. 120 mmHg" />
+                <Campo label="Presión Diastólica" value={form.diastolic} onChange={set('diastolic')} icon={Gauge} iconColor="#ea580c" placeholder="Ej. 80 mmHg" />
+                <Campo label="Temperatura" value={form.temperature_c} onChange={set('temperature_c')} icon={Thermometer} iconColor="#0d9488" placeholder="Ej. 36.5 °C" />
+                <Campo label="Saturación de Oxígeno" value={form.oxygen_saturation} onChange={set('oxygen_saturation')} icon={Activity} iconColor="#ca8a04" placeholder="Ej. 98 %" />
+                <Campo label="Glucosa" value={form.glucose} onChange={set('glucose')} icon={Droplet} iconColor="#0284c7" placeholder="Ej. 90 mg/dL" />
               </div>
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 pt-2">Laboratorio (opcional)</p>
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-                <Campo label="Colesterol" value={form.colesterol} onChange={set('colesterol')} />
-                <Campo label="Triglicéridos" value={form.trigliceridos} onChange={set('trigliceridos')} />
-                <Campo label="Urea" value={form.urea} onChange={set('urea')} />
-                <Campo label="Creatinina" value={form.creatinina} onChange={set('creatinina')} />
-                <Campo label="Hemoglobina" value={form.hemoglobina} onChange={set('hemoglobina')} />
+                <Campo label="Colesterol" value={form.colesterol} onChange={set('colesterol')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 180" />
+                <Campo label="Triglicéridos" value={form.trigliceridos} onChange={set('trigliceridos')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 150" />
+                <Campo label="Urea" value={form.urea} onChange={set('urea')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 30" />
+                <Campo label="Creatinina" value={form.creatinina} onChange={set('creatinina')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 0.9" />
+                <Campo label="Hemoglobina" value={form.hemoglobina} onChange={set('hemoglobina')} icon={Droplet} iconColor="#dc2626" placeholder="Ej. 14" />
               </div>
-              <div>
-                <label className="label">Observaciones</label>
-                <input className="input" value={form.notes} onChange={set('notes')} />
-              </div>
+              <Campo label="Observaciones" type="text" value={form.notes} onChange={set('notes')} icon={ClipboardList} iconColor="#9A7B1E" placeholder="Ej. Paciente estable, sin novedades" />
               <div className="flex justify-end">
                 <button
                   type="button" onClick={guardar} disabled={crear.isPending}
@@ -166,6 +166,28 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
           ) : (
             <p className="text-sm text-gray-500">Captura peso, talla, presión, temperatura, SatO₂, glucosa y laboratorio.</p>
           )}
+        </Card>
+      )}
+
+      {/* Última toma (la más reciente, destacada) */}
+      {!isLoading && !isError && tomas.length > 0 && (
+        <Card title="Última toma" icon={Activity}>
+          <p className="text-xs text-gray-400 mb-3">{formatFechaHora(tomas[0].measured_at)}</p>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+            <DatoToma label="Peso" value={tomas[0].weight_kg} unidad="kg" />
+            <DatoToma label="Estatura" value={tomas[0].height_m} unidad="m" />
+            <DatoToma label="IMC" value={tomas[0].imc} destacado />
+            <DatoToma
+              label="Presión Arterial"
+              value={tomas[0].systolic != null && tomas[0].diastolic != null ? `${tomas[0].systolic}/${tomas[0].diastolic}` : null}
+              unidad="mmHg"
+            />
+            <DatoToma label="Frecuencia Cardiaca" value={tomas[0].heart_rate} unidad="lpm" />
+            <DatoToma label="Frecuencia Respiratoria" value={tomas[0].resp_rate} unidad="rpm" />
+            <DatoToma label="Temperatura" value={tomas[0].temperature_c} unidad="°C" />
+            <DatoToma label="Saturación de Oxígeno" value={tomas[0].oxygen_saturation} unidad="%" />
+            <DatoToma label="Glucosa" value={tomas[0].glucose} unidad="mg/dL" />
+          </div>
         </Card>
       )}
 
@@ -233,12 +255,46 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
 }
 
 function Campo({
-  label, value, onChange, type = 'number',
-}: { label: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; type?: string }) {
+  label, value, onChange, type = 'number', icon: Icon, iconColor = '#9A7B1E', placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
+  type?: string
+  icon?: typeof Activity
+  iconColor?: string
+  placeholder?: string
+}) {
   return (
     <div>
       <label className="label">{label}</label>
-      <input className="input" type={type} step="any" value={value} onChange={onChange} />
+      <div className="flex items-stretch gap-2">
+        {Icon && (
+          <span
+            className="flex items-center justify-center w-9 rounded-lg shrink-0"
+            style={{ background: 'rgba(201,162,39,0.10)' }}
+          >
+            <Icon className="w-4 h-4" style={{ color: iconColor }} />
+          </span>
+        )}
+        <input className="input flex-1" type={type} step="any" value={value} onChange={onChange} placeholder={placeholder} />
+      </div>
+    </div>
+  )
+}
+
+/** Un dato de la "Última toma" (etiqueta arriba, valor grande). */
+function DatoToma({
+  label, value, unidad, destacado,
+}: { label: string; value: string | number | null | undefined; unidad?: string; destacado?: boolean }) {
+  const hay = value != null && value !== ''
+  return (
+    <div className="rounded-xl px-3 py-2 bg-white/60">
+      <p className="text-[11px] text-gray-400">{label}</p>
+      <p className="text-base font-semibold" style={{ color: destacado ? '#B8860B' : '#374151' }}>
+        {hay ? value : '—'}
+        {hay && unidad && <span className="text-xs font-normal text-gray-400"> {unidad}</span>}
+      </p>
     </div>
   )
 }

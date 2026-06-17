@@ -8,6 +8,7 @@ import {
   createPatient,
   createPatientQuick,
   deactivatePatient,
+  getPatient,
   listPatients,
   setPatientClassification,
   updatePatient,
@@ -33,6 +34,16 @@ export const pacientesKeys = {
   all: ['pacientes'] as const,
   list: (p: UsePatientsParams) =>
     ['pacientes', 'list', p.segment ?? 'all', p.search ?? '', p.dateFrom ?? '', p.dateTo ?? ''] as const,
+  detail: (id: string) => ['pacientes', 'detail', id] as const,
+}
+
+/** Detalle de un paciente por id (para abrir su expediente directo, p. ej. desde la campana). */
+export function usePatient(id: string | null) {
+  return useQuery({
+    queryKey: pacientesKeys.detail(id ?? ''),
+    queryFn: () => getPatient(id as string),
+    enabled: !!id,
+  })
 }
 
 /** Lista paginada (primera página) con búsqueda + segmento server-side.

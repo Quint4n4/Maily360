@@ -23,7 +23,7 @@ import type {
 import { useMedicalHistory, useUpsertMedicalHistory } from '../../hooks/expediente'
 import { erroresDe } from '../../lib/apiErrors'
 import {
-  Cargando, ErroresAlerta, EXPLORACION_BASAL_OPTIONS, SISTEMA_LABEL, VIVIENDA_OPTIONS,
+  Cargando, ErroresAlerta, EXPLORACION_BASAL_OPTIONS, SistemaLabelConIcono, VIVIENDA_OPTIONS,
 } from './ui'
 
 /** Estado editable de la HC en el formulario (todos los bloques presentes). */
@@ -321,7 +321,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
             const celda = form.exploracion_fisica_basal[sistema] ?? {}
             return (
               <div key={sistema} className="grid items-center gap-2" style={{ gridTemplateColumns: '160px 180px 1fr' }}>
-                <span className="text-sm text-gray-700">{SISTEMA_LABEL[sistema]}</span>
+                <span className="text-sm text-gray-700"><SistemaLabelConIcono sistema={sistema} /></span>
                 <select className="input"
                   value={celda.estado ?? 'sin_alteraciones'}
                   onChange={e => setSistema(sistema, { estado: e.target.value })}

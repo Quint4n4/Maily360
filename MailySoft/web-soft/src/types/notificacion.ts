@@ -1,9 +1,14 @@
 /** Tipos del dominio Notificaciones (reflejan apps/notificaciones/serializers.py). */
 
-export type NotificationKind = 'meeting' | 'team_note' | 'role_note' | 'broadcast'
+export type NotificationKind =
+  | 'meeting'
+  | 'team_note'
+  | 'role_note'
+  | 'broadcast'
+  | 'nursing_instruction'
 
 /** Objeto destino al que apunta el clic. '' = sin destino. */
-export type NotificationTarget = 'appointment' | 'agenda_block' | 'note' | ''
+export type NotificationTarget = 'appointment' | 'agenda_block' | 'note' | 'patient' | ''
 
 export interface NotificationActor {
   id: string

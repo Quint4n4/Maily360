@@ -18,6 +18,9 @@
  *     GET    /expediente/<patient_id>/evoluciones/      → PAGINADO (.results)
  *     POST   /expediente/<patient_id>/evoluciones/
  *     POST   /expediente/evoluciones/<id>/addendum/
+ *     GET    /expediente/evoluciones/<id>/imagenes/     → lista de imágenes de la nota
+ *     POST   /expediente/evoluciones/<id>/imagenes/     → sube una imagen (multipart, campo `image`)
+ *     DELETE /expediente/imagenes/<id>/                 → baja lógica de la imagen (204)
  *     GET    /expediente/<patient_id>/diagnosticos/[?only_active=true] → PAGINADO
  *     POST   /expediente/<patient_id>/diagnosticos/
  *     POST   /expediente/diagnosticos/<id>/resolver/
@@ -32,10 +35,12 @@ import type {
   AllergyInput,
   Diagnosis,
   DiagnosisInput,
+  EvolutionImage,
   EvolutionNote,
   EvolutionNoteInput,
   MedicalHistory,
   MedicalHistoryInput,
+  NursingInstruction,
   VitalSignsInput,
   VitalSignsRecord,
   VitalSignsSeries,
@@ -136,6 +141,49 @@ export async function createAddendum(
     method: 'POST',
     body: input,
   })
+}
+
+// ── A4 — Imágenes de la nota de evolución ─────────────────────────────────────
+
+/** GET /expediente/evoluciones/<evolution_id>/imagenes/ — imágenes de la nota. */
+export async function getEvolutionImages(evolutionId: string): Promise<EvolutionImage[]> {
+  return request<EvolutionImage[]>(`/expediente/evoluciones/${evolutionId}/imagenes/`)
+}
+
+/**
+ * POST /expediente/evoluciones/<evolution_id>/imagenes/ — sube una imagen (multipart).
+ * Campo `image` (el archivo) + `caption` opcional. El backend valida que sea una
+ * imagen real (JPG/PNG/WEBP) y limita a 20 por nota (400 si no cumple).
+ */
+export async function uploadEvolutionImage(
+  evolutionId: string,
+  file: File,
+  caption?: string,
+): Promise<EvolutionImage> {
+  const fd = new FormData()
+  fd.append('image', file)
+  if (caption) fd.append('caption', caption)
+  return request<EvolutionImage>(`/expediente/evoluciones/${evolutionId}/imagenes/`, {
+    method: 'POST',
+    body: fd,
+  })
+}
+
+/** DELETE /expediente/imagenes/<id>/ — baja lógica de una imagen (204). */
+export async function deleteEvolutionImage(imageId: string): Promise<void> {
+  await request<void>(`/expediente/imagenes/${imageId}/`, { method: 'DELETE' })
+}
+
+// ── A4 — Indicaciones para enfermería ─────────────────────────────────────────
+
+/**
+ * GET /expediente/<patient_id>/indicaciones-enfermeria/ — lista de indicaciones
+ * para enfermería derivadas de las notas de evolución (más recientes primero).
+ */
+export async function getNursingInstructions(
+  patientId: string,
+): Promise<NursingInstruction[]> {
+  return request<NursingInstruction[]>(`/expediente/${patientId}/indicaciones-enfermeria/`)
 }
 
 // ── A4 — Diagnósticos ─────────────────────────────────────────────────────────

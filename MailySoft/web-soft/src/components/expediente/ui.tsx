@@ -189,3 +189,46 @@ export const SISTEMA_LABEL: Record<string, string> = {
   piel_tegumentos: 'Piel y tegumentos',
   otros: 'Otros',
 }
+
+/**
+ * Imagen (icono anatómico) por aparato/sistema, para dar identidad visual a la
+ * exploración (similar al expediente legacy). Los SVG son de Healthicons
+ * (healthicons.org, licencia MIT) y viven en `web-soft/public/organos/`.
+ */
+export const SISTEMA_ICONO_SRC: Record<string, string> = {
+  cerebro: '/organos/cerebro.svg',
+  sistema_nervioso: '/organos/sistema_nervioso.svg',
+  ocular: '/organos/ocular.svg',
+  endocrino: '/organos/endocrino.svg',
+  corazon: '/organos/corazon.svg',
+  circulatorio: '/organos/circulatorio.svg',
+  respiratorio: '/organos/respiratorio.svg',
+  hepatico: '/organos/hepatico.svg',
+  pancreas: '/organos/pancreas.svg',
+  renal: '/organos/renal.svg',
+  gastrointestinal: '/organos/gastrointestinal.svg',
+  osteoarticular: '/organos/osteoarticular.svg',
+  tendomuscular: '/organos/tendomuscular.svg',
+  reproductor: '/organos/reproductor.svg',
+  inmunologico: '/organos/inmunologico.svg',
+  extremidades: '/organos/extremidades.svg',
+  piel_tegumentos: '/organos/piel_tegumentos.svg',
+  otros: '/organos/otros.svg',
+}
+
+/** Icono anatómico (imagen) de un aparato/sistema. */
+export function SistemaIcono({ sistema, className }: { sistema: string; className?: string }) {
+  const src = SISTEMA_ICONO_SRC[sistema]
+  if (!src) return null
+  return <img src={src} alt="" aria-hidden="true" className={className ?? 'h-5 w-5 shrink-0'} />
+}
+
+/** Nombre del sistema con su icono anatómico al inicio (para encabezados). */
+export function SistemaLabelConIcono({ sistema }: { sistema: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <SistemaIcono sistema={sistema} />
+      {SISTEMA_LABEL[sistema] ?? sistema}
+    </span>
+  )
+}

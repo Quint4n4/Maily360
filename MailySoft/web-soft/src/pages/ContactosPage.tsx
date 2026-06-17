@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle, AlertTriangle, Star, Crown, CalendarRange } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import NuevoPacienteDrawer from '../components/contactos/NuevoPacienteDrawer'
-import EditarPacienteDrawer from '../components/contactos/EditarPacienteDrawer'
 import ExpedienteDrawer from '../components/contactos/ExpedienteDrawer'
 import MiniCalendario from '../components/agenda/MiniCalendario'
-import { usePatients, useDeactivatePatient, useSetPatientClassification } from '../hooks/pacientes'
+import {
+  usePatient, usePatients, useDeactivatePatient, useSetPatientClassification,
+} from '../hooks/pacientes'
 import { initialsOf } from '../lib/paciente'
 import { formatFechaCorta } from '../lib/fecha'
 import type { PatientOut, PatientSegment } from '../types/paciente'
@@ -47,26 +49,40 @@ export default function ContactosPage() {
   const [dateTo, setDateTo]       = useState('')
   const [nuevoOpen, setNuevo]     = useState(false)
   const [verPaciente, setVer]     = useState<PatientOut | null>(null)
-  const [editarPaciente, setEditar] = useState<PatientOut | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
   const { role } = useRole()
+
+  // Deep-link: /contactos?paciente=<id> abre directo el expediente (p. ej. desde la campana).
+  const pacienteParam = searchParams.get('paciente')
+  const { data: pacienteDeepLink } = usePatient(verPaciente ? null : pacienteParam)
+  // El paciente mostrado: el abierto desde la lista, o el del query param.
+  const pacienteMostrado = verPaciente ?? pacienteDeepLink ?? null
+
+  /** Quita ?paciente=<id> de la URL sin perder los demás query params. */
+  const limpiarParam = () => {
+    if (!pacienteParam) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('paciente')
+    setSearchParams(next, { replace: true })
+  }
+
+  const cerrarExpediente = () => {
+    setVer(null)
+    limpiarParam()
+  }
+
   const editar = puedeEditar(role, 'contactos')
   const verClinico = puedeVerExpedienteClinico(role)
   const baja = useDeactivatePatient()
   const clasificar = useSetPatientClassification()
 
-  const abrirEdicion = () => {
-    if (!verPaciente) return
-    setEditar(verPaciente)
-    setVer(null)
-  }
-
   const darDeBaja = () => {
-    if (!verPaciente) return
+    if (!pacienteMostrado) return
     const ok = window.confirm(
-      `¿Dar de baja a ${verPaciente.full_name}? Dejará de aparecer en la lista (no se borra de la base de datos).`,
+      `¿Dar de baja a ${pacienteMostrado.full_name}? Dejará de aparecer en la lista (no se borra de la base de datos).`,
     )
     if (!ok) return
-    baja.mutate(verPaciente.id, { onSuccess: () => setVer(null) })
+    baja.mutate(pacienteMostrado.id, { onSuccess: cerrarExpediente })
   }
 
   const toggleFavorito = (p: PatientOut) =>
@@ -286,13 +302,11 @@ export default function ContactosPage() {
       </div>
 
       <NuevoPacienteDrawer open={nuevoOpen} onClose={() => setNuevo(false)} />
-      <EditarPacienteDrawer paciente={editarPaciente} onClose={() => setEditar(null)} />
       <ExpedienteDrawer
-        paciente={verPaciente}
-        onClose={() => setVer(null)}
+        paciente={pacienteMostrado}
+        onClose={cerrarExpediente}
         verClinico={verClinico}
         puedeEditar={editar}
-        onEditar={abrirEdicion}
         onDarDeBaja={darDeBaja}
         dandoDeBaja={baja.isPending}
       />
