@@ -390,25 +390,31 @@ class VitalSignsPermission(HasClinicRole):
 
 
 class EvolutionPermission(HasClinicRole):
-    """Permisos para las Notas de Evolución (A4 — D-EC-1 inmutable).
+    """Permisos para las Notas de Evolución (A4 — D-EC-1 inmutable) e imágenes.
 
     La nota de evolución es contenido clínico de alta sensibilidad:
     solo personal clínico cualificado puede leer (CLINICAL_READ) o crear
     (owner, admin, doctor). Recepción y finanzas NO tienen acceso.
 
-    Inmutabilidad: no existen PATCH, PUT ni DELETE. Si el cliente envía esos
-    métodos, DRF responde 405 (método no ruteado). La regla del médico
-    (doctor solo puede crear sobre citas propias) se valida en el service,
-    no en el permiso HTTP.
+    Inmutabilidad de NOTAS: no existen PATCH ni PUT sobre evoluciones.
+    Si el cliente envía esos métodos sobre el endpoint de notas, DRF responde 405
+    (método no ruteado). La regla del médico (doctor solo puede crear sobre citas
+    propias) se valida en el service, no en el permiso HTTP.
+
+    DELETE se permite para la baja lógica de IMÁGENES adjuntas (endpoint distinto).
+    El permiso de DELETE es igual al de POST (escritura clínica):
+    owner, admin, doctor.
 
     Matriz:
-        GET  → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
-        POST → owner, admin, doctor (nurse y readonly NO crean evoluciones).
+        GET    → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
+        POST   → owner, admin, doctor (nurse y readonly NO crean evoluciones/imágenes).
+        DELETE → owner, admin, doctor (baja lógica de imágenes — D-EC-5).
     """
 
     policy: dict[str, frozenset[str]] = {
         "GET": CLINICAL_READ,
         "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "DELETE": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
     }
 
 
@@ -444,6 +450,26 @@ class DiagnosisPermission(HasClinicRole):
     policy: dict[str, frozenset[str]] = {
         "GET": CLINICAL_READ,
         "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class NursingInstructionPermission(HasClinicRole):
+    """Permisos para el listado de indicaciones de enfermería por paciente.
+
+    Las indicaciones son contenido clínico que enfermería necesita leer para
+    ejecutar las órdenes del médico. Recepción y finanzas NO tienen acceso
+    (CLINICAL_READ excluye esos roles).
+
+    Readonly (READONLY) sí puede leer (observadores clínicos).
+
+    Solo GET está expuesto en este endpoint (solo lectura).
+
+    Matriz:
+        GET → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
     }
 
 

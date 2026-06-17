@@ -26,6 +26,8 @@ Funciones públicas (A4):
     addendum_list            — addenda de una nota de evolución.
     diagnosis_get            — un diagnóstico por id (con aislamiento de tenant).
     diagnosis_list           — diagnósticos de un paciente (filtrado por status opcional).
+    evolution_nursing_instructions_for_patient — notas del paciente que tienen indicaciones
+                               de enfermería no vacías, ordenadas por -created_at.
 """
 
 import uuid
@@ -40,6 +42,7 @@ from apps.expediente.models import (
     Allergy,
     Diagnosis,
     DiagnosisStatus,
+    EvolutionImage,
     EvolutionNote,
     MedicalHistory,
     VitalSignsRecord,
@@ -410,3 +413,94 @@ def diagnosis_list(
     if only_active:
         qs = qs.filter(status=DiagnosisStatus.ACTIVO)
     return qs.order_by("-created_at")
+
+
+# ---------------------------------------------------------------------------
+# Indicaciones de enfermería (A4 — sub-vista especializada)
+# ---------------------------------------------------------------------------
+
+
+def evolution_nursing_instructions_for_patient(
+    *,
+    patient: Patient,
+    limit: int = 20,
+) -> QuerySet[EvolutionNote]:
+    """Retorna las notas de evolución del paciente que tienen indicaciones de enfermería.
+
+    Solo incluye las notas con `indicaciones_enfermeria` no vacías (excluye cadenas
+    en blanco y valores nulos). Ordena por -created_at (más reciente primero).
+    Limita al número indicado por `limit` (default=20) para evitar cargas masivas.
+
+    Usa el TenantManager (filtra por tenant del contexto activo + excluye
+    soft-deleted). Filtra explícitamente por patient como defensa en profundidad
+    (anti-IDOR adicional al TenantManager).
+
+    Precarga `doctor` y `doctor__membership` para evitar N+1 al serializar
+    el nombre del médico autor.
+
+    Args:
+        patient: Paciente cuyas notas con indicaciones se recuperan.
+        limit:   Máximo de registros devueltos (default=20). Protege contra
+                 historiales extensos que carguen toda la tabla en memoria.
+
+    Returns:
+        QuerySet[EvolutionNote] con indicaciones_enfermeria no vacías,
+        ordenado por -created_at, limitado a `limit` registros.
+    """
+    return (
+        EvolutionNote.objects.select_related(
+            "doctor",
+            "doctor__membership",
+        )
+        .filter(
+            patient=patient,
+            indicaciones_enfermeria__isnull=False,
+        )
+        .exclude(indicaciones_enfermeria="")
+        .order_by("-created_at")[:limit]
+    )
+
+
+# ---------------------------------------------------------------------------
+# EvolutionImage selectors
+# ---------------------------------------------------------------------------
+
+
+def evolution_image_get(*, image_id: uuid.UUID) -> EvolutionImage:
+    """Retorna una imagen de evolución por su UUID.
+
+    Usa el TenantManager (filtra por tenant del contexto activo + excluye
+    soft-deleted). Lanza EvolutionImage.DoesNotExist si no existe o no pertenece
+    al tenant activo. Las vistas capturan DoesNotExist y devuelven 404 (anti-IDOR).
+
+    Args:
+        image_id: UUID de la imagen a recuperar.
+
+    Returns:
+        Instancia de EvolutionImage con evolution precargada.
+
+    Raises:
+        EvolutionImage.DoesNotExist: si la imagen no existe en el tenant activo.
+    """
+    return EvolutionImage.objects.select_related("evolution", "created_by").get(
+        id=image_id
+    )
+
+
+def evolution_images_list(*, evolution: EvolutionNote) -> "QuerySet[EvolutionImage]":
+    """Retorna el QuerySet de imágenes activas de una nota de evolución.
+
+    Filtra por tenant del contexto activo (TenantManager, excluye soft-deleted)
+    y por evolution en defensa en profundidad. Ordena por created_at (cronológico).
+
+    Args:
+        evolution: Nota de evolución cuyas imágenes se recuperan.
+
+    Returns:
+        QuerySet[EvolutionImage] ordenado por created_at.
+    """
+    return (
+        EvolutionImage.objects.select_related("created_by")
+        .filter(evolution=evolution)
+        .order_by("created_at")
+    )

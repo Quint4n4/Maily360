@@ -46,6 +46,7 @@ from apps.expediente.models import (
     Allergy,
     Diagnosis,
     DiagnosisKind,
+    EvolutionImage,
     EvolutionNote,
     MedicalHistory,
     Severity,
@@ -747,3 +748,115 @@ class DiagnosisOutputSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
+# Indicaciones de enfermería — Output (A4 — sub-vista especializada)
+# ---------------------------------------------------------------------------
+
+
+class NursingInstructionOutputSerializer(serializers.ModelSerializer):
+    """Serializer de salida para el listado de indicaciones de enfermería.
+
+    Expone únicamente los campos necesarios para que enfermería ejecute
+    las órdenes del médico:
+        id           — UUID de la nota de evolución de origen.
+        fecha        — Alias de created_at (cuando se creó la nota).
+        doctor       — Nombre completo del médico autor (full_name del User).
+        indicaciones — Texto de las indicaciones para enfermería.
+
+    No expone contenido clínico del resto de la nota (diagnósticos, tratamiento,
+    antecedentes) ya que este endpoint está optimizado para el flujo de enfermería.
+    """
+
+    fecha = serializers.DateTimeField(source="created_at", read_only=True)
+    doctor = serializers.SerializerMethodField()
+    indicaciones = serializers.CharField(source="indicaciones_enfermeria", read_only=True)
+
+    class Meta:
+        model = EvolutionNote
+        fields = ["id", "fecha", "doctor", "indicaciones"]
+        read_only_fields = fields
+
+    def get_doctor(self, obj: EvolutionNote) -> str:
+        """Retorna el nombre completo del médico autor de la nota.
+
+        Accede a doctor.membership.user usando las relaciones precargadas por
+        el selector (select_related). Si por alguna razón el usuario no está
+        disponible, retorna una cadena vacía en lugar de fallar.
+        """
+        try:
+            return str(obj.doctor.membership.user.get_full_name() or obj.doctor.membership.user.email)
+        except Exception:
+            return ""
+
+
+# ---------------------------------------------------------------------------
+# EvolutionImage — Input/Output
+# ---------------------------------------------------------------------------
+
+
+class EvolutionImageInputSerializer(serializers.Serializer):
+    """Valida los datos de entrada para subir una imagen a una nota de evolución.
+
+    Campos:
+        image   — archivo de imagen (requerido). La validación Pillow real se hace
+                  en el service; aquí solo verificamos que el campo esté presente.
+        caption — descripción breve opcional (máx 255 chars).
+
+    Seguridad: no confiar en este serializer para la validación de contenido binario.
+    La barrera real es validate_evolution_image() en el service (Pillow + whitelist).
+    Este serializer solo garantiza que el campo llegue al service.
+    """
+
+    image = serializers.ImageField(
+        help_text="Imagen clínica (JPEG/PNG/WEBP, máx 10 MB).",
+    )
+    caption = serializers.CharField(
+        max_length=255,
+        required=False,
+        default="",
+        allow_blank=True,
+        help_text="Descripción breve de la imagen (opcional).",
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Rechaza campos no declarados (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class EvolutionImageOutputSerializer(serializers.ModelSerializer):
+    """Serializer de salida para EvolutionImage.
+
+    Expone image_url (URL absoluta o relativa servible) en lugar del path interno
+    para que el frontend pueda renderizar la imagen directamente.
+    No expone tenant_id, deleted_at ni campos internos de auditoría.
+    """
+
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EvolutionImage
+        fields = [
+            "id",
+            "evolution_id",
+            "image_url",
+            "caption",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_image_url(self, obj: EvolutionImage) -> str | None:
+        """Retorna la URL servible de la imagen.
+
+        Usa request del context para construir URL absoluta cuando esté disponible.
+        Si no hay request en el context (ej. tests sin contexto HTTP), devuelve
+        la URL relativa del ImageField (que puede ser un path o una URL si se usa S3).
+        """
+        request = self.context.get("request")
+        if not obj.image:
+            return None
+        if request is not None:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url

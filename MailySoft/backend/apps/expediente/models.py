@@ -31,6 +31,7 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 
+from apps.core.files import evolution_image_path
 from apps.core.models import TenantAwareModel
 
 
@@ -759,4 +760,81 @@ class Diagnosis(TenantAwareModel):
         return (
             f"Diagnosis({self.id}) [{self.kind}/{self.status}] "
             f"— paciente {self.patient_id} (tenant={self.tenant_id})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# EvolutionImage — Imagen adjunta a una Nota de Evolución
+# ---------------------------------------------------------------------------
+
+
+class EvolutionImage(TenantAwareModel):
+    """Imagen fotográfica adjunta a una nota de evolución clínica.
+
+    Permite subir fotos clínicas (heridas, hallazgos, estudios fotográficos)
+    directamente asociadas a una EvolutionNote. Es el equivalente al botón
+    "Nueva Imagen" del legacy.
+
+    Seguridad:
+      - El campo `image` usa `evolution_image_path` que aleatoriza el nombre
+        (anti path-traversal, anti-enumeración).
+      - La validación de contenido binario (Pillow) se hace en el service
+        mediante `validate_evolution_image` ANTES de guardar. El ImageField
+        de Django tiene su propia verificación básica pero no es suficiente
+        por sí sola (no rechaza SVG ni valida formato real).
+      - Almacenamiento local (MEDIA_ROOT/evoluciones/). En producción basta
+        con cambiar DEFAULT_FILE_STORAGE / STORAGES a S3; el código no cambia.
+
+    Baja lógica (D-EC-5):
+      - `evolution_image_remove` pone `deleted_at` al momento actual.
+      - NUNCA se llama `.delete()` físico sobre instancias de este modelo.
+      - El TenantManager excluye soft-deleted automáticamente (deleted_at__isnull=True).
+
+    Campos:
+        evolution  FK a EvolutionNote (CASCADE: si se borra la nota, se borran
+                   las imágenes — coherente porque la nota es inmutable; el
+                   borrado físico de notas no ocurre en v1, pero si ocurriera
+                   se arrastraría coherentemente).
+        image      Archivo almacenado bajo evoluciones/<uuid><ext>.
+        caption    Descripción breve de la imagen (opcional, ej. "Herida día 3").
+
+    Auditoría y timestamps heredados de TenantAwareModel:
+        id, created_at, updated_at, deleted_at, tenant, created_by.
+    """
+
+    evolution = models.ForeignKey(
+        EvolutionNote,
+        on_delete=models.CASCADE,
+        related_name="images",
+        db_index=True,
+        help_text="Nota de evolución a la que pertenece esta imagen.",
+    )
+    image = models.ImageField(
+        upload_to=evolution_image_path,
+        help_text=(
+            "Imagen clínica (JPEG/PNG/WEBP, máx 10 MB). "
+            "El nombre se aleatoriza al guardar (anti path-traversal)."
+        ),
+    )
+    caption = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Descripción breve de la imagen (opcional).",
+    )
+
+    class Meta:
+        db_table = "expediente_evolution_images"
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(
+                fields=["evolution", "created_at"],
+                name="evol_image_evol_time_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"EvolutionImage({self.id}) — evolución {self.evolution_id} "
+            f"(tenant={self.tenant_id})"
         )

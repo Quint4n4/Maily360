@@ -34,8 +34,11 @@ from apps.expediente.views import (
     AllergyResolveApi,
     DiagnosisListCreateApi,
     DiagnosisResolveApi,
+    EvolutionImageDeleteApi,
+    EvolutionImageListCreateApi,
     EvolutionNoteListCreateApi,
     MedicalHistoryApi,
+    NursingInstructionListApi,
     VitalSignsListCreateApi,
     VitalSignsSeriesApi,
 )
@@ -92,5 +95,22 @@ urlpatterns = [
         "expediente/<uuid:patient_id>/diagnosticos/",
         DiagnosisListCreateApi.as_view(),
         name="diagnosis-list-create",
+    ),
+    # A4 — Indicaciones de enfermería (sub-vista especializada, solo GET)
+    path(
+        "expediente/<uuid:patient_id>/indicaciones-enfermeria/",
+        NursingInstructionListApi.as_view(),
+        name="nursing-instructions-list",
+    ),
+    # Imágenes de evolución — acciones sobre imagen individual van ANTES del listado
+    path(
+        "expediente/imagenes/<uuid:image_id>/",
+        EvolutionImageDeleteApi.as_view(),
+        name="evolution-image-delete",
+    ),
+    path(
+        "expediente/evoluciones/<uuid:evolution_id>/imagenes/",
+        EvolutionImageListCreateApi.as_view(),
+        name="evolution-image-list-create",
     ),
 ]

@@ -24,7 +24,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 
-from apps.core.files import validate_avatar
+from apps.core.files import validate_avatar, validate_image
 
 
 # ---------------------------------------------------------------------------
@@ -86,10 +86,9 @@ class TestValidateAvatarAllowedFormats:
         Si el puntero no se resetea, el archivo quedará vacío al intentar
         guardarlo en el storage. Este test verifica el seek(0) del finally.
         """
-        # Arrange
+        # Arrange — SimpleUploadedFile tiene .size (BAJO-1 requiere que esté presente)
         content = _make_image_bytes("PNG")
-        file = io.BytesIO(content)
-        file.name = "avatar.png"
+        file = _make_uploaded_file("avatar.png", content, "image/png")
 
         # Act
         validate_avatar(file)
@@ -261,12 +260,81 @@ class TestValidateAvatarSizeLimit:
                 "No debe rechazarse por tamaño cuando el archivo mide exactamente 5 MB."
             )
 
-    def test_file_without_size_attribute_does_not_raise_size_error(self) -> None:
-        """Si el archivo no tiene atributo .size, no se lanza error de tamaño."""
+    def test_file_without_size_attribute_raises_validation_error(self) -> None:
+        """BAJO-1: si el archivo no tiene atributo .size, se lanza ValidationError.
+
+        Fail-closed: no podemos verificar el tamaño → rechazamos el archivo.
+        Esto evita que un atacante construya un UploadedFile sin .size para
+        saltarse el chequeo de límite de bytes.
+        """
         # Arrange — usar un BytesIO sin .size
         buf = io.BytesIO(_make_image_bytes("PNG"))
         buf.name = "avatar.png"
-        # BytesIO no tiene .size por defecto → getattr devuelve None → se omite
+        # BytesIO no tiene .size por defecto → getattr devuelve None →
+        # BAJO-1: fail-closed → ValidationError
 
-        # Act / Assert — no debe lanzar por tamaño
-        validate_avatar(buf)
+        # Act / Assert — DEBE lanzar porque no podemos verificar el tamaño
+        with pytest.raises(ValidationError):
+            validate_avatar(buf)
+
+
+# ===========================================================================
+# MEDIO-1 — Bomba de descompresión y detección con .load()
+# ===========================================================================
+
+
+class TestValidateImageDecompressionBomb:
+    """MEDIO-1: validate_image debe rechazar bombas de descompresión.
+
+    verify() no decodifica los píxeles; una imagen manipulada puede pasar
+    verify() pero explotar en tamaño al decodificarse. La nueva llamada a
+    .load() tras verify() fuerza la decodificación completa.
+    """
+
+    def test_image_that_passes_verify_but_fails_load_raises_validation_error(
+        self,
+    ) -> None:
+        """Imagen cuyo .load() falla → ValidationError (nunca propaga la excepción).
+
+        Simulamos el caso con un mock: Image.open().load() lanza
+        DecompressionBombError aunque verify() haya pasado.
+        """
+        from unittest.mock import MagicMock, patch
+
+        from PIL import Image as PILImage
+
+        # Imagen PNG real pequeña que pasa verify()
+        content = _make_image_bytes("PNG")
+        file = _make_uploaded_file("bomb.png", content, "image/png")
+
+        # Parchear Image.open para que el segundo open() (el del .load()) lance
+        # DecompressionBombError, simulando una bomba de descompresión.
+        original_open = PILImage.open
+        call_count: list[int] = [0]
+
+        def patched_open(f: Any, **kwargs: Any) -> Any:
+            call_count[0] += 1
+            if call_count[0] == 2:
+                # Segunda llamada: simula la bomba de descompresión
+                raise PILImage.DecompressionBombError(  # type: ignore[attr-defined]
+                    "Image size (999999999 pixels) exceeds limit"
+                )
+            return original_open(f, **kwargs)
+
+        with patch("apps.core.files.Image.open", side_effect=patched_open):
+            with pytest.raises(ValidationError):
+                validate_image(file, max_bytes=5 * 1024 * 1024)
+
+    def test_normal_image_passes_load_check(self) -> None:
+        """Una imagen legítima pasa verify() Y .load() sin lanzar excepción."""
+        content = _make_image_bytes("PNG")
+        file = _make_uploaded_file("ok.png", content, "image/png")
+        # no debe lanzar
+        validate_image(file, max_bytes=5 * 1024 * 1024)
+
+    def test_pointer_reset_after_load_check(self) -> None:
+        """El puntero del archivo queda en 0 tras el ciclo verify + load."""
+        content = _make_image_bytes("PNG")
+        file = _make_uploaded_file("ok.png", content, "image/png")
+        validate_image(file, max_bytes=5 * 1024 * 1024)
+        assert file.tell() == 0, "El puntero debe estar en 0 para que el storage pueda guardar."

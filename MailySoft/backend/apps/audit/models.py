@@ -100,6 +100,8 @@ class ActionType(models.TextChoices):
     DIAGNOSIS_CREATE = "DIAGNOSIS_CREATE", "Registrar diagnóstico"
     DIAGNOSIS_RESOLVE = "DIAGNOSIS_RESOLVE", "Resolver diagnóstico"
     DIAGNOSIS_READ = "DIAGNOSIS_READ", "Consultar diagnósticos"
+    EVOLUTION_IMAGE_ADD = "EVOLUTION_IMAGE_ADD", "Agregar imagen a evolución"
+    EVOLUTION_IMAGE_REMOVE = "EVOLUTION_IMAGE_REMOVE", "Dar de baja imagen de evolución"
 
     # Plataforma (panel interno del equipo Maily — cross-tenant)
     TENANT_CREATE = "TENANT_CREATE", "Crear clínica nueva"

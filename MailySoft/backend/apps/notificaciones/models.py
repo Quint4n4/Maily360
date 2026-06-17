@@ -36,6 +36,7 @@ class NotificationKind(models.TextChoices):
     TEAM_NOTE = "team_note", "Nota de equipo"
     ROLE_NOTE = "role_note", "Nota dirigida a un rol"
     BROADCAST = "broadcast", "Aviso a toda la clínica"
+    NURSING_INSTRUCTION = "nursing_instruction", "Indicación de enfermería"
 
 
 class NotificationTarget(models.TextChoices):
@@ -47,6 +48,7 @@ class NotificationTarget(models.TextChoices):
     APPOINTMENT = "appointment", "Cita"
     AGENDA_BLOCK = "agenda_block", "Evento de agenda"
     NOTE = "note", "Nota"
+    PATIENT = "patient", "Paciente"
 
 
 class Notification(TenantAwareModel):

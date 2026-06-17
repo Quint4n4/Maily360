@@ -23,6 +23,8 @@ API pública:
     addendum_create        — agrega un addendum a una nota (append-only).
     diagnosis_create       — registra un diagnóstico para un paciente.
     diagnosis_resolve      — marca un diagnóstico como resuelto (baja lógica).
+    evolution_image_add    — adjunta una imagen a una nota de evolución.
+    evolution_image_remove — baja lógica de una imagen de evolución.
 
 REGLA DE PRIVACIDAD — NUNCA incluir PII clínica en logs ni en la bitácora:
   Los campos `substance`, `reaction`, y cualquier dato del expediente clínico
@@ -47,17 +49,22 @@ from decimal import Decimal
 
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
+from apps.core.files import validate_evolution_image
 from apps.expediente.models import (
     Addendum,
     Allergy,
     Diagnosis,
     DiagnosisKind,
     DiagnosisStatus,
+    EvolutionImage,
     EvolutionNote,
     MedicalHistory,
     Severity,
     VitalSignsRecord,
 )
+from apps.notificaciones.models import NotificationKind, NotificationTarget
+from apps.notificaciones.recipients import Role, users_with_role
+from apps.notificaciones.services import notification_fanout
 from apps.pacientes.models import Patient
 from apps.tenancy.models import Tenant
 
@@ -774,6 +781,32 @@ def evolution_note_create(
         },
     )
 
+    # Best-effort: notificar a enfermería si hay indicaciones.
+    # El try/except garantiza que un fallo en el fanout NO tumba la creación
+    # de la evolución (disponibilidad clínica > entrega garantizada de avisos).
+    # Log sin PII: solo UUIDs.
+    if indicaciones_enfermeria.strip():
+        try:
+            nurses = users_with_role(tenant=tenant, role=Role.NURSE)
+            notification_fanout(
+                tenant=tenant,
+                recipients=nurses,
+                kind=NotificationKind.NURSING_INSTRUCTION,
+                title=f"Indicaciones de enfermería · {patient.full_name}",
+                body=indicaciones_enfermeria[:200],
+                actor=user,
+                target_type=NotificationTarget.PATIENT,
+                target_id=patient.id,
+            )
+        except Exception:
+            logger.warning(
+                "evolution_note_create: no se pudo notificar a enfermería "
+                "(best-effort). note_id=%s patient_id=%s tenant_id=%s",
+                note.pk,
+                patient.pk,
+                tenant.pk,
+            )
+
     return note
 
 
@@ -1032,3 +1065,183 @@ def diagnosis_resolve(
         )
 
     return diagnosis
+
+
+# ---------------------------------------------------------------------------
+# evolution_image_add / evolution_image_remove — Imágenes de Evolución
+# ---------------------------------------------------------------------------
+
+
+#: MEDIO-2 — Límite de imágenes activas por nota de evolución.
+#: Protege contra DoS por acumulación de archivos en una sola nota clínica.
+MAX_IMAGES_PER_EVOLUTION: int = 20
+
+
+@transaction.atomic
+def evolution_image_add(
+    *,
+    tenant: Tenant,
+    user: Any,
+    evolution: EvolutionNote,
+    image: Any,
+    caption: str = "",
+) -> EvolutionImage:
+    """Agrega una imagen fotográfica a una nota de evolución.
+
+    Valida:
+    - Que tenant no sea None.
+    - Que la nota de evolución pertenezca al mismo tenant (defensa en profundidad).
+    - Que la nota no supere MAX_IMAGES_PER_EVOLUTION imágenes activas (MEDIO-2).
+    - Que `image` sea una imagen real y segura (Pillow, whitelist de formatos,
+      rechazo de SVG, límite de 10 MB, sin bombas de descompresión). Esta es
+      la barrera principal de seguridad.
+
+    El nombre del archivo se aleatoriza en `evolution_image_path` (ya en el modelo).
+    El almacenamiento es local en MEDIA_ROOT/evoluciones/. En producción solo
+    hay que cambiar DEFAULT_FILE_STORAGE / STORAGES a S3; el código no cambia.
+
+    D-EC-5: las imágenes nunca se borran físicamente. Usar evolution_image_remove
+    para la baja lógica (pone deleted_at).
+
+    Registra EVOLUTION_IMAGE_ADD en AuditLog (NOM-024 — MEDIO-3).
+    resource_repr = str(evo_image.id) — NUNCA PII ni nombre de archivo.
+
+    Args:
+        tenant:    Clínica del contexto activo. No puede ser None.
+        user:      Usuario que sube la imagen (para created_by/auditoría).
+        evolution: Nota de evolución a la que se agrega la imagen (mismo tenant).
+        image:     Archivo subido (UploadedFile). DEBE pasar validación Pillow.
+        caption:   Descripción breve opcional (ej. "Herida día 3").
+
+    Returns:
+        La instancia EvolutionImage recién creada.
+
+    Raises:
+        ValidationError: si tenant es None, la nota no pertenece al tenant,
+                         se superó el límite de imágenes, o la imagen no pasa
+                         la validación de seguridad.
+    """
+    if tenant is None:
+        raise ValidationError(
+            "Se requiere un tenant activo para subir imágenes de evolución."
+        )
+
+    # Defensa en profundidad: la nota de evolución debe ser del mismo tenant.
+    if evolution.tenant_id != tenant.id:
+        raise ValidationError(
+            "La nota de evolución no pertenece a esta clínica."
+        )
+
+    # MEDIO-2 — Límite de imágenes activas por nota.
+    # Contamos solo las imágenes sin baja lógica (deleted_at IS NULL).
+    # Usamos all_objects para evitar que el TenantManager interfiera con el
+    # filtro explícito de evolución (defensa en profundidad: mismo tenant ya
+    # validado arriba).
+    active_count = EvolutionImage.all_objects.filter(
+        evolution=evolution,
+        deleted_at__isnull=True,
+    ).count()
+    if active_count >= MAX_IMAGES_PER_EVOLUTION:
+        raise ValidationError(
+            f"La nota ya tiene el máximo de imágenes ({MAX_IMAGES_PER_EVOLUTION})."
+        )
+
+    # Barrera principal de seguridad: validar que el archivo SEA una imagen real.
+    # Pillow verifica el contenido binario (no la extensión ni el Content-Type).
+    # Rechaza SVG, bytes basura con extensión .jpg, archivos corruptos, y bombas
+    # de descompresión (MEDIO-1).
+    validate_evolution_image(image)
+
+    evo_image = EvolutionImage.objects.create(
+        tenant=tenant,
+        created_by=user,
+        evolution=evolution,
+        image=image,
+        caption=caption.strip(),
+    )
+
+    logger.info(
+        "evolution_image_add: imagen %s agregada a evolución %s (tenant=%s)",
+        evo_image.pk,
+        evolution.pk,
+        tenant.pk,
+    )
+
+    # MEDIO-3 — Bitácora NOM-024: registrar la subida de imagen.
+    # resource_repr = UUID del registro, NUNCA el nombre del archivo (PII de ruta).
+    # metadata incluye evolution_id y patient_id para correlación de auditoría,
+    # SIN datos clínicos ni rutas de almacenamiento.
+    audit_record(
+        action=ActionType.EVOLUTION_IMAGE_ADD,
+        resource_type="EvolutionImage",
+        actor=user,
+        tenant=tenant,
+        resource_id=evo_image.id,
+        resource_repr=str(evo_image.id),
+        metadata={
+            "evolution_id": str(evolution.id),
+            "patient_id": str(evolution.patient_id),
+        },
+    )
+
+    return evo_image
+
+
+@transaction.atomic
+def evolution_image_remove(
+    *,
+    image: EvolutionImage,
+    user: Any,
+) -> EvolutionImage:
+    """Baja lógica de una imagen de evolución (D-EC-5).
+
+    NUNCA borra el registro físicamente. Pone deleted_at = ahora.
+    Si ya estaba con deleted_at (ya dada de baja), la operación es idempotente.
+
+    Registra EVOLUTION_IMAGE_REMOVE en AuditLog (NOM-024 — MEDIO-3).
+    resource_repr = str(image.id) — NUNCA PII ni nombre de archivo.
+
+    Args:
+        image: Instancia de EvolutionImage a dar de baja.
+        user:  Usuario que ejecuta la acción (para auditoría).
+
+    Returns:
+        La instancia EvolutionImage con deleted_at rellenado.
+
+    Raises:
+        ValidationError: si el tenant de la imagen es None.
+    """
+    from django.utils import timezone  # noqa: PLC0415
+
+    if image.tenant is None:
+        raise ValidationError(
+            "La imagen no tiene un tenant asociado. No se puede dar de baja."
+        )
+
+    if image.deleted_at is None:
+        image.deleted_at = timezone.now()
+        image.save(update_fields=["deleted_at", "updated_at"])
+
+        logger.info(
+            "evolution_image_remove: imagen %s dada de baja por usuario %s",
+            image.pk,
+            getattr(user, "pk", None),
+        )
+
+        # MEDIO-3 — Bitácora NOM-024: registrar la baja lógica de imagen.
+        # resource_repr = UUID del registro, NUNCA nombre de archivo ni ruta.
+        # metadata incluye evolution_id y patient_id para correlación de auditoría.
+        audit_record(
+            action=ActionType.EVOLUTION_IMAGE_REMOVE,
+            resource_type="EvolutionImage",
+            actor=user,
+            tenant=image.tenant,
+            resource_id=image.id,
+            resource_repr=str(image.id),
+            metadata={
+                "evolution_id": str(image.evolution_id),
+                "patient_id": str(image.evolution.patient_id),
+            },
+        )
+
+    return image

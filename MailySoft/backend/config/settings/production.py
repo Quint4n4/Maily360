@@ -5,8 +5,10 @@ Hereda de base.py. DEBUG=False obligatorio.
 Activa HTTPS, HSTS, cookies seguras y headers de seguridad.
 """
 
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F401, F403
-from .base import env
+from .base import AWS_S3_CUSTOM_DOMAIN, env
 
 # ---------------------------------------------------------------------------
 # Seguridad obligatoria en producción
@@ -97,6 +99,29 @@ DEFAULT_FILE_STORAGE: str = env(
     "DJANGO_DEFAULT_FILE_STORAGE",
     default="storages.backends.s3boto3.S3Boto3Storage",
 )
+
+# ---------------------------------------------------------------------------
+# BAJO-3 — Guardia S3: imágenes clínicas nunca deben quedar en URLs públicas.
+#
+# Si AWS_S3_CUSTOM_DOMAIN está configurado (indica un CDN/CloudFront custom
+# domain) pero AWS_CLOUDFRONT_SIGNED no está activo, los objetos del bucket
+# serán accesibles vía URL directa sin firma — exponiendo imágenes de salud
+# protegidas por la LFPDPPP y NOM-024 a cualquiera que tenga el enlace.
+#
+# Esta guardia falla ruidosamente al arrancar en lugar de silenciosamente
+# en producción con datos de salud expuestos.
+# ---------------------------------------------------------------------------
+
+_cloudfront_signed: bool = env.bool("AWS_CLOUDFRONT_SIGNED", default=False)
+if AWS_S3_CUSTOM_DOMAIN and not _cloudfront_signed:
+    raise ImproperlyConfigured(
+        "BAJO-3 (seguridad clínica): AWS_S3_CUSTOM_DOMAIN está configurado pero "
+        "AWS_CLOUDFRONT_SIGNED no está activo (o es False). Las imágenes clínicas "
+        "quedarían accesibles públicamente vía URL directa sin firma de CloudFront, "
+        "violando LFPDPPP y NOM-024. "
+        "Activa las URLs firmadas (AWS_CLOUDFRONT_SIGNED=True) o elimina "
+        "AWS_S3_CUSTOM_DOMAIN si no usas CloudFront."
+    )
 
 # ---------------------------------------------------------------------------
 # Logging solo WARNING en prod (INFO para apps propias)
