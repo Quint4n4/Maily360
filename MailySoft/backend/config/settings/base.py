@@ -74,8 +74,12 @@ LOCAL_APPS: list[str] = [
     "apps.notificaciones",
     # Expediente Clínico (Fase A)
     "apps.expediente",
+    # Mi Consultorio — configuración de la clínica (Fase B base)
+    "apps.clinica",
     # Panel interno de plataforma (cross-tenant, equipo Maily)
     "apps.plataforma",
+    # Recetas médicas (Fase B1)
+    "apps.recetas",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -252,6 +256,10 @@ STATICFILES_STORAGE: str = "whitenoise.storage.CompressedManifestStaticFilesStor
 
 MEDIA_URL: str = "/media/"
 MEDIA_ROOT: Path = BASE_DIR / "media"
+
+# Limita el tamaño máximo de payload en memoria a 5 MB (protección contra
+# cuerpos de plantilla o multipart gigantes que saturen RAM del worker).
+DATA_UPLOAD_MAX_MEMORY_SIZE: int = 5 * 1024 * 1024  # 5 MB
 
 # ---------------------------------------------------------------------------
 # Almacenamiento (S3/MinIO en prod, local en dev)

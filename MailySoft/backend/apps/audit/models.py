@@ -103,6 +103,17 @@ class ActionType(models.TextChoices):
     EVOLUTION_IMAGE_ADD = "EVOLUTION_IMAGE_ADD", "Agregar imagen a evolución"
     EVOLUTION_IMAGE_REMOVE = "EVOLUTION_IMAGE_REMOVE", "Dar de baja imagen de evolución"
 
+    # Recetas — catálogo de medicamentos (Fase B1.1)
+    MEDICATION_CREATE = "MEDICATION_CREATE", "Crear medicamento custom"
+
+    # Recetas — receta médica (Fase B1.2)
+    PRESCRIPTION_CREATE = "PRESCRIPTION_CREATE", "Emitir receta médica"
+    PRESCRIPTION_READ = "PRESCRIPTION_READ", "Consultar receta médica"
+    PRESCRIPTION_CANCEL = "PRESCRIPTION_CANCEL", "Anular receta médica"
+
+    # Recetas — PDF (Fase B1.3)
+    PRESCRIPTION_PDF = "PRESCRIPTION_PDF", "Generar PDF de receta médica"
+
     # Plataforma (panel interno del equipo Maily — cross-tenant)
     TENANT_CREATE = "TENANT_CREATE", "Crear clínica nueva"
     TENANT_STATUS_CHANGE = "TENANT_STATUS_CHANGE", "Cambiar estado de clínica"
@@ -111,6 +122,14 @@ class ActionType(models.TextChoices):
     LOGIN = "LOGIN", "Inicio de sesión"
     LOGOUT = "LOGOUT", "Cierre de sesión"
     LOGIN_FAILED = "LOGIN_FAILED", "Intento de sesión fallido"
+
+    # Mi Consultorio — configuración de la clínica (Fase B base)
+    CLINIC_SETTINGS_UPDATE = "CLINIC_SETTINGS_UPDATE", "Actualizar configuración de clínica"
+    TEMPLATE_CREATE = "TEMPLATE_CREATE", "Crear plantilla clínica"
+    TEMPLATE_UPDATE = "TEMPLATE_UPDATE", "Actualizar plantilla clínica"
+    TEMPLATE_DELETE = "TEMPLATE_DELETE", "Desactivar plantilla clínica"
+    PATIENT_CATEGORY_CREATE = "PATIENT_CATEGORY_CREATE", "Crear categoría de paciente"
+    PATIENT_CATEGORY_DELETE = "PATIENT_CATEGORY_DELETE", "Desactivar categoría de paciente"
 
 
 class AuditLog(TenantAwareModel):

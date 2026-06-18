@@ -473,6 +473,76 @@ class NursingInstructionPermission(HasClinicRole):
     }
 
 
+class PrescriptionPermission(HasClinicRole):
+    """Permisos para el módulo de Recetas (B1.2 — DR-6).
+
+    Crear (POST): solo el médico con perfil Doctor activo. El servicio verifica
+        adicionalmente que el usuario tenga Doctor activo en el tenant; si no, 403.
+        El permiso HTTP aquí solo filtra por rol (capa de defensa externa).
+        owner y admin NO crean recetas directamente (no tienen perfil médico en
+        la mayoría de los casos); solo el rol doctor puede emitirlas.
+
+    Leer (GET): CLINICAL_READ — roles clínicos con acceso al expediente.
+        Recepción y finanzas NO ven recetas (DR-6).
+
+    Anular POST /anular/: se recibe como POST; mismo rol de escritura = doctor.
+        La validación fina (solo el médico emisor o owner/admin puede anular)
+        la hace el servicio, no el permiso HTTP.
+
+    Consistencia con el expediente clínico (MEDIO-5 — DR-6):
+        La política de lectura (GET → CLINICAL_READ) es deliberadamente idéntica
+        a la de historia clínica (MedicalHistoryPermission), signos vitales
+        (VitalSignsPermission), notas de evolución (EvolutionPermission) y
+        diagnósticos (DiagnosisPermission). Una receta es un documento clínico
+        de igual sensibilidad: su contenido revela diagnósticos y tratamientos.
+
+        Roles con acceso de LECTURA:
+            - owner, admin  → gestión del tenant; acceso completo.
+            - doctor        → médico tratante; acceso pleno al expediente.
+            - nurse         → enfermería; consulta sin modificación.
+            - readonly      → observador clínico (p. ej. médico de guardia);
+                              puede consultar el historial de recetas sin emitir.
+
+        Roles SIN acceso (ni lectura ni escritura):
+            - reception     → recepción ve la agenda, no el expediente clínico.
+            - finance       → finanzas ve facturación, no registros clínicos.
+
+        Esta matriz NO se modifica sin aprobación del comité clínico (NOM-004
+        exige restricción de acceso al expediente según función del personal).
+
+    Matriz:
+        GET  → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
+        POST → owner, admin, doctor.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class MedicationPermission(HasClinicRole):
+    """Permisos para el catálogo de medicamentos (B1.1).
+
+    Búsqueda (GET): lectura clínica — roles que acceden al expediente.
+      CLINICAL_READ = {owner, admin, doctor, nurse, readonly}.
+      Recepción y finanzas NO tienen acceso a la sección de recetas (DR-6).
+
+    Creación (POST) de medicamento custom: owner, admin, doctor.
+      Solo personal médico/directivo puede extender el catálogo.
+      Nurse puede buscar pero no crear entradas custom.
+
+    Matriz:
+        GET  → CLINICAL_READ.
+        POST → owner, admin, doctor.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
 class NotificationPermission(HasClinicRole):
     """Permisos para la campana de notificaciones.
 

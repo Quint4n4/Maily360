@@ -34,8 +34,12 @@ urlpatterns = [
     path("api/v1/", include("apps.notas.urls")),
     path("api/v1/", include("apps.notificaciones.urls")),
     path("api/v1/", include("apps.expediente.urls")),
+    # Mi Consultorio — configuración de la clínica (Fase B base)
+    path("api/v1/", include("apps.clinica.urls")),
     # Panel interno de plataforma (cross-tenant, equipo Maily)
     path("api/v1/", include("apps.plataforma.urls")),
+    # Recetas médicas (Fase B1)
+    path("api/v1/", include("apps.recetas.urls")),
 ]
 
 # FIX-8: exponer la documentación OpenAPI SOLO en desarrollo.

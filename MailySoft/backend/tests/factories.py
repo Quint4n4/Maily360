@@ -15,6 +15,13 @@ from factory.django import DjangoModelFactory
 from apps.agenda.models import AgendaBlock, AgendaItemNote, Appointment, AppointmentReminder, TenantAgendaConfig
 from apps.audit.models import ActionType, AuditLog
 from apps.authn.models import User
+from apps.clinica.models import (
+    ClinicSettings,
+    ClinicTemplate,
+    DoctorUniversity,
+    PatientCategory,
+    TemplateKind,
+)
 from apps.expediente.models import (
     Addendum,
     Allergy,
@@ -26,6 +33,14 @@ from apps.expediente.models import (
     VitalSignsRecord,
 )
 from apps.notas.models import Note, NoteScope
+from apps.recetas.models import (
+    GlobalMedication,
+    Medication,
+    MedicationForm,
+    Prescription,
+    PrescriptionItem,
+    PrescriptionStatus,
+)
 from apps.pacientes.models import Patient
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
 from apps.tenancy.models import Tenant, TenantMembership
@@ -551,3 +566,174 @@ class DiagnosisFactory(DjangoModelFactory):
     description = factory.Sequence(lambda n: f"Diagnóstico de prueba #{n}")
     kind = DiagnosisKind.PRESUNTIVO
     status = DiagnosisStatus.ACTIVO
+
+
+# ---------------------------------------------------------------------------
+# Clinica (ClinicSettings, ClinicTemplate, PatientCategory, DoctorUniversity)
+# ---------------------------------------------------------------------------
+
+
+class ClinicSettingsFactory(DjangoModelFactory):
+    """Configuración de clínica (ClinicSettings).
+
+    Por defecto crea una config sin imágenes y sin datos de contacto.
+    Pasar explícitamente los campos que el test necesite.
+    """
+
+    class Meta:
+        model = ClinicSettings
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    address = ""
+    address_2 = ""
+    phone = ""
+    mobile = ""
+    email = ""
+    website = ""
+    facebook = ""
+    instagram = ""
+    youtube = ""
+    letterhead_full_spaces = 0
+    letterhead_half_spaces = 0
+    recipe_use_responsible_doctor = False
+    recipe_whatsapp_contacts = factory.LazyFunction(list)
+
+
+class ClinicTemplateFactory(DjangoModelFactory):
+    """Plantilla clínica (ClinicTemplate).
+
+    Por defecto crea una plantilla de tipo 'recipe' activa.
+    """
+
+    class Meta:
+        model = ClinicTemplate
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    kind = TemplateKind.RECIPE
+    name = factory.Sequence(lambda n: f"Plantilla {n}")
+    body = factory.Sequence(lambda n: f"Cuerpo de plantilla {n}.")
+    group = ""
+    is_active = True
+
+
+class PatientCategoryFactory(DjangoModelFactory):
+    """Categoría de paciente (PatientCategory).
+
+    Por defecto crea una categoría activa.
+    """
+
+    class Meta:
+        model = PatientCategory
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Categoría {n}")
+    is_active = True
+
+
+# ---------------------------------------------------------------------------
+# Recetas — GlobalMedication y Medication (B1.1)
+# ---------------------------------------------------------------------------
+
+
+class GlobalMedicationFactory(DjangoModelFactory):
+    """Medicamento del catálogo global (sin tenant).
+
+    Por defecto crea una tableta de paracetamol 500 mg activa.
+    Usa generic_name + concentration + form distintos si necesitas varios
+    medicamentos únicos (el seed usa get_or_create sobre esos tres campos).
+    """
+
+    class Meta:
+        model = GlobalMedication
+
+    generic_name = factory.Sequence(lambda n: f"Medicamento Global {n}")
+    commercial_name = ""
+    form = MedicationForm.TABLETA
+    concentration = factory.Sequence(lambda n: f"{n * 100 + 100} mg")
+    presentation = ""
+    is_active = True
+
+
+class MedicationFactory(DjangoModelFactory):
+    """Medicamento custom de una clínica (con tenant).
+
+    Por defecto crea una tableta activa sin nombre comercial.
+    """
+
+    class Meta:
+        model = Medication
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    generic_name = factory.Sequence(lambda n: f"Medicamento Custom {n}")
+    commercial_name = ""
+    form = MedicationForm.TABLETA
+    concentration = factory.Sequence(lambda n: f"{n * 50 + 50} mg")
+    presentation = ""
+    is_active = True
+
+
+class PrescriptionFactory(DjangoModelFactory):
+    """Receta médica activa (con folio y doctor del tenant).
+
+    NOTA: el folio no es consecutivo automáticamente aquí porque la factory
+    no usa SELECT FOR UPDATE. Para tests que ejercitan el servicio real
+    de folio consecutivo, usa directamente prescription_create().
+    Esta factory es solo para tests de selectors, APIs y permisos donde
+    el folio exacto no importa.
+    """
+
+    class Meta:
+        model = Prescription
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.LazyAttribute(lambda obj: obj.doctor.membership.user)
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    doctor = factory.LazyAttribute(
+        lambda obj: DoctorFactory(tenant=obj.tenant)
+    )
+    folio = factory.Sequence(lambda n: n + 1)
+    status = PrescriptionStatus.ACTIVE
+    recommendations = ""
+    vitals_snapshot = None
+    cancelled_at = None
+    cancellation_reason = ""
+
+
+class PrescriptionItemFactory(DjangoModelFactory):
+    """Renglón de tratamiento de una receta."""
+
+    class Meta:
+        model = PrescriptionItem
+
+    tenant = factory.LazyAttribute(lambda obj: obj.prescription.tenant)
+    created_by = factory.LazyAttribute(lambda obj: obj.prescription.created_by)
+    prescription = factory.SubFactory(PrescriptionFactory)
+    order = factory.Sequence(lambda n: n + 1)
+    medication_name = factory.Sequence(lambda n: f"Medicamento Test {n}")
+    medication_presentation = ""
+    medication_form = ""
+    medication_concentration = ""
+    indication = "1 tableta cada 8 horas por 7 días"
+    quantity = ""
+
+
+class DoctorUniversityFactory(DjangoModelFactory):
+    """Logo de universidad de un médico (DoctorUniversity).
+
+    NOTA: el campo logo es obligatorio (ImageField); en tests que no necesiten
+    una imagen real, usa SimpleUploadedFile o pasa un mock. Esta factory
+    no setea logo por defecto — pásalo explícitamente en el test.
+    """
+
+    class Meta:
+        model = DoctorUniversity
+        exclude = ["_doctor"]  # evitar que factory_boy lo trate como campo del modelo
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    doctor = factory.SubFactory(DoctorFactory)
+    name = factory.Sequence(lambda n: f"Universidad {n}")
