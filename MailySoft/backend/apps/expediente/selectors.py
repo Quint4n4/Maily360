@@ -17,6 +17,7 @@ Funciones públicas (A2):
 
 Funciones públicas (A3):
     vital_signs_list         — tomas del paciente, orden -measured_at.
+    vital_signs_latest       — la toma más reciente del paciente (para snapshot en receta).
     vital_signs_series       — datos de series temporales para gráficas (una sola query,
                                arma las series en Python).
 
@@ -418,6 +419,30 @@ def diagnosis_list(
 # ---------------------------------------------------------------------------
 # Indicaciones de enfermería (A4 — sub-vista especializada)
 # ---------------------------------------------------------------------------
+
+
+def vital_signs_latest(*, patient: Patient) -> Optional[VitalSignsRecord]:
+    """Retorna la toma de signos vitales más reciente del paciente, o None.
+
+    Usa el TenantManager (filtra por tenant del contexto activo).
+    Usada por `prescription_create` para congelar el snapshot de signos en la
+    receta (DR-7: la receta es autocontenida e inmutable).
+
+    El orden es por `measured_at` descendente; toma el primero.
+    Si el paciente no tiene tomas, devuelve None (el campo vitals_snapshot de
+    Prescription quedará null).
+
+    Args:
+        patient: Paciente del que se obtiene la última toma.
+
+    Returns:
+        Instancia de VitalSignsRecord más reciente, o None.
+    """
+    return (
+        VitalSignsRecord.objects.filter(patient=patient)
+        .order_by("-measured_at")
+        .first()
+    )
 
 
 def evolution_nursing_instructions_for_patient(
