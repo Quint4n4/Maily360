@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { Doctor, HORARIOS, initialesDoctor } from '../../data/personal'
 import ConfiguracionAgendaModal from './ConfiguracionAgendaModal'
+import { useAviso } from '../common/DialogProvider'
 
 interface Props {
   doctor: Doctor | null
@@ -42,6 +43,7 @@ function Linea({ label, value }: { label: string; value: string }) {
 
 export default function DoctorDetalleDrawer({ doctor, onClose, soloLectura = false }: Props) {
   const [configOpen, setConfigOpen] = useState(false)
+  const aviso = useAviso()
   const horarios = doctor ? (HORARIOS[doctor.id] ?? []) : []
 
   return (
@@ -151,7 +153,7 @@ export default function DoctorDetalleDrawer({ doctor, onClose, soloLectura = fal
               <Card
                 title="Horarios de atención" icon={CalendarDays}
                 action={!soloLectura ? (
-                  <button onClick={() => alert('Agregar horario (demo)')}
+                  <button onClick={() => void aviso({ mensaje: 'Agregar horario (demo)', tipo: 'info' })}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                     style={{ color: '#B8860B', background: 'rgba(201,162,39,0.12)' }}>
                     <Plus className="w-3.5 h-3.5" /> Agregar
@@ -171,7 +173,7 @@ export default function DoctorDetalleDrawer({ doctor, onClose, soloLectura = fal
                         </div>
                       </div>
                       {!soloLectura && (
-                        <button onClick={() => alert('Eliminar horario (demo)')} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
+                        <button onClick={() => void aviso({ mensaje: 'Eliminar horario (demo)', tipo: 'info' })} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       )}

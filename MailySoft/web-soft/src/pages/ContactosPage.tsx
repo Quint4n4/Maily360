@@ -13,6 +13,7 @@ import { formatFechaCorta } from '../lib/fecha'
 import type { PatientOut, PatientSegment } from '../types/paciente'
 import { useRole } from '../auth/RoleContext'
 import { puedeEditar, puedeVerExpedienteClinico } from '../auth/permisos'
+import { useConfirm } from '../components/common/DialogProvider'
 
 /** Segmentos de filtrado (reflejan el selector del backend). */
 const SEGMENTOS: { key: PatientSegment; label: string }[] = [
@@ -75,12 +76,16 @@ export default function ContactosPage() {
   const verClinico = puedeVerExpedienteClinico(role)
   const baja = useDeactivatePatient()
   const clasificar = useSetPatientClassification()
+  const confirmar = useConfirm()
 
-  const darDeBaja = () => {
+  const darDeBaja = async () => {
     if (!pacienteMostrado) return
-    const ok = window.confirm(
-      `¿Dar de baja a ${pacienteMostrado.full_name}? Dejará de aparecer en la lista (no se borra de la base de datos).`,
-    )
+    const ok = await confirmar({
+      titulo: 'Dar de baja al paciente',
+      mensaje: `¿Dar de baja a ${pacienteMostrado.full_name}? Dejará de aparecer en la lista (no se borra de la base de datos).`,
+      peligro: true,
+      textoConfirmar: 'Dar de baja',
+    })
     if (!ok) return
     baja.mutate(pacienteMostrado.id, { onSuccess: cerrarExpediente })
   }

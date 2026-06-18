@@ -16,6 +16,9 @@ import type {
   BloodType, Education, MaritalStatus, PatientOut, PatientUpdateInput, Sex,
 } from '../../types/paciente'
 import { BLOOD_OPTIONS, EDUCATION_OPTIONS, MARITAL_OPTIONS } from '../expediente/ui'
+import {
+  MSG, errorDeCampo, esCPValido, esCurpValido, esEmailValido, esTelefonoValido,
+} from '../../lib/validacion'
 
 export const SECCION_LABEL = 'text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-3'
 
@@ -190,12 +193,48 @@ export function erroresDePaciente(err: unknown): string[] {
   return msgs.length ? msgs : [`Error ${err.status}.`]
 }
 
+/**
+ * Errores de FORMATO (solo UX) de los campos del formulario de paciente.
+ * Replica los regex del backend (la autoridad). Un campo vacío NO marca error
+ * (la obligatoriedad se maneja en `validar`). Devuelve un mapa campo→mensaje
+ * solo con los campos inválidos; vacío = todo OK.
+ */
+export type ErroresFormatoPaciente = Partial<Record<
+  'phone' | 'phone_secondary' | 'email' | 'postal_code' | 'curp', string
+>>
+
+export function erroresFormatoPaciente(form: PacienteFormState): ErroresFormatoPaciente {
+  const e: ErroresFormatoPaciente = {}
+  const phone = errorDeCampo(form.phone, esTelefonoValido, MSG.telefono)
+  if (phone) e.phone = phone
+  const phone2 = errorDeCampo(form.phone_secondary, esTelefonoValido, MSG.telefono)
+  if (phone2) e.phone_secondary = phone2
+  const email = errorDeCampo(form.email, esEmailValido, MSG.email)
+  if (email) e.email = email
+  const cp = errorDeCampo(form.postal_code, esCPValido, MSG.cp)
+  if (cp) e.postal_code = cp
+  const curp = errorDeCampo(form.curp, esCurpValido, MSG.curp)
+  if (curp) e.curp = curp
+  return e
+}
+
+/** ¿Hay algún error de formato? (para deshabilitar Guardar). */
+export function hayErroresFormato(form: PacienteFormState): boolean {
+  return Object.keys(erroresFormatoPaciente(form)).length > 0
+}
+
 // ── Secciones de campos reutilizables ────────────────────────────────────────
 
 interface CamposProps {
   form: PacienteFormState
   set: FieldSetter
   setForm: React.Dispatch<React.SetStateAction<PacienteFormState>>
+}
+
+/** Mensaje de error de formato debajo de un campo (UX). */
+function MensajeError({ texto }: { texto?: string }) {
+  if (!texto) return null
+  return <p className="mt-1 text-xs text-red-600">{texto}</p>
 }
 
 /** Datos personales: nombre(s), apellidos, fecha de nacimiento, sexo. */
@@ -237,16 +276,29 @@ export function CamposDatosPersonales({ form, set }: CamposProps) {
 
 /** Contacto: teléfono, teléfono secundario, etiqueta, email. */
 export function CamposContacto({ form, set }: CamposProps) {
+  const errs = erroresFormatoPaciente(form)
   return (
     <div className="space-y-3">
       <div>
         <label className="label">Teléfono</label>
-        <input className="input" value={form.phone} onChange={set('phone')} />
+        <input
+          className={`input${errs.phone ? ' input-error' : ''}`}
+          inputMode="tel"
+          value={form.phone}
+          onChange={set('phone')}
+        />
+        <MensajeError texto={errs.phone} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Teléfono secundario <span className="text-gray-400 font-normal">(opcional)</span></label>
-          <input className="input" value={form.phone_secondary} onChange={set('phone_secondary')} />
+          <input
+            className={`input${errs.phone_secondary ? ' input-error' : ''}`}
+            inputMode="tel"
+            value={form.phone_secondary}
+            onChange={set('phone_secondary')}
+          />
+          <MensajeError texto={errs.phone_secondary} />
         </div>
         <div>
           <label className="label">Etiqueta <span className="text-gray-400 font-normal">(ej. Casa)</span></label>
@@ -255,7 +307,14 @@ export function CamposContacto({ form, set }: CamposProps) {
       </div>
       <div>
         <label className="label">Email <span className="text-gray-400 font-normal">(opcional)</span></label>
-        <input type="email" className="input" value={form.email} onChange={set('email')} />
+        <input
+          type="email"
+          className={`input${errs.email ? ' input-error' : ''}`}
+          inputMode="email"
+          value={form.email}
+          onChange={set('email')}
+        />
+        <MensajeError texto={errs.email} />
       </div>
     </div>
   )
@@ -263,6 +322,7 @@ export function CamposContacto({ form, set }: CamposProps) {
 
 /** Domicilio: calle y número, colonia, ciudad, estado, código postal. */
 export function CamposDomicilio({ form, set }: CamposProps) {
+  const errs = erroresFormatoPaciente(form)
   return (
     <div className="space-y-3">
       <div>
@@ -276,7 +336,14 @@ export function CamposDomicilio({ form, set }: CamposProps) {
         </div>
         <div>
           <label className="label">Código postal</label>
-          <input className="input" value={form.postal_code} onChange={set('postal_code')} />
+          <input
+            className={`input${errs.postal_code ? ' input-error' : ''}`}
+            inputMode="numeric"
+            maxLength={5}
+            value={form.postal_code}
+            onChange={set('postal_code')}
+          />
+          <MensajeError texto={errs.postal_code} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -299,11 +366,18 @@ export function CamposDomicilio({ form, set }: CamposProps) {
  * costo de consulta personalizado.
  */
 export function CamposNom004({ form, set, setForm }: CamposProps) {
+  const errs = erroresFormatoPaciente(form)
   return (
     <div className="space-y-3">
       <div>
         <label className="label">CURP <span className="text-gray-400 font-normal">(opcional)</span></label>
-        <input className="input uppercase" maxLength={18} value={form.curp} onChange={set('curp')} />
+        <input
+          className={`input uppercase${errs.curp ? ' input-error' : ''}`}
+          maxLength={18}
+          value={form.curp}
+          onChange={set('curp')}
+        />
+        <MensajeError texto={errs.curp} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>

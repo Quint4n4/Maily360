@@ -21,7 +21,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, CalendarPlus, UserX, Loader2, AlertTriangle,
-  FileText, Stethoscope, Activity, ClipboardCheck, CalendarClock,
+  FileText, Stethoscope, Activity, ClipboardCheck, CalendarClock, Pill,
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { initialsOf } from '../../lib/paciente'
@@ -30,14 +30,17 @@ import { ApiError } from '../../lib/http'
 import { useRole } from '../../auth/RoleContext'
 import {
   puedeVerExpedienteClinico, puedeEditarClinico, puedeCapturarSignos,
+  puedeEmitirReceta, puedeAnularReceta,
 } from '../../auth/permisos'
 import AvatarUploader from '../common/AvatarUploader'
+import { useAviso } from '../common/DialogProvider'
 import FichaPaciente from '../expediente/FichaPaciente'
 import { Acordeon, AcordeonItem } from '../expediente/Acordeon'
 import HistoriaTab from '../expediente/HistoriaTab'
 import SignosTab from '../expediente/SignosTab'
 import EvolucionTab from '../expediente/EvolucionTab'
 import DiagnosticosTab from '../expediente/DiagnosticosTab'
+import RecetasTab from '../expediente/RecetasTab'
 import CitasSection from '../expediente/CitasSection'
 
 interface ExpedienteDrawerProps {
@@ -60,14 +63,20 @@ export default function ExpedienteDrawer({
   const accesoClinico = (verClinico ?? true) && puedeVerExpedienteClinico(role)
   const editarClinico = puedeEditarClinico(role)
   const capturarSignos = puedeCapturarSignos(role)
+  const emitirReceta = puedeEmitirReceta(role)
+  const anularReceta = puedeAnularReceta(role)
 
   const subirAvatar = useUploadPatientAvatar()
+  const aviso = useAviso()
   const onAvatarFile = (file: File) => {
     if (!paciente) return
     subirAvatar.mutate({ id: paciente.id, file }, {
       onError: e => {
         const d = e instanceof ApiError ? e.body?.detail : null
-        window.alert(Array.isArray(d) ? d.join(' ') : (d ?? 'No se pudo subir la imagen.'))
+        void aviso({
+          mensaje: Array.isArray(d) ? d.join(' ') : (d ?? 'No se pudo subir la imagen.'),
+          tipo: 'error',
+        })
       },
     })
   }
@@ -188,6 +197,15 @@ export default function ExpedienteDrawer({
                       </AcordeonItem>
                       <AcordeonItem title="Diagnósticos" icon={ClipboardCheck}>
                         {() => <DiagnosticosTab paciente={paciente} puedeEditar={editarClinico} />}
+                      </AcordeonItem>
+                      <AcordeonItem title="Recetas" icon={Pill}>
+                        {() => (
+                          <RecetasTab
+                            paciente={paciente}
+                            puedeEmitir={emitirReceta}
+                            puedeAnular={anularReceta}
+                          />
+                        )}
                       </AcordeonItem>
                     </>
                   )}

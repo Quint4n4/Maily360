@@ -5,7 +5,7 @@ import { useUpdatePatient } from '../../hooks/pacientes'
 import type { PatientOut } from '../../types/paciente'
 import {
   CamposContacto, CamposDatosPersonales, CamposDomicilio, CamposNom004,
-  SECCION_LABEL, erroresDePaciente, usePacienteForm,
+  SECCION_LABEL, erroresDePaciente, hayErroresFormato, usePacienteForm,
 } from './pacienteForm'
 
 interface EditarPacienteDrawerProps {
@@ -21,10 +21,16 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
   // Limpiar errores al cambiar de paciente.
   useEffect(() => { setErrores([]) }, [paciente])
 
+  const formatoInvalido = hayErroresFormato(form)
+
   const guardar = async () => {
     if (!paciente) return
     const faltan = validar()
     if (faltan.length) { setErrores(faltan); return }
+    if (formatoInvalido) {
+      setErrores(['Revisa los campos marcados en rojo antes de guardar.'])
+      return
+    }
     setErrores([])
     try {
       await actualizar.mutateAsync({ id: paciente.id, input: construirInput() })
@@ -108,7 +114,7 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
               <button onClick={onClose} disabled={actualizar.isPending} className="btn-secondary flex-1 disabled:opacity-60">Cancelar</button>
               <button
                 onClick={guardar}
-                disabled={actualizar.isPending}
+                disabled={actualizar.isPending || formatoInvalido}
                 className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
                 style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
               >

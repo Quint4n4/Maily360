@@ -4,6 +4,9 @@ import { X, Info, AlertCircle, Loader2 } from 'lucide-react'
 import { useCreatePatient } from '../../hooks/pacientes'
 import { ApiError } from '../../lib/http'
 import type { Sex } from '../../types/paciente'
+import {
+  MSG, errorDeCampo, esCurpValido, esEmailValido, esTelefonoValido,
+} from '../../lib/validacion'
 
 interface NuevoPacienteDrawerProps {
   open: boolean
@@ -39,6 +42,12 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }))
 
+  // Errores de FORMATO (solo UX). Vacío = sin error. El backend revalida.
+  const errPhone = errorDeCampo(form.phone, esTelefonoValido, MSG.telefono)
+  const errEmail = errorDeCampo(form.email, esEmailValido, MSG.email)
+  const errCurp = errorDeCampo(form.curp, esCurpValido, MSG.curp)
+  const formatoInvalido = Boolean(errPhone || errEmail || errCurp)
+
   const cerrar = () => {
     setForm(FORM_VACIO)
     setErrores([])
@@ -55,6 +64,10 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
     if (!form.sex) faltan.push('El sexo es obligatorio.')
     if (!form.phone.trim()) faltan.push('El teléfono es obligatorio.')
     if (faltan.length) { setErrores(faltan); return }
+    if (formatoInvalido) {
+      setErrores(['Revisa los campos marcados en rojo antes de guardar.'])
+      return
+    }
 
     try {
       await crear.mutateAsync({
@@ -159,11 +172,26 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
                 <div className="space-y-3">
                   <div>
                     <label className="label">Teléfono</label>
-                    <input className="input" value={form.phone} onChange={set('phone')} placeholder="55 1234 5678" />
+                    <input
+                      className={`input${errPhone ? ' input-error' : ''}`}
+                      inputMode="tel"
+                      value={form.phone}
+                      onChange={set('phone')}
+                      placeholder="55 1234 5678"
+                    />
+                    {errPhone && <p className="mt-1 text-xs text-red-600">{errPhone}</p>}
                   </div>
                   <div>
                     <label className="label">Email <span className="text-gray-400 font-normal">(opcional)</span></label>
-                    <input type="email" className="input" value={form.email} onChange={set('email')} placeholder="paciente@correo.mx" />
+                    <input
+                      type="email"
+                      className={`input${errEmail ? ' input-error' : ''}`}
+                      inputMode="email"
+                      value={form.email}
+                      onChange={set('email')}
+                      placeholder="paciente@correo.mx"
+                    />
+                    {errEmail && <p className="mt-1 text-xs text-red-600">{errEmail}</p>}
                   </div>
                 </div>
               </section>
@@ -172,7 +200,14 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
                 <p className={SECCION}>Identificación</p>
                 <div>
                   <label className="label">CURP <span className="text-gray-400 font-normal">(opcional)</span></label>
-                  <input className="input uppercase" maxLength={18} value={form.curp} onChange={set('curp')} placeholder="18 caracteres" />
+                  <input
+                    className={`input uppercase${errCurp ? ' input-error' : ''}`}
+                    maxLength={18}
+                    value={form.curp}
+                    onChange={set('curp')}
+                    placeholder="18 caracteres"
+                  />
+                  {errCurp && <p className="mt-1 text-xs text-red-600">{errCurp}</p>}
                 </div>
               </section>
 
@@ -192,7 +227,7 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
               <button onClick={cerrar} disabled={crear.isPending} className="btn-secondary flex-1 disabled:opacity-60">Cancelar</button>
               <button
                 onClick={guardar}
-                disabled={crear.isPending}
+                disabled={crear.isPending || formatoInvalido}
                 className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
                 style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
               >

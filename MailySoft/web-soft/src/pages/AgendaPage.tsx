@@ -16,6 +16,7 @@ import type { Appointment, AppointmentStatus, AgendaBlock, AppointmentModality }
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
 import { puedeAgendar, puedeCambiarEstadoCita } from '../auth/permisos'
+import { useAviso } from '../components/common/DialogProvider'
 
 /* ─── Rejilla horaria 9:00–17:30 ─────────────────────────────────────────── */
 const SLOTS = Array.from({ length: 18 }, (_, i) => {
@@ -85,6 +86,7 @@ export default function AgendaPage() {
   const soyDoctor = !!user?.doctor_id
   const cambiarEstado = useChangeAppointmentStatus()
   const reactivar = useReactivateAppointment()
+  const aviso = useAviso()
 
   const dayKey = toDayKey(selectedDate)
   // Un horario "ya pasó" si su hora de inicio es anterior a ahora (no se agenda en el pasado).
@@ -188,7 +190,7 @@ export default function AgendaPage() {
         onError: (e) => {
           const detail = e instanceof ApiError ? e.body?.detail : null
           const msg = Array.isArray(detail) ? detail.join(' ') : (detail ?? 'No se pudo cambiar el estado de la cita.')
-          window.alert(msg)
+          void aviso({ mensaje: msg, tipo: 'error' })
         },
       },
     )
@@ -542,7 +544,7 @@ export default function AgendaPage() {
         onCambiarEstado={handleCambiarEstado}
         cambiando={cambiarEstado.isPending}
         reactivando={reactivar.isPending}
-        onReactivar={citaSel ? () => { const id = citaSel.id; reactivar.mutate(id, { onError: e => window.alert(e instanceof ApiError ? (Array.isArray(e.body?.detail) ? e.body.detail.join(' ') : e.body?.detail ?? 'No se pudo reactivar.') : 'No se pudo reactivar.') }); setCitaSel(null) } : undefined}
+        onReactivar={citaSel ? () => { const id = citaSel.id; reactivar.mutate(id, { onError: e => void aviso({ mensaje: e instanceof ApiError ? (Array.isArray(e.body?.detail) ? e.body.detail.join(' ') : e.body?.detail ?? 'No se pudo reactivar.') : 'No se pudo reactivar.', tipo: 'error' }) }); setCitaSel(null) } : undefined}
         onReagendar={citaSel ? () => { setReagendarCita(citaSel); setCitaSel(null) } : undefined}
       />
 

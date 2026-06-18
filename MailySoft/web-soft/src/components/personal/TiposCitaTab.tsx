@@ -2,6 +2,7 @@ import { Loader2, Pencil, Trash2 } from 'lucide-react'
 import { useAppointmentTypesManage, useDeactivateAppointmentType } from '../../hooks/agenda'
 import type { AppointmentType } from '../../types/agenda'
 import type { TipoCitaEdit } from './NuevoTipoCitaDrawer'
+import { useConfirm } from '../common/DialogProvider'
 
 interface Props {
   editar: boolean
@@ -11,9 +12,10 @@ interface Props {
 export default function TiposCitaTab({ editar, onEditar }: Props) {
   const { data: tipos, isLoading, isError } = useAppointmentTypesManage()
   const baja = useDeactivateAppointmentType()
+  const confirmar = useConfirm()
 
-  const desactivar = (t: AppointmentType) => {
-    if (!window.confirm(`¿Desactivar el tipo de cita “${t.name}”? Dejará de aparecer al agendar.`)) return
+  const desactivar = async (t: AppointmentType) => {
+    if (!(await confirmar({ titulo: 'Desactivar tipo de cita', mensaje: `¿Desactivar el tipo de cita “${t.name}”? Dejará de aparecer al agendar.`, peligro: true, textoConfirmar: 'Desactivar' }))) return
     baja.mutate(t.id)
   }
 

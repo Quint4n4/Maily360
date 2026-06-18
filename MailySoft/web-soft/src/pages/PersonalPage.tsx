@@ -10,6 +10,7 @@ import { useConsultoriosManage, useDeactivateConsultorio } from '../hooks/person
 import type { Consultorio as ConsultorioApi } from '../types/personal'
 import { useRole } from '../auth/RoleContext'
 import { puedeEditar } from '../auth/permisos'
+import { useConfirm } from '../components/common/DialogProvider'
 
 type Tab = 'equipo' | 'consultorios' | 'tipos'
 const TAB_LABEL: Record<Tab, string> = { equipo: 'Equipo', consultorios: 'Consultorios', tipos: 'Tipos de cita' }
@@ -29,13 +30,19 @@ export default function PersonalPage() {
 
   const consultoriosQ = useConsultoriosManage()
   const bajaConsul = useDeactivateConsultorio()
+  const confirmar = useConfirm()
   const consultorios: ConsultorioApi[] = consultoriosQ.data?.results ?? []
 
   const editarConsultorio = (c: ConsultorioApi) =>
     setEditConsul({ id: c.id, name: c.name, location: c.location, color_hex: c.color_hex })
 
-  const desactivarConsultorio = (c: ConsultorioApi) => {
-    if (!window.confirm(`¿Desactivar el consultorio “${c.name}”? Dejará de aparecer en la agenda.`)) return
+  const desactivarConsultorio = async (c: ConsultorioApi) => {
+    if (!(await confirmar({
+      titulo: 'Desactivar consultorio',
+      mensaje: `¿Desactivar el consultorio “${c.name}”? Dejará de aparecer en la agenda.`,
+      peligro: true,
+      textoConfirmar: 'Desactivar',
+    }))) return
     bajaConsul.mutate(c.id)
   }
 

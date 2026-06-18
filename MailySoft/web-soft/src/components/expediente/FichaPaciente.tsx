@@ -31,7 +31,7 @@ import { errorMsg } from '../../lib/apiErrors'
 import { Card, Cargando, SEVERITY_OPTIONS } from './ui'
 import {
   CamposContacto, CamposDatosPersonales, CamposDomicilio, CamposNom004,
-  SECCION_LABEL, erroresDePaciente, usePacienteForm,
+  SECCION_LABEL, erroresDePaciente, hayErroresFormato, usePacienteForm,
 } from '../contactos/pacienteForm'
 
 /** Color de la bandera de alergia según severidad. */
@@ -212,9 +212,15 @@ function FichaEditar({
   const [errores, setErrores] = useState<string[]>([])
   const actualizar = useUpdatePatient()
 
+  const formatoInvalido = hayErroresFormato(form)
+
   const guardar = async () => {
     const faltan = validar()
     if (faltan.length) { setErrores(faltan); return }
+    if (formatoInvalido) {
+      setErrores(['Revisa los campos marcados en rojo antes de guardar.'])
+      return
+    }
     setErrores([])
     try {
       await actualizar.mutateAsync({ id: paciente.id, input: construirInput() })
@@ -267,7 +273,7 @@ function FichaEditar({
           Cancelar
         </button>
         <button
-          type="button" onClick={guardar} disabled={actualizar.isPending}
+          type="button" onClick={guardar} disabled={actualizar.isPending || formatoInvalido}
           className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
           style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
         >

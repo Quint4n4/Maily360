@@ -3,6 +3,7 @@ import { useClinicaDetail, useSetClinicaEstado } from '../../hooks/plataforma'
 import { ESTADO_CLINICA } from '../../data/clinicas'
 import { formatFechaCorta, formatMesAnio } from '../../lib/fecha'
 import type { ClinicaDetail } from '../../types/plataforma'
+import { useConfirm } from '../common/DialogProvider'
 
 interface Props {
   clinicaId: string | null
@@ -14,12 +15,18 @@ interface Props {
 export default function ClinicaDetailDrawer({ clinicaId, puedeEditar, onClose }: Props) {
   const { data, isLoading, isError } = useClinicaDetail(clinicaId)
   const cambiarEstado = useSetClinicaEstado()
+  const confirmar = useConfirm()
 
   if (!clinicaId) return null
 
-  const toggleEstado = (c: ClinicaDetail) => {
+  const toggleEstado = async (c: ClinicaDetail) => {
     const suspender = c.status !== 'suspended'
-    if (suspender && !window.confirm(`¿Suspender a "${c.name}"? Quedará bloqueada hasta reactivarla.`)) return
+    if (suspender && !(await confirmar({
+      titulo: 'Suspender clínica',
+      mensaje: `¿Suspender a "${c.name}"? Quedará bloqueada hasta reactivarla.`,
+      peligro: true,
+      textoConfirmar: 'Suspender',
+    }))) return
     cambiarEstado.mutate({ id: c.id, status: suspender ? 'suspended' : 'active' })
   }
 

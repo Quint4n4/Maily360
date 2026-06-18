@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Clock, MessageCircle, Hash } from 'lucide-react'
 import { Doctor } from '../../data/personal'
+import { useAviso } from '../common/DialogProvider'
 
 interface Props {
   open: boolean
@@ -48,6 +49,7 @@ export default function ConfiguracionAgendaModal({ open, doctor, onClose }: Prop
   const [offsets, setOffsets]         = useState<number[]>([1440, 120])
   const [formato, setFormato]         = useState('EXP-####')
   const [reiniciar, setReiniciar]     = useState(false)
+  const aviso = useAviso()
 
   useEffect(() => {
     if (open && doctor) setDuracion(String(doctor.duracion))
@@ -58,9 +60,9 @@ export default function ConfiguracionAgendaModal({ open, doctor, onClose }: Prop
     if (min && !offsets.includes(min)) setOffsets([...offsets, min].sort((a, b) => b - a))
   }
 
-  const guardar = () => {
+  const guardar = async () => {
     /* TODO: PATCH duración → /personal/doctores/<id>/ ; recordatorios/expediente → /agenda/config/ */
-    alert('✅ Configuración guardada (demo)')
+    await aviso({ mensaje: 'Configuración guardada (demo)', tipo: 'exito' })
     onClose()
   }
 

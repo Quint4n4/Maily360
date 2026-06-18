@@ -8,6 +8,7 @@ import { usePlatformClinicas, useSetClinicaEstado } from '../../hooks/plataforma
 import { formatMesAnio } from '../../lib/fecha'
 import NuevaClinicaModal from '../../components/plataforma/NuevaClinicaModal'
 import ClinicaDetailDrawer from '../../components/plataforma/ClinicaDetailDrawer'
+import { useConfirm } from '../../components/common/DialogProvider'
 import type { ClinicaPlat, EstadoClinica } from '../../types/plataforma'
 
 type Filtro = 'todas' | EstadoClinica
@@ -28,6 +29,7 @@ export default function ClinicasPage() {
   const [nuevaOpen, setNuevaOpen] = useState(false)
   const [detalleId, setDetalleId] = useState<string | null>(null)
   const cambiarEstado = useSetClinicaEstado()
+  const confirmar = useConfirm()
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 350)
@@ -41,9 +43,14 @@ export default function ClinicasPage() {
   const lista = data?.results ?? []
   const total = data?.count ?? 0
 
-  const toggleEstado = (c: ClinicaPlat) => {
+  const toggleEstado = async (c: ClinicaPlat) => {
     const suspender = c.status !== 'suspended'
-    if (suspender && !window.confirm(`¿Suspender a "${c.name}"? La clínica quedará bloqueada hasta reactivarla.`)) return
+    if (suspender && !(await confirmar({
+      titulo: 'Suspender clínica',
+      mensaje: `¿Suspender a "${c.name}"? La clínica quedará bloqueada hasta reactivarla.`,
+      peligro: true,
+      textoConfirmar: 'Suspender',
+    }))) return
     cambiarEstado.mutate({ id: c.id, status: suspender ? 'suspended' : 'active' })
   }
 

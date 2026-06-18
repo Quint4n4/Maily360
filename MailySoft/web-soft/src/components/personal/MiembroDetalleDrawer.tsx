@@ -8,6 +8,7 @@ import { useUpdateMember, useUploadMemberAvatar } from '../../hooks/miembros'
 import { useDoctorsManage, useCreateDoctor, useUpdateDoctor, useConsultoriosManage } from '../../hooks/personal'
 import { useAuth } from '../../auth/AuthContext'
 import AvatarUploader from '../common/AvatarUploader'
+import { useConfirm } from '../common/DialogProvider'
 import { ApiError } from '../../lib/http'
 import { ROLES } from '../../auth/permisos'
 import type { ClinicRole } from '../../auth/permisos'
@@ -82,6 +83,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
   const actualizarDoctor = useUpdateDoctor()
   const subirAvatar = useUploadMemberAvatar()
   const { reloadMe } = useAuth()
+  const confirmar = useConfirm()
 
   // Perfil médico asociado (por email) si el miembro es médico.
   const doctorPerfil = miembro && miembro.role === 'doctor'
@@ -130,7 +132,12 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
 
   const toggleBloqueo = async () => {
     const accion = miembro.is_blocked ? 'reactivar' : 'bloquear'
-    if (!window.confirm(`¿Seguro que quieres ${accion} la cuenta de ${miembro.user.full_name}?`)) return
+    if (!(await confirmar({
+      titulo: miembro.is_blocked ? 'Reactivar cuenta' : 'Bloquear cuenta',
+      mensaje: `¿Seguro que quieres ${accion} la cuenta de ${miembro.user.full_name}?`,
+      peligro: !miembro.is_blocked,
+      textoConfirmar: miembro.is_blocked ? 'Reactivar' : 'Bloquear',
+    }))) return
     try {
       await actualizar.mutateAsync({ id: miembro.id, input: { blocked: !miembro.is_blocked } })
       onClose()
