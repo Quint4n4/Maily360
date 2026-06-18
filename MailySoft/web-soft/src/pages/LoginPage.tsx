@@ -6,6 +6,11 @@ import { useAuth } from '../auth/AuthContext'
 import { inicioDeRol } from '../auth/permisos'
 import { ApiError } from '../lib/http'
 import type { Me } from '../types/api'
+<<<<<<< Updated upstream
+=======
+
+import { login } from '../api/auth'
+>>>>>>> Stashed changes
 
 interface LoginForm { email: string; password: string }
 
@@ -58,11 +63,24 @@ export default function LoginPage() {
     if (!form.email || !form.password) { setError('Por favor completa todos los campos.'); return }
     setIsLoading(true); setError(null)
     try {
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+      await login(form.email, form.password)
+      navigate('/finanzas')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor.')
+=======
+>>>>>>> Stashed changes
       // Login real: setea cookie httpOnly de refresh + access en memoria, y trae /me/.
       const profile = await login({ email: form.email.trim(), password: form.password })
       navigate(destinoTrasLogin(profile, from), { replace: true })
     } catch (err) {
       setError(mensajeDeError(err))
+<<<<<<< Updated upstream
+=======
+>>>>>>> 9f3cd4149619be4d5c604a117d939f7904aad547
+>>>>>>> Stashed changes
     } finally {
       setIsLoading(false)
     }

@@ -11,6 +11,7 @@ import AgendaPage from './pages/AgendaPage'
 import ContactosPage from './pages/ContactosPage'
 import PersonalPage from './pages/PersonalPage'
 import FinanzasPage from './pages/FinanzasPage'
+<<<<<<< Updated upstream
 import NotasPage from './pages/NotasPage'
 import AlertaCitas from './components/agenda/AlertaCitas'
 import DashboardPlataformaPage from './pages/plataforma/DashboardPage'
@@ -44,6 +45,54 @@ function PlatGuard({ modulo, children }: { modulo: PlatModulo; children: ReactEl
 
 export default function App() {
   return (
+=======
+<<<<<<< HEAD
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/finanzas" element={<FinanzasPage />} />
+      <Route path="/agenda" element={<AgendaPage />} />
+      <Route path="/contactos" element={<ContactosPage />} />
+      <Route path="/personal" element={<PersonalPage />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+=======
+import NotasPage from './pages/NotasPage'
+import AlertaCitas from './components/agenda/AlertaCitas'
+import DashboardPlataformaPage from './pages/plataforma/DashboardPage'
+import ClinicasPage from './pages/plataforma/ClinicasPage'
+import SuscripcionesPage from './pages/plataforma/SuscripcionesPage'
+import UsuariosPage from './pages/plataforma/UsuariosPage'
+import SistemaPage from './pages/plataforma/SistemaPage'
+
+/* App de la clínica: exige sesión válida (RequireAuth) y luego protege por rol */
+function Guard({ modulo, children }: { modulo: Modulo; children: ReactElement }) {
+  const { role } = useRole()
+  if (!accesoModulo(role, modulo)) return <Navigate to={inicioDeRol(role)} replace />
+  return children
+}
+
+/* Atajo: ruta de clínica protegida por sesión + rol */
+function ClinicRoute({ modulo, children }: { modulo: Modulo; children: ReactElement }) {
+  return (
+    <RequireAuth>
+      <Guard modulo={modulo}>{children}</Guard>
+    </RequireAuth>
+  )
+}
+
+/* Panel de plataforma: protege por rol de plataforma (aún con datos mock, sin backend) */
+function PlatGuard({ modulo, children }: { modulo: PlatModulo; children: ReactElement }) {
+  const { role } = usePlatformRole()
+  if (!accesoModuloPlat(role, modulo)) return <Navigate to={inicioPlat(role)} replace />
+  return children
+}
+
+export default function App() {
+  return (
+>>>>>>> Stashed changes
     <AuthProvider>
       <RoleProvider>
         <PlatformRoleProvider>
@@ -73,5 +122,9 @@ export default function App() {
         </PlatformRoleProvider>
       </RoleProvider>
     </AuthProvider>
+<<<<<<< Updated upstream
+=======
+>>>>>>> 9f3cd4149619be4d5c604a117d939f7904aad547
+>>>>>>> Stashed changes
   )
 }

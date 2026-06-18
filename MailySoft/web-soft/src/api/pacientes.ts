@@ -1,4 +1,25 @@
 /**
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+ * Capa mínima de API de pacientes (solo búsqueda) para los selectores del
+ * módulo finanzas. La gestión completa de pacientes vive en el módulo Contactos.
+ */
+
+import { http } from '../lib/http'
+import type { Paginated } from './finanzas'
+
+export interface PatientLite {
+  id: string
+  full_name: string
+  record_number: string
+  phone: string
+}
+
+export function searchPatients(search: string): Promise<Paginated<PatientLite>> {
+  return http.get<Paginated<PatientLite>>('/pacientes/', search ? { search } : {})
+=======
+>>>>>>> Stashed changes
  * api/pacientes — CRUD de pacientes contra el backend real.
  * Todo pasa por el cliente http central (Bearer + CSRF + refresh automático).
  *
@@ -63,4 +84,8 @@ export async function uploadPatientAvatar(id: string, file: File): Promise<Patie
   const fd = new FormData()
   fd.append('avatar', file)
   return request<PatientOut>(`/pacientes/${id}/avatar/`, { method: 'POST', body: fd })
+<<<<<<< Updated upstream
+=======
+>>>>>>> 9f3cd4149619be4d5c604a117d939f7904aad547
+>>>>>>> Stashed changes
 }

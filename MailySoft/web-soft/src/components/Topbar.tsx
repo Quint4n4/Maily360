@@ -53,7 +53,20 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
             return (
               <button
                 key={key}
+<<<<<<< Updated upstream
                 onClick={() => navigate(`/${key}`)}
+=======
+<<<<<<< HEAD
+                onClick={() => {
+                  if (key === 'finanzas') navigate('/finanzas')
+                  else if (key === 'agenda') navigate('/agenda')
+                  else if (key === 'contactos') navigate('/contactos')
+                  else if (key === 'personal') navigate('/personal')
+                }}
+=======
+                onClick={() => navigate(`/${key}`)}
+>>>>>>> 9f3cd4149619be4d5c604a117d939f7904aad547
+>>>>>>> Stashed changes
                 className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors"
                 style={{
                   background: isActive ? 'rgba(201,162,39,0.14)' : 'transparent',

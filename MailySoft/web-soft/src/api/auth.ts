@@ -1,4 +1,102 @@
 /**
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+ * Autenticación: login JWT + perfil /me/.
+ *
+ * El refresh token vive en cookie httpOnly (maily_refresh); el access en memoria
+ * (tokenStore). Login y refresh usan fetch directo porque aún no hay token.
+ */
+
+import { http } from '../lib/http'
+import { clearAuth, getAccessToken, setAccessToken, setActiveRole } from '../lib/tokenStore'
+import type { Role } from '../auth/permisos'
+
+const API_BASE: string =
+  (import.meta as { env?: Record<string, string> }).env?.VITE_API_URL ??
+  'http://localhost:8000'
+
+const API_PREFIX = '/api/v1'
+
+export interface MeProfile {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  full_name: string
+  active_role: Role | null
+  active_role_display: string | null
+  active_tenant: { id: string; name: string; slug: string } | null
+}
+
+export async function login(email: string, password: string): Promise<MeProfile> {
+  const response = await fetch(`${API_BASE}${API_PREFIX}/auth/login/`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+
+  if (!response.ok) {
+    let message = 'Correo o contraseña incorrectos.'
+    try {
+      const body = (await response.json()) as { detail?: unknown }
+      if (body.detail) {
+        message = Array.isArray(body.detail) ? body.detail.join(' ') : String(body.detail)
+      }
+    } catch {
+      /* sin cuerpo JSON */
+    }
+    throw new Error(message)
+  }
+
+  const data = (await response.json()) as { access?: string }
+  if (!data.access) throw new Error('El servidor no devolvió un token de acceso.')
+  setAccessToken(data.access)
+
+  const me = await fetchMe()
+  if (me.active_role) setActiveRole(me.active_role)
+  return me
+}
+
+export async function fetchMe(): Promise<MeProfile> {
+  return http.get<MeProfile>('/me/')
+}
+
+/** Intenta restaurar sesión vía cookie de refresh (útil tras F5). */
+export async function tryRestoreSession(): Promise<MeProfile | null> {
+  if (getAccessToken()) {
+    try {
+      const me = await fetchMe()
+      if (me.active_role) setActiveRole(me.active_role)
+      return me
+    } catch {
+      clearAuth()
+    }
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}${API_PREFIX}/auth/refresh/`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!response.ok) return null
+    const data = (await response.json()) as { access?: string }
+    if (!data.access) return null
+    setAccessToken(data.access)
+    const me = await fetchMe()
+    if (me.active_role) setActiveRole(me.active_role)
+    return me
+  } catch {
+    return null
+  }
+}
+
+export function logout(): void {
+  clearAuth()
+=======
+>>>>>>> Stashed changes
  * api/auth — funciones de autenticación. Envuelven el cliente http central.
  *
  * Patrón híbrido:
@@ -47,4 +145,8 @@ export async function me(): Promise<Me> {
 /** POST /auth/logout/ — invalida el refresh y borra la cookie. 205 sin cuerpo. */
 export async function logout(): Promise<void> {
   await request<void>('/auth/logout/', { method: 'POST' })
+<<<<<<< Updated upstream
+=======
+>>>>>>> 9f3cd4149619be4d5c604a117d939f7904aad547
+>>>>>>> Stashed changes
 }
