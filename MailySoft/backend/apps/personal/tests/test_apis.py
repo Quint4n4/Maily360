@@ -753,3 +753,52 @@ class TestScheduleDeleteTenantIsolation:
             "El horario del tenant B fue desactivado por un usuario del tenant A "
             "(fuga cross-tenant en el DELETE)."
         )
+
+
+# ---------------------------------------------------------------------------
+# Pendiente frontend: DoctorOutputSerializer expone sello, foto, cedulas_adicionales
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_doctor_output_serializer_includes_profile_fields() -> None:
+    """DoctorOutputSerializer incluye sello, foto y cedulas_adicionales (pendiente frontend).
+
+    Verifica que los tres campos añadidos para el frontend estén presentes en el output,
+    incluso cuando son None/vacío (el frontend necesita conocer su existencia).
+    """
+    from apps.personal.serializers import DoctorOutputSerializer
+
+    doctor = DoctorFactory()
+    # Agregar prefetch para evitar N+1 en serializer
+    from apps.personal.models import Doctor
+
+    doctor_refreshed = (
+        Doctor.objects.prefetch_related("consultorios").select_related("membership__user").get(pk=doctor.pk)
+    )
+
+    data = DoctorOutputSerializer(doctor_refreshed).data
+
+    assert "sello" in data, "DoctorOutputSerializer no incluye el campo 'sello'"
+    assert "foto" in data, "DoctorOutputSerializer no incluye el campo 'foto'"
+    assert "cedulas_adicionales" in data, (
+        "DoctorOutputSerializer no incluye el campo 'cedulas_adicionales'"
+    )
+
+
+@pytest.mark.django_db
+def test_doctor_output_serializer_cedulas_content() -> None:
+    """cedulas_adicionales en output refleja el valor guardado."""
+    from apps.personal.serializers import DoctorOutputSerializer
+    from apps.personal.models import Doctor
+
+    doctor = DoctorFactory()
+    doctor.cedulas_adicionales = "11111111,22222222"
+    doctor.save(update_fields=["cedulas_adicionales", "updated_at"])
+
+    doctor_refreshed = (
+        Doctor.objects.prefetch_related("consultorios").select_related("membership__user").get(pk=doctor.pk)
+    )
+    data = DoctorOutputSerializer(doctor_refreshed).data
+
+    assert data["cedulas_adicionales"] == "11111111,22222222"

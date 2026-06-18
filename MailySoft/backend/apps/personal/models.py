@@ -20,6 +20,25 @@ from django.db.models import Q
 from apps.core.models import TenantAwareModel
 
 
+def _doctor_sello_path(instance: "Doctor", filename: str) -> str:
+    """Ruta para el sello/firma del médico (importada condicionalmente por clinica)."""
+    # Importación inline para evitar dependencia circular personal → clinica.
+    from apps.clinica.models import doctor_sello_path
+    return doctor_sello_path(instance, filename)
+
+
+def _doctor_foto_path(instance: "Doctor", filename: str) -> str:
+    """Ruta para la fotografía del médico."""
+    from apps.clinica.models import doctor_foto_path
+    return doctor_foto_path(instance, filename)
+
+
+def _validate_doctor_image(file: object) -> None:
+    """Valida imagen del médico (JPG/PNG/WEBP, máx 5 MB)."""
+    from apps.core.files import validate_image
+    validate_image(file)
+
+
 class Doctor(TenantAwareModel):
     """Perfil clínico de un médico dentro de un tenant (clínica).
 
@@ -75,6 +94,30 @@ class Doctor(TenantAwareModel):
             "Consultorios donde ESTE médico puede atender. "
             "Vacío = sin restricción (puede usar cualquiera). "
             "Todos deben pertenecer al mismo tenant que el doctor."
+        ),
+    )
+    # --- Campos agregados por módulo Mi Consultorio ---
+    sello = models.ImageField(
+        upload_to=_doctor_sello_path,
+        null=True,
+        blank=True,
+        validators=[_validate_doctor_image],
+        help_text="Sello o firma escaneada del médico (JPG/PNG/WEBP, máx 5 MB).",
+    )
+    foto = models.ImageField(
+        upload_to=_doctor_foto_path,
+        null=True,
+        blank=True,
+        validators=[_validate_doctor_image],
+        help_text="Fotografía del médico para encabezados de receta (JPG/PNG/WEBP, máx 5 MB).",
+    )
+    cedulas_adicionales = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text=(
+            "Cédulas profesionales adicionales separadas por coma "
+            "(especialidades, subespecialidades)."
         ),
     )
 

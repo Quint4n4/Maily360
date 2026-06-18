@@ -36,6 +36,10 @@ class DoctorOutputSerializer(serializers.ModelSerializer):
     de la membresía, y la lista mínima de consultorios asignados ({id, name}).
     No expone membership_id directo (implementación interna).
 
+    Incluye sello, foto (URLs absolutas via ImageField serialization) y
+    cedulas_adicionales para que el frontend del Expediente/Mi Consultorio
+    pueda renderizar el perfil completo del médico sin un endpoint adicional.
+
     Requiere que el queryset haya llamado prefetch_related("consultorios")
     para evitar N+1 al listar múltiples doctores.
     """
@@ -44,6 +48,8 @@ class DoctorOutputSerializer(serializers.ModelSerializer):
     user_email = serializers.CharField(source="membership.user.email", read_only=True)
     role = serializers.CharField(source="membership.role", read_only=True)
     consultorios = _ConsultorioMinimalSerializer(many=True, read_only=True)
+    sello = serializers.ImageField(read_only=True, use_url=True)
+    foto = serializers.ImageField(read_only=True, use_url=True)
 
     def get_full_name(self, obj: Doctor) -> str:
         return obj.full_name
@@ -59,6 +65,9 @@ class DoctorOutputSerializer(serializers.ModelSerializer):
             "specialty",
             "default_appointment_duration",
             "bio_short",
+            "sello",
+            "foto",
+            "cedulas_adicionales",
             "is_active",
             "consultorios",
             "created_at",
