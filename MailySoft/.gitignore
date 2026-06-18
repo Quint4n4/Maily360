@@ -18,6 +18,11 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Excepción: src/lib del frontend es CÓDIGO FUENTE (cliente HTTP, validación,
+# helpers), NO un directorio de build de Python. La regla `lib/` de arriba lo
+# ocultaba — esto lo vuelve a versionar.
+!web-soft/src/lib/
+!web-soft/src/lib/**
 parts/
 sdist/
 var/
