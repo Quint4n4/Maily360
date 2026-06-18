@@ -35,6 +35,7 @@ Nota MEDIO-4: PatientNom004InputSerializer y PatientNom004OutputSerializer
   única fuente de verdad.
 """
 
+import re
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -62,6 +63,15 @@ from apps.expediente.validators import (
     validate_no_patologicos,
     validate_personales_patologicos,
 )
+
+
+# ---------------------------------------------------------------------------
+# Constantes de validación
+# ---------------------------------------------------------------------------
+
+# B6: patrón CIE-10 estándar: letra mayúscula + 2 dígitos + subcategoría opcional.
+# Ejemplos válidos: "J06", "J06.9", "A01.0", "Z00.00".
+_CIE10_RE = re.compile(r"^[A-Z]\d{2}(\.\d{1,2})?$")
 
 
 # ---------------------------------------------------------------------------
@@ -740,7 +750,7 @@ class DiagnosisInputSerializer(serializers.Serializer):
         required=False,
         default="",
         allow_blank=True,
-        help_text="Código CIE-10 (texto libre en v1).",
+        help_text="Código CIE-10 (ej. J06.9). Normalizado a mayúsculas.",
     )
     kind = serializers.ChoiceField(
         choices=DiagnosisKind.choices,
@@ -763,6 +773,31 @@ class DiagnosisInputSerializer(serializers.Serializer):
                 "La descripción del diagnóstico no puede estar vacía."
             )
         return value
+
+    def validate_cie_code(self, value: str) -> str:
+        """B6: valida y normaliza el código CIE-10.
+
+        Permite vacío. Si se provee, normaliza a mayúsculas y valida el formato
+        estándar: letra + 2 dígitos + subcategoría opcional (ej. J06.9).
+
+        Args:
+            value: código CIE-10 recibido del cliente.
+
+        Returns:
+            Código en mayúsculas si es válido, o cadena vacía.
+
+        Raises:
+            serializers.ValidationError: si el formato no coincide con CIE-10.
+        """
+        if not value:
+            return ""
+        normalized = value.strip().upper()
+        if not _CIE10_RE.match(normalized):
+            raise serializers.ValidationError(
+                "Código CIE-10 inválido. Formato esperado: "
+                "letra mayúscula + 2 dígitos + subcategoría opcional (ej. J06.9, A01)."
+            )
+        return normalized
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Rechaza campos no declarados (D-EC-7)."""

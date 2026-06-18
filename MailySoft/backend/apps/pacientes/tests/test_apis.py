@@ -874,3 +874,125 @@ class TestPatientJWTIsolation:
             f"Aislamiento cross-tenant fallido: se obtuvieron {len(results)} pacientes "
             f"en lugar de 2 del tenant A."
         )
+
+
+# ---------------------------------------------------------------------------
+# M1 — notes de paciente sin límite (max_length=5000)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_patient_create_notes_over_limit_returns_400() -> None:
+    """POST con notes > 5000 caracteres → 400 (M1)."""
+    tenant = TenantFactory()
+    client = _make_member_client(tenant, role="owner")
+    payload = {**_VALID_PAYLOAD, "notes": "x" * 5001}
+
+    with _tenant_context(tenant):
+        response = client.post(LIST_URL, payload, format="json")
+
+    assert response.status_code == 400
+    assert "notes" in response.data or "notes" in str(response.data)
+
+
+@pytest.mark.django_db
+def test_patient_create_notes_at_limit_succeeds() -> None:
+    """POST con notes exactamente en 5000 caracteres → 201 (M1 límite exacto OK)."""
+    tenant = TenantFactory()
+    client = _make_member_client(tenant, role="owner")
+    payload = {**_VALID_PAYLOAD, "notes": "a" * 5000}
+
+    with _tenant_context(tenant):
+        response = client.post(LIST_URL, payload, format="json")
+
+    assert response.status_code == 201
+
+
+@pytest.mark.django_db
+def test_patient_patch_notes_over_limit_returns_400(db: Any) -> None:
+    """PATCH con notes > 5000 caracteres → 400 (M1 en PatientDetailApi.InputSerializer)."""
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant, is_active=True)
+    client = _make_member_client(tenant, role="owner")
+
+    with _tenant_context(tenant):
+        response = client.patch(
+            _detail_url(patient.id),
+            {"notes": "z" * 5001},
+            format="json",
+        )
+
+    assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# B7 — postal_code sin formato (debe ser exactamente 5 dígitos)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_patient_patch_postal_code_valid_succeeds(db: Any) -> None:
+    """PATCH con postal_code de 5 dígitos → 200 (B7)."""
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant, is_active=True)
+    client = _make_member_client(tenant, role="owner")
+
+    with _tenant_context(tenant):
+        response = client.patch(
+            _detail_url(patient.id),
+            {"postal_code": "39355"},
+            format="json",
+        )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_patient_patch_postal_code_alpha_returns_400(db: Any) -> None:
+    """PATCH con postal_code alfabético → 400 (B7)."""
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant, is_active=True)
+    client = _make_member_client(tenant, role="owner")
+
+    with _tenant_context(tenant):
+        response = client.patch(
+            _detail_url(patient.id),
+            {"postal_code": "abc"},
+            format="json",
+        )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_patient_patch_postal_code_4digits_returns_400(db: Any) -> None:
+    """PATCH con postal_code de 4 dígitos (< 5) → 400 (B7)."""
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant, is_active=True)
+    client = _make_member_client(tenant, role="owner")
+
+    with _tenant_context(tenant):
+        response = client.patch(
+            _detail_url(patient.id),
+            {"postal_code": "1234"},
+            format="json",
+        )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_patient_patch_postal_code_empty_succeeds(db: Any) -> None:
+    """PATCH con postal_code vacío → 200 (B7: campo opcional, vacío permitido)."""
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant, is_active=True)
+    client = _make_member_client(tenant, role="owner")
+
+    with _tenant_context(tenant):
+        response = client.patch(
+            _detail_url(patient.id),
+            {"postal_code": ""},
+            format="json",
+        )
+
+    assert response.status_code == 200

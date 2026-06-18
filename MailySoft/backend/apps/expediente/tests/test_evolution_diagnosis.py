@@ -1675,3 +1675,157 @@ class TestEvolutionNoteNoVacia:
         }
         s = EvolutionNoteInputSerializer(data=data)
         assert s.is_valid(), s.errors
+
+
+# ---------------------------------------------------------------------------
+# B6 — cie_code sin formato CIE-10
+# ---------------------------------------------------------------------------
+
+
+class TestDiagnosisInputCieCode:
+    """B6: DiagnosisInputSerializer.validate_cie_code valida el formato CIE-10."""
+
+    def _make_diagnosis_serializer(self, data: dict) -> Any:  # type: ignore[type-arg]
+        from apps.expediente.serializers import DiagnosisInputSerializer  # noqa: PLC0415
+
+        return DiagnosisInputSerializer(data=data)
+
+    def test_cie_code_valid_with_subcategory(self) -> None:
+        """J06.9 → válido (B6 camino feliz con subcategoría)."""
+        s = self._make_diagnosis_serializer(
+            {"description": "Infección respiratoria", "cie_code": "J06.9"}
+        )
+        assert s.is_valid(), s.errors
+        assert s.validated_data["cie_code"] == "J06.9"
+
+    def test_cie_code_valid_without_subcategory(self) -> None:
+        """A01 → válido (B6: solo letra + 2 dígitos)."""
+        s = self._make_diagnosis_serializer(
+            {"description": "Fiebre tifoidea", "cie_code": "A01"}
+        )
+        assert s.is_valid(), s.errors
+        assert s.validated_data["cie_code"] == "A01"
+
+    def test_cie_code_normalizes_to_uppercase(self) -> None:
+        """j06.9 → normalizado a J06.9 (B6: normalización a mayúsculas)."""
+        s = self._make_diagnosis_serializer(
+            {"description": "Infección", "cie_code": "j06.9"}
+        )
+        assert s.is_valid(), s.errors
+        assert s.validated_data["cie_code"] == "J06.9"
+
+    def test_cie_code_empty_is_allowed(self) -> None:
+        """cie_code vacío → válido (B6: campo opcional)."""
+        s = self._make_diagnosis_serializer(
+            {"description": "Sin código", "cie_code": ""}
+        )
+        assert s.is_valid(), s.errors
+        assert s.validated_data["cie_code"] == ""
+
+    def test_cie_code_missing_is_allowed(self) -> None:
+        """cie_code ausente → válido (B6: campo opcional con default='')."""
+        s = self._make_diagnosis_serializer({"description": "Sin código"})
+        assert s.is_valid(), s.errors
+
+    def test_cie_code_invalid_returns_error(self) -> None:
+        """'xx' → 400 (B6: formato inválido)."""
+        s = self._make_diagnosis_serializer(
+            {"description": "Prueba", "cie_code": "xx"}
+        )
+        assert not s.is_valid()
+        assert "cie_code" in s.errors
+
+    def test_cie_code_numeric_only_returns_error(self) -> None:
+        """'123' → 400 (B6: falta la letra inicial)."""
+        s = self._make_diagnosis_serializer(
+            {"description": "Prueba", "cie_code": "123"}
+        )
+        assert not s.is_valid()
+        assert "cie_code" in s.errors
+
+    def test_cie_code_all_letters_returns_error(self) -> None:
+        """'ABC' → 400 (B6: faltan los 2 dígitos)."""
+        s = self._make_diagnosis_serializer(
+            {"description": "Prueba", "cie_code": "ABC"}
+        )
+        assert not s.is_valid()
+        assert "cie_code" in s.errors
+
+
+# ---------------------------------------------------------------------------
+# M4 — strings de bloques JSON de historia clínica sin límite por valor
+# ---------------------------------------------------------------------------
+
+
+class TestStringBlockMaxLength:
+    """M4: _validate_string_block aplica _STR_BLOCK_MAX_LEN = 2000."""
+
+    def test_string_block_over_limit_raises(self) -> None:
+        """Un valor de string > 2000 chars en personales_patologicos → ValidationError."""
+        from rest_framework.exceptions import ValidationError  # noqa: PLC0415
+
+        from apps.expediente.validators import validate_personales_patologicos  # noqa: PLC0415
+
+        oversized = "x" * 2001
+        with pytest.raises(ValidationError):
+            validate_personales_patologicos({"diabetes": oversized})
+
+    def test_string_block_at_limit_passes(self) -> None:
+        """Un valor de string exactamente en 2000 chars → válido."""
+        from apps.expediente.validators import validate_personales_patologicos  # noqa: PLC0415
+
+        at_limit = "x" * 2000
+        result = validate_personales_patologicos({"diabetes": at_limit})
+        assert result["diabetes"] == at_limit
+
+    def test_heredo_familiares_over_limit_raises(self) -> None:
+        """Un valor de string > 2000 chars en heredo_familiares → ValidationError (M4).
+
+        validate_heredo_familiares NO usa _validate_string_block internamente
+        para los string-keys; el límite se aplica directo en su propio loop.
+        """
+        from rest_framework.exceptions import ValidationError  # noqa: PLC0415
+
+        from apps.expediente.validators import validate_heredo_familiares  # noqa: PLC0415
+
+        oversized = "y" * 2001
+        with pytest.raises(ValidationError):
+            validate_heredo_familiares({"diabetes": oversized})
+
+    def test_heredo_familiares_at_limit_passes(self) -> None:
+        """Un valor de string exactamente en 2000 chars en heredo_familiares → válido."""
+        from apps.expediente.validators import validate_heredo_familiares  # noqa: PLC0415
+
+        at_limit = "y" * 2000
+        result = validate_heredo_familiares({"diabetes": at_limit})
+        assert result["diabetes"] == at_limit
+
+    def test_no_patologicos_over_limit_raises(self) -> None:
+        """no_patologicos con string > 2000 → ValidationError (M4)."""
+        from rest_framework.exceptions import ValidationError  # noqa: PLC0415
+
+        from apps.expediente.validators import validate_no_patologicos  # noqa: PLC0415
+
+        oversized = "z" * 2001
+        with pytest.raises(ValidationError):
+            validate_no_patologicos({"tabaquismo": oversized})
+
+    def test_gineco_obstetricos_over_limit_raises(self) -> None:
+        """gineco_obstetricos con string > 2000 → ValidationError (M4)."""
+        from rest_framework.exceptions import ValidationError  # noqa: PLC0415
+
+        from apps.expediente.validators import validate_gineco_obstetricos  # noqa: PLC0415
+
+        oversized = "g" * 2001
+        with pytest.raises(ValidationError):
+            validate_gineco_obstetricos({"menarca": oversized})
+
+    def test_habitos_alimenticios_over_limit_raises(self) -> None:
+        """habitos_alimenticios con string > 2000 → ValidationError (M4)."""
+        from rest_framework.exceptions import ValidationError  # noqa: PLC0415
+
+        from apps.expediente.validators import validate_habitos_alimenticios  # noqa: PLC0415
+
+        oversized = "h" * 2001
+        with pytest.raises(ValidationError):
+            validate_habitos_alimenticios({"dieta_especial": oversized})

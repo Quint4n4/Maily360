@@ -72,6 +72,10 @@ _EXPLORACION_SISTEMAS: frozenset[str] = frozenset(
 # Helper privado
 # ---------------------------------------------------------------------------
 
+# M4: longitud máxima por valor de string en bloques JSON de historia clínica.
+# 2000 caracteres ≈ una página clínica densa; suficiente para cualquier campo.
+_STR_BLOCK_MAX_LEN: int = 2000
+
 
 def _validate_string_block(
     data: dict[str, Any],
@@ -83,6 +87,7 @@ def _validate_string_block(
     Rechaza:
       - Claves no declaradas en `allowed_keys`.
       - Valores que no sean str o None.
+      - Valores string que superen _STR_BLOCK_MAX_LEN caracteres (M4 anti-DoS).
 
     Args:
         data:         Diccionario del bloque JSON recibido del cliente.
@@ -93,7 +98,8 @@ def _validate_string_block(
         El mismo dict si es válido.
 
     Raises:
-        serializers.ValidationError: si hay claves desconocidas o tipos inválidos.
+        serializers.ValidationError: si hay claves desconocidas, tipos inválidos
+            o strings que superan el límite de longitud.
     """
     unknown = set(data.keys()) - allowed_keys
     if unknown:
@@ -110,6 +116,15 @@ def _validate_string_block(
         if value is not None and not isinstance(value, str):
             raise serializers.ValidationError(
                 {block_name: f"El campo '{key}' debe ser un string o null."}
+            )
+        if isinstance(value, str) and len(value) > _STR_BLOCK_MAX_LEN:
+            raise serializers.ValidationError(
+                {
+                    block_name: (
+                        f"El campo '{key}' no puede superar los "
+                        f"{_STR_BLOCK_MAX_LEN} caracteres."
+                    )
+                }
             )
 
     return data
@@ -279,7 +294,7 @@ def validate_heredo_familiares(data: dict[str, Any]) -> dict[str, Any]:
                     {"heredo_familiares": "El campo 'numero_hermanos' debe ser >= 0."}
                 )
 
-    # Validar las claves de string.
+    # Validar las claves de string (tipo y longitud máxima — M4 anti-DoS).
     for key in _AHF_STRING_KEYS:
         if key in data:
             value = data[key]
@@ -288,6 +303,15 @@ def validate_heredo_familiares(data: dict[str, Any]) -> dict[str, Any]:
                     {
                         "heredo_familiares": (
                             f"El campo '{key}' debe ser un string o null."
+                        )
+                    }
+                )
+            if isinstance(value, str) and len(value) > _STR_BLOCK_MAX_LEN:
+                raise serializers.ValidationError(
+                    {
+                        "heredo_familiares": (
+                            f"El campo '{key}' no puede superar los "
+                            f"{_STR_BLOCK_MAX_LEN} caracteres."
                         )
                     }
                 )
@@ -364,13 +388,22 @@ def validate_no_patologicos(data: dict[str, Any]) -> dict[str, Any]:
                 }
             )
 
-    # Validar las demás claves como strings.
+    # Validar las demás claves como strings (tipo y longitud máxima — M4 anti-DoS).
     for key in _APNP_STRING_KEYS:
         if key in data:
             value = data[key]
             if value is not None and not isinstance(value, str):
                 raise serializers.ValidationError(
                     {"no_patologicos": f"El campo '{key}' debe ser un string o null."}
+                )
+            if isinstance(value, str) and len(value) > _STR_BLOCK_MAX_LEN:
+                raise serializers.ValidationError(
+                    {
+                        "no_patologicos": (
+                            f"El campo '{key}' no puede superar los "
+                            f"{_STR_BLOCK_MAX_LEN} caracteres."
+                        )
+                    }
                 )
 
     return data
@@ -431,7 +464,7 @@ def validate_habitos_alimenticios(data: dict[str, Any]) -> dict[str, Any]:
                     }
                 )
 
-    # Validar las demás claves como strings.
+    # Validar las demás claves como strings (tipo y longitud máxima — M4 anti-DoS).
     for key in _HABITOS_STRING_KEYS:
         if key in data:
             value = data[key]
@@ -440,6 +473,15 @@ def validate_habitos_alimenticios(data: dict[str, Any]) -> dict[str, Any]:
                     {
                         "habitos_alimenticios": (
                             f"El campo '{key}' debe ser un string o null."
+                        )
+                    }
+                )
+            if isinstance(value, str) and len(value) > _STR_BLOCK_MAX_LEN:
+                raise serializers.ValidationError(
+                    {
+                        "habitos_alimenticios": (
+                            f"El campo '{key}' no puede superar los "
+                            f"{_STR_BLOCK_MAX_LEN} caracteres."
                         )
                     }
                 )

@@ -152,7 +152,7 @@ class PatientListCreateApi(TenantAPIView):
         # FIX-B7: validación de CURP con regex RENAPO
         curp = serializers.CharField(max_length=18, default="", allow_blank=True)
         email = serializers.EmailField(default="", allow_blank=True)
-        notes = serializers.CharField(default="", allow_blank=True)
+        notes = serializers.CharField(default="", allow_blank=True, max_length=5000)
 
         def validate_curp(self, value: str) -> str:
             return _validate_curp(value)
@@ -300,13 +300,18 @@ class PatientDetailApi(TenantAPIView):
         # FIX-B7: validación de CURP con regex RENAPO
         curp = serializers.CharField(max_length=18, required=False, allow_blank=True)
         email = serializers.EmailField(required=False, allow_blank=True)
-        notes = serializers.CharField(required=False, allow_blank=True)
+        notes = serializers.CharField(required=False, allow_blank=True, max_length=5000)
         # Campos NOM-004 expediente A1 (plan §3.1) — todos opcionales en PATCH.
         address_street = serializers.CharField(max_length=255, required=False, allow_blank=True)
         address_neighborhood = serializers.CharField(max_length=120, required=False, allow_blank=True)
         city = serializers.CharField(max_length=120, required=False, allow_blank=True)
         state = serializers.CharField(max_length=120, required=False, allow_blank=True)
-        postal_code = serializers.CharField(max_length=10, required=False, allow_blank=True)
+        postal_code = serializers.RegexField(
+            regex=r"^\d{5}$",
+            required=False,
+            allow_blank=True,
+            error_messages={"invalid": "El código postal debe ser exactamente 5 dígitos numéricos."},
+        )
         birthplace = serializers.CharField(max_length=160, required=False, allow_blank=True)
         marital_status = serializers.ChoiceField(
             choices=[("", "Sin especificar")] + list(MaritalStatus.choices),
