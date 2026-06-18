@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ChevronDown, LogOut, User, Building2 } from 'lucide-react'
+import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ChevronDown, LogOut, User, Building2, Briefcase } from 'lucide-react'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
-import { Modulo, accesoModulo, ROLE_LABEL } from '../auth/permisos'
+import { Modulo, accesoModulo, puedeAccederConsultorio, ROLE_LABEL } from '../auth/permisos'
 import CampanaNotificaciones from './CampanaNotificaciones'
 
 interface TopbarProps {
@@ -109,6 +109,15 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
               <button className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 transition-colors">
                 <User className="w-4 h-4 text-gray-400" /> Mi perfil
               </button>
+
+              {puedeAccederConsultorio(role) && (
+                <button
+                  onClick={() => { setMenuOpen(false); navigate('/mi-consultorio') }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 transition-colors"
+                >
+                  <Briefcase className="w-4 h-4 text-gray-400" /> Mi Consultorio
+                </button>
+              )}
 
               {isPlatformStaff && (
                 <button

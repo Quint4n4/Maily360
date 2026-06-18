@@ -13,6 +13,7 @@ import type {
   ExploracionEvolucionEstado,
   ViviendaChoice,
 } from '../../types/expediente'
+import type { MedicationFormValue } from '../../types/recetas'
 import type { BloodType, Education, MaritalStatus } from '../../types/paciente'
 
 export const SECCION_LABEL = 'text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-3'
@@ -149,6 +150,31 @@ export const DIAGNOSIS_KIND_OPTIONS: { value: DiagnosisKind; label: string }[] =
   { value: 'presuntivo', label: 'Presuntivo' },
   { value: 'definitivo', label: 'Definitivo' },
 ]
+
+/** Formas farmacéuticas (reflejan models.MedicationForm.choices del backend). */
+export const MEDICATION_FORM_OPTIONS: { value: MedicationFormValue; label: string }[] = [
+  { value: 'tableta', label: 'Tableta' },
+  { value: 'capsula', label: 'Cápsula' },
+  { value: 'jarabe', label: 'Jarabe' },
+  { value: 'suspension', label: 'Suspensión' },
+  { value: 'solucion', label: 'Solución' },
+  { value: 'solucion_inyectable', label: 'Solución inyectable' },
+  { value: 'crema', label: 'Crema' },
+  { value: 'unguento', label: 'Ungüento' },
+  { value: 'gel', label: 'Gel' },
+  { value: 'gotas', label: 'Gotas' },
+  { value: 'ovulo', label: 'Óvulo' },
+  { value: 'supositorio', label: 'Supositorio' },
+  { value: 'parche', label: 'Parche' },
+  { value: 'aerosol', label: 'Aerosol' },
+  { value: 'polvo', label: 'Polvo' },
+  { value: 'otro', label: 'Otro' },
+]
+
+/** Etiqueta legible de una forma farmacéutica (snapshot puede llegar como string libre). */
+export function formaLabel(form: string): string {
+  return MEDICATION_FORM_OPTIONS.find(o => o.value === form)?.label ?? form
+}
 
 /** Estados de la exploración basal (HC). */
 export const EXPLORACION_BASAL_OPTIONS: { value: ExploracionBasalEstado; label: string }[] = [

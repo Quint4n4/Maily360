@@ -74,3 +74,42 @@ export const puedeCambiarEstadoCita = (role: ClinicRole): boolean =>
 /** Ruta de inicio según el rol (a dónde llega al entrar / cambiar de rol). */
 export const inicioDeRol = (role: ClinicRole): string =>
   role === 'finance' ? '/finanzas' : '/agenda'
+
+/* ─── "Mi Consultorio" (apps/clinica) ──────────────────────────────────────
+   Solo UX: ocultan/deshabilitan botones. El backend es la autoridad (403).
+   Reflejan EXACTO apps/clinica/permissions.py. */
+
+/** Acceder a la página /mi-consultorio → owner/admin/doctor. */
+export const puedeAccederConsultorio = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor'
+
+/** Editar configuración / membrete / recetas / categorías → solo owner/admin. */
+export const puedeGestionarConsultorio = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin'
+
+/** Crear/editar/borrar plantillas → owner/admin/doctor. */
+export const puedeEditarPlantillas = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor'
+
+/** Gestionar el perfil médico (sello/foto/cédulas/universidades) → owner/admin/doctor
+ *  (el backend valida además que un doctor solo toque su propio perfil). */
+export const puedeGestionarPerfilMedico = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor'
+
+/* ─── Recetas (apps/recetas) ────────────────────────────────────────────────
+   Solo UX: ocultan/deshabilitan botones. El backend es la autoridad (403).
+   Reflejan apps/core/permissions.py (MedicationPermission / PrescriptionPermission)
+   + la validación fina del service (solo perfil Doctor emite; emisor/admin/owner anula). */
+
+/**
+ * Mostrar el botón "Nueva receta" y "Nuevo medicamento" → owner/admin/doctor.
+ * OJO: el backend exige además un perfil de Doctor activo para EMITIR (no solo el
+ * rol). Si owner/admin sin perfil médico intentan crear, el backend responde 403;
+ * la UI debe mostrar ese mensaje claro, no romperse.
+ */
+export const puedeEmitirReceta = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor'
+
+/** Anular una receta → owner/admin/doctor (el backend exige ser emisor o owner/admin). */
+export const puedeAnularReceta = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor'

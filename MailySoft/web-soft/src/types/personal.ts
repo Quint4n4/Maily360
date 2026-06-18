@@ -58,6 +58,12 @@ export interface Doctor {
   specialty: string
   default_appointment_duration: number
   bio_short: string
+  /** URL absoluta del sello del médico, o null (perfil ampliado, apps/clinica). */
+  sello: string | null
+  /** URL absoluta de la foto del médico, o null. */
+  foto: string | null
+  /** Cédulas adicionales separadas por coma. */
+  cedulas_adicionales: string
   /** Consultorios asignados al médico (vacío = puede usar cualquiera). */
   consultorios: ConsultorioRefMin[]
   is_active: boolean

@@ -3,8 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { RequireAuth } from './auth/RequireAuth'
 import { RoleProvider, useRole } from './auth/RoleContext'
-import { Modulo, accesoModulo, inicioDeRol } from './auth/permisos'
+import { Modulo, accesoModulo, inicioDeRol, puedeAccederConsultorio } from './auth/permisos'
 import { PlatformRoleProvider, usePlatformRole } from './platform/PlatformRoleContext'
+import { DialogProvider } from './components/common/DialogProvider'
 import { PlatModulo, accesoModuloPlat, inicioPlat } from './platform/permisos'
 import LoginPage from './pages/LoginPage'
 import AgendaPage from './pages/AgendaPage'
@@ -12,6 +13,7 @@ import ContactosPage from './pages/ContactosPage'
 import PersonalPage from './pages/PersonalPage'
 import FinanzasPage from './pages/FinanzasPage'
 import NotasPage from './pages/NotasPage'
+import MiConsultorioPage from './pages/MiConsultorioPage'
 import AlertaCitas from './components/agenda/AlertaCitas'
 import LuzRecordatorios from './components/agenda/LuzRecordatorios'
 import DashboardPlataformaPage from './pages/plataforma/DashboardPage'
@@ -32,6 +34,23 @@ function ClinicRoute({ modulo, children }: { modulo: Modulo; children: ReactElem
   return (
     <RequireAuth>
       <Guard modulo={modulo}>{children}</Guard>
+    </RequireAuth>
+  )
+}
+
+/* Guard de rol para "Mi Consultorio" (owner/admin/doctor). */
+function ConsultorioGuard({ children }: { children: ReactElement }) {
+  const { role } = useRole()
+  if (!puedeAccederConsultorio(role)) return <Navigate to={inicioDeRol(role)} replace />
+  return children
+}
+
+/* "Mi Consultorio": ruta de clínica protegida por sesión + rol (owner/admin/doctor).
+   No encaja en un Modulo del menú, así que usa su propio guard de rol. */
+function ConsultorioRoute({ children }: { children: ReactElement }) {
+  return (
+    <RequireAuth>
+      <ConsultorioGuard>{children}</ConsultorioGuard>
     </RequireAuth>
   )
 }
@@ -60,6 +79,7 @@ export default function App() {
     <AuthProvider>
       <RoleProvider>
         <PlatformRoleProvider>
+          <DialogProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
 
@@ -69,6 +89,7 @@ export default function App() {
             <Route path="/personal"  element={<ClinicRoute modulo="personal"><PersonalPage /></ClinicRoute>} />
             <Route path="/notas"     element={<ClinicRoute modulo="notas"><NotasPage /></ClinicRoute>} />
             <Route path="/finanzas"  element={<ClinicRoute modulo="finanzas"><FinanzasPage /></ClinicRoute>} />
+            <Route path="/mi-consultorio" element={<ConsultorioRoute><MiConsultorioPage /></ConsultorioRoute>} />
 
             {/* ── Panel interno de Maily (datos reales: dashboard/clínicas/usuarios) ── */}
             <Route path="/plataforma" element={<Navigate to="/plataforma/dashboard" replace />} />
@@ -85,6 +106,7 @@ export default function App() {
           <AlertaCitas />
           {/* Luz amarilla global: recordatorios de hoy ya vencidos y pendientes */}
           <LuzRecordatorios />
+          </DialogProvider>
         </PlatformRoleProvider>
       </RoleProvider>
     </AuthProvider>
