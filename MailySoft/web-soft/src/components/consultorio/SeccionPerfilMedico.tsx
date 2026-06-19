@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { GraduationCap, Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { Award, GraduationCap, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
 import {
+  useCreateCredential,
   useCreateUniversity,
+  useCredentials,
+  useDeleteCredential,
   useDeleteUniversity,
   useDoctorActual,
   useUniversities,
@@ -10,6 +13,11 @@ import {
 } from '../../hooks/clinica'
 import { erroresDe } from '../../lib/apiErrors'
 import type { DoctorUniversityOut } from '../../types/clinica'
+import type {
+  CredentialKind,
+  DoctorCredentialOut,
+} from '../../types/credenciales'
+import { CREDENTIAL_KIND_OPTIONS } from '../../types/credenciales'
 import ImageUploader from './ImageUploader'
 import { AlertaErrores, AvisoGuardado, AvisoInfo, Nota } from './Avisos'
 import { useConfirm } from '../common/DialogProvider'
@@ -236,6 +244,192 @@ export default function SeccionPerfilMedico() {
               Agregar
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Credenciales estructuradas (COFEPRIS F2) */}
+      <SeccionCredenciales doctorId={doctorId} />
+    </div>
+  )
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Credenciales estructuradas del médico (COFEPRIS F2)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/** Estado del formulario de nueva credencial. */
+interface CredencialForm {
+  title: string
+  institution: string
+  credential_number: string
+  kind: CredentialKind
+}
+
+const CRED_FORM_VACIO: CredencialForm = {
+  title: '',
+  institution: '',
+  credential_number: '',
+  kind: 'profesional',
+}
+
+/**
+ * CRUD de credenciales académicas estructuradas. Sustituye funcionalmente al
+ * texto libre `cedulas_adicionales`: COFEPRIS exige institución + número.
+ */
+function SeccionCredenciales({ doctorId }: { doctorId: string }) {
+  const credencialesQ = useCredentials(doctorId)
+  const crear = useCreateCredential(doctorId)
+  const borrar = useDeleteCredential(doctorId)
+  const confirmar = useConfirm()
+
+  const [form, setForm] = useState<CredencialForm>(CRED_FORM_VACIO)
+  const [errores, setErrores] = useState<string[]>([])
+
+  const set = <K extends keyof CredencialForm>(k: K) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((p) => ({ ...p, [k]: e.target.value as CredencialForm[K] }))
+
+  const agregar = async () => {
+    setErrores([])
+    if (!form.title.trim()) { setErrores(['El título es obligatorio.']); return }
+    if (!form.institution.trim()) { setErrores(['La institución es obligatoria.']); return }
+    try {
+      await crear.mutateAsync({
+        title: form.title.trim(),
+        institution: form.institution.trim(),
+        kind: form.kind,
+        credential_number: form.credential_number.trim(),
+      })
+      setForm(CRED_FORM_VACIO)
+    } catch (err) {
+      setErrores(erroresDe(err))
+    }
+  }
+
+  const eliminar = async (c: DoctorCredentialOut) => {
+    if (!(await confirmar({
+      titulo: 'Eliminar credencial',
+      mensaje: `¿Eliminar "${c.title}"?`,
+      peligro: true,
+      textoConfirmar: 'Eliminar',
+    }))) return
+    setErrores([])
+    try {
+      await borrar.mutateAsync(c.id)
+    } catch (err) {
+      setErrores(erroresDe(err))
+    }
+  }
+
+  const credenciales = credencialesQ.data ?? []
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="label mb-0">Credenciales (COFEPRIS)</p>
+        <Nota>
+          Cédula profesional, de especialidad y posgrados con la institución que los expide.
+          Es la forma estructurada que exige COFEPRIS; aparece en el membrete de la receta.
+        </Nota>
+      </div>
+
+      <AlertaErrores errores={errores} />
+
+      {/* Lista */}
+      {credencialesQ.isLoading ? (
+        <div className="flex items-center justify-center py-8 text-gray-400">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Cargando credenciales…
+        </div>
+      ) : credencialesQ.isError ? (
+        <AlertaErrores errores={erroresDe(credencialesQ.error)} />
+      ) : credenciales.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+          <Award className="w-8 h-8 mb-2 opacity-50" />
+          <p className="text-sm">Aún no agregas credenciales.</p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {credenciales.map((c) => (
+            <li
+              key={c.id}
+              className="flex items-start justify-between gap-3 rounded-2xl border border-gray-100 bg-white/70 p-3"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-gray-800 truncate">{c.title}</span>
+                  <span
+                    className="text-[10px] rounded-full px-1.5 py-0.5"
+                    style={{ background: 'rgba(201,162,39,0.15)', color: '#9A7B1E' }}
+                  >
+                    {c.kind_display}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {[c.institution, c.credential_number ? `Céd. ${c.credential_number}` : '']
+                    .filter(Boolean).join(' · ') || '—'}
+                </p>
+              </div>
+              <button
+                onClick={() => eliminar(c)}
+                disabled={borrar.isPending}
+                className="shrink-0 p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                aria-label="Eliminar credencial"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Alta */}
+      <div className="rounded-2xl border border-gray-100 bg-white/60 p-4 space-y-3">
+        <p className="text-sm font-medium text-gray-700">Agregar credencial</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="label" htmlFor="cred-title">Título / grado *</label>
+            <input
+              id="cred-title"
+              className="input"
+              placeholder="Ej. Médico Cirujano"
+              value={form.title}
+              onChange={set('title')}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="cred-inst">Institución *</label>
+            <input
+              id="cred-inst"
+              className="input"
+              placeholder="Ej. UNAM"
+              value={form.institution}
+              onChange={set('institution')}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="cred-num">Número de cédula</label>
+            <input
+              id="cred-num"
+              className="input"
+              placeholder="Ej. 1234567"
+              value={form.credential_number}
+              onChange={set('credential_number')}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="cred-kind">Tipo</label>
+            <select id="cred-kind" className="input" value={form.kind} onChange={set('kind')}>
+              {CREDENTIAL_KIND_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button className="btn-primary" onClick={agregar} disabled={crear.isPending}>
+            {crear.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            Agregar credencial
+          </button>
         </div>
       </div>
     </div>

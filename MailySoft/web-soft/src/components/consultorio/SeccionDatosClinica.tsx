@@ -35,6 +35,7 @@ function errorClinica(valor: string, validacion?: Validacion): string | null {
 
 /** Campos de texto editables en esta sección. */
 const CAMPOS = [
+  { key: 'commercial_name', label: 'Nombre comercial', type: 'text' },
   { key: 'address', label: 'Dirección', type: 'text' },
   { key: 'address_2', label: 'Dirección 2 (opcional)', type: 'text' },
   { key: 'phone', label: 'Teléfono', type: 'tel', inputMode: 'tel', validacion: 'telefono' },
@@ -50,6 +51,7 @@ type CampoKey = (typeof CAMPOS)[number]['key']
 type FormState = Record<CampoKey, string>
 
 const FORM_VACIO: FormState = {
+  commercial_name: '',
   address: '', address_2: '', phone: '', mobile: '', email: '',
   website: '', facebook: '', instagram: '', youtube: '',
 }
@@ -68,6 +70,7 @@ export default function SeccionDatosClinica({ editable }: Props) {
   useEffect(() => {
     if (settings) {
       setForm({
+        commercial_name: settings.commercial_name,
         address: settings.address,
         address_2: settings.address_2,
         phone: settings.phone,

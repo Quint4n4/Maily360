@@ -37,6 +37,10 @@ import type {
   PatientCategoryOut,
   TemplateKind,
 } from '../types/clinica'
+import type {
+  DoctorCredentialCreateInput,
+  DoctorCredentialOut,
+} from '../types/credenciales'
 
 /* ─── Configuración de la clínica ─────────────────────────────────────────── */
 
@@ -176,4 +180,27 @@ export async function createUniversity(
 /** DELETE /clinica/universidades/<id>/ — elimina un logo de universidad. */
 export async function deleteUniversity(universityId: string): Promise<void> {
   await request<void>(`/clinica/universidades/${universityId}/`, { method: 'DELETE' })
+}
+
+/* ─── Credenciales del médico (COFEPRIS F2) ───────────────────────────────── */
+
+/** GET /clinica/doctores/<doctorId>/credenciales/ — array directo (sin paginar). */
+export async function listCredentials(doctorId: string): Promise<DoctorCredentialOut[]> {
+  return request<DoctorCredentialOut[]>(`/clinica/doctores/${doctorId}/credenciales/`)
+}
+
+/** POST /clinica/doctores/<doctorId>/credenciales/ — crea una credencial (201, JSON). */
+export async function createCredential(
+  doctorId: string,
+  input: DoctorCredentialCreateInput,
+): Promise<DoctorCredentialOut> {
+  return request<DoctorCredentialOut>(`/clinica/doctores/${doctorId}/credenciales/`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
+/** DELETE /clinica/credenciales/<id>/ — baja lógica de la credencial (204). */
+export async function deleteCredential(credentialId: string): Promise<void> {
+  await request<void>(`/clinica/credenciales/${credentialId}/`, { method: 'DELETE' })
 }

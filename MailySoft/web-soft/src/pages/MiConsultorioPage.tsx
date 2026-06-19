@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Building2, FileText, GraduationCap, Printer, ScrollText, Tag } from 'lucide-react'
+import { Building2, FileText, GraduationCap, LayoutTemplate, Printer, ScrollText, Tag } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
@@ -14,8 +14,9 @@ import SeccionRecetas from '../components/consultorio/SeccionRecetas'
 import SeccionPlantillas from '../components/consultorio/SeccionPlantillas'
 import SeccionCategorias from '../components/consultorio/SeccionCategorias'
 import SeccionPerfilMedico from '../components/consultorio/SeccionPerfilMedico'
+import SeccionFormatos from '../components/consultorio/SeccionFormatos'
 
-type SeccionKey = 'datos' | 'membrete' | 'recetas' | 'plantillas' | 'categorias' | 'perfil'
+type SeccionKey = 'datos' | 'membrete' | 'recetas' | 'formatos' | 'plantillas' | 'categorias' | 'perfil'
 
 interface SeccionDef {
   key: SeccionKey
@@ -27,6 +28,7 @@ const SECCIONES: SeccionDef[] = [
   { key: 'datos', label: 'Datos de la clínica', icon: Building2 },
   { key: 'membrete', label: 'Membrete', icon: Printer },
   { key: 'recetas', label: 'Recetas', icon: ScrollText },
+  { key: 'formatos', label: 'Formato de receta', icon: LayoutTemplate },
   { key: 'plantillas', label: 'Plantillas', icon: FileText },
   { key: 'categorias', label: 'Categorías de pacientes', icon: Tag },
   { key: 'perfil', label: 'Mi perfil médico', icon: GraduationCap },
@@ -51,6 +53,8 @@ export default function MiConsultorioPage() {
         return <SeccionMembrete editable={gestionable} />
       case 'recetas':
         return <SeccionRecetas editable={gestionable} />
+      case 'formatos':
+        return <SeccionFormatos editable={gestionable} />
       case 'plantillas':
         return <SeccionPlantillas editable={editaPlantillas} />
       case 'categorias':

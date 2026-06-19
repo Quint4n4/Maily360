@@ -18,12 +18,16 @@
 import { request, requestBlob } from '../lib/http'
 import type { Paginated } from '../types/paciente'
 import type {
+  ItemKind,
   MedicationCreateInput,
   MedicationCreated,
   MedicationSearchResult,
   PrescriptionCancelInput,
   PrescriptionCreateInput,
   PrescriptionDetail,
+  PrescriptionFormatCreateInput,
+  PrescriptionFormatOut,
+  PrescriptionFormatUpdateInput,
   PrescriptionListItem,
 } from '../types/recetas'
 
@@ -33,13 +37,16 @@ import type {
  * GET recetas/medicamentos/buscar/ — autocompletado (catálogo global + custom).
  * Respuesta: lista directa (no paginada). `q` vacío devuelve [].
  * `limit` lo clampa el backend entre 1 y 50 (default 25).
+ * `kind` (COFEPRIS F2): filtra por tipo de ítem (medicamento/suero/terapia).
  */
 export async function searchMedications(
   q: string,
   limit = 25,
   signal?: AbortSignal,
+  kind?: ItemKind,
 ): Promise<MedicationSearchResult[]> {
   const qs = new URLSearchParams({ q, limit: String(limit) })
+  if (kind) qs.set('kind', kind)
   return request<MedicationSearchResult[]>(`/recetas/medicamentos/buscar/?${qs.toString()}`, {
     signal,
   })
@@ -105,4 +112,58 @@ export async function getPrescriptionPdf(prescriptionId: string): Promise<Blob> 
   return requestBlob(`/recetas/${prescriptionId}/pdf/`, {
     headers: { Accept: 'application/pdf' },
   })
+}
+
+/**
+ * GET recetas/<id>/pdf/?formato=|?format_id= — PDF con override de formato.
+ * Se usa en la galería para la vista previa de un formato sobre una receta de
+ * ejemplo. `formato` fuerza el layout por nombre (standard/compact/digital);
+ * `formatId` aplica un PrescriptionFormat persistido por UUID.
+ */
+export async function getPrescriptionPdfWithFormat(
+  prescriptionId: string,
+  override: { formato?: string; formatId?: string },
+): Promise<Blob> {
+  const qs = new URLSearchParams()
+  if (override.formatId) qs.set('format_id', override.formatId)
+  else if (override.formato) qs.set('formato', override.formato)
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return requestBlob(`/recetas/${prescriptionId}/pdf/${suffix}`, {
+    headers: { Accept: 'application/pdf' },
+  })
+}
+
+// ── F3 — PrescriptionFormat (galería de formatos) ──────────────────────────────
+
+/** GET recetas/formatos/ — formatos del tenant (array directo, no paginado). */
+export async function listPrescriptionFormats(): Promise<PrescriptionFormatOut[]> {
+  return request<PrescriptionFormatOut[]>('/recetas/formatos/')
+}
+
+/** POST recetas/formatos/ — crea un formato (201). */
+export async function createPrescriptionFormat(
+  input: PrescriptionFormatCreateInput,
+): Promise<PrescriptionFormatOut> {
+  return request<PrescriptionFormatOut>('/recetas/formatos/', { method: 'POST', body: input })
+}
+
+/** GET recetas/formatos/<id>/ — detalle de un formato. */
+export async function getPrescriptionFormat(formatId: string): Promise<PrescriptionFormatOut> {
+  return request<PrescriptionFormatOut>(`/recetas/formatos/${formatId}/`)
+}
+
+/** PATCH recetas/formatos/<id>/ — actualización parcial. */
+export async function updatePrescriptionFormat(
+  formatId: string,
+  input: PrescriptionFormatUpdateInput,
+): Promise<PrescriptionFormatOut> {
+  return request<PrescriptionFormatOut>(`/recetas/formatos/${formatId}/`, {
+    method: 'PATCH',
+    body: input,
+  })
+}
+
+/** DELETE recetas/formatos/<id>/ — baja del formato (204). */
+export async function deletePrescriptionFormat(formatId: string): Promise<void> {
+  await request<void>(`/recetas/formatos/${formatId}/`, { method: 'DELETE' })
 }

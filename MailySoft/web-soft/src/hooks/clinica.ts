@@ -8,13 +8,16 @@ import { listDoctors } from '../api/personal'
 import type { Doctor } from '../types/personal'
 import {
   createCategory,
+  createCredential,
   createTemplate,
   createUniversity,
   deleteCategory,
+  deleteCredential,
   deleteTemplate,
   deleteUniversity,
   getClinicSettings,
   listCategories,
+  listCredentials,
   listTemplates,
   listUniversities,
   updateClinicSettings,
@@ -30,6 +33,7 @@ import type {
   PatientCategoryCreateInput,
   TemplateKind,
 } from '../types/clinica'
+import type { DoctorCredentialCreateInput } from '../types/credenciales'
 
 /** Claves de caché. Todo lo de "Mi Consultorio" cuelga de ['clinica']. */
 export const clinicaKeys = {
@@ -38,6 +42,7 @@ export const clinicaKeys = {
   templates: (kind?: TemplateKind) => ['clinica', 'templates', kind ?? 'all'] as const,
   categories: ['clinica', 'categories'] as const,
   universities: (doctorId: string) => ['clinica', 'universities', doctorId] as const,
+  credentials: (doctorId: string) => ['clinica', 'credentials', doctorId] as const,
 }
 
 /* ─── Configuración ───────────────────────────────────────────────────────── */
@@ -179,6 +184,39 @@ export function useDeleteUniversity(doctorId: string | null) {
     mutationFn: (universityId: string) => deleteUniversity(universityId),
     onSuccess: () => {
       if (doctorId) qc.invalidateQueries({ queryKey: clinicaKeys.universities(doctorId) })
+    },
+  })
+}
+
+/* ─── Credenciales del médico (COFEPRIS F2) ───────────────────────────────── */
+
+export function useCredentials(doctorId: string | null) {
+  return useQuery({
+    queryKey: clinicaKeys.credentials(doctorId ?? ''),
+    queryFn: () => listCredentials(doctorId as string),
+    enabled: !!doctorId,
+  })
+}
+
+export function useCreateCredential(doctorId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: DoctorCredentialCreateInput) => {
+      if (!doctorId) throw new Error('No hay un médico asociado a tu cuenta.')
+      return createCredential(doctorId, input)
+    },
+    onSuccess: () => {
+      if (doctorId) qc.invalidateQueries({ queryKey: clinicaKeys.credentials(doctorId) })
+    },
+  })
+}
+
+export function useDeleteCredential(doctorId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (credentialId: string) => deleteCredential(credentialId),
+    onSuccess: () => {
+      if (doctorId) qc.invalidateQueries({ queryKey: clinicaKeys.credentials(doctorId) })
     },
   })
 }

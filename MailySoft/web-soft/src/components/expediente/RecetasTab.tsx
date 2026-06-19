@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type {
+  ItemKind,
   MedicationFormValue,
   MedicationSearchResult,
   PrescriptionCreateInput,
@@ -30,7 +31,9 @@ import type {
   PrescriptionItemInput,
   PrescriptionListItem,
   PrescriptionVitalsSnapshot,
+  RouteOfAdministration,
 } from '../../types/recetas'
+import { ITEM_KIND_OPTIONS, ROUTE_OPTIONS } from '../../types/recetas'
 import type { VitalSignsRecord } from '../../types/expediente'
 import {
   useCancelPrescription,
@@ -60,10 +63,18 @@ interface RecetasTabProps {
 interface RenglonEdit {
   /** id local estable para keys de React (no se envía al backend). */
   uid: string
+  /** Tipo de ítem (COFEPRIS F2): medicamento / suero / terapia. */
+  kind: ItemKind
   medication_name: string
   medication_form: string
   medication_concentration: string
   medication_presentation: string
+  /** Renglón estructurado COFEPRIS F2. */
+  dose: string
+  frequency: string
+  route: RouteOfAdministration | ''
+  duration: string
+  /** Nota/observación adicional (opcional). */
   indication: string
   quantity: string
   global_medication_id: string | null
@@ -75,15 +86,25 @@ const nuevoUid = (): string => `r${++uidSeq}`
 
 const renglonVacio = (): RenglonEdit => ({
   uid: nuevoUid(),
+  kind: 'medicamento',
   medication_name: '',
   medication_form: '',
   medication_concentration: '',
   medication_presentation: '',
+  dose: '',
+  frequency: '',
+  route: '',
+  duration: '',
   indication: '',
   quantity: '',
   global_medication_id: null,
   medication_id: null,
 })
+
+/** Normaliza un valor de vía desconocido (compat. recetas viejas) a '' o válido. */
+function normalizarVia(route: string): RouteOfAdministration | '' {
+  return ROUTE_OPTIONS.some((o) => o.value === route) ? (route as RouteOfAdministration) : ''
+}
 
 export default function RecetasTab({ paciente, puedeEmitir, puedeAnular }: RecetasTabProps) {
   const { data: recetasData, isLoading, isError } = usePrescriptions(paciente.id)
@@ -227,6 +248,13 @@ function RecetaCard({
             {receta.items_count} {receta.items_count === 1 ? 'medicamento' : 'medicamentos'}
           </span>
         </div>
+
+        {receta.diagnosis && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700/70">Diagnóstico</p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{receta.diagnosis}</p>
+          </div>
+        )}
 
         {receta.recommendations && (
           <div>
@@ -426,10 +454,15 @@ function NuevaReceta({
     if (prefill && prefill.items.length > 0) {
       return prefill.items.map(it => ({
         uid: nuevoUid(),
+        kind: it.kind,
         medication_name: it.medication_name,
         medication_form: it.medication_form,
         medication_concentration: it.medication_concentration,
         medication_presentation: it.medication_presentation,
+        dose: it.dose,
+        frequency: it.frequency,
+        route: normalizarVia(it.route),
+        duration: it.duration,
         indication: it.indication,
         quantity: it.quantity,
         // La trazabilidad al catálogo NO se copia: el texto es la fuente de verdad.
@@ -439,6 +472,7 @@ function NuevaReceta({
     }
     return [renglonVacio()]
   })
+  const [diagnosis, setDiagnosis] = useState(prefill?.diagnosis ?? '')
   const [recommendations, setRecommendations] = useState(prefill?.recommendations ?? '')
   const [mostrarSignos, setMostrarSignos] = useState(false)
   // Plantillas de receta (Mi Consultorio) para precargar las recomendaciones.
@@ -469,21 +503,44 @@ function NuevaReceta({
 
   const guardar = async () => {
     setErrores([])
-    const llenos = renglones.filter(r => r.medication_name.trim() || r.indication.trim())
+    // Un renglón cuenta como "lleno" si tiene nombre o algún dato del tratamiento.
+    const llenos = renglones.filter(
+      r => r.medication_name.trim() || r.dose.trim() || r.frequency.trim()
+        || r.duration.trim() || r.indication.trim(),
+    )
     if (llenos.length === 0) {
-      setErrores(['Agrega al menos un medicamento con su indicación.'])
+      setErrores(['Agrega al menos un renglón de tratamiento con su nombre.'])
       return
     }
-    const sinNombre = llenos.some(r => !r.medication_name.trim())
-    const sinIndicacion = llenos.some(r => !r.indication.trim())
-    if (sinNombre) { setErrores(['Cada renglón necesita el nombre del medicamento.']); return }
-    if (sinIndicacion) { setErrores(['Cada renglón necesita una indicación (dosis, frecuencia y duración).']); return }
+    if (llenos.some(r => !r.medication_name.trim())) {
+      setErrores(['Cada renglón necesita el nombre del medicamento, suero o terapia.'])
+      return
+    }
+    // COFEPRIS F2: para kind=medicamento, dosis/frecuencia/vía/duración son obligatorios (UX).
+    const errFaltantes: string[] = []
+    llenos.forEach((r, i) => {
+      if (r.kind !== 'medicamento') return
+      const faltan: string[] = []
+      if (!r.dose.trim()) faltan.push('dosis')
+      if (!r.frequency.trim()) faltan.push('frecuencia')
+      if (!r.route) faltan.push('vía')
+      if (!r.duration.trim()) faltan.push('duración')
+      if (faltan.length > 0) {
+        errFaltantes.push(`Medicamento ${i + 1}: falta ${faltan.join(', ')} (obligatorio por COFEPRIS).`)
+      }
+    })
+    if (errFaltantes.length > 0) { setErrores(errFaltantes); return }
 
     const items: PrescriptionItemInput[] = llenos.map(r => {
       const item: PrescriptionItemInput = {
+        kind: r.kind,
         medication_name: r.medication_name.trim(),
-        indication: r.indication.trim(),
       }
+      if (r.dose.trim()) item.dose = r.dose.trim()
+      if (r.frequency.trim()) item.frequency = r.frequency.trim()
+      if (r.route) item.route = r.route
+      if (r.duration.trim()) item.duration = r.duration.trim()
+      if (r.indication.trim()) item.indication = r.indication.trim()
       if (r.medication_presentation.trim()) item.medication_presentation = r.medication_presentation.trim()
       if (r.medication_form.trim()) item.medication_form = r.medication_form.trim()
       if (r.medication_concentration.trim()) item.medication_concentration = r.medication_concentration.trim()
@@ -494,6 +551,7 @@ function NuevaReceta({
     })
 
     const input: PrescriptionCreateInput = { items }
+    if (diagnosis.trim()) input.diagnosis = diagnosis.trim()
     if (recommendations.trim()) input.recommendations = recommendations.trim()
     if (prefill?.appointment_id) input.appointment_id = prefill.appointment_id
     if (prefill?.evolution_note_id) input.evolution_note_id = prefill.evolution_note_id
@@ -574,6 +632,20 @@ function NuevaReceta({
           )}
         </div>
 
+        {/* Diagnóstico (recomendado, COFEPRIS) */}
+        <div>
+          <label className="label" htmlFor="receta-diagnostico">Diagnóstico</label>
+          <textarea
+            id="receta-diagnostico"
+            className="input resize-none" rows={2}
+            placeholder="Ej. Faringoamigdalitis bacteriana aguda"
+            value={diagnosis} onChange={e => setDiagnosis(e.target.value)}
+          />
+          <p className="text-[11px] text-gray-400 mt-1">
+            Recomendado por COFEPRIS: una receta sin diagnóstico se considera incompleta.
+          </p>
+        </div>
+
         {/* Renglones de tratamiento */}
         <div className="space-y-3">
           {renglones.map((r, idx) => (
@@ -650,16 +722,25 @@ function RenglonTratamiento({
   onChange: (patch: Partial<RenglonEdit>) => void
   onQuitar: () => void
 }) {
+  // COFEPRIS: el renglón estructurado es obligatorio solo para medicamentos.
+  const esMedicamento = renglon.kind === 'medicamento'
+  const kindLabel = ITEM_KIND_OPTIONS.find(o => o.value === renglon.kind)?.label ?? 'Medicamento'
+  // Resalta en rojo los obligatorios vacíos (solo para medicamento).
+  const reqVacio = (valor: string): boolean => esMedicamento && !valor.trim()
+  const viaVacia = esMedicamento && !renglon.route
+
   return (
     <div
       className="rounded-2xl p-4"
       style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(201,162,39,0.18)' }}
     >
       <div className="flex items-center justify-between mb-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700/70">Medicamento {indice}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700/70">
+          {kindLabel} {indice}
+        </span>
         {puedeQuitar && (
           <button
-            type="button" onClick={onQuitar} aria-label="Quitar medicamento"
+            type="button" onClick={onQuitar} aria-label="Quitar renglón"
             className="text-gray-400 hover:text-red-600"
           >
             <Trash2 className="w-4 h-4" />
@@ -667,8 +748,21 @@ function RenglonTratamiento({
         )}
       </div>
 
-      {/* Buscador con autocompletar (texto libre permitido) */}
+      {/* Tipo de ítem (medicamento / suero / terapia) */}
+      <div className="mb-2.5">
+        <label className="label">Tipo</label>
+        <select
+          className="input"
+          value={renglon.kind}
+          onChange={e => onChange({ kind: e.target.value as ItemKind })}
+        >
+          {ITEM_KIND_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+
+      {/* Buscador con autocompletar (texto libre permitido), filtrado por tipo */}
       <BuscadorMedicamento
+        kind={renglon.kind}
         valorNombre={renglon.medication_name}
         onTextoLibre={nombre => onChange({
           medication_name: nombre,
@@ -685,6 +779,54 @@ function RenglonTratamiento({
           medication_id: med.source === 'custom' ? med.id : null,
         })}
       />
+
+      {/* Renglón estructurado COFEPRIS: dosis / frecuencia / vía / duración */}
+      <div className="grid gap-2.5 mt-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+        <div>
+          <label className="label">Dosis{esMedicamento && ' *'}</label>
+          <input
+            className={`input${reqVacio(renglon.dose) ? ' input-error' : ''}`}
+            placeholder="Ej. 1 tableta"
+            value={renglon.dose}
+            onChange={e => onChange({ dose: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="label">Frecuencia{esMedicamento && ' *'}</label>
+          <input
+            className={`input${reqVacio(renglon.frequency) ? ' input-error' : ''}`}
+            placeholder="Ej. cada 8 horas"
+            value={renglon.frequency}
+            onChange={e => onChange({ frequency: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="label">Vía{esMedicamento && ' *'}</label>
+          <select
+            className={`input${viaVacia ? ' input-error' : ''}`}
+            value={renglon.route}
+            onChange={e => onChange({ route: e.target.value as RouteOfAdministration | '' })}
+          >
+            <option value="">—</option>
+            {ROUTE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Duración{esMedicamento && ' *'}</label>
+          <input
+            className={`input${reqVacio(renglon.duration) ? ' input-error' : ''}`}
+            placeholder="Ej. por 7 días"
+            value={renglon.duration}
+            onChange={e => onChange({ duration: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {esMedicamento && (
+        <p className="text-[11px] text-gray-400 mt-1.5">
+          COFEPRIS exige dosis, frecuencia, vía y duración sin abreviaturas para medicamentos.
+        </p>
+      )}
 
       {/* Detalle del medicamento (precargado al elegir; editable) */}
       <div className="grid gap-2.5 mt-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
@@ -726,10 +868,10 @@ function RenglonTratamiento({
       </div>
 
       <div className="mt-2.5">
-        <label className="label">Indicación *</label>
+        <label className="label">Nota / observación (opcional)</label>
         <textarea
           className="input resize-none" rows={2}
-          placeholder="Ej. 1 tableta cada 8 horas por 7 días con alimentos"
+          placeholder="Ej. tomar con alimentos; suspender si hay reacción"
           value={renglon.indication}
           onChange={e => onChange({ indication: e.target.value })}
         />
@@ -746,8 +888,10 @@ function isFormaConocida(form: string): form is MedicationFormValue {
 // ── Buscador de medicamentos con autocompletar (debounce) ──────────────────────
 
 function BuscadorMedicamento({
-  valorNombre, onTextoLibre, onSeleccionar,
+  kind, valorNombre, onTextoLibre, onSeleccionar,
 }: {
+  /** Filtra el catálogo por tipo de ítem (COFEPRIS F2). */
+  kind: ItemKind
   valorNombre: string
   onTextoLibre: (nombre: string) => void
   onSeleccionar: (med: MedicationSearchResult) => void
@@ -766,8 +910,8 @@ function BuscadorMedicamento({
     return () => clearTimeout(t)
   }, [texto])
 
-  // Solo busca cuando el desplegable está abierto (foco en el input).
-  const { data, isFetching } = useMedicationSearch(debounced, abierto)
+  // Solo busca cuando el desplegable está abierto (foco en el input). Filtra por kind.
+  const { data, isFetching } = useMedicationSearch(debounced, abierto, kind)
   const resultados: MedicationSearchResult[] = data ?? []
 
   // Cerrar el desplegable al hacer clic fuera.
@@ -785,9 +929,11 @@ function BuscadorMedicamento({
     setAbierto(false)
   }
 
+  const nombreLabel = kind === 'suero' ? 'Suero *' : kind === 'terapia' ? 'Terapia *' : 'Medicamento *'
+
   return (
     <div ref={wrapRef} className="relative">
-      <label className="label">Medicamento *</label>
+      <label className="label">{nombreLabel}</label>
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         <input

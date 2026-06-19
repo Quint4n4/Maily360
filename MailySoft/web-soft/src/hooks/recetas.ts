@@ -13,22 +13,32 @@ import {
   cancelPrescription,
   createMedication,
   createPrescription,
+  createPrescriptionFormat,
+  deletePrescriptionFormat,
   getPrescription,
   getPrescriptionPdf,
+  getPrescriptionPdfWithFormat,
+  listPrescriptionFormats,
   listPrescriptions,
   searchMedications,
+  updatePrescriptionFormat,
 } from '../api/recetas'
 import type {
+  ItemKind,
   MedicationCreateInput,
   PrescriptionCancelInput,
   PrescriptionCreateInput,
+  PrescriptionFormatCreateInput,
+  PrescriptionFormatUpdateInput,
 } from '../types/recetas'
 
 /** Claves de caché del dominio recetas. */
 export const recetasKeys = {
   delPaciente: (patientId: string) => ['recetas', patientId] as const,
   detalle: (prescriptionId: string) => ['recetas', 'detalle', prescriptionId] as const,
-  buscarMedicamentos: (q: string) => ['medicamentos', 'buscar', q] as const,
+  buscarMedicamentos: (q: string, kind?: ItemKind) =>
+    ['medicamentos', 'buscar', q, kind ?? 'todos'] as const,
+  formatos: ['recetas', 'formatos'] as const,
 }
 
 // ── B1.1 — Autocompletado de medicamentos ──────────────────────────────────────
@@ -37,11 +47,11 @@ export const recetasKeys = {
  * Autocompletado de medicamentos. Se habilita solo con `q` no vacío para no
  * llamar al backend en cada montaje. El debounce del input lo hace el caller.
  */
-export function useMedicationSearch(q: string, enabled = true) {
+export function useMedicationSearch(q: string, enabled = true, kind?: ItemKind) {
   const term = q.trim()
   return useQuery({
-    queryKey: recetasKeys.buscarMedicamentos(term),
-    queryFn: ({ signal }) => searchMedications(term, 25, signal),
+    queryKey: recetasKeys.buscarMedicamentos(term, kind),
+    queryFn: ({ signal }) => searchMedications(term, 25, signal, kind),
     enabled: enabled && term.length >= 1,
     // El catálogo cambia poco: mantenemos resultados frescos un rato.
     staleTime: 60_000,
@@ -119,5 +129,66 @@ export function useOpenPrescriptionPdf() {
       // Revocar tras un margen para que la pestaña alcance a cargar el recurso.
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     },
+  })
+}
+
+/**
+ * Abre el PDF de una receta de ejemplo con un override de formato (vista previa
+ * de la galería). Acepta `formatId` (formato persistido) o `formato` (layout por
+ * nombre). Mismo patrón blob+object URL que useOpenPrescriptionPdf.
+ */
+export function useOpenPrescriptionPdfWithFormat() {
+  return useMutation({
+    mutationFn: async (params: {
+      prescriptionId: string
+      formato?: string
+      formatId?: string
+    }): Promise<void> => {
+      const blob = await getPrescriptionPdfWithFormat(params.prescriptionId, {
+        formato: params.formato,
+        formatId: params.formatId,
+      })
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank', 'noopener,noreferrer')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    },
+  })
+}
+
+// ── F3 — Formatos de receta (galería) ──────────────────────────────────────────
+
+/** Lista de formatos del tenant (array directo). */
+export function usePrescriptionFormats() {
+  return useQuery({
+    queryKey: recetasKeys.formatos,
+    queryFn: listPrescriptionFormats,
+  })
+}
+
+/** Crea un formato. Invalida la lista. */
+export function useCreatePrescriptionFormat() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PrescriptionFormatCreateInput) => createPrescriptionFormat(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: recetasKeys.formatos }),
+  })
+}
+
+/** Actualiza un formato (PATCH parcial). Invalida la lista. */
+export function useUpdatePrescriptionFormat() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: PrescriptionFormatUpdateInput }) =>
+      updatePrescriptionFormat(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: recetasKeys.formatos }),
+  })
+}
+
+/** Borra un formato. Invalida la lista. */
+export function useDeletePrescriptionFormat() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deletePrescriptionFormat(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: recetasKeys.formatos }),
   })
 }

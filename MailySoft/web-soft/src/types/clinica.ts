@@ -24,6 +24,8 @@ export interface WhatsAppContact {
 /** Salida de ClinicSettings (ClinicSettingsOutputSerializer). */
 export interface ClinicSettingsOut {
   id: string
+  /** Nombre comercial de la clínica para el membrete (COFEPRIS F2). */
+  commercial_name: string
   /** URL absoluta del logo, o null si no hay. */
   logo: string | null
   address: string
@@ -53,6 +55,8 @@ export interface ClinicSettingsOut {
  * Todos opcionales: el PUT es un upsert parcial (solo actualiza lo enviado).
  */
 export interface ClinicSettingsFields {
+  /** Nombre comercial de la clínica para el membrete (COFEPRIS F2). */
+  commercial_name?: string
   address?: string
   address_2?: string
   phone?: string
