@@ -4,314 +4,256 @@
   <meta charset="UTF-8" />
   <style>
     /* ================================================================
-       Receta médica COMPACTA — Media carta HORIZONTAL (8.5 × 5.5 in).
-       Caso Camsa: mucho contenido, sin encimado, 2 columnas en flujo.
-       Maquetado con tablas; sin posiciones absolutas; si el contenido
-       excede, xhtml2pdf genera otra página en lugar de montar texto.
-       Compatible con xhtml2pdf.
-       F3: accent={{ accent }}, font={{ font_family }}
+       Receta COMPACT — media carta horizontal (21.6 x 14 cm).
+       Diseño robusto: TODO en flujo normal (sin running header que se
+       solape). Fondo decorativo (ondas SVG inline + logo marca de agua)
+       en .page-bg position:fixed. Número de página via @bottom-right.
+       accent={{ accent }} · font={{ font_family }}
     ================================================================ */
     @page {
-      size: 8.5in 5.5in;
-      margin: 0.5cm 0.6cm 0.6cm 0.6cm;
+      size: 21.6cm 14cm;
+      margin: 0.7cm 0.8cm 2.4cm 0.8cm;
+      @bottom-center { content: element(rxfooter); width: 100%; }
+      @bottom-right {
+        content: "Pág. " counter(page) " / " counter(pages);
+        font-size: 5pt; color: #bbb;
+      }
     }
+    * { box-sizing: border-box; }
+    body { font-family: {{ font_family }}; font-size: 7pt; color: #2b2b2b; margin: 0; padding: 0; }
 
-    body {
-      font-family: {{ font_family }};
-      font-size: 7.5pt;
-      color: #2b2b2b;
-      margin: 0;
-      padding: 0;
-    }
+    /* ---- Fondo: ondas inline + logo marca de agua (cubre el papel) ---- */
+    .page-bg { position: fixed; top: -0.7cm; left: -0.8cm; width: 21.6cm; height: 14cm; z-index: -1; }
+    .page-bg .wave-tr { position: absolute; top: 0; right: 0; }
+    .page-bg .wave-bot { position: absolute; bottom: 0; left: 0; width: 21.6cm; }
+    .page-bg .wm-logo { position: absolute; top: 0; left: 0; width: 21.6cm; height: 14cm;
+      display: flex; align-items: center; justify-content: center; }
+    .page-bg .wm-logo img { width: 8cm; height: auto; }
+    .wm-anulada { position: absolute; top: 0; left: 0; width: 21.6cm; height: 14cm;
+      display: flex; align-items: center; justify-content: center; }
+    .wm-anulada span { font-size: 70pt; font-weight: bold; color: rgba(200,0,0,0.10);
+      transform: rotate(-26deg); letter-spacing: 5pt; }
 
-    /* --- Marca de agua "ANULADA" --- */
-    .watermark {
-      position: fixed;
-      top: 35%;
-      left: 10%;
-      font-size: 60pt;
-      font-weight: bold;
-      color: rgba(200, 0, 0, 0.14);
-      transform: rotate(-30deg);
-      z-index: 0;
-      white-space: nowrap;
-    }
+    /* ---- Membrete (flujo) ---- */
+    .membrete { width: 100%; border-collapse: collapse; }
+    .membrete td { vertical-align: top; }
+    .m-logo { width: 150pt; }
+    .m-logo img { max-width: 48pt; max-height: 40pt; }
+    .m-center { text-align: center; padding: 0 6pt; }
+    .m-clinic { font-size: 13pt; font-weight: bold; color: {{ accent }}; letter-spacing: 0.6pt; text-transform: uppercase; line-height: 1.05; }
+    .m-doctor { font-size: 8.5pt; font-weight: bold; color: #1a1a1a; letter-spacing: 0.2pt; margin-top: 1pt; }
+    .m-rule { height: 1pt; width: 60%; margin: 2pt auto;
+      background: linear-gradient(90deg, transparent, {{ accent }}, transparent); }
+    .m-spec { font-size: 6.5pt; color: #555; font-style: italic; }
+    .m-creds { font-size: 5.5pt; color: #444; margin-top: 2pt; line-height: 1.4; }
+    .m-creds .ck { font-weight: bold; color: {{ accent }}; }
+    .m-contact { width: 150pt; text-align: right; font-size: 5.5pt; color: #777; line-height: 1.45; }
+    .rule-top { border-bottom: 1.5pt solid {{ accent }}; margin: 4pt 0 5pt; }
 
-    /* --- Encabezado compacto (una sola fila) --- */
-    .header-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 3pt;
-    }
-    .header-table td { vertical-align: middle; padding: 0; }
-    .header-table td.logo-cell { width: 40pt; }
-    .header-table td.clinic-cell { padding-left: 5pt; }
-    .header-table td.contact-hdr { text-align: right; font-size: 6.5pt; color: #666; }
+    /* ---- Datos del paciente + signos (flujo, 2 columnas) ---- */
+    .datos { width: 100%; border-collapse: collapse; margin-bottom: 5pt; }
+    .datos td { vertical-align: top; }
+    .d-left { width: 56%; padding-right: 8pt; }
+    .d-right { width: 44%; }
+    .folio { display: inline-block; border: 0.8pt solid {{ accent }}; background: {{ accent }}11;
+      color: {{ accent }}; font-weight: bold; font-size: 6pt; padding: 1.5pt 6pt; border-radius: 2pt; margin-bottom: 3pt; }
+    .drow { font-size: 7pt; margin-bottom: 1.5pt; }
+    .dlbl { color: #999; }
+    .dval { font-weight: bold; color: #1a1a1a; }
+    .dx { font-size: 6.5pt; border-left: 2pt solid {{ accent }}; padding-left: 4pt; margin-top: 2pt; }
+    .dx b { color: {{ accent }}; }
+    .signos { border: 0.5pt solid {{ accent }}55; background: {{ accent }}0a; border-radius: 3pt; padding: 3pt 6pt; }
+    .signos-t { font-size: 5.5pt; font-weight: bold; color: {{ accent }}; text-transform: uppercase; letter-spacing: 0.4pt; margin-bottom: 2pt; }
+    .signos .vrow { font-size: 6.3pt; margin-bottom: 1.3pt; line-height: 1.3; }
+    .signos .sl { color: {{ accent }}; font-weight: bold; }
 
-    .clinic-name-sm { font-size: 9pt; font-weight: bold; color: {{ accent }}; }
-    .doctor-name-sm { font-size: 8.5pt; font-weight: bold; color: #2b2b2b; }
-    .cred-line { font-size: 6pt; color: #555; }
+    /* ---- Controlado ---- */
+    .controlado { background: #FFF8E8; border: 0.8pt solid #E6A817; border-radius: 2pt;
+      padding: 2.5pt 7pt; margin-bottom: 5pt; font-size: 6.2pt; }
+    .controlado b { color: #7B4700; }
 
-    .accent-rule { border-bottom: 1.8pt solid {{ accent }}; margin-bottom: 3pt; }
+    /* ---- Rp/ ---- */
+    .rp { font-size: 11pt; font-weight: bold; color: {{ accent }}; text-transform: uppercase; letter-spacing: 0.5pt; line-height: 1; margin-bottom: 4pt; border-bottom: 0.6pt solid {{ accent }}66; padding-bottom: 2pt; }
+    .sec-t { font-size: 6pt; font-weight: bold; color: {{ accent }}; text-transform: uppercase;
+      letter-spacing: 0.4pt; border-bottom: 0.4pt solid {{ accent }}66; padding-bottom: 1pt; margin: 5pt 0 3pt; }
+    .med { margin-bottom: 4pt; padding-bottom: 3pt; border-bottom: 0.3pt solid #eee; page-break-inside: avoid; }
+    .med-n { font-weight: bold; color: {{ accent }}; font-size: 7.5pt; }
+    .med-name { font-weight: bold; color: #1a1a1a; font-size: 7.5pt; }
+    .med-det { font-size: 5.8pt; color: #888; margin-left: 10pt; }
+    .med-str { font-size: 6.2pt; color: #444; margin-left: 10pt; margin-top: 1pt; }
+    .med-str .sl { color: {{ accent }}; font-weight: bold; }
+    .med-note { font-size: 5.8pt; color: #777; font-style: italic; margin-left: 10pt; margin-top: 1pt; }
 
-    /* --- Cuerpo: 2 columnas (tabla) --- */
-    .body-table { width: 100%; border-collapse: collapse; }
-    .body-table td { vertical-align: top; }
-    .col-left  { width: 38%; padding-right: 6pt; border-right: 0.5pt solid {{ accent }}; }
-    .col-right { width: 62%; padding-left: 6pt; }
+    .recom { margin-top: 4pt; page-break-inside: avoid; }
+    .recom-txt { font-size: 6.2pt; color: #333; white-space: pre-line; }
 
-    /* --- Columna izquierda: paciente + signos + diagnóstico --- */
-    .section-label {
-      font-size: 6pt; font-weight: bold; color: {{ accent }};
-      text-transform: uppercase; letter-spacing: 0.3pt;
-      margin-top: 5pt; margin-bottom: 1pt;
-      border-bottom: 0.5pt solid {{ accent }}; padding-bottom: 1pt;
-    }
-    .data-row { margin-bottom: 1.5pt; font-size: 7pt; }
-    .data-label { color: #888; display: inline; }
-    .data-value { font-weight: bold; display: inline; }
-
-    .folio-sm {
-      border: 0.8pt solid {{ accent }}; background: #FBF6E8;
-      padding: 2pt 5pt; font-size: 7pt; color: {{ accent }};
-      font-weight: bold; text-align: center; border-radius: 3pt;
-      margin-bottom: 4pt;
-    }
-    .cancelled-sm { color: #cc0000; font-size: 6pt; font-weight: bold; text-align: center; margin-bottom: 3pt; }
-
-    .vitals-block {
-      background: #FBF6E8; border: 0.5pt solid {{ accent }};
-      border-radius: 2pt; padding: 3pt 5pt; margin-top: 4pt;
-    }
-    .vitals-row { font-size: 6.5pt; color: #444; margin-bottom: 1pt; }
-    .vitals-lbl { color: {{ accent }}; font-weight: bold; }
-
-    .diag-box {
-      background: #F5F0E8; border-left: 2pt solid {{ accent }};
-      padding: 3pt 5pt; margin-top: 5pt; font-size: 7pt;
-    }
-    .diag-lbl { color: {{ accent }}; font-weight: bold; font-size: 6pt; text-transform: uppercase; }
-
-    /* --- Columna derecha: Rp/ y secciones --- */
-    .rp-header { font-size: 13pt; font-weight: bold; color: {{ accent }}; margin-bottom: 3pt; }
-
-    .rx-section-title {
-      font-size: 6.5pt; font-weight: bold; color: {{ accent }};
-      text-transform: uppercase; letter-spacing: 0.3pt;
-      margin-top: 5pt; margin-bottom: 2pt;
-      border-bottom: 0.5pt solid {{ accent }}; padding-bottom: 1pt;
-    }
-
-    /* Cada ítem en la columna derecha */
-    .med-item {
-      margin-bottom: 4pt; padding-bottom: 3pt;
-      border-bottom: 0.4pt solid #f0f0f0; page-break-inside: avoid;
-    }
-    .med-num { font-size: 7.5pt; font-weight: bold; color: {{ accent }}; }
-    .med-name { font-size: 7.5pt; font-weight: bold; }
-    .med-detail-sm { font-size: 6.5pt; color: #666; margin-left: 10pt; }
-    .med-struct {
-      font-size: 6.5pt; color: #444; margin-left: 10pt; margin-top: 1pt;
-    }
-    .slbl { color: {{ accent }}; font-weight: bold; }
-    .med-note { font-size: 6pt; color: #666; margin-left: 10pt; font-style: italic; }
-
-    /* --- Pie de firma (flujo normal, NO fixed) --- */
-    .footer-compact {
-      margin-top: 6pt;
-      border-top: 0.8pt solid #ccc;
-      padding-top: 3pt;
-    }
-    .footer-table { width: 100%; border-collapse: collapse; }
-    .footer-table td { vertical-align: bottom; font-size: 6.5pt; }
-    .sign-line-sm { border-top: 0.5pt solid #999; width: 150pt; padding-top: 2pt; }
-    .doctor-nm { font-size: 7.5pt; font-weight: bold; }
-    .sello-right { text-align: right; }
-    /* F5: QR de verificación */
-    .qr-verify-sm { text-align: center; width: 58pt; }
-    .qr-verify-sm img { display: block; margin: 0 auto; }
-    .qr-label-sm { font-size: 4.5pt; color: #aaa; margin-top: 1pt; }
+    /* ---- Firma + sello + QR (flujo, al final) ---- */
+    #rxfooter { position: running(rxfooter); }
+    .firma { width: 100%; border-collapse: collapse; }
+    .firma td { vertical-align: bottom; }
+    .f-datos { width: 33%; }
+    .f-doc { font-size: 7.5pt; font-weight: bold; color: #1a1a1a; }
+    .f-sub { font-size: 5.8pt; color: #666; }
+    .f-firma { width: 34%; text-align: center; }
+    .f-sello-img { max-height: 28pt; margin-bottom: -2pt; }
+    .f-linea { border-top: 0.7pt solid #888; width: 175pt; margin: 0 auto; padding-top: 2pt; }
+    .f-linea-lbl { font-size: 5.5pt; color: #888; }
+    .f-qr { width: 33%; text-align: right; }
+    .f-qr img { width: 1.05cm; height: 1.05cm; }
+    .f-qr .ql { font-size: 4pt; color: #bbb; }
   </style>
 </head>
 <body>
 
-  {% if cancelled %}
-  <div class="watermark">ANULADA</div>
+  <div class="page-bg">
+    <svg class="wave-tr" width="250" height="150" viewBox="0 0 250 150">
+      <path d="M250,0 L250,150 Q185,112 132,70 Q78,28 0,0 Z" fill="{{ accent }}" fill-opacity="0.09"/>
+      <path d="M250,0 L250,150 Q208,118 172,80 Q118,28 55,0 Z" fill="{{ accent }}" fill-opacity="0.18"/>
+    </svg>
+    <svg class="wave-bot" width="612" height="70" viewBox="0 0 612 70" preserveAspectRatio="none">
+      <path d="M0,70 L612,70 L612,36 Q500,10 380,30 Q250,54 130,26 Q60,12 0,34 Z" fill="{{ accent }}" fill-opacity="0.09"/>
+      <path d="M0,70 L612,70 L612,52 Q500,34 380,48 Q250,66 130,42 Q60,30 0,50 Z" fill="{{ accent }}" fill-opacity="0.18"/>
+    </svg>
+    {% if logo_watermark_b64 %}<div class="wm-logo"><img src="{{ logo_watermark_b64 }}" alt="" /></div>{% endif %}
+    {% if cancelled %}<div class="wm-anulada"><span>ANULADA</span></div>{% endif %}
+  </div>
+
+  <!-- Membrete -->
+  <table class="membrete">
+    <tr>
+      <td class="m-logo">
+        {% if logo_b64 %}<img src="data:image/{{ logo_mime }};base64,{{ logo_b64 }}" alt="Logo" />{% endif %}
+      </td>
+      <td class="m-center">
+        {% if clinic_name %}<div class="m-clinic">{{ clinic_name }}</div>{% endif %}
+        <div class="m-doctor">{{ doctor_name }}</div>
+        <div class="m-rule"></div>
+        {% if doctor_specialty %}<div class="m-spec">{{ doctor_specialty }}</div>{% endif %}
+        {% if credentials %}
+          <div class="m-creds">
+            {% for c in credentials %}<span class="ck">{{ c.kind_display }}:</span> Céd. {{ c.credential_number }}{% if c.title %} — {{ c.title }}{% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}
+          </div>
+        {% else %}
+          <div class="m-creds"><span class="ck">Céd. Prof.</span> {{ cedula_profesional }}{% if cedulas_adicionales %} · {{ cedulas_adicionales }}{% endif %}</div>
+        {% endif %}
+      </td>
+      <td class="m-contact">
+        {% if address %}{{ address }}<br/>{% endif %}
+        {% if address_2 and address_2 != address %}{{ address_2 }}<br/>{% endif %}
+        {% if phone %}Tel. {{ phone }}{% if mobile %} · Cel. {{ mobile }}{% endif %}<br/>{% elif mobile %}Cel. {{ mobile }}<br/>{% endif %}
+        {% if email %}{{ email }}<br/>{% endif %}
+        {% if website %}{{ website }}{% endif %}
+      </td>
+    </tr>
+  </table>
+  <div class="rule-top"></div>
+
+  <!-- Datos del paciente + signos -->
+  <table class="datos">
+    <tr>
+      <td class="d-left">
+        <span class="folio">Folio Nº {{ folio }}</span>
+        <div class="drow"><span class="dlbl">Paciente:</span> <span class="dval">{{ patient_name }}</span></div>
+        {% if patient_age_sex %}<div class="drow"><span class="dlbl">Edad/Sexo:</span> <span class="dval">{{ patient_age_sex }}</span></div>{% endif %}
+        <div class="drow"><span class="dlbl">Fecha:</span> <span class="dval">{{ issued_at }}</span></div>
+        {% if sections.diagnostico and diagnosis %}<div class="dx"><b>Diagnóstico:</b> {{ diagnosis }}</div>{% endif %}
+      </td>
+      <td class="d-right">
+        {% if sections.signos and vitals %}
+        <div class="signos">
+          <div class="signos-t">Datos del paciente</div>
+          {% if vitals.weight_kg %}<div class="vrow"><span class="sl">Peso:</span> {{ vitals.weight_kg }} kg</div>{% endif %}
+          {% if vitals.height_m %}<div class="vrow"><span class="sl">Estatura:</span> {{ vitals.height_m }} m</div>{% endif %}
+          {% if vitals.imc %}<div class="vrow"><span class="sl">Índice de masa corporal:</span> {{ vitals.imc }}</div>{% endif %}
+          {% if vitals.systolic and vitals.diastolic %}<div class="vrow"><span class="sl">Presión arterial:</span> {{ vitals.systolic }}/{{ vitals.diastolic }} mmHg</div>{% endif %}
+          {% if vitals.heart_rate %}<div class="vrow"><span class="sl">Frecuencia cardíaca:</span> {{ vitals.heart_rate }} latidos por minuto</div>{% endif %}
+          {% if vitals.respiratory_rate %}<div class="vrow"><span class="sl">Frecuencia respiratoria:</span> {{ vitals.respiratory_rate }} por minuto</div>{% endif %}
+          {% if vitals.temperature_c %}<div class="vrow"><span class="sl">Temperatura:</span> {{ vitals.temperature_c }} °C</div>{% endif %}
+          {% if vitals.oxygen_saturation %}<div class="vrow"><span class="sl">Saturación de oxígeno:</span> {{ vitals.oxygen_saturation }} %</div>{% endif %}
+          {% if vitals.glucose %}<div class="vrow"><span class="sl">Glucosa:</span> {{ vitals.glucose }} mg/dL</div>{% endif %}
+        </div>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  {% if is_controlled %}
+  <div class="controlado">
+    <b>⚠ CONTROLADO Grupo {{ controlled_group_top }}</b>{% if controlled_folio %} · Folio: <b>{{ controlled_folio }}</b>{% endif %}{% if valid_until %} · Vigencia: <b>{{ valid_until }}</b>{% endif %}
+  </div>
   {% endif %}
 
-  <!-- ============================ ENCABEZADO COMPACTO -->
-  <table class="header-table">
-    <tr>
-      {% if logo_b64 %}
-      <td class="logo-cell">
-        <img src="data:image/{{ logo_mime }};base64,{{ logo_b64 }}" alt="Logo" width="{{ logo_w }}" height="{{ logo_h }}" />
-      </td>
-      {% endif %}
-      <td class="clinic-cell">
-        {% if clinic_name %}<div class="clinic-name-sm">{{ clinic_name }}</div>{% endif %}
-        <div class="doctor-name-sm">{{ doctor_name }}</div>
-        {% if credentials %}
-          {% for cred in credentials %}
-          <div class="cred-line">{{ cred.kind_display }}: {{ cred.title }}{% if cred.credential_number %} · Céd. {{ cred.credential_number }}{% endif %}</div>
-          {% endfor %}
-        {% else %}
-          <div class="cred-line">Céd. Prof. {{ cedula_profesional }}{% if cedulas_adicionales %} · {{ cedulas_adicionales }}{% endif %}</div>
-        {% endif %}
-      </td>
-      <td class="contact-hdr">
-        {% if address %}{{ address }}<br/>{% endif %}
-        {% if phone %}Tel. {{ phone }}{% if mobile %} · Cel. {{ mobile }}{% endif %}<br/>{% elif mobile %}Cel. {{ mobile }}<br/>{% endif %}
-        {% if email %}{{ email }}{% endif %}
-      </td>
-    </tr>
-  </table>
-  <div class="accent-rule"></div>
-
-  <!-- ============================ CUERPO: 2 COLUMNAS -->
-  <table class="body-table">
-    <tr>
-
-      <!-- ============ COLUMNA IZQUIERDA: paciente + signos + diagnóstico -->
-      <td class="col-left">
-
-        <div class="folio-sm">Folio N&ordm; {{ folio }}</div>
-        {% if cancelled %}<div class="cancelled-sm">RECETA ANULADA</div>{% endif %}
-
-        <div class="section-label">Paciente</div>
-        <div class="data-row"><span class="data-label">Nombre: </span><span class="data-value">{{ patient_name }}</span></div>
-        {% if patient_age_sex %}<div class="data-row"><span class="data-label">Edad/Sexo: </span><span class="data-value">{{ patient_age_sex }}</span></div>{% endif %}
-        <div class="data-row"><span class="data-label">Fecha: </span><span class="data-value">{{ issued_at }}</span></div>
-
-        {% if sections.signos and vitals %}
-        <div class="vitals-block">
-          <div class="section-label" style="margin-top:0;">Signos Vitales</div>
-          {% if vitals.weight_kg %}<div class="vitals-row"><span class="vitals-lbl">Peso:</span> {{ vitals.weight_kg }} kg</div>{% endif %}
-          {% if vitals.height_m %}<div class="vitals-row"><span class="vitals-lbl">Talla:</span> {{ vitals.height_m }} m</div>{% endif %}
-          {% if vitals.imc %}<div class="vitals-row"><span class="vitals-lbl">IMC:</span> {{ vitals.imc }}</div>{% endif %}
-          {% if vitals.systolic and vitals.diastolic %}<div class="vitals-row"><span class="vitals-lbl">TA:</span> {{ vitals.systolic }}/{{ vitals.diastolic }} mmHg</div>{% endif %}
-          {% if vitals.heart_rate %}<div class="vitals-row"><span class="vitals-lbl">FC:</span> {{ vitals.heart_rate }} lpm</div>{% endif %}
-          {% if vitals.temperature_c %}<div class="vitals-row"><span class="vitals-lbl">Temp:</span> {{ vitals.temperature_c }} &deg;C</div>{% endif %}
-          {% if vitals.oxygen_saturation %}<div class="vitals-row"><span class="vitals-lbl">SpO&sup2;:</span> {{ vitals.oxygen_saturation }}%</div>{% endif %}
-          {% if vitals.glucose %}<div class="vitals-row"><span class="vitals-lbl">Glucosa:</span> {{ vitals.glucose }} mg/dL</div>{% endif %}
-        </div>
-        {% endif %}
-
-        {% if sections.diagnostico and diagnosis %}
-        <div class="diag-box">
-          <div class="diag-lbl">Diagnóstico</div>
-          {{ diagnosis }}
-        </div>
-        {% endif %}
-
-      </td>
-
-      <!-- ============ COLUMNA DERECHA: Rp/ medicamentos + sueros + terapias -->
-      <td class="col-right">
-
-        <!-- F6: aviso medicamento controlado -->
-        {% if is_controlled %}
-        <div style="background:#FFF3CD; border:1pt solid #E6A817; padding:4pt 7pt; margin-bottom:6pt; font-size:7pt;">
-          <strong style="color:#7B4700;">&#9888; CONTROLADO Grupo {{ controlled_group_top }}</strong>
-          {% if controlled_folio %}&nbsp;Folio: <strong>{{ controlled_folio }}</strong>{% endif %}
-          {% if valid_until %}&nbsp;Vigencia: <strong>{{ valid_until }}</strong>{% endif %}
-        </div>
-        {% endif %}
-
-        {% if medicamentos %}
-        <div class="rp-header">Rp/</div>
-        {% for item in medicamentos %}
-        <div class="med-item">
-          <div><span class="med-num">{{ forloop.counter }}.</span> <span class="med-name">{{ item.medication_name }}</span></div>
-          {% if item.medication_detail %}<div class="med-detail-sm">{{ item.medication_detail }}</div>{% endif %}
-          {% if item.dose or item.frequency or item.route_label or item.duration %}
-          <div class="med-struct">
-            {% if item.dose %}<span class="slbl">Dosis:</span> {{ item.dose }}&nbsp;{% endif %}
-            {% if item.frequency %}<span class="slbl">C/:</span> {{ item.frequency }}&nbsp;{% endif %}
-            {% if item.route_label %}<span class="slbl">Vía:</span> {{ item.route_label }}&nbsp;{% endif %}
-            {% if item.duration %}<span class="slbl">Por:</span> {{ item.duration }}{% endif %}
-          </div>
-          {% endif %}
-          {% if sections.indicaciones and item.indication %}<div class="med-note">{{ item.indication }}</div>{% endif %}
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        {% if sections.sueros and sueros %}
-        <div class="rx-section-title">Sueros / Soluciones</div>
-        {% for item in sueros %}
-        <div class="med-item">
-          <div><span class="med-num">{{ forloop.counter }}.</span> <span class="med-name">{{ item.medication_name }}</span></div>
-          {% if item.medication_detail %}<div class="med-detail-sm">{{ item.medication_detail }}</div>{% endif %}
-          {% if item.dose or item.frequency or item.route_label or item.duration %}
-          <div class="med-struct">
-            {% if item.dose %}<span class="slbl">Dosis:</span> {{ item.dose }}&nbsp;{% endif %}
-            {% if item.frequency %}<span class="slbl">C/:</span> {{ item.frequency }}&nbsp;{% endif %}
-            {% if item.route_label %}<span class="slbl">Vía:</span> {{ item.route_label }}&nbsp;{% endif %}
-            {% if item.duration %}<span class="slbl">Por:</span> {{ item.duration }}{% endif %}
-          </div>
-          {% endif %}
-          {% if sections.indicaciones and item.indication %}<div class="med-note">{{ item.indication }}</div>{% endif %}
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        {% if sections.terapias and terapias %}
-        <div class="rx-section-title">Terapias / Procedimientos</div>
-        {% for item in terapias %}
-        <div class="med-item">
-          <div><span class="med-num">{{ forloop.counter }}.</span> <span class="med-name">{{ item.medication_name }}</span></div>
-          {% if item.medication_detail %}<div class="med-detail-sm">{{ item.medication_detail }}</div>{% endif %}
-          {% if item.frequency or item.duration %}
-          <div class="med-struct">
-            {% if item.frequency %}<span class="slbl">Frecuencia:</span> {{ item.frequency }}&nbsp;{% endif %}
-            {% if item.duration %}<span class="slbl">Por:</span> {{ item.duration }}{% endif %}
-          </div>
-          {% endif %}
-          {% if sections.indicaciones and item.indication %}<div class="med-note">{{ item.indication }}</div>{% endif %}
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        {% if sections.indicaciones and recommendations %}
-        <div class="rx-section-title">Recomendaciones</div>
-        <div style="font-size:6.5pt; color:#333; white-space:pre-line;">{{ recommendations }}</div>
-        {% endif %}
-
-      </td>
-    </tr>
-  </table>
-
-  <!-- ============================ PIE DE FIRMA (flujo, no fixed) -->
-  <div class="footer-compact">
-    <table class="footer-table">
-      <tr>
-        <td>
-          <div class="sign-line-sm">
-            <div class="doctor-nm">{{ doctor_name }}</div>
-            {% if credentials %}
-              {% for cred in credentials %}
-              <div style="font-size:6pt; color:#555;">Céd. {{ cred.credential_number }}</div>
-              {% endfor %}
-            {% else %}
-              <div style="color:#555; font-size:6pt;">Céd. Prof. {{ cedula_profesional }}</div>
-            {% endif %}
-            {% if doctor_specialty %}<div style="color:#555; font-style:italic; font-size:6pt;">{{ doctor_specialty }}</div>{% endif %}
-          </div>
-        </td>
-        {% if sello_b64 %}
-        <td class="sello-right">
-          <img src="data:image/{{ sello_mime }};base64,{{ sello_b64 }}" alt="Sello" width="{{ sello_w }}" height="{{ sello_h }}" />
-        </td>
-        {% endif %}
-        {% if qr_b64 %}
-        <td class="qr-verify-sm">
-          <img src="data:image/{{ qr_mime }};base64,{{ qr_b64 }}" alt="QR verificación" width="55" height="55" />
-          <div class="qr-label-sm">Verificar autenticidad</div>
-        </td>
-        {% endif %}
-      </tr>
-    </table>
+  <!-- Rp/ -->
+  {% if medicamentos %}
+  <div class="rp">Medicamentos</div>
+  {% for item in medicamentos %}
+  <div class="med">
+    <div><span class="med-n">{{ forloop.counter }}.</span> <span class="med-name">{{ item.medication_name }}</span></div>
+    {% if item.medication_detail %}<div class="med-det">{{ item.medication_detail }}</div>{% endif %}
+    {% if item.dose or item.frequency or item.route_label or item.duration %}
+    <div class="med-str">{% if item.dose %}<span class="sl">Dosis:</span> {{ item.dose }} {% endif %}{% if item.frequency %}<span class="sl">Frecuencia:</span> {{ item.frequency }} {% endif %}{% if item.route_label %}<span class="sl">Vía:</span> {{ item.route_label }} {% endif %}{% if item.duration %}<span class="sl">Durante:</span> {{ item.duration }}{% endif %}</div>
+    {% endif %}
+    {% if sections.indicaciones and item.indication %}<div class="med-note">{{ item.indication }}</div>{% endif %}
   </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if sections.sueros and sueros %}
+  <div class="sec-t">Sueros / Soluciones</div>
+  {% for item in sueros %}
+  <div class="med">
+    <div><span class="med-n">{{ forloop.counter }}.</span> <span class="med-name">{{ item.medication_name }}</span></div>
+    {% if item.medication_detail %}<div class="med-det">{{ item.medication_detail }}</div>{% endif %}
+    {% if item.dose or item.frequency or item.route_label or item.duration %}
+    <div class="med-str">{% if item.dose %}<span class="sl">Dosis:</span> {{ item.dose }} {% endif %}{% if item.frequency %}<span class="sl">Frecuencia:</span> {{ item.frequency }} {% endif %}{% if item.route_label %}<span class="sl">Vía:</span> {{ item.route_label }} {% endif %}{% if item.duration %}<span class="sl">Durante:</span> {{ item.duration }}{% endif %}</div>
+    {% endif %}
+    {% if sections.indicaciones and item.indication %}<div class="med-note">{{ item.indication }}</div>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if sections.terapias and terapias %}
+  <div class="sec-t">Terapias / Procedimientos</div>
+  {% for item in terapias %}
+  <div class="med">
+    <div><span class="med-n">{{ forloop.counter }}.</span> <span class="med-name">{{ item.medication_name }}</span></div>
+    {% if item.medication_detail %}<div class="med-det">{{ item.medication_detail }}</div>{% endif %}
+    {% if item.frequency or item.duration %}
+    <div class="med-str">{% if item.frequency %}<span class="sl">Frecuencia:</span> {{ item.frequency }} {% endif %}{% if item.duration %}<span class="sl">Durante:</span> {{ item.duration }}{% endif %}</div>
+    {% endif %}
+    {% if sections.indicaciones and item.indication %}<div class="med-note">{{ item.indication }}</div>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if sections.indicaciones and recommendations %}
+  <div class="recom">
+    <div class="sec-t">Recomendaciones</div>
+    <div class="recom-txt">{{ recommendations }}</div>
+  </div>
+  {% endif %}
+
+  <!-- Pie repetido: datos del médico | línea de firma + sello | QR -->
+  <table class="firma" id="rxfooter">
+    <tr>
+      <td class="f-datos">
+        <div class="f-doc">{{ doctor_name }}</div>
+        {% if credentials %}{% for c in credentials %}{% if c.credential_number %}<div class="f-sub">Céd. {{ c.credential_number }}</div>{% endif %}{% endfor %}{% else %}<div class="f-sub">Céd. Prof. {{ cedula_profesional }}</div>{% endif %}
+        {% if doctor_specialty %}<div class="f-sub">{{ doctor_specialty }}</div>{% endif %}
+      </td>
+      <td class="f-firma">
+        {% if sello_b64 %}<img class="f-sello-img" src="data:image/{{ sello_mime }};base64,{{ sello_b64 }}" alt="Sello" /><br/>{% endif %}
+        <div class="f-linea"></div>
+        <div class="f-linea-lbl">Firma y sello del médico</div>
+      </td>
+      {% if qr_b64 %}
+      <td class="f-qr">
+        <img src="data:image/{{ qr_mime }};base64,{{ qr_b64 }}" alt="QR" />
+        <div class="ql">Verificar</div>
+      </td>
+      {% else %}<td class="f-qr"></td>{% endif %}
+    </tr>
+  </table>
 
 </body>
 </html>

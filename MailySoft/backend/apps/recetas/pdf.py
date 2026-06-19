@@ -1,21 +1,24 @@
 """
 Generación de PDF para recetas médicas — F1 (multi-formato).
 
-Librería: xhtml2pdf (puro Python/pip, sin dependencias de sistema).
-  Nota: Se evaluó WeasyPrint pero requiere libpango/libcairo/libgdk-pixbuf en el
-  sistema operativo. El Dockerfile usa python:3.12-slim sin esas libs; instalarlas
-  en ambos stages (builder + runtime) implicaría reconstrucción completa del venv
-  y +200 MB en la imagen. xhtml2pdf no requiere tocar el Dockerfile y cumple el
-  requisito funcional completamente.
+Librería: WeasyPrint 62.3+ (requiere libpango/libcairo/libgdk-pixbuf; ya
+  instalados en el Dockerfile del proyecto).
 
 Formatos disponibles (F1):
-  standard  — Carta vertical, membrete digital limpio. (refactor del original)
-  compact   — Media carta horizontal (8.5×5.5 in). Caso Camsa. 2 columnas.
+  standard  — Carta vertical, membrete digital limpio.
+  compact   — Media carta horizontal (21.6 × 14 cm). Caso Camsa.
   digital   — Carta vertical amigable para el paciente.
 
 Imágenes (logo, sello):
   Se incrustan como data URI en base64. Funciona con FileSystemStorage (dev)
   y S3Boto3Storage (prod). Si el archivo no existe o falla, se omite silenciosamente.
+
+Seguridad — _secure_fetcher:
+  WeasyPrint llama a un url_fetcher para cargar recursos externos referenciados
+  en el HTML/CSS. `_secure_fetcher` SOLO permite data URIs (esquema "data:").
+  Cualquier otro esquema (file://, http://, https://, rutas relativas) lanza
+  ValueError bloqueando LFI/SSRF. Equivale al _link_callback que existía en
+  xhtml2pdf.
 
 Decisión sobre recipe_use_responsible_doctor:
   El modelo ClinicSettings tiene el flag `recipe_use_responsible_doctor` pero no
@@ -32,7 +35,7 @@ from io import BytesIO
 from typing import Any, Literal, Optional
 
 from django.template.loader import render_to_string
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 logger = logging.getLogger("apps.recetas.pdf")
 
@@ -48,14 +51,65 @@ _TEMPLATE_MAP: dict[str, str] = {
 }
 
 
+def _logo_watermark_b64(field: Any, *, alpha: float = 0.08) -> str:
+    """Genera una versión marca de agua del logo de la clínica como data URI PNG.
+
+    Convierte la imagen a RGBA, reduce el canal alpha al valor especificado
+    (por defecto 0.08 ≈ 8% de opacidad), y devuelve el resultado como PNG
+    codificado en base64 listo para incrustarse en un data URI.
+
+    Si no hay logo, el campo está vacío o falla cualquier paso, devuelve ""
+    (comportamiento seguro: el PDF se genera sin marca de agua).
+
+    Args:
+        field: ImageField de Django con el logo de la clínica.
+        alpha: Opacidad de la marca de agua (0.0 = invisible, 1.0 = opaco).
+               Valor recomendado: 0.06–0.10.
+
+    Returns:
+        Data URI completa ("data:image/png;base64,...") o "" si no aplica.
+    """
+    if not field:
+        return ""
+
+    try:
+        with field.open("rb") as f:
+            raw: bytes = f.read()
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "pdf._logo_watermark_b64: no se pudo leer logo para marca de agua '%s'.",
+            getattr(field, "name", "<desconocido>"),
+        )
+        return ""
+
+    try:
+        with Image.open(BytesIO(raw)) as img:
+            img_rgba = img.convert("RGBA")
+            r, g, b, a = img_rgba.split()
+            # Reducir el alpha a la fracción indicada (conserva la forma)
+            a_dimmed = a.point(lambda px: int(px * alpha))
+            watermark = Image.merge("RGBA", (r, g, b, a_dimmed))
+
+            buf = BytesIO()
+            watermark.save(buf, format="PNG")
+            buf.seek(0)
+            encoded = base64.b64encode(buf.read()).decode("ascii")
+            return f"data:image/png;base64,{encoded}"
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "pdf._logo_watermark_b64: error al procesar imagen de marca de agua '%s'. "
+            "El PDF se generará sin marca de agua.",
+            getattr(field, "name", "<desconocido>"),
+        )
+        return ""
+
+
 def _image_box(field: Any, max_w_pt: float, max_h_pt: float) -> dict[str, Any]:
     """Prepara una imagen (logo/sello) para el PDF con dimensiones proporcionales.
 
-    xhtml2pdf NO respeta `max-width`/`max-height` en CSS: si no se dan dimensiones
-    exactas en el tag, la imagen sale a tamaño nativo (gigante) o deformada. Para
-    que CUALQUIER logo —cuadrado, horizontal o vertical— se vea bien, se lee su
-    tamaño real con Pillow y se calcula (w, h) en pt que encaje dentro de la caja
-    `max_w_pt × max_h_pt` MANTENIENDO la proporción.
+    Se lee el tamaño real de la imagen con Pillow y se calcula (w, h) en pt
+    que encaje dentro de la caja `max_w_pt × max_h_pt` MANTENIENDO la proporción.
+    Los valores w/h se usan para acotar el max-width/max-height en el template.
 
     Returns:
         dict con `b64`, `mime`, `w`, `h` (w/h en pt; 0 si no hay imagen válida).
@@ -80,30 +134,41 @@ def _image_box(field: Any, max_w_pt: float, max_h_pt: float) -> dict[str, Any]:
     }
 
 
-def _link_callback(uri: str, rel: str) -> str:  # noqa: ARG001
-    """Callback de seguridad para xhtml2pdf — bloquea acceso a recursos externos.
+def _secure_fetcher(url: str) -> dict[str, Any]:
+    """URL fetcher de seguridad para WeasyPrint — bloquea todo excepto data URIs.
 
-    Política:
-        - URIs ``data:`` → se devuelven tal cual (son los únicos recursos usados).
-        - Cualquier otro esquema (file://, http://, rutas relativas) → cadena vacía
-          y WARNING. xhtml2pdf omite el recurso silenciosamente (comportamiento seguro).
+    WeasyPrint llama a esta función para resolver recursos referenciados en el HTML
+    o CSS del template (imágenes, fuentes, etc.). La política de seguridad es:
+
+        - URIs ``data:`` → se procesan normalmente (son los únicos recursos usados;
+          las imágenes se incrustan en base64 antes del render).
+        - Cualquier otro esquema (``file://``, ``http://``, ``https://``, rutas
+          relativas) → se lanza ``ValueError``. Esto bloquea LFI y SSRF al evitar
+          que WeasyPrint lea archivos del sistema o haga peticiones salientes.
 
     Args:
-        uri: URI del recurso tal como aparece en el HTML/CSS.
-        rel: Ruta relativa base (ignorada).
+        url: URL del recurso tal como aparece en el HTML/CSS.
 
     Returns:
-        La URI original si es ``data:``; cadena vacía en cualquier otro caso.
+        Dict con los datos del recurso para WeasyPrint (solo para data URIs).
+
+    Raises:
+        ValueError: si la URL no empieza con ``data:`` (política de seguridad).
     """
-    if uri.startswith("data:"):
-        return uri
+    if url.startswith("data:"):
+        # Delegamos al fetcher de datos nativo de WeasyPrint.
+        from weasyprint.urls import default_url_fetcher
+        return default_url_fetcher(url)  # type: ignore[return-value]
 
     logger.warning(
-        "pdf._link_callback: URI bloqueada por política de seguridad — '%s'. "
+        "pdf._secure_fetcher: URL bloqueada por política de seguridad — '%s'. "
         "Solo se permiten data URIs en el template de receta.",
-        uri[:200],
+        url[:200],
     )
-    return ""
+    raise ValueError(
+        f"URL bloqueada por política de seguridad del generador de PDF: '{url[:200]}'. "
+        "Solo se permiten data URIs (imágenes base64 incrustadas)."
+    )
 
 
 _MIME_FALLBACK = "image/png"
@@ -206,10 +271,12 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
     except Exception:  # noqa: BLE001
         settings_obj = None
 
-    # Logo: encajado proporcionalmente en caja.
+    # Logo: encajado proporcionalmente en caja (membrete).
     logo_box: dict[str, Any] = {"b64": "", "mime": "", "w": 0, "h": 0}
+    logo_watermark: str = ""
     if settings_obj is not None and settings_obj.logo:
         logo_box = _image_box(settings_obj.logo, max_w_pt=160, max_h_pt=58)
+        logo_watermark = _logo_watermark_b64(settings_obj.logo, alpha=0.08)
 
     # Nombre principal del encabezado: commercial_name tiene prioridad sobre Tenant.name.
     commercial_name: str = ""
@@ -438,6 +505,8 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
         "logo_mime": logo_box["mime"],
         "logo_w": logo_box["w"],
         "logo_h": logo_box["h"],
+        # Marca de agua: PNG RGBA con opacidad reducida (~8%) para fondo de página
+        "logo_watermark_b64": logo_watermark,
         "clinic_name": clinic_name,
         "commercial_name": commercial_name,
         "address": address,
@@ -473,6 +542,9 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
         "cancelled": cancelled,
         # F3 — formato configurable
         "accent": accent,
+        # accent con '#' escapado como %23 para usar DENTRO de data: URIs SVG
+        # (un '#' crudo rompe el url() y WeasyPrint descarta toda la regla @page).
+        "accent_svg": accent.replace("#", "%23"),
         "font_family": font_family,
         "sections": sections_ctx,
         "letterhead_mode": letterhead_mode_ctx,
@@ -518,11 +590,12 @@ def prescription_pdf_build(
         Bytes del PDF generado.
 
     Raises:
-        RuntimeError: si xhtml2pdf no pudo generar el PDF (buffer vacío o error
+        RuntimeError: si WeasyPrint no pudo generar el PDF (buffer vacío o error
                       de conversión irrecuperable).
     """
+    from weasyprint import HTML  # import late para facilitar mocking en tests
+
     from apps.recetas.selectors import prescription_format_resolve
-    from xhtml2pdf import pisa  # import late para facilitar mocking en tests
 
     # Resolver el formato a usar.
     if format_override is not None:
@@ -545,32 +618,29 @@ def prescription_pdf_build(
     context = _build_context(prescription, fmt=resolved_fmt)
     html_str: str = render_to_string(template_name, context)
 
-    buffer = BytesIO()
-    result = pisa.CreatePDF(
-        src=html_str,
-        dest=buffer,
-        encoding="utf-8",
-        link_callback=_link_callback,
-    )
-
-    if result.err:
+    try:
+        pdf_bytes: bytes = HTML(
+            string=html_str,
+            base_url=None,
+            url_fetcher=_secure_fetcher,
+        ).write_pdf()
+    except Exception as exc:  # noqa: BLE001
         logger.error(
-            "prescription_pdf_build: xhtml2pdf reportó errores al generar PDF "
-            "para receta folio=%s layout=%s — err_code=%s",
+            "prescription_pdf_build: WeasyPrint falló al generar PDF "
+            "para receta folio=%s layout=%s — %s",
             prescription.folio,
-            base_layout,
-            result.err,
+            active_layout,
+            exc,
         )
         raise RuntimeError(
             f"Error al generar el PDF de la receta (folio={prescription.folio}, "
-            f"layout={base_layout}). Código de error xhtml2pdf: {result.err}"
-        )
+            f"layout={active_layout}): {exc}"
+        ) from exc
 
-    pdf_bytes: bytes = buffer.getvalue()
     if not pdf_bytes:
         raise RuntimeError(
             f"El PDF generado está vacío para receta folio={prescription.folio} "
-            f"layout={base_layout}."
+            f"layout={active_layout}."
         )
 
     return pdf_bytes

@@ -20,6 +20,15 @@ RUN apt-get update \
         curl \
         build-essential \
         libpq-dev \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libpangoft2-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        libcairo2 \
+        libffi-dev \
+        shared-mime-info \
+        libfontconfig1 \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar Poetry
@@ -57,6 +66,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libpq5 \
         curl \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libpangoft2-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        libcairo2 \
+        libffi8 \
+        shared-mime-info \
+        libfontconfig1 \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Usuario no-root por seguridad

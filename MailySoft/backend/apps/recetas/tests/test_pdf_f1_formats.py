@@ -309,13 +309,13 @@ def test_pdf_no_logo_no_sello(formato: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test compact con 8+ ítems (anti-encimado)
+# Tests compact estilo Camsa — paginación multi-hoja
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
 def test_pdf_compact_many_items_no_error() -> None:
-    """compact con 8+ ítems genera PDF sin error (no hay encimado)."""
+    """compact con 8+ ítems genera PDF válido sin error."""
     tenant = TenantFactory()
     patient = PatientFactory(tenant=tenant)
     doctor = DoctorFactory(tenant=tenant)
@@ -367,6 +367,210 @@ def test_pdf_compact_many_items_no_error() -> None:
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
+
+
+@pytest.mark.django_db
+def test_pdf_compact_12_meds_multi_page() -> None:
+    """compact con 12 medicamentos con indicación genera ≥2 páginas físicas.
+
+    WeasyPrint usa running elements (@top-center / @bottom-center) para que
+    header y footer se repitan en cada hoja; el cuerpo del Rp/ fluye y pagina
+    automáticamente cuando excede el área disponible.
+    12 meds con 3-4 líneas c/u (~36pt/med) exceden una sola hoja → ≥2 páginas.
+    Se verifica con pypdf (WeasyPrint genera PDFs comprimidos con ObjStm,
+    por lo que el regex de texto crudo no funciona).
+    """
+    from io import BytesIO
+    import pypdf
+
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(
+        tenant=tenant, patient=patient, doctor=doctor,
+        diagnosis="Tratamiento integral con múltiples comorbilidades",
+        vitals_snapshot={
+            "weight_kg": 80, "height_m": 1.70, "imc": 27.7,
+            "heart_rate": 80, "systolic": 130, "diastolic": 85,
+            "temperature_c": 36.8, "oxygen_saturation": 97, "glucose": 95,
+        },
+    )
+    # 12 medicamentos con indicación completa (3-4 líneas por ítem)
+    for i in range(1, 13):
+        PrescriptionItemFactory(
+            prescription=rx, tenant=tenant, order=i,
+            medication_name=f"Medicamento Nombre Largo Número {i}",
+            medication_concentration=f"{i * 50} mg",
+            medication_form="cápsula dura",
+            medication_presentation="Caja con 21 cápsulas",
+            kind=ItemKind.MEDICAMENTO,
+            dose=f"{i * 10} mg",
+            frequency="cada 8 horas",
+            route="oral",
+            duration="7 días",
+            indication="Tomar con alimentos para evitar malestar estomacal. No suspender sin consultar.",
+        )
+
+    user = _make_nurse(tenant)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    with api_tenant_ctx(tenant):
+        resp = client.get(_pdf_url(rx.id, formato="compact"))
+
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"%PDF"
+
+    # Verificar ≥2 páginas con pypdf (soporta PDFs comprimidos de WeasyPrint).
+    pdf_bytes = resp.content
+    reader = pypdf.PdfReader(BytesIO(pdf_bytes))
+    num_pages = len(reader.pages)
+    assert num_pages >= 2, (
+        f"compact con 12 meds debería generar ≥2 páginas físicas, "
+        f"pero se encontraron {num_pages} páginas. "
+        f"Tamaño del PDF: {len(pdf_bytes)} bytes."
+    )
+
+
+@pytest.mark.django_db
+def test_pdf_compact_1_med_single_page() -> None:
+    """compact con 1 medicamento genera exactamente 1 página."""
+    from io import BytesIO
+    import pypdf
+
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(tenant=tenant, patient=patient, doctor=doctor)
+    PrescriptionItemFactory(
+        prescription=rx, tenant=tenant, order=1,
+        medication_name="Paracetamol",
+        medication_concentration="500 mg",
+        medication_form="tableta",
+        kind=ItemKind.MEDICAMENTO,
+        dose="1 tableta",
+        frequency="cada 8 horas",
+        route="oral",
+        duration="5 días",
+        indication="Tomar con agua",
+    )
+
+    user = _make_nurse(tenant)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    with api_tenant_ctx(tenant):
+        resp = client.get(_pdf_url(rx.id, formato="compact"))
+
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"%PDF"
+    reader = pypdf.PdfReader(BytesIO(resp.content))
+    num_pages = len(reader.pages)
+    assert num_pages == 1, (
+        f"compact con 1 med debería ser 1 página, pero hay {num_pages}."
+    )
+
+
+@pytest.mark.django_db
+def test_pdf_compact_camsa_style_with_signos_diagnostico_controlado() -> None:
+    """compact estilo Camsa: signos, diagnóstico, controlado → PDF válido."""
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    DoctorCredentialFactory(
+        tenant=tenant, doctor=doctor,
+        title="Médico Cirujano", institution="UNAM",
+        credential_number="12345678",
+        kind="profesional", order=0,
+    )
+    DoctorCredentialFactory(
+        tenant=tenant, doctor=doctor,
+        title="Medicina Interna", institution="UNAM",
+        credential_number="87654321",
+        kind="especialidad", order=1,
+    )
+
+    rx = PrescriptionFactory(
+        tenant=tenant, patient=patient, doctor=doctor,
+        diagnosis="Hipertensión arterial esencial controlada",
+        vitals_snapshot={
+            "weight_kg": 72, "height_m": 1.65, "imc": 26.4,
+            "systolic": 125, "diastolic": 80, "heart_rate": 72,
+            "temperature_c": 36.5, "oxygen_saturation": 99,
+            "glucose": 90, "respiratory_rate": 14,
+        },
+    )
+    PrescriptionItemFactory(
+        prescription=rx, tenant=tenant, order=1,
+        medication_name="Morfina",
+        kind=ItemKind.MEDICAMENTO,
+        dose="10 mg", frequency="cada 4 horas", route="intravenosa",
+        duration="3 días",
+    )
+
+    user = _make_nurse(tenant)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    with api_tenant_ctx(tenant):
+        resp = client.get(_pdf_url(rx.id, formato="compact"))
+
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"%PDF"
+
+
+@pytest.mark.django_db
+def test_pdf_compact_cancelled_watermark() -> None:
+    """compact con receta anulada genera PDF con marca de agua (sin error)."""
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(
+        tenant=tenant, patient=patient, doctor=doctor,
+        status=PrescriptionStatus.CANCELLED,
+        cancellation_reason="Error en indicación",
+    )
+    PrescriptionItemFactory(
+        prescription=rx, tenant=tenant, order=1,
+        medication_name="Ibuprofeno 400 mg",
+        kind=ItemKind.MEDICAMENTO,
+    )
+
+    user = _make_nurse(tenant)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    with api_tenant_ctx(tenant):
+        resp = client.get(_pdf_url(rx.id, formato="compact"))
+
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"%PDF"
+
+
+@pytest.mark.django_db
+def test_pdf_compact_2_meds_single_page() -> None:
+    """compact con 2 medicamentos básicos genera PDF de 1 página."""
+    from io import BytesIO
+    import pypdf
+
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(tenant=tenant, patient=patient, doctor=doctor)
+    for i in range(1, 3):
+        PrescriptionItemFactory(
+            prescription=rx, tenant=tenant, order=i,
+            medication_name=f"Medicamento {i}",
+            kind=ItemKind.MEDICAMENTO,
+            dose="500 mg", frequency="cada 12 horas", route="oral", duration="7 días",
+        )
+
+    user = _make_nurse(tenant)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    with api_tenant_ctx(tenant):
+        resp = client.get(_pdf_url(rx.id, formato="compact"))
+
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"%PDF"
+    reader = pypdf.PdfReader(BytesIO(resp.content))
+    assert len(reader.pages) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -571,3 +775,192 @@ def test_build_context_route_label_mapping() -> None:
     med = ctx["medicamentos"][0]
     assert med["route"] == "subcutanea"
     assert med["route_label"] == "Subcutánea"
+
+
+# ---------------------------------------------------------------------------
+# Tests de rediseño compact v2: ondas SVG + logo marca de agua
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_pdf_compact_with_logo_watermark_present_in_context() -> None:
+    """Con logo de clínica, el contexto incluye logo_watermark_b64 no vacío."""
+    import base64
+    from io import BytesIO
+    from PIL import Image
+    from django.core.files.base import ContentFile
+
+    # Crear logo PNG mínimo válido
+    buf = BytesIO()
+    img = Image.new("RGBA", (120, 60), color=(30, 90, 200, 255))
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    tenant = TenantFactory()
+    settings = ClinicSettingsFactory(tenant=tenant, commercial_name="Clínica Test")
+    settings.logo.save("logo_test.png", ContentFile(buf.read()), save=True)
+
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(tenant=tenant, patient=patient, doctor=doctor)
+    PrescriptionItemFactory(prescription=rx, tenant=tenant, order=1, medication_name="Amoxicilina")
+
+    from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
+    set_current_tenant(tenant)
+    set_tenant_context_active(True)
+    try:
+        from apps.recetas.selectors import prescription_get
+        full_rx = prescription_get(prescription_id=rx.id)
+        ctx = _build_context(full_rx)
+    finally:
+        set_current_tenant(None)
+        set_tenant_context_active(False)
+
+    # El contexto debe incluir la clave logo_watermark_b64
+    assert "logo_watermark_b64" in ctx
+    watermark = ctx["logo_watermark_b64"]
+    assert watermark, "Con logo válido, logo_watermark_b64 no debe estar vacío"
+    assert watermark.startswith("data:image/png;base64,"), (
+        "logo_watermark_b64 debe ser un data URI PNG"
+    )
+
+    # Verificar que la imagen tiene opacidad reducida (~8%)
+    raw = base64.b64decode(watermark.split(",", 1)[1])
+    with Image.open(BytesIO(raw)) as wm_img:
+        assert wm_img.mode == "RGBA", "La marca de agua debe ser RGBA"
+        r, g, b, a = wm_img.split()
+        max_alpha = max(a.getdata())  # type: ignore[arg-type]
+        # Con alpha=0.08 del logo sólido (255*0.08 ≈ 20), max alpha < 30
+        assert max_alpha < 30, (
+            f"La marca de agua debería tener alpha muy bajo (max={max_alpha}), "
+            "indica que la opacidad no se redujo correctamente."
+        )
+
+
+@pytest.mark.django_db
+def test_pdf_compact_without_logo_watermark_empty_in_context() -> None:
+    """Sin logo de clínica, logo_watermark_b64 es cadena vacía (sin error)."""
+    tenant = TenantFactory()
+    # ClinicSettings sin logo
+    ClinicSettingsFactory(tenant=tenant, commercial_name="Clínica Sin Logo")
+
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(tenant=tenant, patient=patient, doctor=doctor)
+    PrescriptionItemFactory(prescription=rx, tenant=tenant, order=1, medication_name="Losartán")
+
+    from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
+    set_current_tenant(tenant)
+    set_tenant_context_active(True)
+    try:
+        from apps.recetas.selectors import prescription_get
+        full_rx = prescription_get(prescription_id=rx.id)
+        ctx = _build_context(full_rx)
+    finally:
+        set_current_tenant(None)
+        set_tenant_context_active(False)
+
+    assert "logo_watermark_b64" in ctx
+    assert ctx["logo_watermark_b64"] == "", (
+        "Sin logo, logo_watermark_b64 debe ser cadena vacía"
+    )
+
+
+@pytest.mark.django_db
+def test_pdf_compact_with_logo_generates_valid_pdf() -> None:
+    """compact con logo genera PDF válido con marca de agua (sin error de WeasyPrint)."""
+    from io import BytesIO as _BytesIO
+    from PIL import Image as _Image
+    from django.core.files.base import ContentFile
+
+    # Logo PNG mínimo
+    buf = _BytesIO()
+    img = _Image.new("RGBA", (120, 60), color=(30, 90, 200, 255))
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    tenant = TenantFactory()
+    settings = ClinicSettingsFactory(tenant=tenant, commercial_name="Clínica Ondas")
+    settings.logo.save("logo_ondas.png", ContentFile(buf.read()), save=True)
+
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(
+        tenant=tenant, patient=patient, doctor=doctor,
+        diagnosis="Hipertensión esencial",
+    )
+    PrescriptionItemFactory(
+        prescription=rx, tenant=tenant, order=1,
+        medication_name="Enalapril",
+        kind=ItemKind.MEDICAMENTO,
+        dose="10 mg", frequency="cada 12 horas", route="oral", duration="indefinido",
+    )
+
+    user = _make_nurse(tenant)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    with api_tenant_ctx(tenant):
+        resp = client.get(_pdf_url(rx.id, formato="compact"))
+
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"%PDF", "El PDF con logo debe iniciar con %PDF"
+
+
+@pytest.mark.django_db
+def test_pdf_compact_12_meds_multipage_with_watermark() -> None:
+    """compact con 12 meds + logo genera ≥2 páginas, ondas y marca de agua en ambas."""
+    from io import BytesIO as _BytesIO
+    import pypdf
+    from PIL import Image as _Image
+    from django.core.files.base import ContentFile
+
+    buf = _BytesIO()
+    img = _Image.new("RGBA", (120, 60), color=(30, 90, 200, 255))
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    tenant = TenantFactory()
+    settings = ClinicSettingsFactory(tenant=tenant, commercial_name="Clínica Multipágina")
+    settings.logo.save("logo_mp.png", ContentFile(buf.read()), save=True)
+
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(
+        tenant=tenant, patient=patient, doctor=doctor,
+        diagnosis="Tratamiento complejo multipágina",
+        vitals_snapshot={
+            "weight_kg": 75, "height_m": 1.68, "imc": 26.6,
+            "systolic": 120, "diastolic": 80, "heart_rate": 72,
+            "temperature_c": 36.6, "oxygen_saturation": 98,
+        },
+    )
+    # 12 medicamentos con indicación (3-4 líneas por ítem → desborda 1 hoja)
+    for i in range(1, 13):
+        PrescriptionItemFactory(
+            prescription=rx, tenant=tenant, order=i,
+            medication_name=f"Medicamento Nombre Largo Número {i}",
+            medication_concentration=f"{i * 50} mg",
+            medication_form="cápsula dura",
+            medication_presentation="Caja con 21 cápsulas",
+            kind=ItemKind.MEDICAMENTO,
+            dose=f"{i * 10} mg",
+            frequency="cada 8 horas",
+            route="oral",
+            duration="7 días",
+            indication="Tomar con alimentos. No suspender sin consultar al médico.",
+        )
+
+    user = _make_nurse(tenant)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    with api_tenant_ctx(tenant):
+        resp = client.get(_pdf_url(rx.id, formato="compact"))
+
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"%PDF"
+    reader = pypdf.PdfReader(_BytesIO(resp.content))
+    num_pages = len(reader.pages)
+    assert num_pages >= 2, (
+        f"compact con 12 meds + logo debería generar ≥2 páginas, "
+        f"se obtuvieron {num_pages}."
+    )

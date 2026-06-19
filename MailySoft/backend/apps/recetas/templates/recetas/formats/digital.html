@@ -5,16 +5,29 @@
   <style>
     /* ================================================================
        Receta médica DIGITAL — Carta vertical, amigable para el paciente.
-       Cada medicamento se presenta como una "tarjeta" clara:
-         Qué tomar · Cómo (dosis + frecuencia + vía) · Por cuánto tiempo.
-       Lenguaje sencillo; pensada para compartir por WhatsApp / correo.
-       Compatible con xhtml2pdf (tablas; sin flexbox/grid).
+       WeasyPrint 62.3+: running elements para header/footer repetidos.
+       Sin trucos xhtml2pdf. Diseño en tarjetas claras, lenguaje sencillo.
        F3: accent={{ accent }}, font={{ font_family }}
     ================================================================ */
+
     @page {
       size: letter;
-      margin: 1.2cm 1.4cm 2.2cm 1.4cm;
+      margin-top: 3.6cm;
+      margin-bottom: 2.2cm;
+      margin-left: 1.4cm;
+      margin-right: 1.4cm;
+
+      @top-center {
+        content: element(rx-header);
+        width: 100%;
+      }
+      @bottom-center {
+        content: element(rx-footer);
+        width: 100%;
+      }
     }
+
+    * { box-sizing: border-box; }
 
     body {
       font-family: {{ font_family }};
@@ -24,51 +37,110 @@
       padding: 0;
     }
 
-    /* --- Marca de agua "ANULADA" --- */
-    .watermark {
-      position: fixed;
-      top: 38%;
-      left: 14%;
-      font-size: 80pt;
-      font-weight: bold;
-      color: rgba(200, 0, 0, 0.14);
-      transform: rotate(-35deg);
-      z-index: 0;
-      white-space: nowrap;
+    /* ================================================================
+       MARCA DE AGUA
+    ================================================================ */
+    @page cancelled-page {
+      background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='240'><text x='50%' y='50%' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='90' font-weight='bold' fill='rgba(200,0,0,0.12)' transform='rotate(-35,300,120)'>ANULADA</text></svg>") center center no-repeat;
+    }
+    .page-cancelled { page: cancelled-page; }
+
+    /* ================================================================
+       RUNNING HEADER
+    ================================================================ */
+    #rx-header {
+      position: running(rx-header);
+      width: 100%;
+      background: white;
+      padding-bottom: 4pt;
     }
 
-    /* --- Encabezado simple --- */
-    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 4pt; }
-    .header-table td { vertical-align: top; }
-    .header-table td.brand-cell { width: 65%; }
-    .header-table td.contact-cell { width: 35%; text-align: right; }
+    .header-flex {
+      display: flex;
+      align-items: flex-start;
+      gap: 10pt;
+    }
+    .header-brand { flex: 1 1 auto; }
+    .header-contact {
+      flex: 0 0 auto;
+      max-width: 35%;
+      text-align: right;
+      font-size: 8pt;
+      color: #666;
+      line-height: 1.5;
+    }
 
     .clinic-name { font-size: 10pt; font-weight: bold; color: {{ accent }}; }
-    .doctor-name-hdr { font-size: 13pt; font-weight: bold; }
+    .doctor-name-hdr { font-size: 13pt; font-weight: bold; line-height: 1.1; }
     .doctor-sub { font-size: 8.5pt; color: #555; margin-top: 2pt; }
-    .contact-txt { font-size: 8pt; color: #666; line-height: 1.5; }
 
-    .accent-rule { border-bottom: 2pt solid {{ accent }}; margin-top: 6pt; margin-bottom: 0; }
-    .accent-thin  { border-bottom: 0.6pt solid {{ accent }}; margin-top: 1pt; margin-bottom: 10pt; }
+    .accent-rule { border-bottom: 2pt solid {{ accent }}; margin-top: 6pt; }
+    .accent-thin { border-bottom: 0.6pt solid {{ accent }}; margin-top: 1pt; }
 
-    /* --- Bloque "Tu receta" (encabezado amigable) --- */
+    /* ================================================================
+       RUNNING FOOTER
+    ================================================================ */
+    #rx-footer {
+      position: running(rx-footer);
+      width: 100%;
+      background: white;
+      display: flex;
+      align-items: flex-end;
+      gap: 10pt;
+      border-top: 1pt solid {{ accent }};
+      padding-top: 5pt;
+      font-size: 7.5pt;
+      color: #777;
+    }
+
+    .footer-dig-left { flex: 1 1 auto; }
+    .sign-line-dig {
+      border-top: 0.6pt solid #999;
+      width: 170pt;
+      padding-top: 3pt;
+    }
+    .footer-doc-name { font-size: 9pt; font-weight: bold; color: #2b2b2b; }
+    .footer-doc-sub { font-size: 7pt; color: #555; }
+
+    .footer-dig-right { flex: 0 0 auto; text-align: right; }
+    .qr-verify-dig { flex: 0 0 auto; text-align: center; }
+    .qr-label-dig { font-size: 5pt; color: #aaa; margin-top: 1pt; }
+
+    .ftr-page {
+      flex: 0 0 auto;
+      font-size: 6pt;
+      color: #bbb;
+      align-self: flex-end;
+    }
+    .ftr-page::after { content: counter(page) " / " counter(pages); }
+
+    /* ================================================================
+       CUERPO
+    ================================================================ */
+
+    /* Bloque hero "Tu receta" */
     .rx-hero {
       background: #FBF6E8;
       border: 1pt solid {{ accent }};
       border-radius: 5pt;
       padding: 8pt 12pt;
       margin-bottom: 12pt;
+      margin-top: 10pt;
     }
-    .rx-hero-title {
-      font-size: 14pt; font-weight: bold; color: {{ accent }};
-    }
+    .rx-hero-title { font-size: 14pt; font-weight: bold; color: {{ accent }}; }
     .rx-hero-sub { font-size: 9pt; color: #555; margin-top: 2pt; }
-    .rx-hero-table { width: 100%; border-collapse: collapse; margin-top: 6pt; }
-    .rx-hero-table td { font-size: 9pt; padding: 1.5pt 0; vertical-align: top; }
-    .rx-hero-label { color: #888; width: 70pt; }
+    .rx-hero-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4pt 24pt;
+      margin-top: 6pt;
+      font-size: 9pt;
+    }
+    .rx-hero-item { display: flex; gap: 4pt; }
+    .rx-hero-label { color: #888; }
     .rx-hero-value { font-weight: bold; }
 
-    /* --- Diagnóstico amigable --- */
+    /* Diagnóstico amigable */
     .diag-banner {
       background: #F0EBD8;
       border-left: 3pt solid {{ accent }};
@@ -79,34 +151,53 @@
     }
     .diag-banner-label { font-weight: bold; color: {{ accent }}; font-size: 8pt; text-transform: uppercase; }
 
-    /* --- Tarjeta de medicamento --- */
+    /* Signos vitales (compacto) */
+    .vitals-strip {
+      background: #f9f9f9;
+      border: 0.6pt solid #ddd;
+      border-radius: 4pt;
+      padding: 5pt 9pt;
+      font-size: 7.5pt;
+      color: #555;
+      margin-bottom: 12pt;
+    }
+    .vitals-strip span { margin-right: 10pt; }
+    .vl { color: {{ accent }}; font-weight: bold; }
+
+    /* Controlado */
+    .controlled-box {
+      background: #FFF3CD;
+      border: 1.5pt solid #E6A817;
+      border-radius: 6pt;
+      padding: 8pt 12pt;
+      margin-bottom: 12pt;
+    }
+
+    /* Tarjeta de medicamento */
     .med-card {
       border: 0.8pt solid {{ accent }};
       border-radius: 5pt;
-      padding: 8pt 11pt;
       margin-bottom: 10pt;
       page-break-inside: avoid;
+      overflow: hidden;
     }
     .med-card-header {
       background: {{ accent }};
       color: #fff;
       font-weight: bold;
       font-size: 10.5pt;
-      padding: 4pt 8pt;
-      margin: -8pt -11pt 8pt -11pt;
-      border-radius: 4pt 4pt 0 0;
+      padding: 4pt 10pt;
     }
+    .med-card-body { padding: 6pt 10pt 8pt 10pt; }
     .med-card-detail { font-size: 8.5pt; color: #666; margin-bottom: 6pt; }
 
-    /* Filas de instrucción dentro de la tarjeta */
-    .instr-table { width: 100%; border-collapse: collapse; }
-    .instr-table td { vertical-align: top; padding: 2pt 0; font-size: 9pt; }
-    .instr-icon { width: 16pt; color: {{ accent }}; font-weight: bold; }
-    .instr-label { width: 80pt; color: #555; }
-    .instr-value { font-weight: bold; }
-    .instr-note { font-size: 8pt; color: #777; font-style: italic; padding-top: 1pt; }
+    .instr-row { display: flex; gap: 6pt; font-size: 9pt; padding: 2pt 0; }
+    .instr-bullet { color: {{ accent }}; font-weight: bold; flex: 0 0 10pt; }
+    .instr-label { color: #555; flex: 0 0 90pt; }
+    .instr-value { font-weight: bold; flex: 1 1 auto; }
+    .instr-note { font-size: 8pt; color: #777; font-style: italic; padding-top: 2pt; }
 
-    /* --- Secciones de sueros y terapias (más simples) --- */
+    /* Secciones de sueros y terapias */
     .section-banner {
       background: {{ accent }};
       color: #fff;
@@ -129,112 +220,123 @@
     .simple-field { margin-bottom: 2pt; }
     .simple-label { color: #888; }
 
-    /* --- Signos vitales (colapsado) --- */
-    .vitals-strip {
-      background: #f9f9f9; border: 0.6pt solid #ddd; border-radius: 4pt;
-      padding: 5pt 9pt; font-size: 7.5pt; color: #555; margin-bottom: 12pt;
-    }
-    .vitals-strip span { margin-right: 10pt; }
-    .vl { color: {{ accent }}; font-weight: bold; }
-
-    /* --- Recomendaciones --- */
+    /* Recomendaciones */
     .rec-box {
-      background: #F5FAF5; border: 0.7pt solid #C5DEB0;
-      border-radius: 5pt; padding: 8pt 12pt; margin-top: 14pt;
+      background: #F5FAF5;
+      border: 0.7pt solid #C5DEB0;
+      border-radius: 5pt;
+      padding: 8pt 12pt;
+      margin-top: 14pt;
     }
     .rec-title { font-size: 9pt; font-weight: bold; color: #4A7A30; margin-bottom: 5pt; text-transform: uppercase; }
     .rec-text { font-size: 9.5pt; color: #333; white-space: pre-line; }
 
-    /* --- Pie amigable --- */
-    .footer-digital { position: fixed; bottom: 0; left: 0; right: 0; }
-    .footer-dig-inner {
-      border-top: 1pt solid {{ accent }};
-      padding-top: 5pt;
-      font-size: 7.5pt;
-      color: #777;
-    }
-    .footer-dig-table { width: 100%; border-collapse: collapse; }
-    .footer-dig-table td { vertical-align: bottom; }
-    .footer-dig-left { width: 50%; }
-    .footer-dig-right { text-align: right; width: 28%; }
-    .footer-doc-name { font-size: 9pt; font-weight: bold; color: #2b2b2b; }
-    .footer-doc-sub { font-size: 7pt; color: #555; }
-    .sign-line-dig { border-top: 0.6pt solid #999; width: 170pt; padding-top: 3pt; }
-    /* F5: QR de verificación */
-    .qr-verify-dig { text-align: center; padding-left: 8pt; width: 22%; }
-    .qr-verify-dig img { display: block; margin: 0 auto; }
-    .qr-label-dig { font-size: 5pt; color: #aaa; margin-top: 1pt; }
   </style>
 </head>
-<body>
+<body{% if cancelled %} class="page-cancelled"{% endif %}>
 
-  {% if cancelled %}
-  <div class="watermark">ANULADA</div>
-  {% endif %}
-
-  <!-- ============================ ENCABEZADO -->
-  <table class="header-table">
-    <tr>
-      <td class="brand-cell">
-        {% if logo_b64 %}<img src="data:image/{{ logo_mime }};base64,{{ logo_b64 }}" alt="Logo" width="{{ logo_w }}" height="{{ logo_h }}" /><br/>{% endif %}
+  <!-- ================================================================
+       RUNNING HEADER
+  ================================================================ -->
+  <div id="rx-header">
+    <div class="header-flex">
+      <div class="header-brand">
+        {% if logo_b64 %}<img src="data:image/{{ logo_mime }};base64,{{ logo_b64 }}" alt="Logo" style="max-width:{{ logo_w }}pt; max-height:{{ logo_h }}pt; display:block; margin-bottom:3pt;" />{% endif %}
         {% if clinic_name %}<div class="clinic-name">{{ clinic_name }}</div>{% endif %}
         <div class="doctor-name-hdr">Dr(a). {{ doctor_name }}</div>
         <div class="doctor-sub">
           {% if doctor_specialty %}{{ doctor_specialty }} &mdash; {% endif %}
           {% if credentials %}
-            {% for cred in credentials %}
-              Céd. {{ cred.credential_number }}{% if not forloop.last %} · {% endif %}
-            {% endfor %}
+            {% for cred in credentials %}Céd. {{ cred.credential_number }}{% if not forloop.last %} &middot; {% endif %}{% endfor %}
           {% else %}
             Céd. Prof. {{ cedula_profesional }}
           {% endif %}
         </div>
-      </td>
-      <td class="contact-cell">
-        <div class="contact-txt">
-          {% if address %}{{ address }}<br/>{% endif %}
-          {% if address_2 %}{{ address_2 }}<br/>{% endif %}
-          {% if phone %}Tel. {{ phone }}<br/>{% endif %}
-          {% if mobile %}Cel. {{ mobile }}<br/>{% endif %}
-          {% if email %}{{ email }}<br/>{% endif %}
-          {% if website %}{{ website }}{% endif %}
-        </div>
-      </td>
-    </tr>
-  </table>
-  <div class="accent-rule"></div>
-  <div class="accent-thin"></div>
+      </div>
+      <div class="header-contact">
+        {% if address %}{{ address }}<br/>{% endif %}
+        {% if address_2 %}{{ address_2 }}<br/>{% endif %}
+        {% if phone %}Tel. {{ phone }}<br/>{% endif %}
+        {% if mobile %}Cel. {{ mobile }}<br/>{% endif %}
+        {% if email %}{{ email }}<br/>{% endif %}
+        {% if website %}{{ website }}{% endif %}
+      </div>
+    </div>
+    <div class="accent-rule"></div>
+    <div class="accent-thin"></div>
+  </div><!-- /#rx-header -->
 
-  <!-- ============================ TU RECETA (hero) -->
+
+  <!-- ================================================================
+       RUNNING FOOTER
+  ================================================================ -->
+  <div id="rx-footer">
+    <div class="footer-dig-left">
+      <div class="sign-line-dig">
+        <div class="footer-doc-name">{{ doctor_name }}</div>
+        {% if credentials %}
+          {% for cred in credentials %}
+          <div class="footer-doc-sub">{{ cred.kind_display }}: Céd. {{ cred.credential_number }}</div>
+          {% endfor %}
+        {% else %}
+          <div class="footer-doc-sub">Céd. Prof. {{ cedula_profesional }}</div>
+        {% endif %}
+        {% if doctor_specialty %}<div class="footer-doc-sub">{{ doctor_specialty }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="footer-dig-right">
+      {% if sello_b64 %}
+      <img src="data:image/{{ sello_mime }};base64,{{ sello_b64 }}" alt="Sello"
+           style="max-width:{{ sello_w }}pt; max-height:{{ sello_h }}pt;" />
+      {% endif %}
+      <div style="font-size:6.5pt; color:#aaa; margin-top:3pt;">Folio N&ordm; {{ folio }} &mdash; {{ issued_at }}</div>
+    </div>
+    {% if qr_b64 %}
+    <div class="qr-verify-dig">
+      <img src="data:image/{{ qr_mime }};base64,{{ qr_b64 }}" alt="QR verificación" width="65" height="65" />
+      <div class="qr-label-dig">Verificar autenticidad</div>
+    </div>
+    {% endif %}
+    <div class="ftr-page"></div>
+  </div><!-- /#rx-footer -->
+
+
+  <!-- ================================================================
+       CUERPO
+  ================================================================ -->
+
+  <!-- Hero "Tu receta" -->
   <div class="rx-hero">
     <div class="rx-hero-title">Tu receta m&eacute;dica</div>
     <div class="rx-hero-sub">Guarda este documento y sigue las indicaciones de tu m&eacute;dico.</div>
-    <table class="rx-hero-table">
-      <tr>
-        <td class="rx-hero-label">Paciente:</td>
-        <td class="rx-hero-value">{{ patient_name }}</td>
-        <td style="width:20pt;"></td>
-        <td class="rx-hero-label">Fecha:</td>
-        <td class="rx-hero-value">{{ issued_at }}</td>
-      </tr>
+    <div class="rx-hero-grid">
+      <div class="rx-hero-item">
+        <span class="rx-hero-label">Paciente:</span>
+        <span class="rx-hero-value">{{ patient_name }}</span>
+      </div>
+      <div class="rx-hero-item">
+        <span class="rx-hero-label">Fecha:</span>
+        <span class="rx-hero-value">{{ issued_at }}</span>
+      </div>
       {% if patient_age_sex %}
-      <tr>
-        <td class="rx-hero-label">Edad / Sexo:</td>
-        <td class="rx-hero-value" colspan="4">{{ patient_age_sex }}</td>
-      </tr>
+      <div class="rx-hero-item">
+        <span class="rx-hero-label">Edad/Sexo:</span>
+        <span class="rx-hero-value">{{ patient_age_sex }}</span>
+      </div>
       {% endif %}
-      <tr>
-        <td class="rx-hero-label">Folio:</td>
-        <td class="rx-hero-value" style="color:{{ accent }};">N&ordm; {{ folio }}</td>
-        <td></td>
-        {% if cancelled %}
-        <td colspan="2" style="color:#cc0000; font-weight:bold; font-size:9pt;">RECETA ANULADA</td>
-        {% endif %}
-      </tr>
-    </table>
+      <div class="rx-hero-item">
+        <span class="rx-hero-label">Folio:</span>
+        <span class="rx-hero-value" style="color:{{ accent }};">N&ordm; {{ folio }}</span>
+      </div>
+      {% if cancelled %}
+      <div class="rx-hero-item">
+        <span style="color:#cc0000; font-weight:bold;">&#9888; RECETA ANULADA</span>
+      </div>
+      {% endif %}
+    </div>
   </div>
 
-  <!-- ============================ DIAGNÓSTICO -->
+  <!-- Diagnóstico -->
   {% if sections.diagnostico and diagnosis %}
   <div class="diag-banner">
     <div class="diag-banner-label">Tu diagn&oacute;stico</div>
@@ -242,7 +344,7 @@
   </div>
   {% endif %}
 
-  <!-- ============================ SIGNOS VITALES (compacto) -->
+  <!-- Signos vitales -->
   {% if sections.signos and vitals %}
   <div class="vitals-strip">
     Tus signos al momento de la consulta:&nbsp;&nbsp;
@@ -251,13 +353,14 @@
     {% if vitals.systolic and vitals.diastolic %}<span><span class="vl">TA</span> {{ vitals.systolic }}/{{ vitals.diastolic }}</span>{% endif %}
     {% if vitals.heart_rate %}<span><span class="vl">FC</span> {{ vitals.heart_rate }} lpm</span>{% endif %}
     {% if vitals.temperature_c %}<span><span class="vl">Temp</span> {{ vitals.temperature_c }}&deg;C</span>{% endif %}
-    {% if vitals.oxygen_saturation %}<span><span class="vl">SpO&sup2;</span> {{ vitals.oxygen_saturation }}%</span>{% endif %}
+    {% if vitals.oxygen_saturation %}<span><span class="vl">SpO&#8322;</span> {{ vitals.oxygen_saturation }}%</span>{% endif %}
+    {% if vitals.glucose %}<span><span class="vl">Glucosa</span> {{ vitals.glucose }} mg/dL</span>{% endif %}
   </div>
   {% endif %}
 
-  <!-- ============================ F6: AVISO MEDICAMENTO CONTROLADO -->
+  <!-- Controlado -->
   {% if is_controlled %}
-  <div style="background:#FFF3CD; border:1.5pt solid #E6A817; border-radius:6pt; padding:8pt 12pt; margin-bottom:12pt;">
+  <div class="controlled-box">
     <div style="font-size:10pt; font-weight:bold; color:#7B4700;">&#9888; MEDICAMENTO CONTROLADO &mdash; Grupo {{ controlled_group_top }} (COFEPRIS)</div>
     {% if controlled_folio %}
     <div style="font-size:9pt; color:#555; margin-top:3pt;">Folio Recetario Especial: <strong>{{ controlled_folio }}</strong></div>
@@ -268,53 +371,50 @@
   </div>
   {% endif %}
 
-  <!-- ============================ MEDICAMENTOS (tarjetas) -->
+  <!-- Medicamentos (tarjetas) -->
   {% if medicamentos %}
   {% for item in medicamentos %}
   <div class="med-card">
     <div class="med-card-header">{{ forloop.counter }}. {{ item.medication_name }}</div>
-    {% if item.medication_detail %}<div class="med-card-detail">{{ item.medication_detail }}</div>{% endif %}
-    <table class="instr-table">
+    <div class="med-card-body">
+      {% if item.medication_detail %}<div class="med-card-detail">{{ item.medication_detail }}</div>{% endif %}
       {% if item.dose %}
-      <tr>
-        <td class="instr-icon">&bull;</td>
-        <td class="instr-label">Qu&eacute; tomar:</td>
-        <td class="instr-value">{{ item.dose }}</td>
-      </tr>
+      <div class="instr-row">
+        <span class="instr-bullet">&bull;</span>
+        <span class="instr-label">Qu&eacute; tomar:</span>
+        <span class="instr-value">{{ item.dose }}</span>
+      </div>
       {% endif %}
       {% if item.frequency %}
-      <tr>
-        <td class="instr-icon">&bull;</td>
-        <td class="instr-label">Cu&aacute;ndo:</td>
-        <td class="instr-value">{{ item.frequency }}</td>
-      </tr>
+      <div class="instr-row">
+        <span class="instr-bullet">&bull;</span>
+        <span class="instr-label">Cu&aacute;ndo:</span>
+        <span class="instr-value">{{ item.frequency }}</span>
+      </div>
       {% endif %}
       {% if item.route_label %}
-      <tr>
-        <td class="instr-icon">&bull;</td>
-        <td class="instr-label">C&oacute;mo tomarlo:</td>
-        <td class="instr-value">{{ item.route_label }}</td>
-      </tr>
+      <div class="instr-row">
+        <span class="instr-bullet">&bull;</span>
+        <span class="instr-label">C&oacute;mo tomarlo:</span>
+        <span class="instr-value">{{ item.route_label }}</span>
+      </div>
       {% endif %}
       {% if item.duration %}
-      <tr>
-        <td class="instr-icon">&bull;</td>
-        <td class="instr-label">Por cu&aacute;nto tiempo:</td>
-        <td class="instr-value">{{ item.duration }}</td>
-      </tr>
+      <div class="instr-row">
+        <span class="instr-bullet">&bull;</span>
+        <span class="instr-label">Por cu&aacute;nto tiempo:</span>
+        <span class="instr-value">{{ item.duration }}</span>
+      </div>
       {% endif %}
       {% if sections.indicaciones and item.indication %}
-      <tr>
-        <td class="instr-icon"></td>
-        <td colspan="2" class="instr-note">Nota del m&eacute;dico: {{ item.indication }}</td>
-      </tr>
+      <div class="instr-note">Nota del m&eacute;dico: {{ item.indication }}</div>
       {% endif %}
-    </table>
+    </div>
   </div>
   {% endfor %}
   {% endif %}
 
-  <!-- ============================ SUEROS -->
+  <!-- Sueros -->
   {% if sections.sueros and sueros %}
   <div class="section-banner">Sueros / Soluciones</div>
   {% for item in sueros %}
@@ -330,7 +430,7 @@
   {% endfor %}
   {% endif %}
 
-  <!-- ============================ TERAPIAS -->
+  <!-- Terapias -->
   {% if sections.terapias and terapias %}
   <div class="section-banner">Terapias y Procedimientos</div>
   {% for item in terapias %}
@@ -344,48 +444,13 @@
   {% endfor %}
   {% endif %}
 
-  <!-- ============================ RECOMENDACIONES -->
+  <!-- Recomendaciones -->
   {% if sections.indicaciones and recommendations %}
   <div class="rec-box">
     <div class="rec-title">Recomendaciones de tu m&eacute;dico</div>
     <div class="rec-text">{{ recommendations }}</div>
   </div>
   {% endif %}
-
-  <!-- ============================ PIE -->
-  <div class="footer-digital">
-    <div class="footer-dig-inner">
-      <table class="footer-dig-table">
-        <tr>
-          <td class="footer-dig-left">
-            <div class="sign-line-dig">
-              <div class="footer-doc-name">{{ doctor_name }}</div>
-              {% if credentials %}
-                {% for cred in credentials %}
-                <div class="footer-doc-sub">{{ cred.kind_display }}: Céd. {{ cred.credential_number }}</div>
-                {% endfor %}
-              {% else %}
-                <div class="footer-doc-sub">Céd. Prof. {{ cedula_profesional }}</div>
-              {% endif %}
-              {% if doctor_specialty %}<div class="footer-doc-sub">{{ doctor_specialty }}</div>{% endif %}
-            </div>
-          </td>
-          <td class="footer-dig-right">
-            {% if sello_b64 %}
-            <img src="data:image/{{ sello_mime }};base64,{{ sello_b64 }}" alt="Sello" width="{{ sello_w }}" height="{{ sello_h }}" />
-            {% endif %}
-            <div style="font-size:6.5pt; color:#aaa; margin-top:3pt;">Folio N&ordm; {{ folio }} &mdash; {{ issued_at }}</div>
-          </td>
-          {% if qr_b64 %}
-          <td class="qr-verify-dig">
-            <img src="data:image/{{ qr_mime }};base64,{{ qr_b64 }}" alt="QR verificación" width="65" height="65" />
-            <div class="qr-label-dig">Verificar autenticidad</div>
-          </td>
-          {% endif %}
-        </tr>
-      </table>
-    </div>
-  </div>
 
 </body>
 </html>

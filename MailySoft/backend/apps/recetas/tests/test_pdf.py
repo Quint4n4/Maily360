@@ -239,7 +239,7 @@ def test_pdf_cross_tenant_returns_404() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Tests de generación de PDF (end-to-end real con xhtml2pdf)
+# Tests de generación de PDF (end-to-end real con WeasyPrint)
 # ---------------------------------------------------------------------------
 
 
