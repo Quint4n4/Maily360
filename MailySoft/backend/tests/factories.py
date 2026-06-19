@@ -18,6 +18,8 @@ from apps.authn.models import User
 from apps.clinica.models import (
     ClinicSettings,
     ClinicTemplate,
+    CredentialKind,
+    DoctorCredential,
     DoctorUniversity,
     PatientCategory,
     TemplateKind,
@@ -35,9 +37,11 @@ from apps.expediente.models import (
 from apps.notas.models import Note, NoteScope
 from apps.recetas.models import (
     GlobalMedication,
+    ItemKind,
     Medication,
     MedicationForm,
     Prescription,
+    PrescriptionFormat,
     PrescriptionItem,
     PrescriptionStatus,
 )
@@ -641,9 +645,7 @@ class PatientCategoryFactory(DjangoModelFactory):
 class GlobalMedicationFactory(DjangoModelFactory):
     """Medicamento del catálogo global (sin tenant).
 
-    Por defecto crea una tableta de paracetamol 500 mg activa.
-    Usa generic_name + concentration + form distintos si necesitas varios
-    medicamentos únicos (el seed usa get_or_create sobre esos tres campos).
+    Por defecto crea una tableta activa. COFEPRIS F2: kind=medicamento, controlled_group=none.
     """
 
     class Meta:
@@ -655,12 +657,14 @@ class GlobalMedicationFactory(DjangoModelFactory):
     concentration = factory.Sequence(lambda n: f"{n * 100 + 100} mg")
     presentation = ""
     is_active = True
+    kind = ItemKind.MEDICAMENTO
+    controlled_group = "none"
 
 
 class MedicationFactory(DjangoModelFactory):
     """Medicamento custom de una clínica (con tenant).
 
-    Por defecto crea una tableta activa sin nombre comercial.
+    Por defecto crea una tableta activa. COFEPRIS F2: kind=medicamento, controlled_group=none.
     """
 
     class Meta:
@@ -674,6 +678,8 @@ class MedicationFactory(DjangoModelFactory):
     concentration = factory.Sequence(lambda n: f"{n * 50 + 50} mg")
     presentation = ""
     is_active = True
+    kind = ItemKind.MEDICAMENTO
+    controlled_group = "none"
 
 
 class PrescriptionFactory(DjangoModelFactory):
@@ -697,14 +703,23 @@ class PrescriptionFactory(DjangoModelFactory):
     )
     folio = factory.Sequence(lambda n: n + 1)
     status = PrescriptionStatus.ACTIVE
+    diagnosis = ""
     recommendations = ""
     vitals_snapshot = None
     cancelled_at = None
     cancellation_reason = ""
+    # F6: medicamentos controlados (default: no controlada)
+    controlled_folio = ""
+    valid_until = None
 
 
 class PrescriptionItemFactory(DjangoModelFactory):
-    """Renglón de tratamiento de una receta."""
+    """Renglón de tratamiento de una receta.
+
+    COFEPRIS F2: dose/frequency/route/duration son requeridos para kind=medicamento.
+    La factory los rellena con valores válidos por defecto para no romper tests
+    que no los pasaban explícitamente. Para suero/terapia pueden quedar vacíos.
+    """
 
     class Meta:
         model = PrescriptionItem
@@ -713,12 +728,46 @@ class PrescriptionItemFactory(DjangoModelFactory):
     created_by = factory.LazyAttribute(lambda obj: obj.prescription.created_by)
     prescription = factory.SubFactory(PrescriptionFactory)
     order = factory.Sequence(lambda n: n + 1)
+    kind = ItemKind.MEDICAMENTO
     medication_name = factory.Sequence(lambda n: f"Medicamento Test {n}")
     medication_presentation = ""
     medication_form = ""
     medication_concentration = ""
-    indication = "1 tableta cada 8 horas por 7 días"
+    # COFEPRIS F2: campos estructurados (rellenos con valores válidos por defecto)
+    dose = "1 tableta"
+    frequency = "cada 8 horas"
+    route = "oral"
+    duration = "7 días"
+    # Nota adicional (antes campo obligatorio — ahora opcional)
+    indication = ""
     quantity = ""
+    # F6: snapshot del grupo COFEPRIS (default: no controlado)
+    controlled_group = "none"
+
+
+class PrescriptionFormatFactory(DjangoModelFactory):
+    """Formato de receta configurable por clínica (F3).
+
+    Por defecto crea un formato estándar activo (no default, no por médico).
+    Pasar is_default=True para el formato default del tenant.
+    Pasar doctor= y is_authorized=True para el formato personal del médico.
+    """
+
+    class Meta:
+        model = PrescriptionFormat
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Formato Test {n}")
+    base_layout = PrescriptionFormat.BaseLayout.STANDARD
+    accent_color = "#9A7B1E"
+    font = PrescriptionFormat.FontChoice.HELVETICA
+    sections = factory.LazyFunction(dict)
+    letterhead_mode = PrescriptionFormat.LetterheadMode.DIGITAL
+    is_default = False
+    doctor = None
+    is_authorized = False
+    is_active = True
 
 
 class DoctorUniversityFactory(DjangoModelFactory):
@@ -737,3 +786,25 @@ class DoctorUniversityFactory(DjangoModelFactory):
     created_by = factory.SubFactory(UserFactory)
     doctor = factory.SubFactory(DoctorFactory)
     name = factory.Sequence(lambda n: f"Universidad {n}")
+
+
+class DoctorCredentialFactory(DjangoModelFactory):
+    """Credencial académica de un médico (DoctorCredential — COFEPRIS F2).
+
+    Por defecto crea una cédula profesional activa con datos genéricos.
+    Pasar `kind`, `title`, `institution` o `credential_number` explícitamente
+    en el test si se necesitan valores específicos.
+    """
+
+    class Meta:
+        model = DoctorCredential
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    doctor = factory.SubFactory(DoctorFactory)
+    title = factory.Sequence(lambda n: f"Médico Cirujano {n}")
+    institution = factory.Sequence(lambda n: f"Universidad Nacional {n}")
+    credential_number = factory.Sequence(lambda n: f"{1000000 + n}")
+    kind = CredentialKind.PROFESIONAL
+    order = 0
+    is_active = True

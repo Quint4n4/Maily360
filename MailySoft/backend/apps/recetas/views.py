@@ -39,7 +39,7 @@ from rest_framework.response import Response
 
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
-from apps.core.permissions import MedicationPermission, PrescriptionPermission
+from apps.core.permissions import MedicationPermission, PrescriptionFormatPermission, PrescriptionPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
 from apps.pacientes.models import Patient
@@ -47,6 +47,8 @@ from apps.pacientes.selectors import patient_get
 from apps.recetas.selectors import (
     SEARCH_LIMIT,
     medication_search,
+    prescription_format_get,
+    prescription_format_list,
     prescription_get,
     prescription_list,
 )
@@ -57,9 +59,19 @@ from apps.recetas.serializers import (
     PrescriptionCancelInputSerializer,
     PrescriptionCreateInputSerializer,
     PrescriptionDetailOutputSerializer,
+    PrescriptionFormatCreateInputSerializer,
+    PrescriptionFormatOutputSerializer,
+    PrescriptionFormatUpdateInputSerializer,
     PrescriptionListOutputSerializer,
 )
-from apps.recetas.services import medication_create, prescription_cancel, prescription_create
+from apps.recetas.services import (
+    medication_create,
+    prescription_cancel,
+    prescription_create,
+    prescription_format_create,
+    prescription_format_delete,
+    prescription_format_update,
+)
 
 logger = logging.getLogger("apps.recetas.views")
 
@@ -110,7 +122,10 @@ class MedicationSearchApi(TenantAPIView):
         except (ValueError, TypeError):
             limit = SEARCH_LIMIT
 
-        results = medication_search(q=q, limit=limit)
+        # COFEPRIS F2: filtro opcional por kind (medicamento|suero|terapia).
+        kind_param: str | None = request.query_params.get("kind") or None
+
+        results = medication_search(q=q, limit=limit, kind=kind_param)
         out = MedicationSearchOutputSerializer(results, many=True)
         return Response(out.data, status=status.HTTP_200_OK)
 
@@ -253,6 +268,9 @@ class PrescriptionListCreateApi(TenantAPIView):
                 appointment_id=s.validated_data.get("appointment_id"),
                 evolution_note_id=s.validated_data.get("evolution_note_id"),
                 recommendations=s.validated_data.get("recommendations", ""),
+                diagnosis=s.validated_data.get("diagnosis", ""),
+                # F6: folio del recetario especial COFEPRIS (vacío si no es controlada)
+                controlled_folio=s.validated_data.get("controlled_folio", ""),
             )
         except DjangoValidationError as exc:
             # Solo capturamos errores de DATOS (400). Los errores de autorización
@@ -383,8 +401,39 @@ class PrescriptionPdfApi(TenantAPIView):
             metadata={"folio": prescription.folio},
         )
 
+        # ?formato= permite seleccionar el layout por nombre (vista previa rápida).
+        # ?format_id= permite seleccionar un PrescriptionFormat persistido por UUID.
+        # Si ninguno se pasa, se resuelve el formato automáticamente (F3).
+        from apps.recetas.pdf import VALID_LAYOUTS
+        from apps.recetas.selectors import prescription_format_resolve
+
+        format_id_param: str | None = request.query_params.get("format_id")
+        formato_param: str | None = request.query_params.get("formato", "").lower().strip() or None
+
+        import uuid as _uuid
+
+        format_override_id: _uuid.UUID | None = None
+        if format_id_param:
+            try:
+                format_override_id = _uuid.UUID(format_id_param)
+            except ValueError:
+                format_override_id = None
+
+        # Resolver el formato para el PDF.
+        if formato_param and formato_param not in VALID_LAYOUTS:
+            formato_param = None
+
+        resolved_fmt = prescription_format_resolve(
+            prescription=prescription,
+            format_override_id=format_override_id,
+            layout_override=formato_param,
+        )
+
         try:
-            pdf_bytes = prescription_pdf_build(prescription=prescription)
+            pdf_bytes = prescription_pdf_build(
+                prescription=prescription,
+                format_override=resolved_fmt,
+            )
         except RuntimeError as exc:
             logger.error(
                 "PrescriptionPdfApi: error al generar PDF — prescription_id=%s — %s",
@@ -460,3 +509,179 @@ class PrescriptionCancelApi(TenantAPIView):
             PrescriptionDetailOutputSerializer(updated).data,
             status=status.HTTP_200_OK,
         )
+
+
+# ---------------------------------------------------------------------------
+# F3 — PrescriptionFormat CRUD
+# ---------------------------------------------------------------------------
+
+
+class PrescriptionFormatListCreateApi(TenantAPIView):
+    """GET  /api/v1/recetas/formatos/  — lista formatos del tenant.
+    POST /api/v1/recetas/formatos/  — crea un formato nuevo.
+
+    GET:
+        Devuelve todos los PrescriptionFormat activos del tenant, ordenados
+        por -is_default, name. Sin paginación (los formatos son pocos por tenant).
+
+    POST:
+        Crea un nuevo formato. El campo is_authorized solo lo puede establecer
+        un owner/admin; cuando lo envía un médico, se ignora (siempre False).
+        Si is_default=True, el servicio desmarca el anterior default del tenant.
+
+    Permisos: PrescriptionFormatPermission (GET=ALL_ROLES, POST=owner/admin/doctor).
+    Anti-IDOR: el TenantManager filtra por tenant activo.
+    """
+
+    permission_classes = [IsAuthenticated, PrescriptionFormatPermission]
+
+    def get(self, request: Request) -> Response:
+        """Lista los formatos activos del tenant."""
+        qs = prescription_format_list(tenant=get_current_tenant())
+        out = PrescriptionFormatOutputSerializer(qs, many=True)
+        return Response(out.data, status=status.HTTP_200_OK)
+
+    def post(self, request: Request) -> Response:
+        """Crea un nuevo formato de receta."""
+        s = PrescriptionFormatCreateInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        active_role: str = getattr(request, "active_role", "") or ""
+        is_admin = active_role in ("owner", "admin")
+
+        # Inyectar active_role para auditoría
+        request.user.active_role = active_role  # type: ignore[union-attr]
+
+        # is_authorized solo admin puede activarlo; médico siempre crea con False
+        data = dict(s.validated_data)
+        if not is_admin:
+            data.pop("is_authorized", None)
+
+        try:
+            fmt = prescription_format_create(
+                tenant=tenant,
+                user=request.user,
+                **data,
+            )
+        except Exception as exc:
+            from django.core.exceptions import ValidationError as DjVE
+            if isinstance(exc, DjVE):
+                msg = exc.message if hasattr(exc, "message") else str(exc)
+                return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
+            raise
+
+        return Response(
+            PrescriptionFormatOutputSerializer(fmt).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PrescriptionFormatDetailApi(TenantAPIView):
+    """GET   /api/v1/recetas/formatos/<format_id>/ — detalle.
+    PATCH /api/v1/recetas/formatos/<format_id>/ — actualizar.
+    DELETE /api/v1/recetas/formatos/<format_id>/ — baja lógica.
+
+    GET:
+        Devuelve el detalle del formato. Disponible para todos los roles.
+
+    PATCH:
+        Actualiza campos del formato. is_authorized solo lo cambia owner/admin.
+        is_active y campos de identidad son inmutables.
+
+    DELETE:
+        Baja lógica (is_active=False + deleted_at). Solo owner/admin.
+        Si era el default del tenant, queda sin default.
+
+    Anti-IDOR: prescription_format_get usa TenantManager; formato de otro tenant → 404.
+    """
+
+    permission_classes = [IsAuthenticated, PrescriptionFormatPermission]
+
+    def get(self, request: Request, format_id: uuid.UUID) -> Response:
+        """Detalle del formato."""
+        from apps.recetas.models import PrescriptionFormat
+
+        try:
+            fmt = prescription_format_get(format_id=format_id)
+        except PrescriptionFormat.DoesNotExist:
+            return Response(
+                {"detail": "Formato no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(
+            PrescriptionFormatOutputSerializer(fmt).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def patch(self, request: Request, format_id: uuid.UUID) -> Response:
+        """Actualiza parcialmente un formato de receta."""
+        from apps.recetas.models import PrescriptionFormat
+
+        try:
+            fmt = prescription_format_get(format_id=format_id)
+        except PrescriptionFormat.DoesNotExist:
+            return Response(
+                {"detail": "Formato no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        s = PrescriptionFormatUpdateInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        if not s.validated_data:
+            return Response(
+                {"detail": "No se enviaron campos para actualizar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tenant = get_current_tenant()
+        active_role: str = getattr(request, "active_role", "") or ""
+        is_admin = active_role in ("owner", "admin")
+        request.user.active_role = active_role  # type: ignore[union-attr]
+
+        try:
+            updated = prescription_format_update(
+                fmt=fmt,
+                user=request.user,
+                tenant=tenant,
+                is_admin=is_admin,
+                **s.validated_data,
+            )
+        except Exception as exc:
+            from django.core.exceptions import ValidationError as DjVE
+            if isinstance(exc, DjVE):
+                msg = exc.message if hasattr(exc, "message") else str(exc)
+                return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
+            raise
+
+        return Response(
+            PrescriptionFormatOutputSerializer(updated).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def delete(self, request: Request, format_id: uuid.UUID) -> Response:
+        """Baja lógica de un formato de receta."""
+        from apps.recetas.models import PrescriptionFormat
+
+        try:
+            fmt = prescription_format_get(format_id=format_id)
+        except PrescriptionFormat.DoesNotExist:
+            return Response(
+                {"detail": "Formato no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        tenant = get_current_tenant()
+        request.user.active_role = getattr(request, "active_role", "") or ""  # type: ignore[union-attr]
+
+        try:
+            prescription_format_delete(fmt=fmt, user=request.user, tenant=tenant)
+        except Exception as exc:
+            from django.core.exceptions import ValidationError as DjVE
+            if isinstance(exc, DjVE):
+                msg = exc.message if hasattr(exc, "message") else str(exc)
+                return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
+            raise
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

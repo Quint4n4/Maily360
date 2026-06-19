@@ -12,10 +12,16 @@ Rutas B1.2:
     recetas/<prescription_id>/anular/         PrescriptionCancelApi      POST anular
     recetas/<prescription_id>/                PrescriptionDetailApi      GET detalle
 
+F5 — Endpoint público (sin auth):
+    verificar-receta/<prescription_id>/       PrescriptionVerifyApi  GET verificar QR
+
 ORDEN: rutas de acción específica (/anular/) van ANTES del detalle para evitar
        colisión. Medicamentos van antes de recetas para evitar ambigüedad.
        La ruta de historial sigue el patrón expediente/<patient_id>/<recurso>/
        establecido por la app expediente.
+       La ruta pública de verificación usa el prefijo "verificar-receta/" para
+       distinguirla semánticamente del resto de la API y facilitar el rate-limiting
+       selectivo en el reverse proxy.
 """
 
 from django.urls import path
@@ -25,9 +31,12 @@ from apps.recetas.views import (
     MedicationSearchApi,
     PrescriptionCancelApi,
     PrescriptionDetailApi,
+    PrescriptionFormatDetailApi,
+    PrescriptionFormatListCreateApi,
     PrescriptionListCreateApi,
     PrescriptionPdfApi,
 )
+from apps.recetas.views_public import PrescriptionVerifyApi
 
 urlpatterns = [
     # B1.1 — Catálogo de medicamentos
@@ -66,5 +75,24 @@ urlpatterns = [
         "recetas/<uuid:prescription_id>/",
         PrescriptionDetailApi.as_view(),
         name="prescription-detail",
+    ),
+    # F3 — PrescriptionFormat CRUD
+    # Lista + creación van ANTES del detalle para evitar colisión.
+    path(
+        "recetas/formatos/",
+        PrescriptionFormatListCreateApi.as_view(),
+        name="prescription-format-list-create",
+    ),
+    path(
+        "recetas/formatos/<uuid:format_id>/",
+        PrescriptionFormatDetailApi.as_view(),
+        name="prescription-format-detail",
+    ),
+    # F5 — Verificación pública de autenticidad (sin auth, throttle propio)
+    # ORDEN: va al final para no interferir con las rutas privadas de /recetas/.
+    path(
+        "verificar-receta/<uuid:prescription_id>/",
+        PrescriptionVerifyApi.as_view(),
+        name="prescription-verify-public",
     ),
 ]

@@ -110,8 +110,15 @@ def _url_cancel(prescription_id: Any) -> str:
 # ---------------------------------------------------------------------------
 
 _ITEM = {
+    "kind": "medicamento",
     "medication_name": "Paracetamol",
-    "indication": "1 tableta cada 8 h por 5 días",
+    # COFEPRIS F2: campos estructurados obligatorios para kind=medicamento
+    "dose": "1 tableta",
+    "frequency": "cada 8 horas",
+    "route": "oral",
+    "duration": "5 días",
+    # indication: ahora opcional (nota adicional)
+    "indication": "Tomar con alimentos",
     "medication_presentation": "Caja con 20 tabletas",
     "medication_form": "tableta",
     "medication_concentration": "500 mg",
@@ -271,7 +278,7 @@ class TestPrescriptionCreate:
         assert rx.items.count() == 1
         item = rx.items.first()
         assert item.medication_name == "Paracetamol"
-        assert item.indication == "1 tableta cada 8 h por 5 días"
+        assert item.indication == "Tomar con alimentos"
         assert item.order == 1
 
     def test_folio_consecutive_same_tenant(self, db: Any) -> None:
@@ -394,17 +401,22 @@ class TestPrescriptionCreate:
                     items_data=[bad_item],
                 )
 
-    def test_item_missing_indication_raises(self, db: Any) -> None:
-        """Ítem sin indication → ValidationError."""
+    def test_item_medicamento_missing_cofepris_fields_raises(self, db: Any) -> None:
+        """Ítem kind=medicamento sin dose/frequency/route/duration → ValidationError COFEPRIS.
+
+        F2: indication ya es opcional, pero los campos estructurados COFEPRIS
+        son obligatorios cuando kind=medicamento.
+        """
         from django.core.exceptions import ValidationError
 
         tenant = TenantFactory()
         user, _ = _member_with_doctor(tenant)
         patient = PatientFactory(tenant=tenant, is_deceased=False)
 
-        bad_item = {"medication_name": "Amoxicilina", "indication": ""}
+        # Solo medication_name, sin campos COFEPRIS → debe fallar
+        bad_item = {"kind": "medicamento", "medication_name": "Amoxicilina"}
         with tenant_ctx(tenant):
-            with pytest.raises(ValidationError, match="indicación"):
+            with pytest.raises(ValidationError, match="COFEPRIS"):
                 prescription_create(
                     tenant=tenant,
                     user=user,
@@ -507,8 +519,9 @@ class TestPrescriptionCreate:
         patient = PatientFactory(tenant=tenant, is_deceased=False)
 
         items = [
-            {"medication_name": "Paracetamol", "indication": "1 tab c/8h"},
-            {"medication_name": "Ibuprofeno", "indication": "1 tab c/12h"},
+            # COFEPRIS F2: campos estructurados obligatorios para kind=medicamento
+            {**dict(_ITEM), "medication_name": "Paracetamol", "indication": "1 tab c/8h"},
+            {**dict(_ITEM), "medication_name": "Ibuprofeno", "indication": "1 tab c/12h"},
         ]
         with tenant_ctx(tenant):
             rx = prescription_create(
@@ -900,7 +913,13 @@ class TestPrescriptionCreateApi:
     _PAYLOAD: dict[str, Any] = {
         "items": [
             {
+                "kind": "medicamento",
                 "medication_name": "Amoxicilina",
+                # COFEPRIS F2: campos estructurados obligatorios para kind=medicamento
+                "dose": "1 cápsula",
+                "frequency": "cada 8 horas",
+                "route": "oral",
+                "duration": "7 días",
                 "indication": "1 cápsula cada 8 horas por 7 días",
                 "medication_form": "capsula",
                 "medication_concentration": "500 mg",
@@ -966,14 +985,17 @@ class TestPrescriptionCreateApi:
 
         assert resp.status_code == 400
 
-    def test_create_400_empty_indication(self, db: Any) -> None:
-        """Ítem sin indication → 400."""
+    def test_create_400_medicamento_missing_cofepris_fields(self, db: Any) -> None:
+        """Ítem kind=medicamento sin dose/frequency/route/duration → 400 (F2 COFEPRIS).
+
+        indication ya es opcional; los campos estructurados COFEPRIS son los obligatorios.
+        """
         tenant = TenantFactory()
         user, _ = _member_with_doctor(tenant)
         patient = PatientFactory(tenant=tenant, is_deceased=False)
 
         payload = {
-            "items": [{"medication_name": "Paracetamol", "indication": ""}]
+            "items": [{"kind": "medicamento", "medication_name": "Paracetamol"}]
         }
         client = _auth_client(user)
         with api_tenant_ctx(tenant):

@@ -178,6 +178,9 @@ REST_FRAMEWORK: dict = {
         "user": env("DRF_THROTTLE_USER", default="300/minute"),
         # Límite estricto para login: protege contra fuerza bruta de credenciales.
         "auth_login": env("DRF_THROTTLE_LOGIN", default="5/minute"),
+        # Límite anti-enumeración para el endpoint público de verificación de receta (F5).
+        # 30 consultas/min por IP es suficiente para una farmacia real; bloquea scrapers.
+        "prescription_verify": env("DRF_THROTTLE_VERIFY", default="30/minute"),
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": [
@@ -409,6 +412,24 @@ CSRF_COOKIE_SAMESITE: str = "Strict"
 CSRF_TRUSTED_ORIGINS: list[str] = env.list(
     "CSRF_TRUSTED_ORIGINS",
     default=["http://localhost:5173", "http://localhost:3000"],
+)
+
+# ---------------------------------------------------------------------------
+# Recetas — QR de verificación pública (F5)
+#
+# PRESCRIPTION_VERIFY_SECRET: secreto HMAC-SHA256 para generar/validar el token
+#   del QR de cada receta.  Debe ser distinto de DJANGO_SECRET_KEY (rotación
+#   independiente). Si no está en el entorno, usa SECRET_KEY como fallback
+#   seguro (ambas son sensibles y se rotan del mismo modo en dev).
+#   En producción OBLIGATORIO configurar como secreto independiente.
+# PRESCRIPTION_VERIFY_BASE_URL: URL del frontend donde vive la pantalla pública
+#   de verificación. El QR apunta a {BASE_URL}/verificar-receta/{id}?sig={token}.
+#   Default: http://localhost:5173 para desarrollo local.
+# ---------------------------------------------------------------------------
+
+PRESCRIPTION_VERIFY_SECRET: str = env("PRESCRIPTION_VERIFY_SECRET", default=SECRET_KEY)
+PRESCRIPTION_VERIFY_BASE_URL: str = env(
+    "PRESCRIPTION_VERIFY_BASE_URL", default="http://localhost:5173"
 )
 
 # ---------------------------------------------------------------------------

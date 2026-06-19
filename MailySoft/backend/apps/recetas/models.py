@@ -35,11 +35,73 @@ Notas sobre RLS:
   Migración 0003_prescription.py aplica RLS en ambas tablas.
 """
 
+import re
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
 from apps.core.models import BaseModel, TenantAwareModel
+
+
+class ItemKind(models.TextChoices):
+    """Tipo de ítem de prescripción (COFEPRIS F2).
+
+    Distingue entre medicamentos, sueros (soluciones parenterales) y terapias
+    (procedimientos o tratamientos no farmacológicos). El catálogo usa el mismo
+    campo para unificar el autocompletado y el filtrado.
+    """
+
+    MEDICAMENTO = "medicamento", "Medicamento"
+    SUERO = "suero", "Suero / solución parenteral"
+    TERAPIA = "terapia", "Terapia / procedimiento"
+
+
+class ControlledGroup(models.TextChoices):
+    """Grupo COFEPRIS de medicamento controlado (psicotrópicos y estupefacientes).
+
+    none = no controlado (la mayoría del catálogo).
+    I–V  = grupos según Ley General de Salud y Reglamento de Insumos:
+        Grupo I   — estupefacientes experimentales (uso muy restringido, 24 h).
+        Grupo II  — opioides y psicotrópicos de alto potencial (30 días, un surtido).
+        Grupo III — psicotrópicos de potencial moderado.
+        Grupo IV  — psicotrópicos de bajo potencial (benzodiazepinas, etc.).
+        Grupo V   — psicotrópicos de menor potencial (algunos antiepilépticos).
+
+    El módulo de controlados (F6) usará este campo para aplicar reglas
+    de vigencia, folio autorizado y recetario especial.
+    """
+
+    NONE = "none", "No controlado"
+    I = "I", "Grupo I"
+    II = "II", "Grupo II"
+    III = "III", "Grupo III"
+    IV = "IV", "Grupo IV"
+    V = "V", "Grupo V"
+
+
+class RouteOfAdministration(models.TextChoices):
+    """Vía de administración del medicamento (COFEPRIS F2).
+
+    COFEPRIS exige especificar la vía sin abreviaturas. Se incluyen las vías
+    más comunes en práctica clínica ambulatoria.
+    """
+
+    ORAL = "oral", "Oral"
+    SUBLINGUAL = "sublingual", "Sublingual"
+    INTRAVENOSA = "intravenosa", "Intravenosa"
+    INTRAMUSCULAR = "intramuscular", "Intramuscular"
+    SUBCUTANEA = "subcutanea", "Subcutánea"
+    TOPICA = "topica", "Tópica"
+    OFTALMICA = "oftalmica", "Oftálmica"
+    OTICA = "otica", "Ótica"
+    NASAL = "nasal", "Nasal"
+    RECTAL = "rectal", "Rectal"
+    VAGINAL = "vaginal", "Vaginal"
+    INHALADA = "inhalada", "Inhalada"
+    TRANSDERMICA = "transdermica", "Transdérmica"
+    OTRA = "otra", "Otra"
 
 
 class MedicationForm(models.TextChoices):
@@ -150,6 +212,29 @@ class GlobalMedication(BaseModel):
         ),
     )
 
+    # --- COFEPRIS F2: clasificación ---
+    kind = models.CharField(
+        max_length=15,
+        choices=ItemKind.choices,
+        default=ItemKind.MEDICAMENTO,
+        db_index=True,
+        help_text=(
+            "Tipo de ítem del catálogo: medicamento, suero o terapia. "
+            "El seed inicial (313 entradas) mantiene 'medicamento'. COFEPRIS F2."
+        ),
+    )
+    controlled_group = models.CharField(
+        max_length=5,
+        choices=ControlledGroup.choices,
+        default=ControlledGroup.NONE,
+        db_index=True,
+        help_text=(
+            "Grupo COFEPRIS de medicamento controlado (none = no controlado). "
+            "Grupos I–V según LGS. Módulo de controlados F6 lo usa para "
+            "aplicar reglas de vigencia y folio autorizado."
+        ),
+    )
+
     class Meta:
         db_table = "recetas_global_medications"
         ordering = ["generic_name", "form", "concentration"]
@@ -230,6 +315,28 @@ class Medication(TenantAwareModel):
         help_text=(
             "True = medicamento vigente (aparece en autocompletado). "
             "False = dado de baja (baja clínica, sin borrado físico — DR-5)."
+        ),
+    )
+
+    # --- COFEPRIS F2: clasificación ---
+    kind = models.CharField(
+        max_length=15,
+        choices=ItemKind.choices,
+        default=ItemKind.MEDICAMENTO,
+        db_index=True,
+        help_text=(
+            "Tipo de ítem: medicamento, suero o terapia. "
+            "Permite catálogos custom de sueros y terapias. COFEPRIS F2."
+        ),
+    )
+    controlled_group = models.CharField(
+        max_length=5,
+        choices=ControlledGroup.choices,
+        default=ControlledGroup.NONE,
+        db_index=True,
+        help_text=(
+            "Grupo COFEPRIS de medicamento controlado (none = no controlado). "
+            "Módulo de controlados F6."
         ),
     )
 
@@ -350,6 +457,20 @@ class Prescription(TenantAwareModel):
         db_index=True,
         help_text="Fecha y hora de emisión de la receta. Por defecto = ahora.",
     )
+
+    # --- COFEPRIS F2: diagnóstico ---
+    diagnosis = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text=(
+            "Diagnóstico del paciente al momento de la receta (COFEPRIS F2). "
+            "COFEPRIS marca 'receta sin diagnóstico' como error que invalida el documento. "
+            "Texto libre; FK opcional a expediente.Diagnosis = fase futura. "
+            "No incluir en la receta datos de otro paciente (NOM-024)."
+        ),
+    )
+
     recommendations = models.TextField(
         blank=True,
         default="",
@@ -367,6 +488,29 @@ class Prescription(TenantAwareModel):
             "systolic, diastolic, temperature_c, oxygen_saturation, glucose, measured_at}. "
             "Null si el paciente no tiene tomas registradas al momento de crear. "
             "DR-7: congela los signos — cambios futuros no alteran la receta."
+        ),
+    )
+
+    # --- F6: Medicamentos controlados (COFEPRIS) ---
+    controlled_folio = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        help_text=(
+            "Folio del recetario especial que el médico ingresa manualmente (F6). "
+            "Emitido por COFEPRIS fuera del sistema. "
+            "Requerido cuando la receta contiene al menos un medicamento controlado "
+            "(is_controlled=True). Máximo 60 caracteres."
+        ),
+    )
+    valid_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Vigencia de la receta, calculada automáticamente al crear (F6). "
+            "Null para recetas sin medicamentos controlados. "
+            "Grupo I → 24 horas desde issued_at. "
+            "Grupo II–V → 30 días desde issued_at (configurable en settings)."
         ),
     )
 
@@ -422,6 +566,19 @@ class Prescription(TenantAwareModel):
             ),
         ]
 
+    @property
+    def is_controlled(self) -> bool:
+        """True si al menos un ítem de la receta tiene controlled_group != 'none'.
+
+        Basado en los ítems ya cargados (prefetch_related) o consultados al vuelo.
+        Nota: Si los ítems no están precargados se disparará una query adicional.
+        Para evitar N+1, usar prefetch_related("items") en los selectors.
+        """
+        return any(
+            item.controlled_group != ControlledGroup.NONE
+            for item in self.items.all()
+        )
+
     def __str__(self) -> str:
         return (
             f"Receta#{self.folio} [{self.status}] "
@@ -463,6 +620,19 @@ class PrescriptionItem(TenantAwareModel):
     order = models.PositiveSmallIntegerField(
         default=1,
         help_text="Orden del renglón en la receta (1-based). Permite presentación ordenada.",
+    )
+
+    # --- COFEPRIS F2: tipo de ítem ---
+    kind = models.CharField(
+        max_length=15,
+        choices=ItemKind.choices,
+        default=ItemKind.MEDICAMENTO,
+        db_index=True,
+        help_text=(
+            "Tipo de ítem: medicamento, suero o terapia. "
+            "Determina qué campos son obligatorios (validación condicional COFEPRIS). "
+            "COFEPRIS F2."
+        ),
     )
 
     # --- Snapshot del medicamento (DR-7: fuente de verdad) ---
@@ -517,11 +687,57 @@ class PrescriptionItem(TenantAwareModel):
         ),
     )
 
-    # --- Indicación (requerida) ---
-    indication = models.TextField(
+    # --- COFEPRIS F2: campos estructurados del renglón ---
+    dose = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
         help_text=(
-            "Indicación del médico: dosis, frecuencia y duración. "
-            "Ej: '1 tableta cada 8 horas por 7 días con alimentos'. Requerido."
+            "Dosis sin abreviaturas (COFEPRIS F2). "
+            "Ej: '1 tableta', '500 miligramos', '10 mililitros'. "
+            "Obligatorio para kind=medicamento."
+        ),
+    )
+    frequency = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text=(
+            "Frecuencia de administración sin abreviaturas (COFEPRIS F2). "
+            "Ej: 'cada 8 horas', 'dos veces al día', 'una vez en ayunas'. "
+            "Obligatorio para kind=medicamento."
+        ),
+    )
+    route = models.CharField(
+        max_length=15,
+        choices=RouteOfAdministration.choices,
+        blank=True,
+        default="",
+        help_text=(
+            "Vía de administración (COFEPRIS F2). "
+            "Obligatorio para kind=medicamento. Siempre validado contra choices."
+        ),
+    )
+    duration = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text=(
+            "Duración del tratamiento sin abreviaturas (COFEPRIS F2). "
+            "Ej: '7 días', 'hasta terminar el frasco', 'uso crónico'. "
+            "Obligatorio para kind=medicamento."
+        ),
+    )
+
+    # --- Indicación (nota/observación — ahora complemento al renglón estructurado) ---
+    indication = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Nota u observación adicional del médico (opcional). "
+            "El renglón estructurado (dose/frequency/route/duration) es la fuente "
+            "COFEPRIS; este campo permite texto libre adicional. "
+            "En recetas pre-F2 puede contener la indicación completa por compatibilidad."
         ),
     )
 
@@ -531,6 +747,19 @@ class PrescriptionItem(TenantAwareModel):
         blank=True,
         default="",
         help_text="Cantidad a dispensar (opcional). Ej: '20 tabletas', '1 frasco'.",
+    )
+
+    # --- F6: snapshot del grupo COFEPRIS de medicamento controlado (DR-7) ---
+    controlled_group = models.CharField(
+        max_length=5,
+        choices=ControlledGroup.choices,
+        default=ControlledGroup.NONE,
+        db_index=True,
+        help_text=(
+            "Snapshot del grupo COFEPRIS del medicamento al momento de emitir la receta (F6). "
+            "DR-7: capturado del catálogo al crear — no depende del catálogo futuro. "
+            "none = no controlado. I–V = grupos según LGS."
+        ),
     )
 
     class Meta:
@@ -548,3 +777,212 @@ class PrescriptionItem(TenantAwareModel):
             f"Item#{self.order} [{self.medication_name}] "
             f"— receta {self.prescription_id} (tenant={self.tenant_id})"
         )
+
+
+# ---------------------------------------------------------------------------
+# PrescriptionFormat — Formato de receta configurable por clínica (F3)
+# ---------------------------------------------------------------------------
+
+_HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+# Whitelist de secciones opcionales configurables (medicamentos siempre presente).
+SECTIONS_KEYS: frozenset[str] = frozenset(
+    {"signos", "diagnostico", "sueros", "terapias", "indicaciones"}
+)
+
+_DEFAULT_SECTIONS: dict[str, bool] = {
+    "signos": True,
+    "diagnostico": True,
+    "sueros": True,
+    "terapias": True,
+    "indicaciones": True,
+}
+
+
+class PrescriptionFormat(TenantAwareModel):
+    """Formato de receta configurable por clínica (F3).
+
+    Permite que cada clínica personalice el PDF de sus recetas:
+    - base_layout: plantilla base (standard/compact/digital).
+    - accent_color: color de acento en hex (#RRGGBB).
+    - font: tipografía (helvetica / times).
+    - sections: flags booleanos por sección opcional (JSON).
+    - letterhead_mode: digital (el sistema imprime el encabezado) o
+      preprinted (deja espacio superior — el médico usa papel pre-impreso).
+    - is_default: el formato que se aplica automáticamente a las recetas
+      del tenant. Solo uno puede ser default por tenant (enforced en servicio).
+    - doctor (FK opcional a Doctor) + is_authorized: formato propio de un
+      médico. Si is_authorized=True, se aplica a las recetas del médico
+      con prioridad sobre el default del tenant. Solo owner/admin puede
+      autorizar (cambiar is_authorized).
+
+    Resolución de formato en prescription_pdf_build:
+        1. format_override explícito (vista previa / ?formato=).
+        2. PrescriptionFormat del médico con is_authorized=True.
+        3. PrescriptionFormat con is_default=True del tenant.
+        4. Objeto en memoria con defaults de fábrica (sin persistencia).
+
+    Paper:
+        Deriva del base_layout — compact = media carta horizontal;
+        standard/digital = carta. No es un campo separado (fase actual).
+
+    RLS (PostgreSQL):
+        USING + WITH CHECK igual que otras tablas tenant-aware.
+        Migración 0007_prescription_format.py.
+
+    Baja lógica (DR-5): is_active=False + deleted_at, sin borrado físico.
+    Bitácora: FORMAT_CREATE / FORMAT_UPDATE / FORMAT_DELETE.
+    """
+
+    class BaseLayout(models.TextChoices):
+        STANDARD = "standard", "Estándar (carta vertical)"
+        COMPACT = "compact", "Compacta (media carta horizontal)"
+        DIGITAL = "digital", "Digital (para el paciente)"
+
+    class FontChoice(models.TextChoices):
+        HELVETICA = "helvetica", "Helvetica / Arial (sans-serif)"
+        TIMES = "times", "Times New Roman (serif)"
+
+    class LetterheadMode(models.TextChoices):
+        DIGITAL = "digital", "Digital (el sistema imprime el encabezado)"
+        PREPRINTED = "preprinted", "Pre-impreso (deja espacio superior)"
+
+    name = models.CharField(
+        max_length=120,
+        help_text="Nombre descriptivo del formato. Ej: 'Estándar clínica', 'Compacta Camsa'.",
+    )
+    base_layout = models.CharField(
+        max_length=10,
+        choices=BaseLayout.choices,
+        default=BaseLayout.STANDARD,
+        db_index=True,
+        help_text="Plantilla base del PDF (determina tamaño y estructura del layout).",
+    )
+    accent_color = models.CharField(
+        max_length=7,
+        default="#9A7B1E",
+        help_text=(
+            "Color de acento en hex (#RRGGBB). "
+            "Se inyecta como variable Django en el template — NO como CSS var() "
+            "(xhtml2pdf no soporta custom properties)."
+        ),
+    )
+    font = models.CharField(
+        max_length=10,
+        choices=FontChoice.choices,
+        default=FontChoice.HELVETICA,
+        help_text="Tipografía del PDF. Solo fuentes base (Helvetica/Times); fase futura: embeber TTF.",
+    )
+    sections = models.JSONField(
+        default=dict,
+        blank=True,  # {} es un valor válido; full_clean no debe tratarlo como "vacío"
+        help_text=(
+            "Flags booleanos de secciones opcionales. "
+            "Whitelist: signos, diagnostico, sueros, terapias, indicaciones. "
+            "medicamentos siempre está presente. "
+            "Ejemplo: {signos: true, diagnostico: true, sueros: false, ...}."
+        ),
+    )
+    letterhead_mode = models.CharField(
+        max_length=12,
+        choices=LetterheadMode.choices,
+        default=LetterheadMode.DIGITAL,
+        help_text=(
+            "Modo de membrete: 'digital' = el sistema imprime el encabezado; "
+            "'preprinted' = el médico usa papel pre-impreso (se deja espacio superior)."
+        ),
+    )
+    is_default = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "True = se aplica automáticamente a todas las recetas del tenant "
+            "cuando no hay formato por médico. Solo uno puede ser default por tenant. "
+            "El servicio prescription_format_set_default desmarca el anterior."
+        ),
+    )
+
+    # --- Formato por médico (decisión 3 del plan) ---
+    doctor = models.ForeignKey(
+        "personal.Doctor",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prescription_formats",
+        db_index=True,
+        help_text=(
+            "Médico propietario del formato (opcional). "
+            "Si se establece, es el formato personal de ese médico. "
+            "Se aplica a sus recetas solo si is_authorized=True."
+        ),
+    )
+    is_authorized = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "True = el formato personal del médico está autorizado y se aplica "
+            "a sus recetas. Solo owner/admin puede cambiar este flag. "
+            "Irrelevante si doctor es null."
+        ),
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False = formato dado de baja (baja lógica). No aparece en selects normales.",
+    )
+
+    class Meta:
+        db_table = "recetas_prescription_formats"
+        ordering = ["-is_default", "name"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "is_default", "is_active"],
+                name="pf_tenant_default_active_idx",
+            ),
+            models.Index(
+                fields=["tenant", "doctor", "is_authorized"],
+                name="pf_tenant_doctor_auth_idx",
+            ),
+        ]
+
+    def clean(self) -> None:
+        """Valida accent_color con regex y sections contra la whitelist."""
+        if self.accent_color and not _HEX_RE.match(self.accent_color):
+            raise ValidationError(
+                {"accent_color": "El color de acento debe tener el formato #RRGGBB."}
+            )
+        if self.sections:
+            unknown = set(self.sections.keys()) - SECTIONS_KEYS
+            if unknown:
+                raise ValidationError(
+                    {
+                        "sections": (
+                            f"Claves desconocidas en sections: {', '.join(sorted(unknown))}. "
+                            f"Permitidas: {', '.join(sorted(SECTIONS_KEYS))}."
+                        )
+                    }
+                )
+            for key, val in self.sections.items():
+                if not isinstance(val, bool):
+                    raise ValidationError(
+                        {"sections": f"El valor de '{key}' debe ser booleano (true/false)."}
+                    )
+
+    def get_sections_full(self) -> dict[str, bool]:
+        """Devuelve las secciones completas, rellenando con defaults los flags ausentes."""
+        merged = dict(_DEFAULT_SECTIONS)
+        merged.update(self.sections or {})
+        return merged
+
+    @property
+    def font_family(self) -> str:
+        """CSS font-family para el template (xhtml2pdf entiende estos valores)."""
+        if self.font == self.FontChoice.TIMES:
+            return "Times, serif"
+        return "Helvetica, Arial, sans-serif"
+
+    def __str__(self) -> str:
+        default_flag = " [default]" if self.is_default else ""
+        doctor_flag = f" [doctor={self.doctor_id}]" if self.doctor_id else ""
+        return f"{self.name}{default_flag}{doctor_flag} (tenant={self.tenant_id})"

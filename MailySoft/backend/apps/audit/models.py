@@ -131,6 +131,26 @@ class ActionType(models.TextChoices):
     PATIENT_CATEGORY_CREATE = "PATIENT_CATEGORY_CREATE", "Crear categoría de paciente"
     PATIENT_CATEGORY_DELETE = "PATIENT_CATEGORY_DELETE", "Desactivar categoría de paciente"
 
+    # Recetas — cumplimiento COFEPRIS (Fase F2)
+    CREDENTIAL_CREATE = "CREDENTIAL_CREATE", "Registrar credencial de médico"
+    CREDENTIAL_DELETE = "CREDENTIAL_DELETE", "Eliminar credencial de médico"
+
+    # Recetas — formatos configurables (Fase F3)
+    FORMAT_CREATE = "FORMAT_CREATE", "Crear formato de receta"
+    FORMAT_UPDATE = "FORMAT_UPDATE", "Actualizar formato de receta"
+    FORMAT_DELETE = "FORMAT_DELETE", "Desactivar formato de receta"
+
+    # Recetas — verificación pública de autenticidad (Fase F5)
+    # Sin PII: solo folio + resultado (vigente/anulada). No registra IP ni sig.
+    PRESCRIPTION_VERIFY = "PRESCRIPTION_VERIFY", "Verificar autenticidad de receta (público)"
+
+    # Recetas — medicamentos controlados (Fase F6)
+    # Auditoría reforzada para controladas: grupo más restrictivo y folio oficial incluidos.
+    PRESCRIPTION_CONTROLLED_CREATE = (
+        "PRESCRIPTION_CONTROLLED_CREATE",
+        "Emitir receta con medicamento controlado",
+    )
+
 
 class AuditLog(TenantAwareModel):
     """Registro inmutable de un evento auditable en la plataforma.

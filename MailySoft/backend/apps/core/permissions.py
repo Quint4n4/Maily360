@@ -543,6 +543,33 @@ class MedicationPermission(HasClinicRole):
     }
 
 
+class PrescriptionFormatPermission(HasClinicRole):
+    """Permisos para la gestión de formatos de receta (F3).
+
+    Listar/leer (GET): cualquier miembro activo puede ver los formatos disponibles
+        para elegir al imprimir. ALL_ROLES (incluyendo recepción).
+
+    Crear/actualizar/eliminar (POST/PATCH/DELETE): solo owner y admin configuran
+        los formatos de la clínica. Los médicos pueden crear su formato personal
+        (la validación fina de "solo el propio médico" la hace el servicio).
+
+    Matriz:
+        GET    → ALL_ROLES
+        POST   → MANAGE_ROLES + DOCTOR (el médico puede crear su propio formato)
+        PATCH  → MANAGE_ROLES + DOCTOR
+        DELETE → MANAGE_ROLES
+    """
+
+    _DOCTOR_ROLES: frozenset[str] = frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR})
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": ALL_ROLES,
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "PATCH": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "DELETE": MANAGE_ROLES,
+    }
+
+
 class NotificationPermission(HasClinicRole):
     """Permisos para la campana de notificaciones.
 

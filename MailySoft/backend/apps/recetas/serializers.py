@@ -29,9 +29,27 @@ Clases B1.2:
     PrescriptionCancelInputSerializer — valida la entrada para anular una receta.
 """
 
+import re as _re
+
 from rest_framework import serializers
 
-from apps.recetas.models import MedicationForm
+from apps.recetas.models import (
+    ControlledGroup,
+    ItemKind,
+    MedicationForm,
+    PrescriptionFormat,
+    RouteOfAdministration,
+    SECTIONS_KEYS,
+)
+
+_HEX_RE = _re.compile(r"^#[0-9A-Fa-f]{6}$")
+_LAYOUT_CHOICES: list[str] = [c[0] for c in PrescriptionFormat.BaseLayout.choices]
+_FONT_CHOICES: list[str] = [c[0] for c in PrescriptionFormat.FontChoice.choices]
+_LETTERHEAD_CHOICES: list[str] = [c[0] for c in PrescriptionFormat.LetterheadMode.choices]
+
+_ROUTE_CHOICES: list[str] = [c[0] for c in RouteOfAdministration.choices]
+_ITEM_KIND_CHOICES: list[str] = [c[0] for c in ItemKind.choices]
+_CONTROLLED_GROUP_CHOICES: list[str] = [c[0] for c in ControlledGroup.choices]
 
 
 def _reject_unknown_fields(serializer: serializers.Serializer, data: dict) -> None:  # type: ignore[type-arg]
@@ -61,6 +79,8 @@ class MedicationSearchOutputSerializer(serializers.Serializer):
 
     Marca el origen con `source`: "global" (catálogo Maily) o "custom" (de la clínica).
     El frontend usa `source` para diferenciación visual.
+    COFEPRIS F2: incluye `kind` y `controlled_group` para que el frontend
+    aplique validación condicional del renglón y filtre por tipo.
     """
 
     id = serializers.CharField()
@@ -70,6 +90,8 @@ class MedicationSearchOutputSerializer(serializers.Serializer):
     concentration = serializers.CharField()
     presentation = serializers.CharField()
     source = serializers.ChoiceField(choices=["global", "custom"])
+    kind = serializers.CharField(default="medicamento")
+    controlled_group = serializers.CharField(default="none")
 
 
 class MedicationCreateInputSerializer(serializers.Serializer):
@@ -115,6 +137,12 @@ class MedicationCreateInputSerializer(serializers.Serializer):
         default="",
         help_text="Presentación comercial (opcional). Ej: 'Caja con 20 tabletas'.",
     )
+    kind = serializers.ChoiceField(
+        choices=_ITEM_KIND_CHOICES,
+        required=False,
+        default="medicamento",
+        help_text="Tipo de ítem: medicamento, suero o terapia. COFEPRIS F2.",
+    )
 
     def validate_generic_name(self, value: str) -> str:
         """Rechaza generic_name que sea solo espacios."""
@@ -135,6 +163,8 @@ class MedicationCreateOutputSerializer(serializers.Serializer):
     form = serializers.CharField()
     concentration = serializers.CharField()
     presentation = serializers.CharField()
+    kind = serializers.CharField()
+    controlled_group = serializers.CharField()
     is_active = serializers.BooleanField()
     created_at = serializers.DateTimeField()
 
@@ -147,26 +177,71 @@ class MedicationCreateOutputSerializer(serializers.Serializer):
 class PrescriptionItemInputSerializer(serializers.Serializer):
     """Valida un renglón de tratamiento al crear una receta.
 
-    `medication_name` e `indication` son requeridos (DR-7 + regla de negocio).
-    Los campos de snapshot (presentation, form, concentration) son opcionales:
-    el médico puede no tenerlos si escribe en texto libre.
-    Los FK al catálogo (global_medication_id, medication_id) son solo trazabilidad.
+    COFEPRIS F2 — validación condicional por kind:
+        Cuando kind == "medicamento", los campos dose, frequency, route y duration
+        son obligatorios (COFEPRIS exige renglón estructurado sin abreviaturas).
+        Para kind == "suero" o "terapia" esos campos son opcionales.
+
+    `medication_name` es siempre requerido (DR-7 — snapshot inmutable).
+    `indication` pasa de obligatorio a opcional: ahora es nota/observación adicional.
+        Se conserva para compatibilidad con recetas pre-F2 donde contiene la indicación
+        completa en texto libre. El médico puede enviarlo vacío si usa el renglón COFEPRIS.
 
     Campos desconocidos son rechazados explícitamente en validate() (M-4).
-    DRF NO los rechaza automáticamente; hay que implementarlo en validate().
-
-    Límites anti-DoS (M-3):
-        indication: max_length=2000 (campo de texto largo del médico).
+    Límites anti-DoS (M-3): indication max_length=2000.
     """
 
+    kind = serializers.ChoiceField(
+        choices=_ITEM_KIND_CHOICES,
+        required=False,
+        default="medicamento",
+        help_text="Tipo de ítem: medicamento, suero o terapia. COFEPRIS F2.",
+    )
     medication_name = serializers.CharField(
         max_length=200,
-        help_text="Nombre del medicamento (requerido). Snapshot inmutable.",
+        help_text="Nombre del medicamento/suero/terapia (requerido). Snapshot inmutable.",
     )
+    # --- COFEPRIS F2: renglón estructurado ---
+    dose = serializers.CharField(
+        max_length=120,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Dosis sin abreviaturas. Obligatorio si kind=medicamento. COFEPRIS F2.",
+    )
+    frequency = serializers.CharField(
+        max_length=120,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Frecuencia sin abreviaturas. Obligatorio si kind=medicamento. COFEPRIS F2.",
+    )
+    route = serializers.ChoiceField(
+        choices=[""] + _ROUTE_CHOICES,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Vía de administración. Obligatorio si kind=medicamento. COFEPRIS F2.",
+    )
+    duration = serializers.CharField(
+        max_length=120,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Duración del tratamiento sin abreviaturas. Obligatorio si kind=medicamento. COFEPRIS F2.",
+    )
+    # --- Nota adicional (antes campo obligatorio) ---
     indication = serializers.CharField(
-        max_length=2000,  # M-3: límite anti-DoS para campo de texto libre.
-        help_text="Indicación completa: dosis, frecuencia y duración (requerido).",
+        max_length=2000,  # M-3: límite anti-DoS
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=(
+            "Nota u observación adicional (opcional). "
+            "En recetas pre-F2 contiene la indicación completa por compatibilidad."
+        ),
     )
+    # --- Snapshot de catálogo ---
     medication_presentation = serializers.CharField(
         max_length=200,
         required=False,
@@ -216,13 +291,31 @@ class PrescriptionItemInputSerializer(serializers.Serializer):
             )
         return stripped
 
-    def validate_indication(self, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
+    def validate_route(self, value: str) -> str:
+        """Permite vacío o un valor válido de RouteOfAdministration."""
+        if value and value not in _ROUTE_CHOICES:
             raise serializers.ValidationError(
-                "La indicación no puede estar vacía."
+                f"Vía de administración inválida '{value}'. "
+                f"Las válidas son: {', '.join(_ROUTE_CHOICES)}."
             )
-        return stripped
+        return value
+
+    def validate(self, attrs: dict) -> dict:  # type: ignore[override]
+        """Validación condicional COFEPRIS: si kind=medicamento, dose/frequency/route/duration son obligatorios."""
+        kind = attrs.get("kind", "medicamento")
+        if kind == "medicamento":
+            errors: dict[str, list[str]] = {}
+            if not attrs.get("dose", "").strip():
+                errors["dose"] = ["Obligatorio para medicamentos (COFEPRIS). Indique la dosis sin abreviaturas."]
+            if not attrs.get("frequency", "").strip():
+                errors["frequency"] = ["Obligatorio para medicamentos (COFEPRIS). Indique la frecuencia sin abreviaturas."]
+            if not attrs.get("route", "").strip():
+                errors["route"] = ["Obligatorio para medicamentos (COFEPRIS). Indique la vía de administración."]
+            if not attrs.get("duration", "").strip():
+                errors["duration"] = ["Obligatorio para medicamentos (COFEPRIS). Indique la duración del tratamiento."]
+            if errors:
+                raise serializers.ValidationError(errors)
+        return attrs
 
 class PrescriptionCreateInputSerializer(serializers.Serializer):
     """Valida la entrada para crear una receta médica.
@@ -230,11 +323,11 @@ class PrescriptionCreateInputSerializer(serializers.Serializer):
     Reglas:
     - `items` es requerido, mínimo 1 y máximo 20 elementos (M-3: anti-DoS).
     - `recommendations` es opcional (máx 5000 chars).
+    - `diagnosis` es opcional por compatibilidad, pero recomendado (COFEPRIS F2).
     - `appointment_id` y `evolution_note_id` son opcionales.
     - No se acepta `doctor_id` en el body: el doctor es el del perfil activo del usuario.
     - No se acepta `patient_id` en el body: viene de la URL.
     - Campos desconocidos son rechazados explícitamente en validate() (M-4).
-      DRF NO los rechaza automáticamente; hay que implementarlo en validate().
     """
 
     items = serializers.ListField(
@@ -242,6 +335,16 @@ class PrescriptionCreateInputSerializer(serializers.Serializer):
         min_length=1,
         max_length=20,  # M-3: máximo 20 medicamentos por receta (anti-DoS).
         help_text="Lista de renglones de tratamiento. Mínimo 1, máximo 20.",
+    )
+    diagnosis = serializers.CharField(
+        max_length=500,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=(
+            "Diagnóstico del paciente (recomendado, COFEPRIS F2). "
+            "COFEPRIS considera 'receta sin diagnóstico' como error invalidante."
+        ),
     )
     recommendations = serializers.CharField(
         max_length=5000,
@@ -261,6 +364,19 @@ class PrescriptionCreateInputSerializer(serializers.Serializer):
         allow_null=True,
         default=None,
         help_text="UUID de la nota de evolución asociada (opcional).",
+    )
+    # F6 — folio del recetario especial COFEPRIS (requerido si hay controlados)
+    controlled_folio = serializers.CharField(
+        max_length=60,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=(
+            "Folio del recetario especial emitido por COFEPRIS (F6). "
+            "El médico lo ingresa manualmente. "
+            "Requerido cuando la receta contiene medicamentos controlados (grupo I–V). "
+            "COFEPRIS emite el recetario especial fuera del sistema."
+        ),
     )
 
     def validate(self, attrs: dict) -> dict:  # type: ignore[override]
@@ -294,14 +410,23 @@ class PrescriptionItemOutputSerializer(serializers.Serializer):
 
     id = serializers.UUIDField()
     order = serializers.IntegerField()
+    kind = serializers.CharField()
     medication_name = serializers.CharField()
     medication_presentation = serializers.CharField()
     medication_form = serializers.CharField()
     medication_concentration = serializers.CharField()
+    # COFEPRIS F2: renglón estructurado
+    dose = serializers.CharField()
+    frequency = serializers.CharField()
+    route = serializers.CharField()
+    duration = serializers.CharField()
+    # Nota/observación (opcional; antes era obligatorio)
     indication = serializers.CharField()
     quantity = serializers.CharField()
     global_medication_id = serializers.UUIDField(allow_null=True)
     medication_id = serializers.UUIDField(allow_null=True)
+    # F6: snapshot del grupo COFEPRIS
+    controlled_group = serializers.CharField()
 
 
 class _DoctorBriefSerializer(serializers.Serializer):
@@ -331,11 +456,15 @@ class PrescriptionListOutputSerializer(serializers.Serializer):
     folio = serializers.IntegerField()
     issued_at = serializers.DateTimeField()
     status = serializers.CharField()
+    diagnosis = serializers.CharField()
     recommendations = serializers.CharField()
     doctor = _DoctorBriefSerializer()
     items_count = serializers.SerializerMethodField()
     cancelled_at = serializers.DateTimeField(allow_null=True)
     cancellation_reason = serializers.CharField()
+    # F6: medicamentos controlados (resumen en lista)
+    controlled_folio = serializers.CharField()
+    valid_until = serializers.DateTimeField(allow_null=True)
 
     def get_items_count(self, obj: object) -> int:
         # M-5: usa len() en lugar de .count() para aprovechar el prefetch_related
@@ -360,6 +489,7 @@ class PrescriptionDetailOutputSerializer(serializers.Serializer):
     folio = serializers.IntegerField()
     issued_at = serializers.DateTimeField()
     status = serializers.CharField()
+    diagnosis = serializers.CharField()
     recommendations = serializers.CharField()
     vitals_snapshot = serializers.JSONField(allow_null=True)
     doctor = _DoctorBriefSerializer()
@@ -371,6 +501,10 @@ class PrescriptionDetailOutputSerializer(serializers.Serializer):
     cancelled_by_id = serializers.UUIDField(allow_null=True)
     cancellation_reason = serializers.CharField()
     created_at = serializers.DateTimeField()
+    # F6: medicamentos controlados
+    controlled_folio = serializers.CharField()
+    valid_until = serializers.DateTimeField(allow_null=True)
+    is_controlled = serializers.BooleanField()
 
 
 class PrescriptionCancelInputSerializer(serializers.Serializer):
@@ -391,3 +525,146 @@ class PrescriptionCancelInputSerializer(serializers.Serializer):
                 "El motivo de anulación no puede estar vacío."
             )
         return stripped
+
+
+# ---------------------------------------------------------------------------
+# F3 — PrescriptionFormat serializers
+# ---------------------------------------------------------------------------
+
+
+class SectionsField(serializers.DictField):
+    """Campo JSON de secciones con validación de whitelist y tipos booleanos.
+
+    Acepta un diccionario con claves en SECTIONS_KEYS y valores bool.
+    Rechaza claves desconocidas y valores no booleanos.
+    """
+
+    child = serializers.BooleanField()
+
+    def to_internal_value(self, data: object) -> dict[str, bool]:
+        if not isinstance(data, dict):
+            raise serializers.ValidationError("sections debe ser un objeto JSON.")
+        unknown = set(data.keys()) - SECTIONS_KEYS  # type: ignore[arg-type]
+        if unknown:
+            raise serializers.ValidationError(
+                f"Claves no permitidas en sections: {', '.join(sorted(unknown))}. "
+                f"Permitidas: {', '.join(sorted(SECTIONS_KEYS))}."
+            )
+        result: dict[str, bool] = {}
+        for key, val in data.items():  # type: ignore[union-attr]
+            if not isinstance(val, bool):
+                raise serializers.ValidationError(
+                    f"El valor de sections.{key} debe ser booleano (true/false)."
+                )
+            result[key] = val
+        return result
+
+
+class PrescriptionFormatCreateInputSerializer(serializers.Serializer):
+    """Valida la entrada para crear un PrescriptionFormat.
+
+    Campos aceptados: name, base_layout, accent_color, font, sections,
+    letterhead_mode, is_default, doctor_id.
+
+    Campos NO aceptados aquí: is_authorized (solo admin, endpoint propio),
+    is_active (inmutable en create, siempre True).
+    """
+
+    name = serializers.CharField(max_length=120, allow_blank=False)
+    base_layout = serializers.ChoiceField(choices=_LAYOUT_CHOICES, default="standard")
+    accent_color = serializers.CharField(max_length=7, default="#9A7B1E")
+    font = serializers.ChoiceField(choices=_FONT_CHOICES, default="helvetica")
+    sections = SectionsField(required=False, default=dict)
+    letterhead_mode = serializers.ChoiceField(choices=_LETTERHEAD_CHOICES, default="digital")
+    is_default = serializers.BooleanField(default=False)
+    doctor_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+
+    def validate_accent_color(self, value: str) -> str:
+        if not _HEX_RE.match(value):
+            raise serializers.ValidationError(
+                "El color de acento debe tener el formato #RRGGBB (ej: #9A7B1E)."
+            )
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class PrescriptionFormatUpdateInputSerializer(serializers.Serializer):
+    """Valida la entrada PATCH para actualizar un PrescriptionFormat.
+
+    Todos los campos son opcionales. is_authorized solo lo puede cambiar
+    un admin (la view lo controla pasando is_admin al servicio).
+    """
+
+    name = serializers.CharField(max_length=120, allow_blank=False, required=False)
+    base_layout = serializers.ChoiceField(choices=_LAYOUT_CHOICES, required=False)
+    accent_color = serializers.CharField(max_length=7, required=False)
+    font = serializers.ChoiceField(choices=_FONT_CHOICES, required=False)
+    sections = SectionsField(required=False)
+    letterhead_mode = serializers.ChoiceField(choices=_LETTERHEAD_CHOICES, required=False)
+    is_default = serializers.BooleanField(required=False)
+    doctor_id = serializers.UUIDField(required=False, allow_null=True)
+    is_authorized = serializers.BooleanField(required=False)
+
+    def validate_accent_color(self, value: str) -> str:
+        if not _HEX_RE.match(value):
+            raise serializers.ValidationError(
+                "El color de acento debe tener el formato #RRGGBB (ej: #9A7B1E)."
+            )
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class PrescriptionFormatOutputSerializer(serializers.Serializer):
+    """Forma la respuesta de un PrescriptionFormat (lista y detalle)."""
+
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    base_layout = serializers.CharField()
+    accent_color = serializers.CharField()
+    font = serializers.CharField()
+    sections = serializers.DictField(child=serializers.BooleanField())
+    letterhead_mode = serializers.CharField()
+    is_default = serializers.BooleanField()
+    is_authorized = serializers.BooleanField()
+    is_active = serializers.BooleanField()
+    doctor_id = serializers.UUIDField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
+# ---------------------------------------------------------------------------
+# F5 — Verificación pública de autenticidad de receta
+# ---------------------------------------------------------------------------
+
+
+class PrescriptionVerifyOutputSerializer(serializers.Serializer):
+    """Respuesta del endpoint público de verificación de autenticidad (F5+F6).
+
+    Política de privacidad estricta (información de salud):
+      EXPONE: folio, estado (vigente/anulada), fecha de emisión,
+              nombre del médico + cédula profesional, nombre comercial de la clínica,
+              controlado (bool), vigencia (datetime | null — sin PII del paciente).
+      NUNCA expone: nombre del paciente, medicamentos, diagnóstico, signos vitales,
+                    ni cualquier otro dato clínico o PII del paciente.
+
+    F6 — medicamentos controlados:
+      controlado: True si la receta contiene al menos un medicamento controlado.
+      vigencia:   valid_until de la receta (datetime ISO-8601) o null.
+                  Permite a la farmacia verificar si la receta sigue vigente.
+                  No expone qué medicamentos son controlados ni el grupo exacto.
+    """
+
+    folio = serializers.IntegerField()
+    estado = serializers.CharField()
+    fecha_emision = serializers.DateField()
+    medico = serializers.DictField()
+    clinica = serializers.CharField()
+    # F6: datos de controlado sin PII
+    controlado = serializers.BooleanField()
+    vigencia = serializers.DateTimeField(allow_null=True)

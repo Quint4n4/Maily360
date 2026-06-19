@@ -72,9 +72,22 @@ def _url_cancel(prescription_id: Any) -> str:
 # ---------------------------------------------------------------------------
 
 _ITEM: dict[str, str] = {
+    "kind": "medicamento",
     "medication_name": "Paracetamol",
-    "indication": "1 tableta cada 8 h por 5 días",
+    # COFEPRIS F2: campos estructurados obligatorios para kind=medicamento
+    "dose": "1 tableta",
+    "frequency": "cada 8 horas",
+    "route": "oral",
+    "duration": "5 días",
+    "indication": "Tomar con alimentos",
 }
+
+
+def _cofepris_item(**overrides: Any) -> dict[str, Any]:
+    """Helper: ítem COFEPRIS completo para kind=medicamento. Permite sobreescribir campos."""
+    base: dict[str, Any] = dict(_ITEM)
+    base.update(overrides)
+    return base
 
 
 def _member_with_doctor(tenant: Any) -> tuple[Any, Any]:
@@ -369,7 +382,7 @@ class TestM3SizeLimits:
 
         long_indication = "x" * 2001
         payload = {
-            "items": [{"medication_name": "Paracetamol", "indication": long_indication}]
+            "items": [_cofepris_item(indication=long_indication)]
         }
         client = _auth_client(user)
         with api_tenant_ctx(tenant):
@@ -385,7 +398,7 @@ class TestM3SizeLimits:
 
         indication_2000 = "a" * 2000
         payload = {
-            "items": [{"medication_name": "Paracetamol", "indication": indication_2000}]
+            "items": [_cofepris_item(indication=indication_2000)]
         }
         client = _auth_client(user)
         with api_tenant_ctx(tenant):
@@ -400,7 +413,7 @@ class TestM3SizeLimits:
         patient = PatientFactory(tenant=tenant, is_deceased=False)
 
         items = [
-            {"medication_name": f"Med {i}", "indication": "1 tab c/8h"}
+            _cofepris_item(medication_name=f"Med {i}", indication="1 tab c/8h")
             for i in range(21)
         ]
         payload = {"items": items}
@@ -417,7 +430,7 @@ class TestM3SizeLimits:
         patient = PatientFactory(tenant=tenant, is_deceased=False)
 
         items = [
-            {"medication_name": f"Med {i}", "indication": "1 tab c/8h"}
+            _cofepris_item(medication_name=f"Med {i}", indication="1 tab c/8h")
             for i in range(20)
         ]
         payload = {"items": items}
@@ -471,15 +484,14 @@ class TestM4UnknownFieldsRejected:
         user, _ = _member_with_doctor(tenant)
         patient = PatientFactory(tenant=tenant, is_deceased=False)
 
-        payload = {
-            "items": [
-                {
-                    "medication_name": "Paracetamol",
-                    "indication": "1 tab c/8h",
-                    "secret_field": "inyección SQL",  # campo no declarado
-                }
-            ]
-        }
+        # Ítem con campos COFEPRIS completos MÁS un campo desconocido (secret_field).
+        # El serializer debe rechazarlo por M-4 (campo no declarado), no por COFEPRIS.
+        item_with_unknown = _cofepris_item(
+            medication_name="Paracetamol",
+            indication="1 tab c/8h",
+            secret_field="inyección SQL",  # tipo: ignorar — campo no declarado en whitelist
+        )
+        payload = {"items": [item_with_unknown]}
         client = _auth_client(user)
         with api_tenant_ctx(tenant):
             resp = client.post(_url_list(patient.id), data=payload, format="json")
@@ -495,7 +507,13 @@ class TestM4UnknownFieldsRejected:
         payload = {
             "items": [
                 {
+                    "kind": "medicamento",
                     "medication_name": "Amoxicilina",
+                    # COFEPRIS F2: campos estructurados para kind=medicamento
+                    "dose": "1 cápsula",
+                    "frequency": "cada 8 horas",
+                    "route": "oral",
+                    "duration": "7 días",
                     "indication": "1 cap c/8h por 7 días",
                     "medication_form": "capsula",
                     "medication_concentration": "500 mg",
@@ -550,8 +568,8 @@ class TestM5ItemsCountNoNPlusOne:
                     user=user,
                     patient_id=patient.id,
                     items_data=[
-                        {"medication_name": "Med A", "indication": "1 tab c/8h"},
-                        {"medication_name": "Med B", "indication": "1 cap c/12h"},
+                        _cofepris_item(medication_name="Med A", indication="1 tab c/8h"),
+                        _cofepris_item(medication_name="Med B", indication="1 cap c/12h"),
                     ],
                 )
 
@@ -591,19 +609,18 @@ class TestB3MedicationIdTenantValidation:
         # Medicamento del tenant_b (ajeno al tenant_a)
         med_b = MedicationFactory(tenant=tenant_b)
 
+        item_with_med: dict[str, Any] = _cofepris_item(
+            medication_name="Paracetamol",
+            indication="1 tab c/8h",
+        )
+        item_with_med["medication_id"] = med_b.id
         with tenant_ctx(tenant_a):
             with pytest.raises(ValidationError, match="no existe o no pertenece"):
                 prescription_create(
                     tenant=tenant_a,
                     user=user_a,
                     patient_id=patient_a.id,
-                    items_data=[
-                        {
-                            "medication_name": "Paracetamol",
-                            "indication": "1 tab c/8h",
-                            "medication_id": med_b.id,
-                        }
-                    ],
+                    items_data=[item_with_med],
                 )
 
     def test_medication_id_other_tenant_api_400(self, db: Any) -> None:
@@ -616,11 +633,11 @@ class TestB3MedicationIdTenantValidation:
 
         payload = {
             "items": [
-                {
-                    "medication_name": "Paracetamol",
-                    "indication": "1 tab c/8h",
-                    "medication_id": str(med_b.id),
-                }
+                _cofepris_item(
+                    medication_name="Paracetamol",
+                    indication="1 tab c/8h",
+                    medication_id=str(med_b.id),
+                )
             ]
         }
         client = _auth_client(user_a)
@@ -638,11 +655,11 @@ class TestB3MedicationIdTenantValidation:
 
         payload = {
             "items": [
-                {
-                    "medication_name": med.generic_name,
-                    "indication": "1 tab c/8h",
-                    "medication_id": str(med.id),
-                }
+                _cofepris_item(
+                    medication_name=med.generic_name,
+                    indication="1 tab c/8h",
+                    medication_id=str(med.id),
+                )
             ]
         }
         client = _auth_client(user)
@@ -662,11 +679,11 @@ class TestB3MedicationIdTenantValidation:
 
         payload = {
             "items": [
-                {
-                    "medication_name": global_med.generic_name,
-                    "indication": "1 tab c/8h",
-                    "global_medication_id": str(global_med.id),
-                }
+                _cofepris_item(
+                    medication_name=global_med.generic_name,
+                    indication="1 tab c/8h",
+                    global_medication_id=str(global_med.id),
+                )
             ]
         }
         client = _auth_client(user)
