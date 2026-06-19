@@ -13,7 +13,7 @@ from typing import Optional
 
 from django.db.models import QuerySet
 
-from apps.clinica.models import ClinicSettings, ClinicTemplate, DoctorUniversity, PatientCategory
+from apps.clinica.models import ClinicSettings, ClinicTemplate, DoctorCredential, DoctorUniversity, PatientCategory
 
 
 def clinic_settings_get(*, tenant_id: uuid.UUID) -> Optional[ClinicSettings]:
@@ -128,6 +128,42 @@ def doctor_university_list(*, doctor_id: uuid.UUID) -> QuerySet[DoctorUniversity
         .filter(doctor_id=doctor_id, deleted_at__isnull=True)
         .order_by("name")
     )
+
+
+def doctor_credential_list(*, doctor_id: uuid.UUID) -> QuerySet[DoctorCredential]:
+    """Retorna las credenciales activas de un médico ordenadas por `order`.
+
+    Usa el TenantManager para filtrar por tenant. El doctor_id adicional
+    restringe a las filas de ese médico específico.
+
+    Args:
+        doctor_id: UUID del Doctor.
+
+    Returns:
+        QuerySet[DoctorCredential] activas, ordenadas por order, id.
+    """
+    return (
+        DoctorCredential.objects
+        .filter(doctor_id=doctor_id, is_active=True, deleted_at__isnull=True)
+        .order_by("order", "id")
+    )
+
+
+def doctor_credential_get(*, credential_id: uuid.UUID) -> DoctorCredential:
+    """Retorna una DoctorCredential por su UUID.
+
+    Usa el TenantManager: una credencial de otro tenant → DoesNotExist → 404.
+
+    Args:
+        credential_id: UUID de la DoctorCredential.
+
+    Returns:
+        Instancia DoctorCredential.
+
+    Raises:
+        DoctorCredential.DoesNotExist: si no existe o no pertenece al tenant activo.
+    """
+    return DoctorCredential.objects.select_related("doctor").get(id=credential_id)
 
 
 def doctor_university_get(*, university_id: uuid.UUID) -> DoctorUniversity:

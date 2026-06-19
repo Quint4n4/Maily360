@@ -12,6 +12,8 @@ Rutas:
     clinica/doctores/<doctor_id>/perfil/                 DoctorProfileApi
     clinica/doctores/<doctor_id>/universidades/          DoctorUniversityListCreateApi
     clinica/universidades/<university_id>/               DoctorUniversityDetailApi
+    clinica/doctores/<doctor_id>/credenciales/           DoctorCredentialListCreateApi  [F2]
+    clinica/credenciales/<credential_id>/                DoctorCredentialDetailApi      [F2]
 """
 
 from django.urls import path
@@ -20,6 +22,8 @@ from apps.clinica.views import (
     ClinicSettingsApi,
     ClinicTemplateDetailApi,
     ClinicTemplateListCreateApi,
+    DoctorCredentialDetailApi,
+    DoctorCredentialListCreateApi,
     DoctorProfileApi,
     DoctorUniversityDetailApi,
     DoctorUniversityListCreateApi,
@@ -72,5 +76,16 @@ urlpatterns = [
         "clinica/universidades/<uuid:university_id>/",
         DoctorUniversityDetailApi.as_view(),
         name="doctor-university-detail",
+    ),
+    # Credenciales del médico (COFEPRIS F2)
+    path(
+        "clinica/doctores/<uuid:doctor_id>/credenciales/",
+        DoctorCredentialListCreateApi.as_view(),
+        name="doctor-credential-list-create",
+    ),
+    path(
+        "clinica/credenciales/<uuid:credential_id>/",
+        DoctorCredentialDetailApi.as_view(),
+        name="doctor-credential-detail",
     ),
 ]

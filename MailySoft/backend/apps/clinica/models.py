@@ -197,6 +197,18 @@ class ClinicSettings(TenantAwareModel):
         ),
     )
 
+    # --- Nombre comercial (COFEPRIS F2) ---
+    commercial_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text=(
+            "Nombre comercial de la clínica para el membrete de la receta. "
+            "Puede diferir de Tenant.name (p. ej. 'Clínica Camsa' vs 'CAMSA S.A. de C.V.'). "
+            "COFEPRIS F2."
+        ),
+    )
+
     # --- Preferencias de recetas ---
     recipe_use_responsible_doctor = models.BooleanField(
         default=False,
@@ -384,3 +396,116 @@ class DoctorUniversity(TenantAwareModel):
                 raise ValidationError(
                     "El médico no pertenece al tenant de esta institución."
                 )
+
+
+# ---------------------------------------------------------------------------
+# DoctorCredential — cédulas y títulos estructurados del médico (COFEPRIS F2)
+# ---------------------------------------------------------------------------
+
+
+class CredentialKind(models.TextChoices):
+    """Tipo de credencial académica del médico.
+
+    COFEPRIS exige distinguir entre cédula profesional (licenciatura),
+    cédula de especialidad (posgrado de especialidad) y posgrado (maestría/doctorado).
+    """
+
+    PROFESIONAL = "profesional", "Cédula profesional"
+    ESPECIALIDAD = "especialidad", "Cédula de especialidad"
+    POSGRADO = "posgrado", "Posgrado (maestría / doctorado)"
+
+
+class DoctorCredential(TenantAwareModel):
+    """Credencial académica estructurada de un médico.
+
+    Sustituye funcionalmente a `Doctor.cedulas_adicionales` (texto libre) para
+    cumplir COFEPRIS 2026: el reglamento exige indicar la institución que expide
+    el título y el número de cédula de especialidad de forma estructurada.
+
+    Baja lógica: `is_active=False` oculta la credencial sin borrarla físicamente.
+    El campo `deleted_at` heredado se reserva para el soft-delete del sistema;
+    `is_active` es la baja administrativa.
+
+    RLS (PostgreSQL):
+        USING + WITH CHECK por tenant. Migración 0004_credential_rls.py.
+
+    `cedulas_adicionales` (texto libre en Doctor) se conserva para compatibilidad
+    con recetas existentes y se marcaría deprecated en una fase posterior.
+
+    Unicidad:
+        No hay UniqueConstraint (un médico puede tener varias credenciales del mismo
+        tipo, p. ej. dos especialidades).
+
+    order:
+        Permite controlar el orden de aparición en el membrete de la receta.
+        0 = orden por defecto (se ordenará por id si todos son 0).
+    """
+
+    doctor = models.ForeignKey(
+        "personal.Doctor",
+        on_delete=models.CASCADE,
+        related_name="credentials",
+        db_index=True,
+        help_text="Médico al que pertenece esta credencial.",
+    )
+    title = models.CharField(
+        max_length=200,
+        help_text=(
+            "Nombre del título o grado académico, sin abreviaturas. "
+            "Ej: 'Médico Cirujano y Partero', 'Maestría en Cirugía Estética'."
+        ),
+    )
+    institution = models.CharField(
+        max_length=200,
+        help_text=(
+            "Institución que expide el título. "
+            "Ej: 'Universidad Nacional Autónoma de México'. COFEPRIS obligatorio."
+        ),
+    )
+    credential_number = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        help_text=(
+            "Número de cédula profesional o de especialidad. "
+            "Ej: '12345678'. Puede estar en blanco si es posgrado sin cédula."
+        ),
+    )
+    kind = models.CharField(
+        max_length=20,
+        choices=CredentialKind.choices,
+        db_index=True,
+        help_text="Tipo de credencial: profesional, especialidad o posgrado.",
+    )
+    order = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Orden de aparición en el membrete (0 = primero). "
+            "Permite controlar qué cédula aparece en qué posición."
+        ),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False = credencial dada de baja (baja lógica, sin borrado físico).",
+    )
+
+    class Meta:
+        db_table = "clinica_doctor_credentials"
+        ordering = ["doctor", "order", "id"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "doctor"],
+                name="cred_tenant_doctor_idx",
+            ),
+            models.Index(
+                fields=["tenant", "doctor", "kind"],
+                name="cred_tenant_doctor_kind_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"[{self.get_kind_display()}] {self.title} "
+            f"— {self.institution} (doctor={self.doctor_id})"
+        )

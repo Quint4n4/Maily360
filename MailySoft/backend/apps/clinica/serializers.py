@@ -28,7 +28,7 @@ from typing import Any
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from apps.clinica.models import ClinicSettings, ClinicTemplate, DoctorUniversity, PatientCategory
+from apps.clinica.models import ClinicSettings, ClinicTemplate, CredentialKind, DoctorCredential, DoctorUniversity, PatientCategory
 from apps.core.files import validate_image
 
 # ---------------------------------------------------------------------------
@@ -183,6 +183,13 @@ class ClinicSettingsInputSerializer(serializers.Serializer):
     """
 
     logo = SecureImageField(required=False, allow_null=True)
+    commercial_name = serializers.CharField(
+        max_length=200,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Nombre comercial de la clínica para el membrete (COFEPRIS F2).",
+    )
     address = serializers.CharField(max_length=300, required=False, allow_blank=True)
     address_2 = serializers.CharField(max_length=300, required=False, allow_blank=True)
     phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
@@ -270,6 +277,7 @@ class ClinicSettingsOutputSerializer(serializers.ModelSerializer["ClinicSettings
         model = ClinicSettings
         fields = [
             "id",
+            "commercial_name",
             "logo",
             "address",
             "address_2",
@@ -452,3 +460,107 @@ class DoctorProfileImageInputSerializer(serializers.Serializer):
         """M2: rechaza campos desconocidos (D-EC-7)."""
         _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
         return attrs
+
+
+# ---------------------------------------------------------------------------
+# DoctorCredential — credenciales COFEPRIS F2
+# ---------------------------------------------------------------------------
+
+_CREDENTIAL_KIND_CHOICES: list[str] = [c[0] for c in CredentialKind.choices]
+
+
+class DoctorCredentialInputSerializer(serializers.Serializer):
+    """Entrada para POST de DoctorCredential.
+
+    Campos obligatorios: title, institution, kind.
+    credential_number y order son opcionales.
+    M2: rechaza campos desconocidos vía validate().
+    Whitelist de kind contra CredentialKind.choices.
+    Rechaza etiquetas HTML en campos de texto libre (M5).
+    """
+
+    title = serializers.CharField(
+        max_length=200,
+        help_text="Nombre del título o grado sin abreviaturas (requerido).",
+    )
+    institution = serializers.CharField(
+        max_length=200,
+        help_text="Institución que expide el título (requerido). COFEPRIS obligatorio.",
+    )
+    kind = serializers.ChoiceField(
+        choices=_CREDENTIAL_KIND_CHOICES,
+        help_text="Tipo de credencial: profesional, especialidad o posgrado.",
+    )
+    credential_number = serializers.CharField(
+        max_length=60,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Número de cédula profesional o de especialidad (opcional).",
+    )
+    order = serializers.IntegerField(
+        min_value=0,
+        max_value=999,
+        required=False,
+        default=0,
+        help_text="Orden de aparición en el membrete (0 = primero).",
+    )
+
+    def validate_title(self, value: str) -> str:
+        """Rechaza etiquetas HTML y valida que no esté vacío."""
+        stripped = value.strip()
+        if not stripped:
+            raise serializers.ValidationError(
+                "El título no puede estar vacío."
+            )
+        if _HTML_TAG_RE.search(stripped):
+            raise serializers.ValidationError(
+                "El título no puede contener etiquetas HTML."
+            )
+        return stripped
+
+    def validate_institution(self, value: str) -> str:
+        """Rechaza etiquetas HTML y valida que no esté vacío."""
+        stripped = value.strip()
+        if not stripped:
+            raise serializers.ValidationError(
+                "La institución no puede estar vacía."
+            )
+        if _HTML_TAG_RE.search(stripped):
+            raise serializers.ValidationError(
+                "La institución no puede contener etiquetas HTML."
+            )
+        return stripped
+
+    def validate_credential_number(self, value: str) -> str:
+        """Rechaza etiquetas HTML (puede estar vacío)."""
+        if _HTML_TAG_RE.search(value):
+            raise serializers.ValidationError(
+                "El número de cédula no puede contener etiquetas HTML."
+            )
+        return value.strip()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class DoctorCredentialOutputSerializer(serializers.ModelSerializer["DoctorCredential"]):
+    """Salida de DoctorCredential."""
+
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = DoctorCredential
+        fields = [
+            "id",
+            "title",
+            "institution",
+            "credential_number",
+            "kind",
+            "kind_display",
+            "order",
+            "is_active",
+            "created_at",
+        ]

@@ -20,7 +20,7 @@ from django.core.exceptions import ValidationError
 
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
-from apps.clinica.models import ClinicSettings, ClinicTemplate, DoctorUniversity, PatientCategory
+from apps.clinica.models import ClinicSettings, ClinicTemplate, CredentialKind, DoctorCredential, DoctorUniversity, PatientCategory
 from apps.clinica.selectors import clinic_settings_get
 
 if TYPE_CHECKING:
@@ -85,6 +85,7 @@ def clinic_settings_upsert(
     letterhead_half_spaces: Optional[int] = None,
     recipe_use_responsible_doctor: Optional[bool] = None,
     recipe_whatsapp_contacts: Optional[list[dict[str, str]]] = None,
+    commercial_name: str = "",
     # Soporte partial update: solo actualiza los campos explícitamente pasados.
     _partial_fields: Optional[frozenset[str]] = None,
 ) -> ClinicSettings:
@@ -116,6 +117,7 @@ def clinic_settings_upsert(
         letterhead_half_spaces:      Espacios después del membrete de media hoja.
         recipe_use_responsible_doctor: Usar nombre del médico responsable en recetas.
         recipe_whatsapp_contacts:    Lista de contactos WhatsApp [{nombre, numero}].
+        commercial_name:             Nombre comercial de la clínica para el membrete (COFEPRIS F2).
         _partial_fields:             Si se provee, solo se actualizan esos campos.
 
     Returns:
@@ -141,6 +143,7 @@ def clinic_settings_upsert(
         "facebook": facebook,
         "instagram": instagram,
         "youtube": youtube,
+        "commercial_name": commercial_name,
     }
     if logo is not None:
         field_map["logo"] = logo
@@ -576,4 +579,117 @@ def doctor_university_delete(
         resource_id=university_id,
         resource_repr=f"{university_name or 'Logo'} eliminado",
         metadata={"doctor_id": str(doctor_id), "context": "university_delete"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# DoctorCredential — credenciales estructuradas COFEPRIS F2
+# ---------------------------------------------------------------------------
+
+
+def doctor_credential_create(
+    *,
+    tenant: "Tenant",
+    user: "User",
+    doctor: "Doctor",
+    title: str,
+    institution: str,
+    kind: str,
+    credential_number: str = "",
+    order: int = 0,
+) -> DoctorCredential:
+    """Crea una credencial académica estructurada para un médico.
+
+    Valida que el doctor pertenezca al tenant actual (defensa en profundidad).
+    El campo `kind` debe ser un valor de CredentialKind.
+
+    Args:
+        tenant:            Clínica a la que pertenece el médico.
+        user:              Usuario que crea el registro (auditoría).
+        doctor:            Médico al que se asocia la credencial.
+        title:             Nombre del título sin abreviaturas (requerido).
+        institution:       Institución que expide el título (requerido).
+        kind:              Tipo: profesional, especialidad o posgrado.
+        credential_number: Número de cédula (opcional, puede estar en blanco).
+        order:             Orden de aparición en el membrete (default 0).
+
+    Returns:
+        Instancia DoctorCredential recién creada.
+
+    Raises:
+        ValidationError: si el doctor no pertenece al tenant o kind es inválido.
+    """
+    if doctor.tenant_id != tenant.id:
+        raise ValidationError("El médico no pertenece a esta clínica.")
+
+    valid_kinds = {c[0] for c in CredentialKind.choices}
+    if kind not in valid_kinds:
+        raise ValidationError(
+            f"Tipo de credencial inválido '{kind}'. "
+            f"Los válidos son: {', '.join(sorted(valid_kinds))}."
+        )
+
+    title = title.strip()
+    if not title:
+        raise ValidationError("El título de la credencial no puede estar vacío.")
+
+    institution = institution.strip()
+    if not institution:
+        raise ValidationError("La institución de la credencial no puede estar vacía.")
+
+    credential = DoctorCredential.objects.create(
+        tenant=tenant,
+        created_by=user,
+        doctor=doctor,
+        title=title,
+        institution=institution,
+        kind=kind,
+        credential_number=credential_number.strip(),
+        order=order,
+        is_active=True,
+    )
+
+    audit_record(
+        action=ActionType.CREDENTIAL_CREATE,
+        resource_type="DoctorCredential",
+        actor=user,
+        tenant=tenant,
+        resource_id=credential.id,
+        resource_repr=f"[{kind}] {title} — doctor={str(doctor.id)}",
+        metadata={"doctor_id": str(doctor.id), "kind": kind},
+    )
+    return credential
+
+
+def doctor_credential_delete(
+    *,
+    credential: DoctorCredential,
+    user: "User",
+) -> None:
+    """Da de baja lógica una credencial del médico (is_active=False).
+
+    A diferencia de DoctorUniversity, las credenciales son documentos con
+    implicaciones legales (COFEPRIS): se conservan en BD con baja lógica para
+    auditoría histórica. No se borran físicamente.
+
+    Args:
+        credential: Instancia DoctorCredential a dar de baja.
+        user:       Usuario que realiza la acción.
+    """
+    doctor_id = credential.doctor_id
+    credential_id = credential.id
+    credential_repr = f"[{credential.kind}] {credential.title}"
+    tenant = credential.tenant
+
+    credential.is_active = False
+    credential.save(update_fields=["is_active", "updated_at"])
+
+    audit_record(
+        action=ActionType.CREDENTIAL_DELETE,
+        resource_type="DoctorCredential",
+        actor=user,
+        tenant=tenant,
+        resource_id=credential_id,
+        resource_repr=f"{credential_repr} dado de baja",
+        metadata={"doctor_id": str(doctor_id)},
     )

@@ -20,7 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.clinica.models import ClinicSettings, ClinicTemplate, DoctorUniversity, PatientCategory
+from apps.clinica.models import ClinicSettings, ClinicTemplate, DoctorCredential, DoctorUniversity, PatientCategory
 from apps.clinica.permissions import (
     ClinicSettingsPermission,
     ClinicTemplatePermission,
@@ -31,6 +31,8 @@ from apps.clinica.selectors import (
     clinic_settings_get,
     clinic_template_get,
     clinic_template_list,
+    doctor_credential_get,
+    doctor_credential_list,
     doctor_university_get,
     doctor_university_list,
     patient_category_get,
@@ -42,6 +44,8 @@ from apps.clinica.serializers import (
     ClinicTemplateInputSerializer,
     ClinicTemplatePatchSerializer,
     ClinicTemplateOutputSerializer,
+    DoctorCredentialInputSerializer,
+    DoctorCredentialOutputSerializer,
     DoctorProfileImageInputSerializer,
     DoctorUniversityInputSerializer,
     DoctorUniversityOutputSerializer,
@@ -50,6 +54,8 @@ from apps.clinica.serializers import (
 )
 from apps.clinica.services import (
     clinic_settings_upsert,
+    doctor_credential_create,
+    doctor_credential_delete,
     doctor_university_create,
     doctor_university_delete,
     doctor_update_profile_images,
@@ -539,6 +545,135 @@ class DoctorUniversityDetailApi(TenantAPIView):
 
         doctor_university_delete(
             university=univ,  # type: ignore[arg-type]
+            user=request.user,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# DoctorCredential — GET/POST doctores/<id>/credenciales/ y DELETE credenciales/<id>/
+# ---------------------------------------------------------------------------
+
+
+class DoctorCredentialListCreateApi(TenantAPIView):
+    """GET  /api/v1/clinica/doctores/<doctor_id>/credenciales/  — lista de credenciales.
+    POST /api/v1/clinica/doctores/<doctor_id>/credenciales/  — agrega una credencial.
+
+    Acceso: owner/admin siempre. Doctor solo si es el mismo médico (Guard M-1).
+    Las credenciales son datos COFEPRIS — no datos clínicos del paciente.
+    """
+
+    permission_classes = [IsAuthenticated, DoctorProfilePermission]
+
+    def _get_doctor_or_404(
+        self, doctor_id: uuid.UUID
+    ) -> "tuple[Doctor | None, Response | None]":
+        try:
+            d = doctor_get(doctor_id=doctor_id)
+            return d, None
+        except Doctor.DoesNotExist:
+            return None, Response(
+                {"detail": "Médico no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def get(self, request: Request, doctor_id: uuid.UUID) -> Response:
+        """Lista las credenciales activas del médico."""
+        _, err = self._get_doctor_or_404(doctor_id)
+        if err:
+            return err
+
+        qs = doctor_credential_list(doctor_id=doctor_id)
+        return Response(DoctorCredentialOutputSerializer(qs, many=True).data)
+
+    def post(self, request: Request, doctor_id: uuid.UUID) -> Response:
+        """Agrega una credencial académica al médico."""
+        doctor, err = self._get_doctor_or_404(doctor_id)
+        if err:
+            return err
+
+        # Guard M-1: un doctor solo puede agregar credenciales a su propio perfil.
+        actor_role: str | None = getattr(request, "active_role", None)
+        if actor_role == "doctor":
+            membership = getattr(request, "membership", None)
+            if membership is None or str(doctor.membership_id) != str(membership.id):
+                return Response(
+                    {"detail": "Solo puedes agregar credenciales a tu propio perfil médico."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        s = DoctorCredentialInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            credential = doctor_credential_create(
+                tenant=tenant,
+                user=request.user,
+                doctor=doctor,  # type: ignore[arg-type]
+                title=s.validated_data["title"],
+                institution=s.validated_data["institution"],
+                kind=s.validated_data["kind"],
+                credential_number=s.validated_data.get("credential_number", ""),
+                order=s.validated_data.get("order", 0),
+            )
+        except DjangoValidationError as exc:
+            return Response(
+                {"detail": exc.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            DoctorCredentialOutputSerializer(credential).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DoctorCredentialDetailApi(TenantAPIView):
+    """DELETE /api/v1/clinica/credenciales/<credential_id>/  — baja lógica de credencial.
+
+    Baja lógica (is_active=False): las credenciales son documentos con implicaciones
+    legales COFEPRIS y se conservan en BD para auditoría histórica.
+    """
+
+    permission_classes = [IsAuthenticated, DoctorProfilePermission]
+
+    def _get_credential_or_404(
+        self, credential_id: uuid.UUID
+    ) -> "tuple[DoctorCredential | None, Response | None]":
+        try:
+            cred = doctor_credential_get(credential_id=credential_id)
+            return cred, None
+        except DoctorCredential.DoesNotExist:
+            return None, Response(
+                {"detail": "Credencial no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def delete(self, request: Request, credential_id: uuid.UUID) -> Response:
+        """Da de baja (is_active=False) una credencial del médico."""
+        cred, err = self._get_credential_or_404(credential_id)
+        if err:
+            return err
+
+        # Guard M-1: un doctor solo puede dar de baja credenciales de su propio perfil.
+        actor_role: str | None = getattr(request, "active_role", None)
+        if actor_role == "doctor":
+            membership = getattr(request, "membership", None)
+            if membership is None or str(cred.doctor.membership_id) != str(membership.id):
+                return Response(
+                    {"detail": "Solo puedes dar de baja credenciales de tu propio perfil médico."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        doctor_credential_delete(
+            credential=cred,  # type: ignore[arg-type]
             user=request.user,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
