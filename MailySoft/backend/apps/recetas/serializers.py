@@ -23,6 +23,7 @@ Clases B1.1:
 Clases B1.2:
     PrescriptionItemInputSerializer  — valida un renglón de tratamiento al crear.
     PrescriptionItemOutputSerializer — forma un renglón de tratamiento en salida.
+    VitalsInPrescriptionSerializer   — valida los signos vitales capturados en la receta.
     PrescriptionCreateInputSerializer — valida la entrada para crear una receta.
     PrescriptionListOutputSerializer  — forma el historial de recetas (lista, sin detalle completo).
     PrescriptionDetailOutputSerializer — forma el detalle completo (con items, doctor, snapshot).
@@ -317,6 +318,156 @@ class PrescriptionItemInputSerializer(serializers.Serializer):
                 raise serializers.ValidationError(errors)
         return attrs
 
+# ---------------------------------------------------------------------------
+# Rangos fisiológicos — mismos que apps/expediente/serializers.py (D-EC-7).
+# Se duplican aquí para evitar import circular entre apps y mantener
+# la app recetas desacoplada de los internos de expediente.
+# ---------------------------------------------------------------------------
+
+_VITAL_RANGES: dict[str, tuple[float, float]] = {
+    "weight_kg": (0.2, 500.0),
+    "height_m": (0.2, 2.6),
+    "heart_rate": (20, 300),
+    "resp_rate": (5, 80),
+    "systolic": (40, 300),
+    "diastolic": (20, 200),
+    "temperature_c": (30.0, 45.0),
+    "oxygen_saturation": (50, 100),
+    "glucose": (10, 1000),
+}
+
+#: Claves permitidas dentro del objeto `vitals` en el body de la receta.
+_VITALS_ALLOWED_KEYS: frozenset[str] = frozenset(_VITAL_RANGES.keys())
+
+
+class VitalsInPrescriptionSerializer(serializers.Serializer):
+    """Valida los signos vitales capturados por el médico al crear la receta.
+
+    Todos los campos son opcionales: el médico puede enviar solo los que mide
+    en el momento (p.ej. solo peso + talla para calcular IMC). Si se envía al
+    menos un campo válido, el servicio construirá el vitals_snapshot con esos
+    valores y descartará el snapshot de la última toma de enfermería.
+
+    Rangos fisiológicos: idénticos a VitalSignsInputSerializer en expediente (D-EC-7).
+    Claves desconocidas son rechazadas en validate() (M-4 whitelist).
+
+    Nota: `measured_at` NO se acepta aquí (se genera automáticamente en el
+    servicio con timezone.now() del momento de emisión de la receta).
+    """
+
+    weight_kg = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        help_text="Peso en kg (rango: 0.2 – 500.0).",
+    )
+    height_m = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=3,
+        required=False,
+        allow_null=True,
+        help_text="Talla en metros (rango: 0.2 – 2.6).",
+    )
+    heart_rate = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Frecuencia cardíaca en lpm (rango: 20 – 300).",
+    )
+    resp_rate = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Frecuencia respiratoria en rpm (rango: 5 – 80).",
+    )
+    systolic = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Presión sistólica en mmHg (rango: 40 – 300).",
+    )
+    diastolic = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Presión diastólica en mmHg (rango: 20 – 200).",
+    )
+    temperature_c = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        required=False,
+        allow_null=True,
+        help_text="Temperatura en °C (rango: 30.0 – 45.0).",
+    )
+    oxygen_saturation = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Saturación de oxígeno en % (rango: 50 – 100).",
+    )
+    glucose = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Glucosa en mg/dL (rango: 10 – 1000).",
+    )
+
+    def _validate_range(self, field: str, value: object) -> None:
+        """Valida que `value` esté dentro del rango fisiológico plausible para `field`."""
+        if value is None:
+            return
+        lo, hi = _VITAL_RANGES[field]
+        if not (lo <= float(value) <= hi):  # type: ignore[arg-type]
+            raise serializers.ValidationError(
+                {field: f"Valor fuera del rango fisiológico plausible ({lo} – {hi})."}
+            )
+
+    def validate_weight_kg(self, value: object) -> object:
+        self._validate_range("weight_kg", value)
+        return value
+
+    def validate_height_m(self, value: object) -> object:
+        self._validate_range("height_m", value)
+        return value
+
+    def validate_heart_rate(self, value: object) -> object:
+        self._validate_range("heart_rate", value)
+        return value
+
+    def validate_resp_rate(self, value: object) -> object:
+        self._validate_range("resp_rate", value)
+        return value
+
+    def validate_systolic(self, value: object) -> object:
+        self._validate_range("systolic", value)
+        return value
+
+    def validate_diastolic(self, value: object) -> object:
+        self._validate_range("diastolic", value)
+        return value
+
+    def validate_temperature_c(self, value: object) -> object:
+        self._validate_range("temperature_c", value)
+        return value
+
+    def validate_oxygen_saturation(self, value: object) -> object:
+        self._validate_range("oxygen_saturation", value)
+        return value
+
+    def validate_glucose(self, value: object) -> object:
+        self._validate_range("glucose", value)
+        return value
+
+    def validate(self, attrs: dict) -> dict:  # type: ignore[override]
+        """M-4: Rechaza claves desconocidas dentro del objeto vitals.
+
+        Cuando VitalsInPrescriptionSerializer actúa como serializer raíz (tests
+        de unidad), `self.initial_data` está disponible y se usa para la whitelist.
+        Cuando actúa como campo anidado dentro de PrescriptionCreateInputSerializer,
+        `initial_data` no está disponible en el nivel del child; la whitelist se
+        aplica en el validate() del padre usando `_VITALS_ALLOWED_KEYS`.
+        """
+        initial = getattr(self, "initial_data", None)
+        if initial is not None and isinstance(initial, dict):
+            _reject_unknown_fields(self, initial)  # type: ignore[arg-type]
+        return attrs
+
+
 class PrescriptionCreateInputSerializer(serializers.Serializer):
     """Valida la entrada para crear una receta médica.
 
@@ -378,13 +529,34 @@ class PrescriptionCreateInputSerializer(serializers.Serializer):
             "COFEPRIS emite el recetario especial fuera del sistema."
         ),
     )
+    # Signos vitales capturados por el médico en la receta.
+    # Todos los campos son opcionales. Si se envía al menos uno, el servicio
+    # construye vitals_snapshot con esos valores (+ IMC si hay peso y talla)
+    # y descarta el snapshot de la última toma de enfermería.
+    # Si no se envía `vitals`, el comportamiento anterior se mantiene:
+    #   snapshot = última toma de enfermería (o None si no hay).
+    # Precedencia: vitals capturados en la receta > última toma de enfermería.
+    vitals = VitalsInPrescriptionSerializer(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text=(
+            "Signos vitales capturados por el médico al emitir la receta (opcional). "
+            "Si se provee con al menos un campo, sobreescribe el snapshot de la "
+            "última toma de enfermería. Claves: weight_kg, height_m, heart_rate, "
+            "resp_rate, systolic, diastolic, temperature_c, oxygen_saturation, glucose. "
+            "Todas las claves son opcionales. Claves desconocidas son rechazadas."
+        ),
+    )
 
     def validate(self, attrs: dict) -> dict:  # type: ignore[override]
-        """M-4: Rechaza campos desconocidos en el root y en cada ítem.
+        """M-4: Rechaza campos desconocidos en el root, en cada ítem y en vitals.
 
         DRF ignora silenciosamente los campos extra; aquí implementamos whitelist real.
         Para el root: comparamos initial_data contra fields declarados.
         Para cada ítem: comparamos cada dict raw contra los fields del child serializer.
+        Para vitals: VitalsInPrescriptionSerializer ya rechaza claves desconocidas
+          en su propio validate(), pero también verificamos aquí a nivel de root.
         """
         # --- Whitelist root ---
         _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
@@ -400,6 +572,20 @@ class PrescriptionCreateInputSerializer(serializers.Serializer):
             if unknown:
                 raise serializers.ValidationError(
                     {f"items[{idx}]": {field: ["Campo no permitido."] for field in sorted(unknown)}}
+                )
+
+        # --- Whitelist de vitals (defensa adicional en profundidad) ---
+        raw_vitals = self.initial_data.get("vitals") if isinstance(self.initial_data, dict) else None  # type: ignore[union-attr]
+        if raw_vitals is not None and isinstance(raw_vitals, dict):
+            unknown_vitals = set(raw_vitals.keys()) - _VITALS_ALLOWED_KEYS
+            if unknown_vitals:
+                raise serializers.ValidationError(
+                    {
+                        "vitals": {
+                            field: ["Campo no permitido en vitals."]
+                            for field in sorted(unknown_vitals)
+                        }
+                    }
                 )
 
         return attrs

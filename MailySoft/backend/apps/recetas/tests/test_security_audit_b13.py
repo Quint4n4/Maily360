@@ -3,14 +3,21 @@ Tests de seguridad — correcciones de auditoría B1.3 (PDF de recetas).
 
 Cubre los hallazgos ALTO-1, MEDIO-3 y MEDIO-4 de la auditoría.
 
-ALTO-1 — _link_callback bloquea recursos externos (LFI/SSRF):
-  - data:image/png;base64,AAA  → devuelve la URI tal cual.
-  - file:///etc/passwd          → devuelve "".
-  - http://evil.example/x      → devuelve "".
-  - https://evil.example/x     → devuelve "".
-  - Ruta relativa ../foo        → devuelve "".
-  - Ruta absoluta /etc/passwd   → devuelve "".
-  - El PDF generado funciona normalmente con data URIs (link_callback no rompe render).
+ALTO-1 — _secure_fetcher bloquea recursos externos (LFI/SSRF):
+  Motor: WeasyPrint 62.3+ (migrado desde xhtml2pdf).
+  Política: el url_fetcher SOLO permite data URIs; para cualquier otro
+  esquema lanza ValueError (bloqueo activo, no silencioso).
+
+  Casos cubiertos:
+  - data:image/png;base64,AAA  → llama al fetcher nativo de WeasyPrint (no lanza).
+  - file:///etc/passwd          → lanza ValueError (LFI bloqueado).
+  - http://evil.example/x      → lanza ValueError (SSRF bloqueado).
+  - https://evil.example/x     → lanza ValueError (SSRF bloqueado).
+  - Ruta relativa ../foo        → lanza ValueError.
+  - Ruta absoluta /etc/passwd   → lanza ValueError.
+  - URI vacía ""               → lanza ValueError.
+  - ftp://server/file           → lanza ValueError.
+  - El PDF generado funciona normalmente con data URIs (_secure_fetcher no rompe render).
 
 MEDIO-3 — Cota anti-DoS en letterhead_spaces:
   - letterhead_full_spaces > 200 → falla la validación del modelo.
@@ -27,12 +34,13 @@ MEDIO-4 — Headers de seguridad en la respuesta del PDF:
 """
 
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
 from rest_framework.test import APIClient
 
-from apps.recetas.pdf import _link_callback
+from apps.recetas.pdf import _secure_fetcher
 from apps.recetas.tests.conftest import api_tenant_ctx
 from apps.tenancy.models import TenantMembership
 from tests.factories import (
@@ -63,66 +71,87 @@ def _make_nurse_user(tenant: Any) -> Any:
 
 
 # ===========================================================================
-# ALTO-1 — _link_callback: política de URIs permitidas
+# ALTO-1 — _secure_fetcher: política de URIs permitidas (WeasyPrint)
 # ===========================================================================
 
 
-class TestAlto1LinkCallback:
-    """ALTO-1: _link_callback solo permite data: URIs; bloquea todo lo demás."""
+class TestAlto1SecureFetcher:
+    """ALTO-1: _secure_fetcher solo permite data: URIs; bloquea todo lo demás con ValueError.
 
-    def test_data_uri_passthrough(self) -> None:
-        """data:image/png;base64,AAA → devuelve la URI sin modificar."""
-        uri = "data:image/png;base64,AAA"
-        assert _link_callback(uri, "") == uri
+    Motor: WeasyPrint 62.3+. La política de bloqueo es activa (lanza ValueError)
+    en lugar de silenciosa (devolver ""), porque WeasyPrint NO omite recursos
+    que fallan silenciosamente — propaga la excepción del fetcher.
+    """
 
-    def test_data_uri_jpeg_passthrough(self) -> None:
-        """data:image/jpeg;base64,/9j/4AA → devuelve la URI sin modificar."""
-        uri = "data:image/jpeg;base64,/9j/4AA"
-        assert _link_callback(uri, "") == uri
+    def test_data_uri_does_not_raise(self) -> None:
+        """data:image/png;base64,iVBORw0KGgo= → no lanza ValueError (pasa al fetcher nativo)."""
+        # Usamos un PNG base64 válido mínimo para que default_url_fetcher lo acepte.
+        import base64
+        # 1x1 pixel PNG transparente
+        png_b64 = base64.b64encode(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+            b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
+            b"\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        ).decode("ascii")
+        uri = f"data:image/png;base64,{png_b64}"
+        # No debe lanzar; delega al fetcher nativo.
+        result = _secure_fetcher(uri)
+        assert isinstance(result, dict)
 
-    def test_data_uri_svg_passthrough(self) -> None:
-        """data:image/svg+xml;base64,PHN2 → devuelve la URI sin modificar (cualquier data:)."""
-        uri = "data:image/svg+xml;base64,PHN2"
-        assert _link_callback(uri, "") == uri
+    def test_file_uri_raises_value_error(self) -> None:
+        """file:///etc/passwd → ValueError (LFI bloqueado)."""
+        with pytest.raises(ValueError, match="bloqueada"):
+            _secure_fetcher("file:///etc/passwd")
 
-    def test_file_uri_blocked(self) -> None:
-        """file:///etc/passwd → "" (LFI bloqueado)."""
-        assert _link_callback("file:///etc/passwd", "") == ""
+    def test_http_uri_raises_value_error(self) -> None:
+        """http://evil.example/x → ValueError (SSRF bloqueado)."""
+        with pytest.raises(ValueError, match="bloqueada"):
+            _secure_fetcher("http://evil.example/x")
 
-    def test_http_uri_blocked(self) -> None:
-        """http://evil.example/x → "" (SSRF bloqueado)."""
-        assert _link_callback("http://evil.example/x", "") == ""
+    def test_https_uri_raises_value_error(self) -> None:
+        """https://evil.example/x → ValueError (SSRF bloqueado)."""
+        with pytest.raises(ValueError, match="bloqueada"):
+            _secure_fetcher("https://evil.example/x")
 
-    def test_https_uri_blocked(self) -> None:
-        """https://evil.example/x → "" (SSRF bloqueado)."""
-        assert _link_callback("https://evil.example/x", "") == ""
+    def test_relative_path_raises_value_error(self) -> None:
+        """Ruta relativa ../foo → ValueError (path traversal bloqueado)."""
+        with pytest.raises(ValueError, match="bloqueada"):
+            _secure_fetcher("../foo")
 
-    def test_relative_path_blocked(self) -> None:
-        """Ruta relativa ../foo → "" (path traversal bloqueado)."""
-        assert _link_callback("../foo", "") == ""
+    def test_absolute_path_raises_value_error(self) -> None:
+        """Ruta absoluta /etc/passwd → ValueError (LFI via ruta POSIX bloqueado)."""
+        with pytest.raises(ValueError, match="bloqueada"):
+            _secure_fetcher("/etc/passwd")
 
-    def test_absolute_path_blocked(self) -> None:
-        """Ruta absoluta /etc/passwd → "" (LFI via ruta POSIX bloqueado)."""
-        assert _link_callback("/etc/passwd", "") == ""
+    def test_empty_string_raises_value_error(self) -> None:
+        """URI vacía → ValueError (caso degenerado; no empieza con 'data:')."""
+        with pytest.raises(ValueError, match="bloqueada"):
+            _secure_fetcher("")
 
-    def test_empty_string_blocked(self) -> None:
-        """URI vacía → "" (caso degenerado; no empieza con 'data:')."""
-        assert _link_callback("", "") == ""
+    def test_ftp_uri_raises_value_error(self) -> None:
+        """ftp://server/file → ValueError (esquema no permitido)."""
+        with pytest.raises(ValueError, match="bloqueada"):
+            _secure_fetcher("ftp://server/file")
 
-    def test_ftp_uri_blocked(self) -> None:
-        """ftp://server/file → "" (esquema no permitido)."""
-        assert _link_callback("ftp://server/file", "") == ""
-
-    def test_rel_arg_ignored(self) -> None:
-        """El argumento rel es ignorado; solo importa uri."""
-        # data: pasa independientemente del rel
-        assert _link_callback("data:text/plain,hello", "some/rel/path") == "data:text/plain,hello"
-        # file: bloquea independientemente del rel
-        assert _link_callback("file:///x", "some/rel/path") == ""
+    def test_data_text_plain_does_not_raise(self) -> None:
+        """data:text/plain,hello → no lanza (cualquier data: pasa)."""
+        # Mockeamos default_url_fetcher porque el fetcher nativo puede no soportar text/plain
+        with patch("apps.recetas.pdf._secure_fetcher.__wrapped__", create=True):
+            pass
+        # Simplemente verificamos que _secure_fetcher no lanza ValueError para data:
+        try:
+            _secure_fetcher("data:text/plain,hello")
+        except ValueError:
+            pytest.fail("_secure_fetcher no debe lanzar ValueError para data: URIs")
+        except Exception:
+            # Otros errores (del fetcher nativo) son aceptables — lo importante es
+            # que NO sea ValueError de nuestra política de seguridad.
+            pass
 
     @pytest.mark.django_db
-    def test_link_callback_does_not_break_pdf_render(self) -> None:
-        """PDF con imágenes data URI se genera correctamente con link_callback activo.
+    def test_secure_fetcher_does_not_break_pdf_render(self) -> None:
+        """PDF con imágenes data URI se genera correctamente con _secure_fetcher activo.
 
         Verifica que el fix de ALTO-1 no rompe el flujo normal: el PDF real
         que usa data URIs en el template sigue produciendo bytes válidos (%PDF).

@@ -107,3 +107,51 @@ export const MSG = {
   html: 'No se permite HTML',
   curp: 'CURP inválida (formato RENAPO, 18 caracteres)',
 } as const
+
+// ── Signos vitales — rangos fisiológicos (copia EXACTA del backend) ──────────
+//
+// Fuente: apps/recetas/serializers.py _VITAL_RANGES (idéntico a
+// apps/expediente/serializers.py, D-EC-7). El backend es la autoridad: vuelve a
+// validar y devuelve 400 si algo cae fuera. Esto solo da feedback inmediato.
+
+/** Clave de un signo vital capturable en la receta. */
+export type VitalKey =
+  | 'weight_kg'
+  | 'height_m'
+  | 'heart_rate'
+  | 'resp_rate'
+  | 'systolic'
+  | 'diastolic'
+  | 'temperature_c'
+  | 'oxygen_saturation'
+  | 'glucose'
+
+/** Rango fisiológico plausible [min, max] por signo (_VITAL_RANGES del backend). */
+export const VITAL_RANGES: Record<VitalKey, readonly [number, number]> = {
+  weight_kg: [0.2, 500.0],
+  height_m: [0.2, 2.6],
+  heart_rate: [20, 300],
+  resp_rate: [5, 80],
+  systolic: [40, 300],
+  diastolic: [20, 200],
+  temperature_c: [30.0, 45.0],
+  oxygen_saturation: [50, 100],
+  glucose: [10, 1000],
+}
+
+/**
+ * Error de formato/rango de un signo vital, o `null` si es válido o está vacío.
+ *
+ * Regla de UX (igual que errorDeCampo): un valor vacío nunca marca error; la
+ * obligatoriedad no aplica aquí (todos los signos son opcionales). Marca error si
+ * el texto no es numérico o si el número cae fuera del rango fisiológico.
+ */
+export function errorDeSignoVital(key: VitalKey, valor: string): string | null {
+  const v = valor.trim()
+  if (v === '') return null
+  const n = Number(v)
+  if (Number.isNaN(n)) return 'Debe ser un número'
+  const [lo, hi] = VITAL_RANGES[key]
+  if (n < lo || n > hi) return `Fuera de rango (${lo}–${hi})`
+  return null
+}

@@ -46,6 +46,11 @@ export type ItemKind = 'medicamento' | 'suero' | 'terapia'
 /** Grupo de medicamento controlado (models.ControlledGroup.choices). */
 export type ControlledGroup = 'none' | 'I' | 'II' | 'III' | 'IV' | 'V'
 
+/** Etiqueta legible del grupo controlado (para el aviso de receta especial). */
+export function controlledGroupLabel(group: ControlledGroup): string {
+  return group === 'none' ? '' : `Grupo ${group}`
+}
+
 /**
  * Vía de administración (models.RouteOfAdministration.choices) — COFEPRIS F2.
  * Cadena vacía = "no especificada" (permitida para suero/terapia).
@@ -233,6 +238,26 @@ export interface PrescriptionItemInput {
 }
 
 /**
+ * Signos vitales capturados por el médico al emitir la receta
+ * (VitalsInPrescriptionSerializer). Todas las claves son opcionales y numéricas.
+ * El backend valida rangos fisiológicos y rechaza (400) cualquier clave fuera de
+ * estas 9. `measured_at` NO se envía: el backend lo genera al momento de emitir.
+ * Si no se envía `vitals` (o todas las claves vacías), el backend cae a la última
+ * toma de Enfermería. El IMC lo deriva el backend (peso / talla²); aquí no se envía.
+ */
+export interface PrescriptionVitalsInput {
+  weight_kg?: number
+  height_m?: number
+  heart_rate?: number
+  resp_rate?: number
+  systolic?: number
+  diastolic?: number
+  temperature_c?: number
+  oxygen_saturation?: number
+  glucose?: number
+}
+
+/**
  * Cuerpo para crear una receta (PrescriptionCreateInputSerializer).
  * NO se envía doctor_id: el backend lo infiere del perfil activo del usuario.
  */
@@ -243,6 +268,17 @@ export interface PrescriptionCreateInput {
   recommendations?: string
   appointment_id?: string | null
   evolution_note_id?: string | null
+  /**
+   * Folio del recetario especial COFEPRIS (F6). REQUERIDO por el backend cuando
+   * la receta contiene medicamentos controlados (grupo I–V); si falta, devuelve
+   * 400. Para recetas sin controlados se omite.
+   */
+  controlled_folio?: string
+  /**
+   * Signos vitales capturados por el médico (opcional). Solo claves con valor; si
+   * se omite por completo, el backend usa la última toma de Enfermería.
+   */
+  vitals?: PrescriptionVitalsInput
 }
 
 /** Cuerpo para anular una receta (PrescriptionCancelInputSerializer). */

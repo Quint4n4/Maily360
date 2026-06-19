@@ -257,6 +257,7 @@ def prescription_create(
     recommendations: str = "",
     diagnosis: str = "",
     controlled_folio: str = "",
+    vitals: dict[str, Any] | None = None,
 ) -> Prescription:
     """Emite una receta médica inmutable para un paciente.
 
@@ -284,9 +285,14 @@ def prescription_create(
         Dentro de la misma transaction.atomic se hace SELECT FOR UPDATE sobre
         las recetas del tenant para serializar el max(folio)+1.
 
-    Snapshot de signos vitales (DR-7):
-        Llama vital_signs_latest del expediente. Si hay toma, guarda un JSON
-        con los campos relevantes. Si no hay, vitals_snapshot = None.
+    Snapshot de signos vitales (DR-7) — precedencia:
+        1. Si `vitals` llega con al menos un campo no-None → se usa ese dict para
+           construir el snapshot. Se agrega `imc` derivado si hay weight_kg y height_m,
+           y `measured_at` = timezone.now() del momento de emisión.
+        2. Si `vitals` es None o vacío → se llama vital_signs_latest del expediente.
+           Si hay toma previa, se congela su snapshot. Si no hay, vitals_snapshot = None.
+        El parámetro `vitals` ya fue validado y sus rangos fisiológicos verificados
+        por VitalsInPrescriptionSerializer antes de llegar al servicio.
 
     Bitácora (NOM-024): PRESCRIPTION_CREATE o PRESCRIPTION_CONTROLLED_CREATE
     con resource_repr = folio (sin PII).
@@ -302,6 +308,11 @@ def prescription_create(
         diagnosis:         Diagnóstico del paciente (opcional, recomendado COFEPRIS F2).
         controlled_folio:  Folio del recetario especial COFEPRIS (requerido si la receta
                            contiene medicamentos controlados; el médico lo ingresa).
+        vitals:            Dict con signos vitales capturados por el médico en la receta
+                           (opcional). Claves aceptadas: weight_kg, height_m, heart_rate,
+                           resp_rate, systolic, diastolic, temperature_c, oxygen_saturation,
+                           glucose. Si llega con al menos un valor no-None, sobreescribe
+                           el snapshot de la última toma de enfermería.
 
     Returns:
         Instancia de Prescription creada con sus ítems.
@@ -422,33 +433,76 @@ def prescription_create(
     )
     next_folio: int = (max_folio_result["max_folio"] or 0) + 1
 
+    # --- Timestamp de emisión (usado en snapshot y en F6) ---
+    issued_at_ts = timezone.now()
+
     # --- Snapshot de signos vitales (DR-7) ---
-    vitals_snapshot = None
-    latest_vitals = vital_signs_latest(patient=patient)
-    if latest_vitals is not None:
+    # Precedencia: vitals capturados en la receta > última toma de enfermería.
+    # Si `vitals` llega con al menos un campo no-None, se usa ese dict.
+    # Si `vitals` es None o todos sus valores son None, se cae al comportamiento
+    # anterior: snapshot de la última toma de enfermería (o None si no hay).
+    vitals_snapshot: dict[str, object] | None = None
+
+    inline_vitals_present: bool = bool(
+        vitals and any(v is not None for v in vitals.values())
+    )
+
+    if inline_vitals_present:
+        # Construir snapshot desde los vitals del médico.
+        assert vitals is not None  # satisface mypy — ya verificado arriba
+        w_kg = vitals.get("weight_kg")
+        h_m = vitals.get("height_m")
         imc: Decimal | None = None
-        if latest_vitals.weight_kg is not None and latest_vitals.height_m not in (
-            None,
-            0,
-        ):
+        if w_kg is not None and h_m is not None and float(h_m) != 0:
             imc = (
-                Decimal(str(latest_vitals.weight_kg))
-                / (Decimal(str(latest_vitals.height_m)) ** 2)
+                Decimal(str(w_kg)) / (Decimal(str(h_m)) ** 2)
             ).quantize(Decimal("0.01"))
 
         vitals_snapshot = {
-            "weight_kg": float(latest_vitals.weight_kg) if latest_vitals.weight_kg is not None else None,
-            "height_m": float(latest_vitals.height_m) if latest_vitals.height_m is not None else None,
+            "weight_kg": float(w_kg) if w_kg is not None else None,
+            "height_m": float(h_m) if h_m is not None else None,
             "imc": float(imc) if imc is not None else None,
-            "heart_rate": latest_vitals.heart_rate,
-            "resp_rate": latest_vitals.resp_rate,
-            "systolic": latest_vitals.systolic,
-            "diastolic": latest_vitals.diastolic,
-            "temperature_c": float(latest_vitals.temperature_c) if latest_vitals.temperature_c is not None else None,
-            "oxygen_saturation": latest_vitals.oxygen_saturation,
-            "glucose": latest_vitals.glucose,
-            "measured_at": latest_vitals.measured_at.isoformat(),
+            "heart_rate": vitals.get("heart_rate"),
+            "resp_rate": vitals.get("resp_rate"),
+            "systolic": vitals.get("systolic"),
+            "diastolic": vitals.get("diastolic"),
+            "temperature_c": (
+                float(vitals["temperature_c"])
+                if vitals.get("temperature_c") is not None
+                else None
+            ),
+            "oxygen_saturation": vitals.get("oxygen_saturation"),
+            "glucose": vitals.get("glucose"),
+            "measured_at": issued_at_ts.isoformat(),
+            "source": "prescription",  # distingue de snapshot de enfermería
         }
+    else:
+        latest_vitals = vital_signs_latest(patient=patient)
+        if latest_vitals is not None:
+            imc = None
+            if latest_vitals.weight_kg is not None and latest_vitals.height_m not in (
+                None,
+                0,
+            ):
+                imc = (
+                    Decimal(str(latest_vitals.weight_kg))
+                    / (Decimal(str(latest_vitals.height_m)) ** 2)
+                ).quantize(Decimal("0.01"))
+
+            vitals_snapshot = {
+                "weight_kg": float(latest_vitals.weight_kg) if latest_vitals.weight_kg is not None else None,
+                "height_m": float(latest_vitals.height_m) if latest_vitals.height_m is not None else None,
+                "imc": float(imc) if imc is not None else None,
+                "heart_rate": latest_vitals.heart_rate,
+                "resp_rate": latest_vitals.resp_rate,
+                "systolic": latest_vitals.systolic,
+                "diastolic": latest_vitals.diastolic,
+                "temperature_c": float(latest_vitals.temperature_c) if latest_vitals.temperature_c is not None else None,
+                "oxygen_saturation": latest_vitals.oxygen_saturation,
+                "glucose": latest_vitals.glucose,
+                "measured_at": latest_vitals.measured_at.isoformat(),
+                "source": "nursing",  # distingue del snapshot capturado en la receta
+            }
 
     # --- F6: resolver controlled_group snapshot por ítem desde el catálogo ---
     # Para cada ítem se determina el grupo controlado en este orden de prioridad:
@@ -510,7 +564,6 @@ def prescription_create(
         )
 
     # --- F6: calcular vigencia según grupo más restrictivo ---
-    issued_at_ts = timezone.now()
     valid_until_dt = _calculate_valid_until(
         issued_at=issued_at_ts,
         groups=controlled_groups_present,

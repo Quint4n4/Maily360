@@ -271,6 +271,9 @@ class PrescriptionListCreateApi(TenantAPIView):
                 diagnosis=s.validated_data.get("diagnosis", ""),
                 # F6: folio del recetario especial COFEPRIS (vacío si no es controlada)
                 controlled_folio=s.validated_data.get("controlled_folio", ""),
+                # Signos vitales capturados por el médico en la receta (opcional).
+                # None si el cliente no los envía → el servicio usa la última toma.
+                vitals=s.validated_data.get("vitals") or None,
             )
         except DjangoValidationError as exc:
             # Solo capturamos errores de DATOS (400). Los errores de autorización
