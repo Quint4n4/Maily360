@@ -13,13 +13,10 @@ M3 — validación de formato de contacto:
     phone/mobile: regex razonable de teléfono (_PHONE_RE).
     facebook/instagram/youtube: validador suave que rechaza etiquetas HTML y
         caracteres de control, pero permite @handle y URLs.
-    WhatsAppContactSerializer.numero: mismo regex de teléfono.
 
 M5 — body de plantilla rechaza etiquetas HTML:
     validate_body comprueba que no haya tags reales (< seguido de letra/slash/!).
     "presión < 120" (con espacio) queda permitido.
-
-B8 — recipe_whatsapp_contacts con max_length=20.
 """
 
 import re
@@ -155,20 +152,6 @@ class SecureImageField(serializers.ImageField):
 # ---------------------------------------------------------------------------
 
 
-class WhatsAppContactSerializer(serializers.Serializer):
-    """Validador de un ítem de recipe_whatsapp_contacts.
-
-    M3: numero valida el mismo regex de teléfono que phone/mobile.
-    """
-
-    nombre = serializers.CharField(max_length=100)
-    numero = serializers.CharField(max_length=30)
-
-    def validate_numero(self, value: str) -> str:
-        """M3: valida formato de teléfono en número de WhatsApp."""
-        return _validate_phone_field(value, field_name="Número de WhatsApp")
-
-
 class ClinicSettingsInputSerializer(serializers.Serializer):
     """Entrada para PUT (actualización completa o parcial) de ClinicSettings.
 
@@ -179,7 +162,6 @@ class ClinicSettingsInputSerializer(serializers.Serializer):
     M3: phone y mobile validan regex de teléfono (_PHONE_RE).
         facebook, instagram, youtube usan validador suave (no URLField estricto):
         permite @handle y URLs, rechaza etiquetas HTML y caracteres de control.
-    B8: recipe_whatsapp_contacts limitado a max_length=20 elementos.
     """
 
     logo = SecureImageField(required=False, allow_null=True)
@@ -203,14 +185,6 @@ class ClinicSettingsInputSerializer(serializers.Serializer):
     letterhead_half = SecureImageField(required=False, allow_null=True)
     letterhead_full_spaces = serializers.IntegerField(min_value=0, max_value=100, required=False)
     letterhead_half_spaces = serializers.IntegerField(min_value=0, max_value=100, required=False)
-    recipe_use_responsible_doctor = serializers.BooleanField(required=False)
-    # B8: máximo 20 contactos de WhatsApp por clínica.
-    recipe_whatsapp_contacts = serializers.ListField(
-        child=WhatsAppContactSerializer(),
-        required=False,
-        allow_empty=True,
-        max_length=20,
-    )
 
     # --- M3: phone / mobile ---
 
@@ -244,26 +218,6 @@ class ClinicSettingsInputSerializer(serializers.Serializer):
             return value
         return value
 
-    def validate_recipe_whatsapp_contacts(
-        self, value: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Valida la estructura de cada contacto WhatsApp.
-
-        La validación de formato de `numero` se hace en WhatsAppContactSerializer.
-        Aquí solo chequeamos que nombre y numero no estén vacíos.
-        """
-        for i, contact in enumerate(value):
-            if not isinstance(contact, dict):
-                raise serializers.ValidationError(
-                    f"El elemento {i} debe ser un objeto {{nombre, numero}}."
-                )
-            for key in ("nombre", "numero"):
-                if not contact.get(key, "").strip():
-                    raise serializers.ValidationError(
-                        f"El campo '{key}' del elemento {i} no puede estar vacío."
-                    )
-        return value
-
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """M2: rechaza campos desconocidos (D-EC-7)."""
         _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
@@ -292,8 +246,6 @@ class ClinicSettingsOutputSerializer(serializers.ModelSerializer["ClinicSettings
             "letterhead_half",
             "letterhead_full_spaces",
             "letterhead_half_spaces",
-            "recipe_use_responsible_doctor",
-            "recipe_whatsapp_contacts",
             "created_at",
             "updated_at",
         ]
@@ -470,10 +422,12 @@ _CREDENTIAL_KIND_CHOICES: list[str] = [c[0] for c in CredentialKind.choices]
 
 
 class DoctorCredentialInputSerializer(serializers.Serializer):
-    """Entrada para POST de DoctorCredential.
+    """Entrada para POST/PATCH de DoctorCredential.
 
     Campos obligatorios: title, institution, kind.
-    credential_number y order son opcionales.
+    credential_number, order y logo son opcionales.
+    logo se envía como multipart (ImageField); usa SecureImageField para
+    validar JPG/PNG/WEBP y máx 5 MB.
     M2: rechaza campos desconocidos vía validate().
     Whitelist de kind contra CredentialKind.choices.
     Rechaza etiquetas HTML en campos de texto libre (M5).
@@ -504,6 +458,11 @@ class DoctorCredentialInputSerializer(serializers.Serializer):
         required=False,
         default=0,
         help_text="Orden de aparición en el membrete (0 = primero).",
+    )
+    logo = SecureImageField(
+        required=False,
+        allow_null=True,
+        help_text="Logo opcional de la institución (JPG/PNG/WEBP, máx 5 MB). Multipart.",
     )
 
     def validate_title(self, value: str) -> str:
@@ -547,9 +506,15 @@ class DoctorCredentialInputSerializer(serializers.Serializer):
 
 
 class DoctorCredentialOutputSerializer(serializers.ModelSerializer["DoctorCredential"]):
-    """Salida de DoctorCredential."""
+    """Salida de DoctorCredential.
+
+    logo_url: URL relativa de la imagen o null si no hay logo.
+    Sigue el mismo patrón que DoctorUniversityOutputSerializer (campo 'logo'
+    del ModelSerializer devuelve la URL relativa al MEDIA_URL cuando está configurado).
+    """
 
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    logo_url = serializers.ImageField(source="logo", read_only=True, allow_null=True)
 
     class Meta:
         model = DoctorCredential
@@ -561,6 +526,7 @@ class DoctorCredentialOutputSerializer(serializers.ModelSerializer["DoctorCreden
             "kind",
             "kind_display",
             "order",
+            "logo_url",
             "is_active",
             "created_at",
         ]

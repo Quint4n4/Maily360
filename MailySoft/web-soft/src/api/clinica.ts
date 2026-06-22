@@ -40,6 +40,7 @@ import type {
 import type {
   DoctorCredentialCreateInput,
   DoctorCredentialOut,
+  DoctorCredentialUpdateInput,
 } from '../types/credenciales'
 
 /* ─── Configuración de la clínica ─────────────────────────────────────────── */
@@ -79,7 +80,6 @@ export async function updateClinicSettings(
     // Campos escalares acompañantes (texto/número/booleano) sí viajan en multipart.
     for (const [key, value] of Object.entries(rest)) {
       if (value === undefined) continue
-      if (key === 'recipe_whatsapp_contacts') continue // estructurado: solo vía JSON
       if (typeof value === 'boolean') fd.append(key, value ? 'true' : 'false')
       else fd.append(key, String(value))
     }
@@ -189,14 +189,40 @@ export async function listCredentials(doctorId: string): Promise<DoctorCredentia
   return request<DoctorCredentialOut[]>(`/clinica/doctores/${doctorId}/credenciales/`)
 }
 
-/** POST /clinica/doctores/<doctorId>/credenciales/ — crea una credencial (201, JSON). */
+/** POST /clinica/doctores/<doctorId>/credenciales/ — crea una credencial (201).
+ *  Multipart: el logo de la institución (opcional) viaja junto con la credencial. */
 export async function createCredential(
   doctorId: string,
   input: DoctorCredentialCreateInput,
 ): Promise<DoctorCredentialOut> {
+  const fd = new FormData()
+  fd.append('title', input.title)
+  fd.append('institution', input.institution)
+  fd.append('kind', input.kind)
+  if (input.credential_number !== undefined) fd.append('credential_number', input.credential_number)
+  if (input.order !== undefined) fd.append('order', String(input.order))
+  if (input.logo) fd.append('logo', input.logo)
   return request<DoctorCredentialOut>(`/clinica/doctores/${doctorId}/credenciales/`, {
     method: 'POST',
-    body: input,
+    body: fd,
+  })
+}
+
+/** PATCH /clinica/credenciales/<id>/ — edita la credencial (incl. logo, multipart). */
+export async function updateCredential(
+  credentialId: string,
+  input: DoctorCredentialUpdateInput,
+): Promise<DoctorCredentialOut> {
+  const fd = new FormData()
+  if (input.title !== undefined) fd.append('title', input.title)
+  if (input.institution !== undefined) fd.append('institution', input.institution)
+  if (input.kind !== undefined) fd.append('kind', input.kind)
+  if (input.credential_number !== undefined) fd.append('credential_number', input.credential_number)
+  if (input.order !== undefined) fd.append('order', String(input.order))
+  if (input.logo) fd.append('logo', input.logo)
+  return request<DoctorCredentialOut>(`/clinica/credenciales/${credentialId}/`, {
+    method: 'PATCH',
+    body: fd,
   })
 }
 

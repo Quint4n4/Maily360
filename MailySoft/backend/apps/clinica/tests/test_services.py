@@ -117,34 +117,9 @@ def test_clinic_settings_upsert_partial_leaves_other_fields() -> None:
     assert settings.email == "a@b.com"  # intocado
 
 
-@pytest.mark.django_db
-def test_clinic_settings_upsert_validates_whatsapp_contacts() -> None:
-    """Contactos WhatsApp con estructura inválida levantan ValidationError."""
-    tenant = TenantFactory()
-    user = UserFactory()
 
-    with pytest.raises(ValidationError, match="nombre"):
-        clinic_settings_upsert(
-            tenant=tenant,
-            user=user,
-            recipe_whatsapp_contacts=[{"numero": "5512345678"}],  # falta nombre
-        )
-
-
-@pytest.mark.django_db
-def test_clinic_settings_upsert_valid_whatsapp_contacts() -> None:
-    """Contactos WhatsApp bien formados se guardan correctamente."""
-    tenant = TenantFactory()
-    user = UserFactory()
-
-    contacts = [{"nombre": "Secretaria", "numero": "5512345678"}]
-    settings = clinic_settings_upsert(
-        tenant=tenant,
-        user=user,
-        recipe_whatsapp_contacts=contacts,
-    )
-
-    assert settings.recipe_whatsapp_contacts == contacts
+# Los tests de recipe_whatsapp_contacts y recipe_use_responsible_doctor fueron
+# eliminados: los campos se removieron del modelo en la migración 0007_remove_recipe_fields.
 
 
 # ---------------------------------------------------------------------------
@@ -392,55 +367,8 @@ def test_doctor_university_delete_removes_record(settings) -> None:
     assert not DoctorUniversity.all_objects.filter(pk=univ_id).exists()
 
 
-# ---------------------------------------------------------------------------
-# M-3: whitelist de claves en _validate_whatsapp_contacts
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-def test_whatsapp_contacts_rejects_extra_keys() -> None:
-    """Contacto con clave fuera de la whitelist {nombre, numero} → ValidationError (M-3)."""
-    tenant = TenantFactory()
-    user = UserFactory()
-
-    with pytest.raises(ValidationError, match="no permitidas"):
-        clinic_settings_upsert(
-            tenant=tenant,
-            user=user,
-            recipe_whatsapp_contacts=[
-                {"nombre": "Secretaria", "numero": "5512345678", "email": "hack@evil.com"}
-            ],
-        )
-
-
-@pytest.mark.django_db
-def test_whatsapp_contacts_rejects_only_extra_key() -> None:
-    """Contacto con solo claves extra (sin nombre/numero) → ValidationError (M-3)."""
-    tenant = TenantFactory()
-    user = UserFactory()
-
-    with pytest.raises(ValidationError):
-        clinic_settings_upsert(
-            tenant=tenant,
-            user=user,
-            recipe_whatsapp_contacts=[{"admin": True}],
-        )
-
-
-@pytest.mark.django_db
-def test_whatsapp_contacts_accepts_valid_whitelist() -> None:
-    """Contacto con exactamente {nombre, numero} se acepta (whitelist M-3)."""
-    tenant = TenantFactory()
-    user = UserFactory()
-
-    contacts = [{"nombre": "Dr. Pérez", "numero": "5512345678"}]
-    settings_obj = clinic_settings_upsert(
-        tenant=tenant,
-        user=user,
-        recipe_whatsapp_contacts=contacts,
-    )
-
-    assert settings_obj.recipe_whatsapp_contacts == contacts
+# Los tests de _validate_whatsapp_contacts fueron eliminados porque el campo
+# recipe_whatsapp_contacts se removió del modelo en la migración 0007_remove_recipe_fields.
 
 
 # ---------------------------------------------------------------------------

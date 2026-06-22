@@ -16,6 +16,7 @@ import uuid
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -56,6 +57,7 @@ from apps.clinica.services import (
     clinic_settings_upsert,
     doctor_credential_create,
     doctor_credential_delete,
+    doctor_credential_update,
     doctor_university_create,
     doctor_university_delete,
     doctor_update_profile_images,
@@ -561,9 +563,11 @@ class DoctorCredentialListCreateApi(TenantAPIView):
 
     Acceso: owner/admin siempre. Doctor solo si es el mismo médico (Guard M-1).
     Las credenciales son datos COFEPRIS — no datos clínicos del paciente.
+    Acepta multipart/form-data para el campo `logo` (imagen de la institución).
     """
 
     permission_classes = [IsAuthenticated, DoctorProfilePermission]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_doctor_or_404(
         self, doctor_id: uuid.UUID
@@ -622,6 +626,7 @@ class DoctorCredentialListCreateApi(TenantAPIView):
                 kind=s.validated_data["kind"],
                 credential_number=s.validated_data.get("credential_number", ""),
                 order=s.validated_data.get("order", 0),
+                logo=s.validated_data.get("logo"),
             )
         except DjangoValidationError as exc:
             return Response(
@@ -636,13 +641,16 @@ class DoctorCredentialListCreateApi(TenantAPIView):
 
 
 class DoctorCredentialDetailApi(TenantAPIView):
-    """DELETE /api/v1/clinica/credenciales/<credential_id>/  — baja lógica de credencial.
+    """PATCH  /api/v1/clinica/credenciales/<credential_id>/  — edita la credencial (incl. logo).
+    DELETE /api/v1/clinica/credenciales/<credential_id>/  — baja lógica de credencial.
 
-    Baja lógica (is_active=False): las credenciales son documentos con implicaciones
-    legales COFEPRIS y se conservan en BD para auditoría histórica.
+    PATCH acepta multipart/form-data: edición parcial de los campos y reemplazo del
+    logo de la institución. DELETE hace baja lógica (is_active=False): las credenciales
+    son documentos con implicaciones legales COFEPRIS y se conservan para auditoría.
     """
 
     permission_classes = [IsAuthenticated, DoctorProfilePermission]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_credential_or_404(
         self, credential_id: uuid.UUID
@@ -655,6 +663,45 @@ class DoctorCredentialDetailApi(TenantAPIView):
                 {"detail": "Credencial no encontrada."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+    def patch(self, request: Request, credential_id: uuid.UUID) -> Response:
+        """Edita (parcial) una credencial del médico, incluido su logo (multipart)."""
+        cred, err = self._get_credential_or_404(credential_id)
+        if err:
+            return err
+
+        # Guard M-1: un doctor solo puede editar credenciales de su propio perfil.
+        actor_role: str | None = getattr(request, "active_role", None)
+        if actor_role == "doctor":
+            membership = getattr(request, "membership", None)
+            if membership is None or str(cred.doctor.membership_id) != str(membership.id):
+                return Response(
+                    {"detail": "Solo puedes editar credenciales de tu propio perfil médico."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        s = DoctorCredentialInputSerializer(data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+
+        try:
+            credential = doctor_credential_update(
+                credential=cred,  # type: ignore[arg-type]
+                user=request.user,
+                title=s.validated_data.get("title"),
+                institution=s.validated_data.get("institution"),
+                kind=s.validated_data.get("kind"),
+                credential_number=s.validated_data.get("credential_number"),
+                order=s.validated_data.get("order"),
+                logo=s.validated_data.get("logo"),
+                logo_provided="logo" in s.validated_data,
+            )
+        except DjangoValidationError as exc:
+            return Response(
+                {"detail": exc.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(DoctorCredentialOutputSerializer(credential).data)
 
     def delete(self, request: Request, credential_id: uuid.UUID) -> Response:
         """Da de baja (is_active=False) una credencial del médico."""

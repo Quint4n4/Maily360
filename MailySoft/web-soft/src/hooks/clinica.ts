@@ -21,6 +21,7 @@ import {
   listTemplates,
   listUniversities,
   updateClinicSettings,
+  updateCredential,
   updateDoctorProfile,
   updateTemplate,
 } from '../api/clinica'
@@ -33,7 +34,10 @@ import type {
   PatientCategoryCreateInput,
   TemplateKind,
 } from '../types/clinica'
-import type { DoctorCredentialCreateInput } from '../types/credenciales'
+import type {
+  DoctorCredentialCreateInput,
+  DoctorCredentialUpdateInput,
+} from '../types/credenciales'
 
 /** Claves de caché. Todo lo de "Mi Consultorio" cuelga de ['clinica']. */
 export const clinicaKeys = {
@@ -205,6 +209,17 @@ export function useCreateCredential(doctorId: string | null) {
       if (!doctorId) throw new Error('No hay un médico asociado a tu cuenta.')
       return createCredential(doctorId, input)
     },
+    onSuccess: () => {
+      if (doctorId) qc.invalidateQueries({ queryKey: clinicaKeys.credentials(doctorId) })
+    },
+  })
+}
+
+export function useUpdateCredential(doctorId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: DoctorCredentialUpdateInput }) =>
+      updateCredential(id, input),
     onSuccess: () => {
       if (doctorId) qc.invalidateQueries({ queryKey: clinicaKeys.credentials(doctorId) })
     },

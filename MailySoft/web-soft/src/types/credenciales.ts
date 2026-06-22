@@ -23,6 +23,8 @@ export interface DoctorCredentialOut {
   order: number
   is_active: boolean
   created_at: string
+  /** URL del logo opcional de la institución que expide la credencial (o null). */
+  logo_url: string | null
 }
 
 /**
@@ -35,6 +37,19 @@ export interface DoctorCredentialCreateInput {
   kind: CredentialKind
   credential_number?: string
   order?: number
+  /** Logo opcional de la institución (se sube junto con la credencial, multipart). */
+  logo?: File | null
+}
+
+/** Cuerpo para editar una credencial (PATCH parcial). Todos los campos opcionales. */
+export interface DoctorCredentialUpdateInput {
+  title?: string
+  institution?: string
+  kind?: CredentialKind
+  credential_number?: string
+  order?: number
+  /** Nuevo logo de la institución (reemplaza el actual). Multipart. */
+  logo?: File | null
 }
 
 /** Opciones de tipo de credencial (etiquetas en español). */

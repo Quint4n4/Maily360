@@ -28,6 +28,7 @@ from apps.clinica.services import (
     clinic_settings_upsert,
     doctor_credential_create,
     doctor_credential_delete,
+    doctor_credential_update,
 )
 from tests.factories import (
     ClinicSettingsFactory,
@@ -518,3 +519,292 @@ def test_commercial_name_in_output_serializer() -> None:
     data = ClinicSettingsOutputSerializer(s).data
     assert "commercial_name" in data
     assert data["commercial_name"] == "Centro Médico"
+
+
+# ---------------------------------------------------------------------------
+# DoctorCredential con logo propio
+# ---------------------------------------------------------------------------
+
+
+def _make_png_file(name: str = "logo.png") -> "SimpleUploadedFile":
+    """Genera un PNG mínimo en memoria con Pillow."""
+    from io import BytesIO
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from PIL import Image
+
+    buf = BytesIO()
+    img = Image.new("RGB", (40, 30), color=(200, 100, 50))
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return SimpleUploadedFile(name, buf.read(), content_type="image/png")
+
+
+@pytest.mark.django_db
+def test_credential_create_with_logo_saves_file() -> None:
+    """doctor_credential_create guarda el logo en DoctorCredential.logo."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+
+    logo_file = _make_png_file("unam_logo.png")
+    cred = doctor_credential_create(
+        tenant=tenant,
+        user=user,
+        doctor=doctor,
+        title="Médico Cirujano y Partero",
+        institution="UNAM",
+        kind="profesional",
+        logo=logo_file,
+    )
+
+    assert cred.pk is not None
+    assert bool(cred.logo)  # ImageField tiene valor
+    assert "credenciales" in cred.logo.name  # ruta correcta
+
+
+@pytest.mark.django_db
+def test_credential_create_without_logo_is_null() -> None:
+    """doctor_credential_create sin logo deja el campo null."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+
+    cred = doctor_credential_create(
+        tenant=tenant,
+        user=user,
+        doctor=doctor,
+        title="Médico Cirujano",
+        institution="UANL",
+        kind="profesional",
+    )
+
+    # Sin logo → campo vacío/falsy
+    assert not bool(cred.logo)
+
+
+@pytest.mark.django_db
+def test_credential_output_serializer_exposes_logo_url() -> None:
+    """DoctorCredentialOutputSerializer expone logo_url cuando hay logo."""
+    from apps.clinica.serializers import DoctorCredentialOutputSerializer
+
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+
+    logo_file = _make_png_file("logo_output.png")
+    cred = doctor_credential_create(
+        tenant=tenant,
+        user=user,
+        doctor=doctor,
+        title="Especialista",
+        institution="IPN",
+        kind="especialidad",
+        logo=logo_file,
+    )
+
+    data = DoctorCredentialOutputSerializer(cred).data
+    assert "logo_url" in data
+    assert data["logo_url"] is not None
+    assert len(str(data["logo_url"])) > 0
+
+
+@pytest.mark.django_db
+def test_credential_output_serializer_logo_url_null_when_no_logo() -> None:
+    """DoctorCredentialOutputSerializer devuelve logo_url=null cuando no hay logo."""
+    from apps.clinica.serializers import DoctorCredentialOutputSerializer
+
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+
+    cred = doctor_credential_create(
+        tenant=tenant,
+        user=user,
+        doctor=doctor,
+        title="Médico sin logo",
+        institution="UAG",
+        kind="posgrado",
+    )
+
+    data = DoctorCredentialOutputSerializer(cred).data
+    assert "logo_url" in data
+    # Sin logo, ImageField serializa como None o cadena vacía
+    assert not data["logo_url"]
+
+
+@pytest.mark.django_db
+def test_credential_api_create_multipart_with_logo_201() -> None:
+    """POST multipart con logo devuelve 201 y logo_url en la respuesta."""
+    from io import BytesIO
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from PIL import Image
+
+    tenant = TenantFactory()
+    user = _member(tenant, role="owner")
+    doctor = DoctorFactory(tenant=tenant)
+
+    # Generar PNG en memoria como SimpleUploadedFile (con nombre de archivo)
+    buf = BytesIO()
+    Image.new("RGB", (40, 30), color=(100, 200, 50)).save(buf, format="PNG")
+    buf.seek(0)
+    logo_file = SimpleUploadedFile("logo_api.png", buf.read(), content_type="image/png")
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    url = URL_CRED_LIST.format(doctor_id=str(doctor.id))
+
+    payload = {
+        "title": "Cirujano con logo",
+        "institution": "UNAM",
+        "kind": "profesional",
+        "logo": logo_file,
+    }
+
+    ctx_patches = _api_tenant_ctx(tenant)
+    with ctx_patches[0], ctx_patches[1], ctx_patches[2]:
+        resp = client.post(url, payload, format="multipart")
+
+    assert resp.status_code == 201
+    assert "logo_url" in resp.data
+    # La URL del logo debe ser truthy (se subió el archivo)
+    assert resp.data["logo_url"]
+
+
+# ---------------------------------------------------------------------------
+# Servicios — doctor_credential_update (edición)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_credential_update_happy_path() -> None:
+    """doctor_credential_update modifica todos los campos provistos."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="Viejo", institution="UNAM", kind="profesional", credential_number="111",
+    )
+
+    doctor_credential_update(
+        credential=cred, user=user,
+        title="Nuevo título", institution="IPN", kind="especialidad", credential_number="999",
+    )
+
+    cred.refresh_from_db()
+    assert cred.title == "Nuevo título"
+    assert cred.institution == "IPN"
+    assert cred.kind == CredentialKind.ESPECIALIDAD
+    assert cred.credential_number == "999"
+
+
+@pytest.mark.django_db
+def test_credential_update_partial_keeps_others() -> None:
+    """Solo cambia los campos provistos; los demás quedan intactos."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="Orig", institution="UNAM", kind="profesional",
+    )
+
+    doctor_credential_update(credential=cred, user=user, title="Cambiado")
+
+    cred.refresh_from_db()
+    assert cred.title == "Cambiado"
+    assert cred.institution == "UNAM"
+    assert cred.kind == CredentialKind.PROFESIONAL
+
+
+@pytest.mark.django_db
+def test_credential_update_invalid_kind() -> None:
+    """Falla al actualizar con un kind no válido."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="Médico Cirujano", institution="UNAM", kind="profesional",
+    )
+
+    with pytest.raises(ValidationError, match="Tipo de credencial inválido"):
+        doctor_credential_update(credential=cred, user=user, kind="licenciatura")
+
+
+@pytest.mark.django_db
+def test_credential_update_records_audit() -> None:
+    """Registra un AuditLog CREDENTIAL_UPDATE al editar."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="Médico Cirujano", institution="UNAM", kind="profesional",
+    )
+
+    doctor_credential_update(credential=cred, user=user, title="Editado")
+
+    assert AuditLog.objects.filter(
+        action=ActionType.CREDENTIAL_UPDATE, resource_id=cred.id
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_credential_api_patch_200_owner() -> None:
+    """PATCH /clinica/credenciales/<id>/ edita los campos (owner)."""
+    tenant = TenantFactory()
+    user = _member(tenant, role="owner")
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="Antes", institution="UNAM", kind="profesional",
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    url = URL_CRED_DETAIL.format(credential_id=str(cred.id))
+
+    ctx_patches = _api_tenant_ctx(tenant)
+    with ctx_patches[0], ctx_patches[1], ctx_patches[2]:
+        resp = client.patch(url, {"title": "Después"}, format="multipart")
+
+    assert resp.status_code == 200
+    assert resp.data["title"] == "Después"
+    cred.refresh_from_db()
+    assert cred.title == "Después"
+
+
+@pytest.mark.django_db
+def test_credential_api_patch_replaces_logo() -> None:
+    """PATCH con logo reemplaza la imagen de la credencial."""
+    from io import BytesIO
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from PIL import Image
+
+    tenant = TenantFactory()
+    user = _member(tenant, role="owner")
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="Con logo", institution="UNAM", kind="profesional",
+    )
+
+    buf = BytesIO()
+    Image.new("RGB", (20, 20), color=(10, 20, 30)).save(buf, format="PNG")
+    buf.seek(0)
+    logo_file = SimpleUploadedFile("nuevo.png", buf.read(), content_type="image/png")
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    url = URL_CRED_DETAIL.format(credential_id=str(cred.id))
+
+    ctx_patches = _api_tenant_ctx(tenant)
+    with ctx_patches[0], ctx_patches[1], ctx_patches[2]:
+        resp = client.patch(url, {"logo": logo_file}, format="multipart")
+
+    assert resp.status_code == 200
+    assert resp.data["logo_url"]

@@ -994,44 +994,9 @@ def test_clinic_settings_facebook_html_returns_400() -> None:
     assert response.status_code == 400
 
 
-@pytest.mark.django_db
-def test_clinic_settings_whatsapp_invalid_phone_returns_400() -> None:
-    """PUT con numero de WhatsApp inválido → 400 (M3: WhatsAppContactSerializer.numero)."""
-    tenant = TenantFactory()
-    membership = TenantMembershipFactory(tenant=tenant, role="owner")
-    client = APIClient()
-    client.force_authenticate(user=membership.user)
 
-    contacts = [{"nombre": "Recepción", "numero": "<script>"}]
-
-    with _clinica_ctx(tenant, membership):
-        response = client.put(
-            SETTINGS_URL,
-            {"recipe_whatsapp_contacts": contacts},
-            format="json",
-        )
-
-    assert response.status_code == 400
-
-
-@pytest.mark.django_db
-def test_clinic_settings_whatsapp_valid_phone_succeeds() -> None:
-    """PUT con numero de WhatsApp válido → 200 (M3)."""
-    tenant = TenantFactory()
-    membership = TenantMembershipFactory(tenant=tenant, role="owner")
-    client = APIClient()
-    client.force_authenticate(user=membership.user)
-
-    contacts = [{"nombre": "Recepción", "numero": "+52 744 551 4025"}]
-
-    with _clinica_ctx(tenant, membership):
-        response = client.put(
-            SETTINGS_URL,
-            {"recipe_whatsapp_contacts": contacts},
-            format="json",
-        )
-
-    assert response.status_code in (200, 201)
+# Los tests de recipe_whatsapp_contacts (WhatsApp) fueron eliminados:
+# el campo se removió del modelo en la migración 0007_remove_recipe_fields.
 
 
 # ---------------------------------------------------------------------------
@@ -1102,52 +1067,6 @@ def test_template_patch_body_with_html_tag_returns_400() -> None:
     assert response.status_code == 400
 
 
-# ---------------------------------------------------------------------------
-# B8 — recipe_whatsapp_contacts sin límite de elementos (max_length=20)
-# ---------------------------------------------------------------------------
 
-
-@pytest.mark.django_db
-def test_clinic_settings_whatsapp_21_contacts_returns_400() -> None:
-    """PUT con 21 contactos WhatsApp → 400 (B8: max_length=20)."""
-    tenant = TenantFactory()
-    membership = TenantMembershipFactory(tenant=tenant, role="owner")
-    client = APIClient()
-    client.force_authenticate(user=membership.user)
-
-    contacts = [
-        {"nombre": f"Contacto {i}", "numero": f"55123400{i:02d}"}
-        for i in range(21)
-    ]
-
-    with _clinica_ctx(tenant, membership):
-        response = client.put(
-            SETTINGS_URL,
-            {"recipe_whatsapp_contacts": contacts},
-            format="json",
-        )
-
-    assert response.status_code == 400
-
-
-@pytest.mark.django_db
-def test_clinic_settings_whatsapp_20_contacts_succeeds() -> None:
-    """PUT con exactamente 20 contactos → 200 (B8: límite permitido)."""
-    tenant = TenantFactory()
-    membership = TenantMembershipFactory(tenant=tenant, role="owner")
-    client = APIClient()
-    client.force_authenticate(user=membership.user)
-
-    contacts = [
-        {"nombre": f"Contacto {i}", "numero": f"55123400{i:02d}"}
-        for i in range(20)
-    ]
-
-    with _clinica_ctx(tenant, membership):
-        response = client.put(
-            SETTINGS_URL,
-            {"recipe_whatsapp_contacts": contacts},
-            format="json",
-        )
-
-    assert response.status_code in (200, 201)
+# Los tests de B8 (recipe_whatsapp_contacts max_length=20) fueron eliminados:
+# el campo se removió del modelo en la migración 0007_remove_recipe_fields.

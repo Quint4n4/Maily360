@@ -83,8 +83,6 @@ def clinic_settings_upsert(
     letterhead_half: Any = None,
     letterhead_full_spaces: Optional[int] = None,
     letterhead_half_spaces: Optional[int] = None,
-    recipe_use_responsible_doctor: Optional[bool] = None,
-    recipe_whatsapp_contacts: Optional[list[dict[str, str]]] = None,
     commercial_name: str = "",
     # Soporte partial update: solo actualiza los campos explícitamente pasados.
     _partial_fields: Optional[frozenset[str]] = None,
@@ -99,26 +97,24 @@ def clinic_settings_upsert(
     La vista lo hace extrayendo s.validated_data.keys() y pasándolos aquí.
 
     Args:
-        tenant:                      Clínica a configurar.
-        user:                        Usuario que realiza el cambio (auditoría).
-        logo:                        Archivo de imagen del logo (opcional).
-        address:                     Dirección principal.
-        address_2:                   Complemento de dirección.
-        phone:                       Teléfono fijo.
-        mobile:                      Móvil / WhatsApp.
-        email:                       Email de contacto.
-        website:                     URL del sitio web.
-        facebook:                    Handle o URL de Facebook.
-        instagram:                   Handle o URL de Instagram.
-        youtube:                     Handle o URL de YouTube.
-        letterhead_full:             Membrete de hoja completa (archivo).
-        letterhead_half:             Membrete de media hoja (archivo).
-        letterhead_full_spaces:      Espacios después del membrete completo.
-        letterhead_half_spaces:      Espacios después del membrete de media hoja.
-        recipe_use_responsible_doctor: Usar nombre del médico responsable en recetas.
-        recipe_whatsapp_contacts:    Lista de contactos WhatsApp [{nombre, numero}].
-        commercial_name:             Nombre comercial de la clínica para el membrete (COFEPRIS F2).
-        _partial_fields:             Si se provee, solo se actualizan esos campos.
+        tenant:               Clínica a configurar.
+        user:                 Usuario que realiza el cambio (auditoría).
+        logo:                 Archivo de imagen del logo (opcional).
+        address:              Dirección principal.
+        address_2:            Complemento de dirección.
+        phone:                Teléfono fijo.
+        mobile:               Móvil / WhatsApp.
+        email:                Email de contacto.
+        website:              URL del sitio web.
+        facebook:             Handle o URL de Facebook.
+        instagram:            Handle o URL de Instagram.
+        youtube:              Handle o URL de YouTube.
+        letterhead_full:      Membrete de hoja completa (archivo).
+        letterhead_half:      Membrete de media hoja (archivo).
+        letterhead_full_spaces:  Espacios después del membrete completo.
+        letterhead_half_spaces:  Espacios después del membrete de media hoja.
+        commercial_name:      Nombre comercial de la clínica para el membrete (COFEPRIS F2).
+        _partial_fields:      Si se provee, solo se actualizan esos campos.
 
     Returns:
         Instancia ClinicSettings (creada o actualizada).
@@ -155,11 +151,6 @@ def clinic_settings_upsert(
         field_map["letterhead_full_spaces"] = letterhead_full_spaces
     if letterhead_half_spaces is not None:
         field_map["letterhead_half_spaces"] = letterhead_half_spaces
-    if recipe_use_responsible_doctor is not None:
-        field_map["recipe_use_responsible_doctor"] = recipe_use_responsible_doctor
-    if recipe_whatsapp_contacts is not None:
-        _validate_whatsapp_contacts(recipe_whatsapp_contacts)
-        field_map["recipe_whatsapp_contacts"] = recipe_whatsapp_contacts
 
     # Filtrar campos según _partial_fields (partial update).
     if _partial_fields is not None:
@@ -181,43 +172,6 @@ def clinic_settings_upsert(
         metadata={"created": creating, "changed_fields": sorted(field_map.keys())},
     )
     return settings
-
-
-def _validate_whatsapp_contacts(contacts: list[dict[str, str]]) -> None:
-    """Valida que cada elemento de recipe_whatsapp_contacts tenga nombre y numero.
-
-    Args:
-        contacts: Lista de dicts con claves 'nombre' y 'numero'.
-
-    Raises:
-        ValidationError: si algún elemento no cumple la estructura esperada.
-    """
-    if not isinstance(contacts, list):
-        raise ValidationError("recipe_whatsapp_contacts debe ser una lista.")
-    for i, item in enumerate(contacts):
-        if not isinstance(item, dict):
-            raise ValidationError(
-                f"El elemento {i} de recipe_whatsapp_contacts debe ser un objeto."
-            )
-        _ALLOWED_KEYS: frozenset[str] = frozenset({"nombre", "numero"})
-        extra = set(item.keys()) - _ALLOWED_KEYS
-        if extra:
-            raise ValidationError(
-                f"El elemento {i} de recipe_whatsapp_contacts contiene claves no permitidas: "
-                f"{', '.join(sorted(extra))}. Solo se aceptan: nombre, numero."
-            )
-        missing = _ALLOWED_KEYS - set(item.keys())
-        if missing:
-            raise ValidationError(
-                f"El elemento {i} de recipe_whatsapp_contacts le faltan los campos: "
-                f"{', '.join(sorted(missing))}."
-            )
-        for key in ("nombre", "numero"):
-            if not isinstance(item[key], str) or not item[key].strip():
-                raise ValidationError(
-                    f"El campo '{key}' del elemento {i} de recipe_whatsapp_contacts "
-                    "no puede estar vacío."
-                )
 
 
 # ---------------------------------------------------------------------------
@@ -597,11 +551,15 @@ def doctor_credential_create(
     kind: str,
     credential_number: str = "",
     order: int = 0,
+    logo: Any = None,
 ) -> DoctorCredential:
     """Crea una credencial académica estructurada para un médico.
 
     Valida que el doctor pertenezca al tenant actual (defensa en profundidad).
     El campo `kind` debe ser un valor de CredentialKind.
+    El campo `logo` es opcional: imagen (JPG/PNG/WEBP, máx 5 MB) del logo de la
+    institución que expide la credencial. Su presencia elimina la necesidad de
+    emparejar credenciales con logos de DoctorUniversity por orden (bug previo).
 
     Args:
         tenant:            Clínica a la que pertenece el médico.
@@ -612,6 +570,7 @@ def doctor_credential_create(
         kind:              Tipo: profesional, especialidad o posgrado.
         credential_number: Número de cédula (opcional, puede estar en blanco).
         order:             Orden de aparición en el membrete (default 0).
+        logo:              Archivo de imagen de la institución (opcional).
 
     Returns:
         Instancia DoctorCredential recién creada.
@@ -637,17 +596,21 @@ def doctor_credential_create(
     if not institution:
         raise ValidationError("La institución de la credencial no puede estar vacía.")
 
-    credential = DoctorCredential.objects.create(
-        tenant=tenant,
-        created_by=user,
-        doctor=doctor,
-        title=title,
-        institution=institution,
-        kind=kind,
-        credential_number=credential_number.strip(),
-        order=order,
-        is_active=True,
-    )
+    create_kwargs: dict[str, Any] = {
+        "tenant": tenant,
+        "created_by": user,
+        "doctor": doctor,
+        "title": title,
+        "institution": institution,
+        "kind": kind,
+        "credential_number": credential_number.strip(),
+        "order": order,
+        "is_active": True,
+    }
+    if logo is not None:
+        create_kwargs["logo"] = logo
+
+    credential = DoctorCredential.objects.create(**create_kwargs)
 
     audit_record(
         action=ActionType.CREDENTIAL_CREATE,
@@ -657,6 +620,91 @@ def doctor_credential_create(
         resource_id=credential.id,
         resource_repr=f"[{kind}] {title} — doctor={str(doctor.id)}",
         metadata={"doctor_id": str(doctor.id), "kind": kind},
+    )
+    return credential
+
+
+def doctor_credential_update(
+    *,
+    credential: DoctorCredential,
+    user: "User",
+    title: str | None = None,
+    institution: str | None = None,
+    kind: str | None = None,
+    credential_number: str | None = None,
+    order: int | None = None,
+    logo: Any = None,
+    logo_provided: bool = False,
+) -> DoctorCredential:
+    """Actualiza (edición parcial) una credencial existente del médico.
+
+    Solo modifica los campos provistos (no-None). El logo se actualiza únicamente
+    cuando `logo_provided=True`: así se distingue "no enviar logo" (no tocar) de
+    "enviar logo nuevo" o "quitar logo" (logo=None). Valida `kind` y campos no vacíos.
+
+    Args:
+        credential:        Instancia DoctorCredential a editar.
+        user:              Usuario que realiza la acción (auditoría).
+        title/institution/kind/credential_number/order: campos opcionales a cambiar.
+        logo:              Nuevo archivo de logo (o None para quitarlo).
+        logo_provided:     True si se debe aplicar el cambio de logo.
+
+    Returns:
+        La instancia DoctorCredential actualizada.
+
+    Raises:
+        ValidationError: si kind es inválido o un campo de texto queda vacío.
+    """
+    update_fields: list[str] = []
+
+    if title is not None:
+        title = title.strip()
+        if not title:
+            raise ValidationError("El título de la credencial no puede estar vacío.")
+        credential.title = title
+        update_fields.append("title")
+
+    if institution is not None:
+        institution = institution.strip()
+        if not institution:
+            raise ValidationError("La institución de la credencial no puede estar vacía.")
+        credential.institution = institution
+        update_fields.append("institution")
+
+    if kind is not None:
+        valid_kinds = {c[0] for c in CredentialKind.choices}
+        if kind not in valid_kinds:
+            raise ValidationError(
+                f"Tipo de credencial inválido '{kind}'. "
+                f"Los válidos son: {', '.join(sorted(valid_kinds))}."
+            )
+        credential.kind = kind
+        update_fields.append("kind")
+
+    if credential_number is not None:
+        credential.credential_number = credential_number.strip()
+        update_fields.append("credential_number")
+
+    if order is not None:
+        credential.order = order
+        update_fields.append("order")
+
+    if logo_provided:
+        credential.logo = logo
+        update_fields.append("logo")
+
+    if update_fields:
+        update_fields.append("updated_at")
+        credential.save(update_fields=update_fields)
+
+    audit_record(
+        action=ActionType.CREDENTIAL_UPDATE,
+        resource_type="DoctorCredential",
+        actor=user,
+        tenant=credential.tenant,
+        resource_id=credential.id,
+        resource_repr=f"[{credential.kind}] {credential.title}",
+        metadata={"doctor_id": str(credential.doctor_id), "fields": update_fields},
     )
     return credential
 

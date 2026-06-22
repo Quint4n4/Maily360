@@ -15,12 +15,6 @@ export type { Paginated }
    Configuración de la clínica  (clinica/configuracion/)
    ──────────────────────────────────────────────────────────────────────── */
 
-/** Un contacto de WhatsApp para el envío (simulado) de recetas. */
-export interface WhatsAppContact {
-  nombre: string
-  numero: string
-}
-
 /** Salida de ClinicSettings (ClinicSettingsOutputSerializer). */
 export interface ClinicSettingsOut {
   id: string
@@ -43,8 +37,6 @@ export interface ClinicSettingsOut {
   letterhead_half: string | null
   letterhead_full_spaces: number
   letterhead_half_spaces: number
-  recipe_use_responsible_doctor: boolean
-  recipe_whatsapp_contacts: WhatsAppContact[]
   created_at: string
   updated_at: string
 }
@@ -68,8 +60,6 @@ export interface ClinicSettingsFields {
   youtube?: string
   letterhead_full_spaces?: number
   letterhead_half_spaces?: number
-  recipe_use_responsible_doctor?: boolean
-  recipe_whatsapp_contacts?: WhatsAppContact[]
 }
 
 /** Imágenes opcionales para el PUT de configuración. */

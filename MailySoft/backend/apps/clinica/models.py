@@ -71,6 +71,16 @@ def doctor_university_logo_path(instance: "DoctorUniversity", filename: str) -> 
     return f"clinica/{tenant_id}/universidades/{_random_name(filename)}"
 
 
+def doctor_credential_logo_path(instance: "DoctorCredential", filename: str) -> str:
+    """Ruta para el logo de la institución que expide una credencial médica.
+
+    Incluye tenant_id para aislamiento físico en S3/MEDIA_ROOT.
+    El nombre se aleatoriza para evitar enumeración y colisiones.
+    """
+    tenant_id = getattr(instance, "tenant_id", None) or "unknown"
+    return f"clinica/{tenant_id}/doctores/credenciales/{_random_name(filename)}"
+
+
 # ---------------------------------------------------------------------------
 # Validadores de imagen reutilizables para campos ImageField
 # ---------------------------------------------------------------------------
@@ -90,14 +100,11 @@ class ClinicSettings(TenantAwareModel):
     """Configuración global de la clínica — uno por tenant activo.
 
     Almacena la identidad visual (logo, membrete), datos de contacto y
-    preferencias de generación de recetas.
+    preferencias de presentación de recetas.
 
     Unicidad: solo puede existir un registro activo (deleted_at IS NULL) por tenant.
     La constraint UniqueConstraint parcial previene duplicados sin bloquear
     la re-creación tras un soft-delete.
-
-    recipe_whatsapp_contacts almacena lista de {nombre: str, numero: str}.
-    La validación de estructura se hace en el serializer (campo ListField).
     """
 
     # --- Identidad visual ---
@@ -206,23 +213,6 @@ class ClinicSettings(TenantAwareModel):
             "Nombre comercial de la clínica para el membrete de la receta. "
             "Puede diferir de Tenant.name (p. ej. 'Clínica Camsa' vs 'CAMSA S.A. de C.V.'). "
             "COFEPRIS F2."
-        ),
-    )
-
-    # --- Preferencias de recetas ---
-    recipe_use_responsible_doctor = models.BooleanField(
-        default=False,
-        help_text=(
-            "Si True, todas las recetas se imprimen con el nombre del médico "
-            "responsable (no el tratante). Útil cuando hay un responsable sanitario."
-        ),
-    )
-    recipe_whatsapp_contacts = models.JSONField(
-        default=list,
-        blank=True,
-        help_text=(
-            "Lista de contactos de WhatsApp para envío de recetas. "
-            "Estructura: [{\"nombre\": \"...\", \"numero\": \"...\"}, ...]."
         ),
     )
 
@@ -482,6 +472,16 @@ class DoctorCredential(TenantAwareModel):
         help_text=(
             "Orden de aparición en el membrete (0 = primero). "
             "Permite controlar qué cédula aparece en qué posición."
+        ),
+    )
+    logo = models.ImageField(
+        upload_to=doctor_credential_logo_path,
+        null=True,
+        blank=True,
+        validators=[validate_clinic_image],
+        help_text=(
+            "Logo opcional de la institución que expide la credencial. "
+            "JPG/PNG/WEBP, máx 5 MB."
         ),
     )
     is_active = models.BooleanField(

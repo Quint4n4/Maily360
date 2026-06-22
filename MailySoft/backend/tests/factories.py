@@ -600,8 +600,6 @@ class ClinicSettingsFactory(DjangoModelFactory):
     youtube = ""
     letterhead_full_spaces = 0
     letterhead_half_spaces = 0
-    recipe_use_responsible_doctor = False
-    recipe_whatsapp_contacts = factory.LazyFunction(list)
 
 
 class ClinicTemplateFactory(DjangoModelFactory):
@@ -759,7 +757,7 @@ class PrescriptionFormatFactory(DjangoModelFactory):
     tenant = factory.SubFactory(TenantFactory)
     created_by = factory.SubFactory(UserFactory)
     name = factory.Sequence(lambda n: f"Formato Test {n}")
-    base_layout = PrescriptionFormat.BaseLayout.STANDARD
+    base_layout = PrescriptionFormat.BaseLayout.DIGITAL
     accent_color = "#9A7B1E"
     font = PrescriptionFormat.FontChoice.HELVETICA
     sections = factory.LazyFunction(dict)
