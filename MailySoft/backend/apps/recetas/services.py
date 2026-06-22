@@ -788,7 +788,7 @@ def prescription_format_create(
     tenant: Tenant,
     user: Any,
     name: str,
-    base_layout: str = "standard",
+    base_layout: str = "digital",
     accent_color: str = "#9A7B1E",
     font: str = "helvetica",
     sections: dict[str, bool] | None = None,
@@ -813,7 +813,7 @@ def prescription_format_create(
         tenant:          Clínica del contexto activo.
         user:            Usuario que crea el formato.
         name:            Nombre descriptivo del formato.
-        base_layout:     Layout base ("standard", "compact", "digital").
+        base_layout:     Layout base ("compact" = Farmacia, "digital" = Paciente).
         accent_color:    Color de acento en hex (#RRGGBB).
         font:            Tipografía ("helvetica", "times").
         sections:        Dict de flags de secciones (keys en SECTIONS_KEYS, vals bool).

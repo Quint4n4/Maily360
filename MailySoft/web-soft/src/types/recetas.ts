@@ -325,22 +325,28 @@ export function routeLabel(route: string): string {
 // F3 — PrescriptionFormat (galería de formatos de receta)
 // ───────────────────────────────────────────────────────────────────────────
 
-/** Plantilla base del PDF (PrescriptionFormat.BaseLayout.choices). */
-export type PrescriptionBaseLayout = 'standard' | 'compact' | 'digital'
+/** Plantilla base del PDF (PrescriptionFormat.BaseLayout.choices).
+ *  digital = receta del Paciente (hoja completa); compact = receta de Farmacia (media carta). */
+export type PrescriptionBaseLayout = 'compact' | 'digital'
 
 /** Tipografía del PDF (PrescriptionFormat.FontChoice.choices). */
 export type PrescriptionFont = 'helvetica' | 'times'
 
-/** Modo de membrete (PrescriptionFormat.LetterheadMode.choices). */
+/** Modo de membrete (heredado; ya no se expone en el editor). */
 export type LetterheadMode = 'digital' | 'preprinted'
 
 /** Claves de secciones opcionales del formato (SECTIONS_KEYS del backend). */
 export type FormatSectionKey =
   | 'signos'
+  | 'edad_sexo'
   | 'diagnostico'
+  | 'alergias'
   | 'sueros'
   | 'terapias'
   | 'indicaciones'
+  | 'vigencia'
+  | 'contacto_clinica'
+  | 'qr'
 
 /** Flags booleanos por sección (JSON `sections`). */
 export type FormatSections = Partial<Record<FormatSectionKey, boolean>>
@@ -399,19 +405,14 @@ export const BASE_LAYOUT_OPTIONS: {
   description: string
 }[] = [
   {
-    value: 'standard',
-    label: 'Estándar',
-    description: 'Carta vertical. Formato clásico para imprimir en hoja completa.',
+    value: 'digital',
+    label: 'Paciente',
+    description: 'Hoja completa (carta vertical). Para el paciente: incluye recomendaciones; se envía por PDF o se imprime.',
   },
   {
     value: 'compact',
-    label: 'Compacta',
-    description: 'Media carta horizontal. Ahorra papel; ideal para recetarios cortos.',
-  },
-  {
-    value: 'digital',
-    label: 'Digital',
-    description: 'Pensada para el paciente: más legible en pantalla y para compartir.',
+    label: 'Farmacia',
+    description: 'Media carta horizontal. Para ir a comprar los medicamentos: compacta y sin recomendaciones.',
   },
 ]
 
@@ -427,11 +428,18 @@ export const LETTERHEAD_MODE_OPTIONS: { value: LetterheadMode; label: string }[]
   { value: 'preprinted', label: 'Pre-impreso (deja espacio superior en blanco)' },
 ]
 
-/** Secciones configurables con su etiqueta (orden de presentación en el editor). */
+/** Secciones configurables con su etiqueta (orden de presentación en el editor).
+ *  El médico, sus cédulas (COFEPRIS), el folio, el paciente, la fecha, los
+ *  medicamentos y el logo/clínica son siempre fijos y no se listan aquí. */
 export const SECTION_OPTIONS: { key: FormatSectionKey; label: string }[] = [
-  { key: 'signos', label: 'Signos vitales' },
+  { key: 'signos', label: 'Datos del paciente (signos vitales)' },
+  { key: 'edad_sexo', label: 'Edad y sexo' },
   { key: 'diagnostico', label: 'Diagnóstico' },
-  { key: 'sueros', label: 'Sueros' },
-  { key: 'terapias', label: 'Terapias' },
-  { key: 'indicaciones', label: 'Indicaciones / recomendaciones' },
+  { key: 'alergias', label: 'Alergias del paciente' },
+  { key: 'sueros', label: 'Sueros / soluciones' },
+  { key: 'terapias', label: 'Terapias / procedimientos' },
+  { key: 'indicaciones', label: 'Recomendaciones (solo receta del paciente)' },
+  { key: 'vigencia', label: 'Vigencia de la receta' },
+  { key: 'contacto_clinica', label: 'Datos de contacto de la clínica' },
+  { key: 'qr', label: 'Código QR de verificación' },
 ]

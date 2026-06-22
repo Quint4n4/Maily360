@@ -5,8 +5,7 @@ Librería: WeasyPrint 62.3+ (requiere libpango/libcairo/libgdk-pixbuf; ya
   instalados en el Dockerfile del proyecto).
 
 Formatos disponibles (F1):
-  standard  — Carta vertical, membrete digital limpio.
-  compact   — Media carta horizontal (21.6 × 14 cm). Caso Camsa.
+  compact   — Media carta horizontal (21.6 × 14 cm). Farmacia.
   digital   — Carta vertical amigable para el paciente.
 
 Imágenes (logo, sello):
@@ -19,13 +18,6 @@ Seguridad — _secure_fetcher:
   Cualquier otro esquema (file://, http://, https://, rutas relativas) lanza
   ValueError bloqueando LFI/SSRF. Equivale al _link_callback que existía en
   xhtml2pdf.
-
-Decisión sobre recipe_use_responsible_doctor:
-  El modelo ClinicSettings tiene el flag `recipe_use_responsible_doctor` pero no
-  existe aún un concepto de "médico responsable de la clínica" como entidad
-  separada en el sistema (no hay FK en ClinicSettings a un Doctor). Mientras ese
-  concepto no esté implementado, este flag se ignora y se usa siempre el médico
-  que emitió la receta (doctor directo de la Prescription).
 """
 
 import base64
@@ -40,12 +32,11 @@ from PIL import Image, ImageEnhance
 logger = logging.getLogger("apps.recetas.pdf")
 
 # Formatos soportados (F1). F3 los persistirá en PrescriptionFormat.
-BaseLayout = Literal["standard", "compact", "digital"]
-VALID_LAYOUTS: frozenset[str] = frozenset({"standard", "compact", "digital"})
+BaseLayout = Literal["compact", "digital"]
+VALID_LAYOUTS: frozenset[str] = frozenset({"compact", "digital"})
 
 # Mapeo layout → template relativo a TEMPLATES dirs.
 _TEMPLATE_MAP: dict[str, str] = {
-    "standard": "recetas/formats/standard.html",
     "compact": "recetas/formats/compact.html",
     "digital": "recetas/formats/digital.html",
 }
@@ -301,7 +292,10 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
         sello_box = _image_box(doctor.sello, max_w_pt=110, max_h_pt=58)
 
     # Credenciales estructuradas (F2): DoctorCredential ordenadas por `order`.
-    credentials: list[dict[str, str]] = []
+    # Cada credencial incluye su PROPIO logo (campo logo en DoctorCredential).
+    # Esto elimina el emparejamiento por índice con university_logos que causaba
+    # que los logos aparecieran descolocados respecto a su cédula.
+    credentials: list[dict[str, Any]] = []
     try:
         cred_qs = DoctorCredential.objects.filter(
             doctor=doctor,
@@ -309,6 +303,11 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
             deleted_at__isnull=True,
         ).order_by("order", "id")
         for cred in cred_qs:
+            cred_logo_box = (
+                _image_box(cred.logo, max_w_pt=46, max_h_pt=34)
+                if cred.logo
+                else {"b64": "", "mime": "", "w": 0, "h": 0}
+            )
             credentials.append(
                 {
                     "title": cred.title,
@@ -316,10 +315,37 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
                     "credential_number": cred.credential_number,
                     "kind": cred.kind,
                     "kind_display": cred.get_kind_display(),
+                    "logo_b64": cred_logo_box["b64"],
+                    "logo_mime": cred_logo_box["mime"],
                 }
             )
     except Exception:  # noqa: BLE001
         credentials = []
+
+    # Logos de universidades/instituciones del médico (lista heredada — se conserva
+    # en el contexto para compatibilidad con standard.html y otros templates que
+    # puedan referenciarlo). Ya NO se usa para emparejar con credential_blocks.
+    university_logos: list[dict[str, Any]] = []
+    try:
+        from apps.clinica.models import DoctorUniversity
+
+        uni_qs = DoctorUniversity.objects.filter(
+            doctor=doctor,
+            deleted_at__isnull=True,
+        ).order_by("name", "id")
+        for uni in uni_qs:
+            if uni.logo:
+                box = _image_box(uni.logo, max_w_pt=46, max_h_pt=34)
+                if box["b64"]:
+                    university_logos.append({**box, "name": uni.name})
+    except Exception:  # noqa: BLE001
+        university_logos = []
+
+    # credential_blocks = credentials directamente (cada una ya trae su propio logo).
+    # El emparejamiento por índice con university_logos fue eliminado porque causaba
+    # que los logos aparecieran descolocados cuando el orden de universidades no
+    # coincidía con el orden de las credenciales.
+    credential_blocks: list[dict[str, Any]] = credentials
 
     # --- Paciente ---
     patient = prescription.patient
@@ -425,15 +451,46 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
         email = settings_obj.email or ""
         website = settings_obj.website or ""
 
+    # --- Alergias activas del paciente (clave "allergies" en el contexto) ---
+    # Lista de strings legibles: "sustancia [reacción]" si hay reacción, si no solo sustancia.
+    # Defensivo: cualquier error devuelve lista vacía — el PDF se genera igualmente.
+    allergies: list[str] = []
+    try:
+        from apps.expediente.models import Allergy as _Allergy
+
+        allergy_qs = _Allergy.objects.filter(
+            patient=patient,
+            tenant=tenant,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).order_by("substance")
+        for a in allergy_qs:
+            label = a.substance
+            if a.reaction:
+                label = f"{label} — {a.reaction}"
+            allergies.append(label)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "pdf._build_context: no se pudieron cargar las alergias del paciente %s. "
+            "El PDF se generará sin alergias.",
+            getattr(patient, "id", "<desconocido>"),
+        )
+        allergies = []
+
     # --- F3: variables del PrescriptionFormat resuelto ---
     _DEFAULT_ACCENT = "#9A7B1E"
     _DEFAULT_FONT_FAMILY = "Helvetica, Arial, sans-serif"
     _DEFAULT_SECTIONS: dict[str, bool] = {
         "signos": True,
+        "edad_sexo": True,
         "diagnostico": True,
+        "alergias": True,
         "sueros": True,
         "terapias": True,
         "indicaciones": True,
+        "vigencia": True,
+        "contacto_clinica": True,
+        "qr": True,
     }
 
     accent: str = _DEFAULT_ACCENT
@@ -521,6 +578,8 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
         "cedulas_adicionales": cedulas_adicionales,
         "doctor_specialty": doctor_specialty,
         "credentials": credentials,
+        "university_logos": university_logos,
+        "credential_blocks": credential_blocks,
         "sello_b64": sello_box["b64"],
         "sello_mime": sello_box["mime"],
         "sello_w": sello_box["w"],
@@ -528,6 +587,8 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
         # Paciente
         "patient_name": patient_name,
         "patient_age_sex": patient_age_sex,
+        # Alergias activas del paciente (lista de strings legibles, puede ser vacía)
+        "allergies": allergies,
         # Receta
         "folio": prescription.folio,
         "issued_at": issued_at_str,
@@ -562,7 +623,7 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
 def prescription_pdf_build(
     *,
     prescription: Any,
-    base_layout: str = "standard",
+    base_layout: str = "digital",
     format_override: "Any | None" = None,
 ) -> bytes:
     """Genera los bytes del PDF de una receta médica en el formato resuelto.
@@ -579,9 +640,9 @@ def prescription_pdf_build(
         prescription:    Instancia de Prescription con relaciones precargadas:
                          doctor, doctor__membership, doctor__membership__user,
                          patient, items.
-        base_layout:     Nombre de layout para override de vista previa (legacy).
-                         Válidos: "standard", "compact", "digital".
-                         Si es inválido, se usa "standard" (fallback con WARNING).
+        base_layout:     Nombre de layout para override de vista previa.
+                         Válidos: "compact", "digital".
+                         Si es inválido, se usa "digital" (fallback con WARNING).
         format_override: PrescriptionFormat (real o en memoria) o None.
                          Si es None, se resuelve automáticamente. Si viene del
                          endpoint ?formato=, la vista lo construye y lo pasa aquí.
@@ -608,11 +669,11 @@ def prescription_pdf_build(
     if active_layout not in VALID_LAYOUTS:
         logger.warning(
             "prescription_pdf_build: base_layout='%s' no es un valor válido. "
-            "Se usará 'standard'. Valores válidos: %s.",
+            "Se usará 'digital'. Valores válidos: %s.",
             active_layout,
             ", ".join(sorted(VALID_LAYOUTS)),
         )
-        active_layout = "standard"
+        active_layout = "digital"
 
     template_name = _TEMPLATE_MAP[active_layout]
     context = _build_context(prescription, fmt=resolved_fmt)

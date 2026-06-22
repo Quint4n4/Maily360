@@ -2,16 +2,16 @@
 Tests — F1: PDF multi-formato de receta médica.
 
 Cubre:
-  - Los tres formatos (standard, compact, digital) generan PDF válido (status 200,
+  - Los dos formatos (compact, digital) generan PDF válido (status 200,
     body empieza con %PDF) vía ?formato=.
-  - Formato inválido cae en "standard" sin error (fallback silencioso).
+  - Formato inválido cae en "digital" sin error (fallback silencioso).
   - Ítems con campos estructurados (dose, frequency, route, duration): PDF generado.
-  - Sueros + terapias + diagnóstico: PDF generado con los tres formatos.
-  - Receta activa y anulada con los tres formatos.
+  - Sueros + terapias + diagnóstico: PDF generado con los dos formatos.
+  - Receta activa y anulada con los dos formatos.
   - Sin sello + sin logo: PDF generado.
   - compact con 8+ ítems: generado sin error (prueba anti-encimado/página extra).
   - Accept: application/pdf con ?formato= → 200, no 406 (regresión).
-  - prescription_pdf_build directo con los tres layouts.
+  - prescription_pdf_build directo con los dos layouts.
   - _build_context incluye 'credentials', 'diagnosis', 'medicamentos', 'sueros', 'terapias'.
   - commercial_name prevalece sobre Tenant.name como clinic_name.
 """
@@ -46,7 +46,7 @@ from tests.factories import (
 PDF_URL = "/api/v1/recetas/{prescription_id}/pdf/"
 
 
-def _pdf_url(prescription_id: Any, formato: str = "standard") -> str:
+def _pdf_url(prescription_id: Any, formato: str = "digital") -> str:
     base = PDF_URL.format(prescription_id=str(prescription_id))
     return f"{base}?formato={formato}"
 
@@ -108,9 +108,9 @@ def _get_full_rx(rx: Prescription, tenant: Any) -> Prescription:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("formato", ["standard", "compact", "digital"])
+@pytest.mark.parametrize("formato", ["compact", "digital"])
 def test_pdf_all_formats_return_200_and_pdf_bytes(formato: str) -> None:
-    """Los tres formatos generan PDF válido (200, %PDF)."""
+    """Los dos formatos generan PDF válido (200, %PDF)."""
     tenant = TenantFactory()
     rx = _basic_rx(tenant)
     user = _make_nurse(tenant)
@@ -126,8 +126,8 @@ def test_pdf_all_formats_return_200_and_pdf_bytes(formato: str) -> None:
 
 
 @pytest.mark.django_db
-def test_pdf_invalid_formato_falls_back_to_standard() -> None:
-    """Formato inválido en ?formato= → 200 con formato standard (fallback silencioso)."""
+def test_pdf_invalid_formato_falls_back_to_digital() -> None:
+    """Formato inválido en ?formato= → 200 con formato digital (fallback silencioso)."""
     tenant = TenantFactory()
     rx = _basic_rx(tenant)
     user = _make_nurse(tenant)
@@ -142,7 +142,7 @@ def test_pdf_invalid_formato_falls_back_to_standard() -> None:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("formato", ["standard", "compact", "digital"])
+@pytest.mark.parametrize("formato", ["compact", "digital"])
 def test_pdf_accept_application_pdf_with_formato(formato: str) -> None:
     """Accept: application/pdf + ?formato= → 200, no 406 (regresión)."""
     tenant = TenantFactory()
@@ -165,9 +165,9 @@ def test_pdf_accept_application_pdf_with_formato(formato: str) -> None:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("formato", ["standard", "compact", "digital"])
+@pytest.mark.parametrize("formato", ["compact", "digital"])
 def test_pdf_with_structured_fields(formato: str) -> None:
-    """Receta con dose/frequency/route/duration → PDF válido en todos los formatos."""
+    """Receta con dose/frequency/route/duration → PDF válido en los dos formatos."""
     tenant = TenantFactory()
     patient = PatientFactory(tenant=tenant)
     doctor = DoctorFactory(tenant=tenant)
@@ -200,7 +200,7 @@ def test_pdf_with_structured_fields(formato: str) -> None:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("formato", ["standard", "compact", "digital"])
+@pytest.mark.parametrize("formato", ["compact", "digital"])
 def test_pdf_with_sueros_terapias_diagnosis(formato: str) -> None:
     """Receta con medicamentos + sueros + terapias + diagnóstico → PDF válido."""
     tenant = TenantFactory()
@@ -259,9 +259,9 @@ def test_pdf_with_sueros_terapias_diagnosis(formato: str) -> None:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("formato", ["standard", "compact", "digital"])
+@pytest.mark.parametrize("formato", ["compact", "digital"])
 def test_pdf_cancelled_all_formats(formato: str) -> None:
-    """Receta anulada genera PDF con marca de agua en los tres formatos."""
+    """Receta anulada genera PDF con marca de agua en los dos formatos."""
     tenant = TenantFactory()
     patient = PatientFactory(tenant=tenant)
     doctor = DoctorFactory(tenant=tenant)
@@ -288,7 +288,7 @@ def test_pdf_cancelled_all_formats(formato: str) -> None:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("formato", ["standard", "compact", "digital"])
+@pytest.mark.parametrize("formato", ["compact", "digital"])
 def test_pdf_no_logo_no_sello(formato: str) -> None:
     """Sin logo de clínica ni sello del médico → PDF generado igual."""
     tenant = TenantFactory()
@@ -579,9 +579,9 @@ def test_pdf_compact_2_meds_single_page() -> None:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("layout", ["standard", "compact", "digital"])
+@pytest.mark.parametrize("layout", ["compact", "digital"])
 def test_prescription_pdf_build_all_layouts(layout: str) -> None:
-    """prescription_pdf_build con los tres layouts retorna bytes %PDF."""
+    """prescription_pdf_build con los dos layouts retorna bytes %PDF."""
     tenant = TenantFactory()
     patient = PatientFactory(tenant=tenant)
     doctor = DoctorFactory(tenant=tenant)
@@ -602,7 +602,7 @@ def test_prescription_pdf_build_all_layouts(layout: str) -> None:
 
 @pytest.mark.django_db
 def test_prescription_pdf_build_invalid_layout_falls_back() -> None:
-    """Layout inválido → fallback silencioso a 'standard'."""
+    """Layout inválido → fallback silencioso a 'digital'."""
     tenant = TenantFactory()
     patient = PatientFactory(tenant=tenant)
     doctor = DoctorFactory(tenant=tenant)
@@ -610,7 +610,7 @@ def test_prescription_pdf_build_invalid_layout_falls_back() -> None:
     PrescriptionItemFactory(prescription=rx, tenant=tenant, order=1, medication_name="Omeprazol")
 
     full_rx = _get_full_rx(rx, tenant)
-    # No debe lanzar excepción; usa standard silenciosamente.
+    # No debe lanzar excepción; usa digital silenciosamente.
     pdf_bytes = prescription_pdf_build(prescription=full_rx, base_layout="tipo_inexistente")
 
     assert pdf_bytes[:4] == b"%PDF"

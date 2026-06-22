@@ -610,3 +610,144 @@ def test_prescription_pdf_build_cancelled() -> None:
 
     pdf_bytes = prescription_pdf_build(prescription=full_rx)
     assert pdf_bytes[:4] == b"%PDF"
+
+
+# ---------------------------------------------------------------------------
+# Tests — logo propio en DoctorCredential (credencial con logo pegado)
+# ---------------------------------------------------------------------------
+
+
+def _make_png_bytes(width: int = 40, height: int = 30) -> bytes:
+    """Genera bytes PNG mínimos con Pillow para usar en tests."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    buf = BytesIO()
+    Image.new("RGB", (width, height), color=(120, 80, 200)).save(buf, format="PNG")
+    buf.seek(0)
+    return buf.read()
+
+
+@pytest.mark.django_db
+def test_build_context_credential_with_logo_includes_logo_b64() -> None:
+    """_build_context incluye logo_b64 no vacío cuando la credencial tiene logo."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.clinica.services import doctor_credential_create
+    from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
+    from apps.recetas.pdf import _build_context
+
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(tenant=tenant, patient=patient, doctor=doctor)
+    PrescriptionItemFactory(prescription=rx, tenant=tenant, order=1, medication_name="Paracetamol")
+
+    png_bytes = _make_png_bytes()
+    logo_file = SimpleUploadedFile("cred_logo.png", png_bytes, content_type="image/png")
+
+    set_current_tenant(tenant)
+    set_tenant_context_active(True)
+    try:
+        doctor_credential_create(
+            tenant=tenant,
+            user=UserFactory(),
+            doctor=doctor,
+            title="Médico con logo",
+            institution="UNAM",
+            kind="profesional",
+            logo=logo_file,
+        )
+        from apps.recetas.selectors import prescription_get as _pg
+        full_rx = _pg(prescription_id=rx.id)
+    finally:
+        set_current_tenant(None)
+        set_tenant_context_active(False)
+
+    ctx = _build_context(full_rx)
+
+    cred_block = next(
+        (b for b in ctx["credential_blocks"] if b["title"] == "Médico con logo"),
+        None,
+    )
+    assert cred_block is not None, "No se encontró el bloque de credencial con logo"
+    assert cred_block["logo_b64"], "logo_b64 debe ser no vacío cuando hay logo"
+    assert cred_block["logo_mime"], "logo_mime debe tener valor cuando hay logo"
+
+
+@pytest.mark.django_db
+def test_build_context_credential_without_logo_has_empty_logo_b64() -> None:
+    """_build_context entrega logo_b64='' cuando la credencial no tiene logo."""
+    from apps.clinica.services import doctor_credential_create
+    from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
+    from apps.recetas.pdf import _build_context
+
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(tenant=tenant, patient=patient, doctor=doctor)
+    PrescriptionItemFactory(prescription=rx, tenant=tenant, order=1, medication_name="Ibuprofeno")
+
+    set_current_tenant(tenant)
+    set_tenant_context_active(True)
+    try:
+        doctor_credential_create(
+            tenant=tenant,
+            user=UserFactory(),
+            doctor=doctor,
+            title="Médico sin logo",
+            institution="IPN",
+            kind="posgrado",
+        )
+        from apps.recetas.selectors import prescription_get as _pg
+        full_rx = _pg(prescription_id=rx.id)
+    finally:
+        set_current_tenant(None)
+        set_tenant_context_active(False)
+
+    ctx = _build_context(full_rx)
+
+    cred_block = next(
+        (b for b in ctx["credential_blocks"] if b["title"] == "Médico sin logo"),
+        None,
+    )
+    assert cred_block is not None
+    assert cred_block["logo_b64"] == ""
+    assert cred_block["logo_mime"] == ""
+
+
+@pytest.mark.django_db
+def test_build_context_credential_blocks_equals_credentials() -> None:
+    """credential_blocks es idéntico a credentials (sin emparejamiento por índice)."""
+    from apps.clinica.services import doctor_credential_create
+    from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
+    from apps.recetas.pdf import _build_context
+
+    tenant = TenantFactory()
+    patient = PatientFactory(tenant=tenant)
+    doctor = DoctorFactory(tenant=tenant)
+    rx = PrescriptionFactory(tenant=tenant, patient=patient, doctor=doctor)
+    PrescriptionItemFactory(prescription=rx, tenant=tenant, order=1, medication_name="Atenolol")
+
+    set_current_tenant(tenant)
+    set_tenant_context_active(True)
+    try:
+        doctor_credential_create(
+            tenant=tenant, user=UserFactory(), doctor=doctor,
+            title="Cred A", institution="UAG", kind="profesional",
+        )
+        doctor_credential_create(
+            tenant=tenant, user=UserFactory(), doctor=doctor,
+            title="Cred B", institution="UANL", kind="especialidad",
+        )
+        from apps.recetas.selectors import prescription_get as _pg
+        full_rx = _pg(prescription_id=rx.id)
+    finally:
+        set_current_tenant(None)
+        set_tenant_context_active(False)
+
+    ctx = _build_context(full_rx)
+
+    assert ctx["credential_blocks"] is ctx["credentials"]
+    assert len(ctx["credential_blocks"]) == 2

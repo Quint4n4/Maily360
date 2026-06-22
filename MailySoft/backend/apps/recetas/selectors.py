@@ -260,7 +260,7 @@ def prescription_format_resolve(
     Args:
         prescription:      Instancia de Prescription con tenant y doctor precargados.
         format_override_id: UUID explícito de un PrescriptionFormat (vista previa por id).
-        layout_override:   Nombre de layout ("standard"|"compact"|"digital") solo para
+        layout_override:   Nombre de layout ("compact"|"digital") solo para
                            vista previa cuando no se tiene un id.
 
     Returns:
@@ -326,7 +326,7 @@ def prescription_format_resolve(
 
     # --- 5. Objeto en memoria con defaults de fábrica ---
     fmt_factory = PrescriptionFormat.__new__(PrescriptionFormat)
-    fmt_factory.base_layout = "standard"
+    fmt_factory.base_layout = "digital"
     fmt_factory.accent_color = "#9A7B1E"
     fmt_factory.font = "helvetica"
     fmt_factory.sections = {}

@@ -786,16 +786,33 @@ class PrescriptionItem(TenantAwareModel):
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 # Whitelist de secciones opcionales configurables (medicamentos siempre presente).
+# Las 10 claves canónicas (todas activadas por defecto).
 SECTIONS_KEYS: frozenset[str] = frozenset(
-    {"signos", "diagnostico", "sueros", "terapias", "indicaciones"}
+    {
+        "signos",
+        "edad_sexo",
+        "diagnostico",
+        "alergias",
+        "sueros",
+        "terapias",
+        "indicaciones",
+        "vigencia",
+        "contacto_clinica",
+        "qr",
+    }
 )
 
 _DEFAULT_SECTIONS: dict[str, bool] = {
     "signos": True,
+    "edad_sexo": True,
     "diagnostico": True,
+    "alergias": True,
     "sueros": True,
     "terapias": True,
     "indicaciones": True,
+    "vigencia": True,
+    "contacto_clinica": True,
+    "qr": True,
 }
 
 
@@ -803,7 +820,7 @@ class PrescriptionFormat(TenantAwareModel):
     """Formato de receta configurable por clínica (F3).
 
     Permite que cada clínica personalice el PDF de sus recetas:
-    - base_layout: plantilla base (standard/compact/digital).
+    - base_layout: plantilla base (compact/digital).
     - accent_color: color de acento en hex (#RRGGBB).
     - font: tipografía (helvetica / times).
     - sections: flags booleanos por sección opcional (JSON).
@@ -824,7 +841,7 @@ class PrescriptionFormat(TenantAwareModel):
 
     Paper:
         Deriva del base_layout — compact = media carta horizontal;
-        standard/digital = carta. No es un campo separado (fase actual).
+        digital = carta. No es un campo separado (fase actual).
 
     RLS (PostgreSQL):
         USING + WITH CHECK igual que otras tablas tenant-aware.
@@ -835,9 +852,8 @@ class PrescriptionFormat(TenantAwareModel):
     """
 
     class BaseLayout(models.TextChoices):
-        STANDARD = "standard", "Estándar (carta vertical)"
-        COMPACT = "compact", "Compacta (media carta horizontal)"
-        DIGITAL = "digital", "Digital (para el paciente)"
+        COMPACT = "compact", "Farmacia (media carta)"
+        DIGITAL = "digital", "Paciente (hoja completa)"
 
     class FontChoice(models.TextChoices):
         HELVETICA = "helvetica", "Helvetica / Arial (sans-serif)"
@@ -854,9 +870,9 @@ class PrescriptionFormat(TenantAwareModel):
     base_layout = models.CharField(
         max_length=10,
         choices=BaseLayout.choices,
-        default=BaseLayout.STANDARD,
+        default=BaseLayout.DIGITAL,
         db_index=True,
-        help_text="Plantilla base del PDF (determina tamaño y estructura del layout).",
+        help_text="Plantilla base del PDF: 'digital' = hoja completa (paciente); 'compact' = media carta (farmacia).",
     )
     accent_color = models.CharField(
         max_length=7,
@@ -878,9 +894,10 @@ class PrescriptionFormat(TenantAwareModel):
         blank=True,  # {} es un valor válido; full_clean no debe tratarlo como "vacío"
         help_text=(
             "Flags booleanos de secciones opcionales. "
-            "Whitelist: signos, diagnostico, sueros, terapias, indicaciones. "
+            "Whitelist (10 claves): signos, edad_sexo, diagnostico, alergias, sueros, "
+            "terapias, indicaciones, vigencia, contacto_clinica, qr. "
             "medicamentos siempre está presente. "
-            "Ejemplo: {signos: true, diagnostico: true, sueros: false, ...}."
+            "Claves omitidas reciben True por defecto vía get_sections_full()."
         ),
     )
     letterhead_mode = models.CharField(

@@ -171,7 +171,7 @@ def test_format_create_ok() -> None:
             tenant=tenant,
             user=user,
             name="Mi formato",
-            base_layout="standard",
+            base_layout="digital",
             accent_color="#AABBCC",
             font="times",
             sections={"signos": False},
@@ -471,7 +471,7 @@ def test_resolve_factory_fallback() -> None:
     with tenant_ctx(tenant):
         prescription = PrescriptionFactory(tenant=tenant)
         result = prescription_format_resolve(prescription=prescription)
-    assert result.base_layout == "standard"
+    assert result.base_layout == "digital"
     assert result.accent_color == "#9A7B1E"
 
 

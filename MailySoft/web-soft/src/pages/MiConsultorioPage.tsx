@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Building2, FileText, GraduationCap, LayoutTemplate, Printer, ScrollText, Tag } from 'lucide-react'
+import { Building2, FileText, GraduationCap, LayoutTemplate, Tag } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
@@ -9,14 +9,12 @@ import {
   puedeGestionarPerfilMedico,
 } from '../auth/permisos'
 import SeccionDatosClinica from '../components/consultorio/SeccionDatosClinica'
-import SeccionMembrete from '../components/consultorio/SeccionMembrete'
-import SeccionRecetas from '../components/consultorio/SeccionRecetas'
 import SeccionPlantillas from '../components/consultorio/SeccionPlantillas'
 import SeccionCategorias from '../components/consultorio/SeccionCategorias'
 import SeccionPerfilMedico from '../components/consultorio/SeccionPerfilMedico'
 import SeccionFormatos from '../components/consultorio/SeccionFormatos'
 
-type SeccionKey = 'datos' | 'membrete' | 'recetas' | 'formatos' | 'plantillas' | 'categorias' | 'perfil'
+type SeccionKey = 'datos' | 'formatos' | 'plantillas' | 'categorias' | 'perfil'
 
 interface SeccionDef {
   key: SeccionKey
@@ -26,9 +24,7 @@ interface SeccionDef {
 
 const SECCIONES: SeccionDef[] = [
   { key: 'datos', label: 'Datos de la clínica', icon: Building2 },
-  { key: 'membrete', label: 'Membrete', icon: Printer },
-  { key: 'recetas', label: 'Recetas', icon: ScrollText },
-  { key: 'formatos', label: 'Formato de receta', icon: LayoutTemplate },
+  { key: 'formatos', label: 'Configuración de recetas', icon: LayoutTemplate },
   { key: 'plantillas', label: 'Plantillas', icon: FileText },
   { key: 'categorias', label: 'Categorías de pacientes', icon: Tag },
   { key: 'perfil', label: 'Mi perfil médico', icon: GraduationCap },
@@ -39,7 +35,7 @@ export default function MiConsultorioPage() {
   const { role } = useRole()
   const [seccion, setSeccion] = useState<SeccionKey>('datos')
 
-  const gestionable = puedeGestionarConsultorio(role) // datos, membrete, recetas, categorías
+  const gestionable = puedeGestionarConsultorio(role) // datos, recetas, categorías
   const editaPlantillas = puedeEditarPlantillas(role)
   const editaPerfil = puedeGestionarPerfilMedico(role)
 
@@ -49,10 +45,6 @@ export default function MiConsultorioPage() {
     switch (seccion) {
       case 'datos':
         return <SeccionDatosClinica editable={gestionable} />
-      case 'membrete':
-        return <SeccionMembrete editable={gestionable} />
-      case 'recetas':
-        return <SeccionRecetas editable={gestionable} />
       case 'formatos':
         return <SeccionFormatos editable={gestionable} />
       case 'plantillas':

@@ -757,7 +757,7 @@ class PrescriptionFormatCreateInputSerializer(serializers.Serializer):
     """
 
     name = serializers.CharField(max_length=120, allow_blank=False)
-    base_layout = serializers.ChoiceField(choices=_LAYOUT_CHOICES, default="standard")
+    base_layout = serializers.ChoiceField(choices=_LAYOUT_CHOICES, default="digital")
     accent_color = serializers.CharField(max_length=7, default="#9A7B1E")
     font = serializers.ChoiceField(choices=_FONT_CHOICES, default="helvetica")
     sections = SectionsField(required=False, default=dict)
