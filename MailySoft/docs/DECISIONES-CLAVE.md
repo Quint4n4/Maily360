@@ -2,7 +2,7 @@
 
 > Registro de las decisiones importantes tomadas durante el desarrollo, con su **porqué** y sus **implicaciones**.
 > Las decisiones de arquitectura más formales tienen su propio ADR en `docs/adr/`. Este documento las consolida y agrega las decisiones de producto/UX y de frontend.
-> Actualizado: **2026-06-15**.
+> Actualizado: **2026-06-23**.
 
 ---
 
@@ -131,6 +131,49 @@ La decisión fue del dueño del producto: el staff clínico necesita avisarle a 
 **PII pendiente a revisar:** el título de la notificación de `team_note` incluye el nombre del paciente (facilita la UX pero es PII). El equipo debe decidir si anonimizarlo o aceptarlo documentado.
 
 ---
+
+## D-20 · Etiquetas de paciente como M2M con catálogo — Favorito/VIP como etiquetas del sistema (2026-06-23)
+
+**Decisión:** las clasificaciones de paciente (incluyendo Favorito y VIP) son **etiquetas del catálogo** (`PatientCategory`) asignadas via relación M2M (`Patient.categories`). Favorito y VIP son etiquetas con `kind=favorite`/`kind=vip`: existen siempre en cada clínica, no se pueden borrar ni renombrar (propiedad `is_system`), y conservan su marcado de 1 clic con estrella/corona. Las etiquetas libres del médico (`kind=custom`) se crean libremente. Un paciente puede tener varias etiquetas.
+
+**Por qué:** los BooleanField `is_favorite`/`is_vip` no escalaban: no se podían combinar con otras etiquetas, no tenían catálogo, y añadir una nueva categoría requería un campo nuevo en el modelo. Un catálogo M2M unificado permite etiquetas ilimitadas, filtro por cualquiera de ellas, y semántica consistente para las de sistema.
+
+**Implicación:**
+- `Patient.is_favorite` e `is_vip` se eliminaron del modelo; se exponen como `SerializerMethodField` derivados del prefetch (compatibilidad de API sin romper la UI).
+- El selector `patient_list` filtra `favorites`/`vip` por `categories__kind` (no por BooleanField).
+- El service `patient_set_classification` opera sobre `categories` (agrega/quita etiqueta), no sobre `save(update_fields=[...])`.
+- Migración de datos (`0010_migrar_favorito_vip_a_etiquetas`): siembra etiquetas de sistema por clínica existente y reasigna pacientes ya marcados.
+- Las clínicas nuevas reciben Favorito/VIP en `create_clinic` (apps/plataforma · `seed_system_patient_categories`).
+- `patient_list` acepta el parámetro adicional `category_id` (UUID) para filtrar por cualquier etiqueta del catálogo.
+
+## D-21 · Validación híbrida de credenciales del médico (2026-06-23)
+
+**Decisión:** las credenciales académicas de un médico (`DoctorCredential`) siguen un flujo de 3 estados: `pendiente` (el doctor las captura) → `validada` o `rechazada` (el admin/dueño las revisa contra registros oficiales, con motivo de rechazo). **Solo las credenciales con `validation_status="validada"` aparecen en la receta impresa.**
+
+**Por qué:** las cédulas y títulos son datos regulatorios (COFEPRIS). Permitir que el médico los auto-publique en una receta sin revisión abre la puerta a errores o datos falsos. El flujo híbrido da control al administrador sin bloquear la captura inicial.
+
+**Implicación:**
+- `DoctorCredential` gana `validation_status` (choice, db_index) y `validation_note` (CharField 300).
+- Dos endpoints nuevos en `apps/clinica`: `GET /clinica/credenciales/` (bandeja del admin) y `PATCH /clinica/credenciales/<id>/validar/`.
+- `_DoctorBriefSerializer` expone `cedulas_validadas` (lista de números de cédula validados) con prefetch `validated_credentials` para evitar N+1.
+- `cedula_profesional` (campo legacy del modelo `Doctor`) se mantiene como respaldo cuando no hay credenciales validadas.
+- Notificaciones best-effort: `CREDENTIAL_REVIEW` al admin al capturar; `CREDENTIAL_RESULT` al doctor al validar/rechazar.
+
+## D-22 · Cuatro estilos de fondo predefinidos para la receta — no diseño libre (2026-06-23)
+
+**Decisión:** el campo `PrescriptionFormat.theme` ofrece **4 estilos decorativos predefinidos** (`ondas`/`minimal`/`barra`/`geometrico`) implementados en un include compartido `_theme_bg.html`. No se expone una interfaz de diseño libre.
+
+**Por qué:** diseño libre (SVG/CSS arbitrario por clínica) sería inmanejable, poco profesional y difícil de probar. Cuatro estilos curados cubren el rango de gustos clínicos (sobrio → decorado) y mantienen la consistencia visual de la plataforma.
+
+**Implicación:** se exploraron 6 estilos; se descartaron "marco" y "banda" por no quedar bien en ambos tamaños de papel. Los 4 elegidos funcionan en `compact` (media carta horizontal) y `digital` (carta vertical).
+
+## D-23 · Generar ambas versiones de receta al emitir (2026-06-23)
+
+**Decisión:** al emitir una receta el sistema genera **dos versiones PDF** usando el mismo `PrescriptionFormat` del tenant (conservando color, tipografía y tema): la versión **Farmacia** (`compact`, media carta horizontal) y la versión **Paciente** (`digital`, carta vertical completa). Ambas accesibles desde botones en el historial. WhatsApp sigue siendo simulado.
+
+**Por qué:** el flujo clínico real necesita las dos: la de Farmacia para que el paciente la lleve a surtir, la del Paciente con instrucciones completas para que la archive. No generar ambas obligaría a volver a la configuración para cambiar de formato.
+
+**Implicación:** `prescription_format_resolve` clona el formato configurado con `layout_override` cuando se pide la versión alternativa, conservando el color y tema para que el historial antiguo se vea consistente con el formato actual. El `layout_override` ya no ignora el formato configurado del tenant (corrección respecto al plan original).
 
 ## Decisiones de proceso / colaboración
 

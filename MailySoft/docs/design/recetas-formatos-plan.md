@@ -1,10 +1,17 @@
-# Formatos de receta configurables por clínica — plan de diseño
+# Formatos de receta configurables por clínica — diseño e implementación
 
-> Estado: **plan** (2026-06-18). Sin implementar. Continuación de `recetas-plan.md` (B1).
+> Estado: **IMPLEMENTADO** — fases F1, F2 (parcial), F3, F4 y F5 completadas. Actualizado **2026-06-23**.
 > Origen: el cliente "Clínica Camsa" usa recetas en **media carta horizontal** muy densas
 > (membrete con varias cédulas + signos + indicaciones largas + sueros/terapias + firma)
 > donde **el texto se encima** por falta de espacio. Otras recetas convienen en formato
 > **digital** para el paciente. Se necesita que **cada clínica elija/configure su formato**.
+>
+> Lo implementado difiere del plan original en estos puntos clave:
+> - Se eliminó el formato "Estándar" (carta vertical genérica); quedaron **2 formatos base**: `compact` (Farmacia) y `digital` (Paciente).
+> - Se añadió el campo **`theme`** (4 estilos decorativos predefinidos) en vez de dejar el diseño libre.
+> - Al emitir una receta se generan **ambas versiones** (Farmacia + Paciente) usando el mismo formato configurado (color, tipografía, tema).
+> - Se implementó **validación híbrida de credenciales** del médico: el doctor captura, el admin valida o rechaza; solo las credenciales con `validation_status="validada"` aparecen en la receta.
+> - La tarjeta del historial muestra las **cédulas validadas reales** del médico (campo `cedulas_validadas` en el serializer, con prefetch para evitar N+1).
 
 ## 1. Problema
 
@@ -31,53 +38,117 @@ Que cada clínica diseñe desde cero sería caótico y poco profesional. Se ofre
 
 ## 4. Formatos predefinidos (plantillas base)
 
-1. **Estándar · carta vertical** — el actual (`prescription.html`). Limpio, una página.
-2. **Compacta · media carta horizontal** — 5.5×8.5 in apaisada. Maquetada en **2 columnas** (datos+signos | Rp+indicaciones) para meter mucho sin encimar; tipografía y tamaños controlados; si no cabe, **continúa en otra media hoja** (no se monta). Resuelve el caso Camsa.
-3. **Digital · para el paciente** — carta vertical amigable: tratamiento explicado en tarjetas ("Qué tomar / Cómo / Por cuánto tiempo"), pensada para enviar por WhatsApp/correo. WhatsApp aún simulado.
+_(Plan original: 3 formatos. Implementado: 2. Ver nota de evolución en el encabezado.)_
+
+1. ~~**Estándar · carta vertical**~~ — **eliminado**. Se descartó durante la implementación; el formato `digital` cubre ese caso.
+2. **Compacta · media carta horizontal** (`compact`) — 5.5×8.5 in apaisada. Maquetada para la receta de **Farmacia**: medicamentos, dosis, signos vitales en espacio reducido sin encimar. Template: `recetas/formats/compact.html`. Resuelve el caso Camsa.
+3. **Digital · para el paciente** (`digital`) — carta vertical (8.5×11 in). Receta completa del **Paciente**: medicamentos con indicaciones, recomendaciones, diagnóstico, QR de verificación. Template: `recetas/formats/digital.html`.
+
+> Al emitir una receta, el backend genera **ambas versiones** usando el mismo `PrescriptionFormat` configurado (conservando color, tipografía y tema). La UI muestra dos botones: **"Farmacia"** y **"Paciente"**.
+
+### 4.1 Estilos decorativos — campo `theme` (nuevo 2026-06-23)
+
+El campo `PrescriptionFormat.theme` controla el **fondo/marco** del PDF sin alterar la estructura del contenido. Implementado en `recetas/formats/_theme_bg.html` (include compartido para `compact` y `digital`).
+
+| `theme` | Descripción |
+|---|---|
+| `ondas` (default) | SVG de ondas suaves en la esquina superior derecha y pie de página, en el color de acento |
+| `minimal` | Sin decoración de fondo (solo contenido) |
+| `barra` | Barra lateral izquierda sólida en el color de acento (0.32 cm) |
+| `geometrico` | Círculos superpuestos en esquinas con el color de acento (opacidad 10–16%) |
+
+El encabezado y pie "running" de los PDF **no llevan fondo blanco** para que los temas decorativos sean visibles. El QR lleva su propio fondo blanco en el HTML para seguir siendo escaneable.
 
 ## 5. Qué se personaliza (sobre el formato elegido)
 
 | Opción | Valores | Notas técnicas |
 |---|---|---|
 | **Logo** | imagen | ya existe en `ClinicSettings.logo`; encajado proporcional (`_image_box`) |
-| **Color de acento** | paleta curada (o hex) | se inyecta en el template Django (`{{ accent }}`), NO como CSS var (xhtml2pdf no soporta `var()`) |
+| **Color de acento** | paleta curada (o hex) | se inyecta en el template Django (`{{ accent }}`), NO como CSS var (WeasyPrint no soporta `var()`) |
 | **Tipografía** | set seguro: Helvetica (sans), Times (serif) en MVP | fuentes custom (Lato, etc.) = embeber TTF con `@font-face`/`registerFont` → fase posterior |
-| **Tamaño/orientación** | Carta vertical · Media carta horizontal · A5 | `@page { size: ... }` (xhtml2pdf lo respeta; media carta = tamaño custom) |
+| **Tamaño/orientación** | Carta vertical · Media carta horizontal · A5 | `@page { size: ... }` (WeasyPrint lo respeta; media carta = tamaño custom) |
 | **Secciones a incluir** | signos, indicaciones, medicamentos, sueros/terapias, diagnóstico | flags en el contexto → `{% if %}` en el template |
 | **Modo de membrete** | digital (el sistema arma el encabezado) · papel pre-impreso (deja espacio superior, no imprime encabezado) | reusa `letterhead_full/half` + `*_spaces` ya existentes |
 
-## 6. Modelo de datos propuesto
+## 6. Modelo de datos — `PrescriptionFormat` (IMPLEMENTADO)
 
-Modelo nuevo **`PrescriptionFormat(TenantAwareModel)`** (1..N por tenant, permite que una clínica tenga varios — ej. "Compacta sueros" y "Digital paciente"):
+`PrescriptionFormat(TenantAwareModel)` — 1..N por tenant:
 
-- `name` (str) — nombre que le pone la clínica.
-- `base_layout` (choice: `standard` | `compact` | `digital`) — la plantilla base.
-- `accent_color` (str hex, validado).
-- `font` (choice del set seguro).
-- `paper` (choice: `letter` | `half_letter_landscape` | `a5`).
-- `sections` (JSON validado por whitelist: `{signos, indicaciones, medicamentos, sueros, diagnostico}` bool).
-- `letterhead_mode` (choice: `digital` | `preprinted`).
-- `is_default` (bool) — el que se usa si no se elige otro.
-- RLS por tenant (USING + WITH CHECK), baja lógica, bitácora de cambios.
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `name` | CharField(120) | Nombre descriptivo que pone la clínica |
+| `base_layout` | choice: `compact` \| `digital` | Plantilla base. ~~`standard`~~ eliminado |
+| `theme` | choice: `ondas` \| `minimal` \| `barra` \| `geometrico` | Estilo decorativo del fondo/marco. Default `ondas`. **Nuevo 2026-06-23** |
+| `accent_color` | CharField hex (#RRGGBB) | Color de acento inyectado como variable Django en el template |
+| `font` | choice: `helvetica` \| `times` | Tipografía base (solo fuentes seguras para WeasyPrint) |
+| `paper` | choice: `letter` \| `half_letter_landscape` | Tamaño de hoja según `base_layout` |
+| `sections` | JSONField | Secciones a incluir: `{signos, indicaciones, medicamentos, sueros, diagnostico}` bool |
+| `letterhead_mode` | choice: `digital` \| `preprinted` | Membrete: el sistema lo imprime o deja espacio (papel pre-impreso) |
+| `is_default` | BooleanField | El formato que se usa si no se especifica otro |
+| `is_authorized` / `doctor_id` | BooleanField / FK | Formato propio del médico con autorización del dueño |
+| `is_active`, `deleted_at` | — | Baja lógica |
 
-**MVP:** la clínica configura **1 formato default**. **Extensión:** varios formatos + **selector al emitir/imprimir** la receta (el médico elige cuál usar para esa receta).
+RLS por tenant (USING + WITH CHECK), bitácora de cambios. La clínica puede tener varios formatos. El selector `prescription_format_resolve` busca en orden: (1) formato pasado explícitamente, (2) formato del médico con `is_authorized=True`, (3) formato `is_default` del tenant, (4) objeto de fábrica en memoria (digital + ondas + dorado).
 
-> Alternativa más simple (si se prefiere no crear modelo): añadir los campos a `ClinicSettings` (formato único por clínica). Se descarta porque limita a un solo formato y Camsa necesita ≥2.
+**Color en recetas pasadas:** `prescription_format_resolve` clona el formato configurado conservando color, tipografía y tema cuando se fuerza un `layout_override` (p. ej. para ver la versión Farmacia de una receta antigua cuyo formato guardado era `digital`). Así el color elegido se aplica también al historial.
 
-## 7. Generador de PDF (cómo cambia `apps/recetas/pdf.py`)
+## 7. Generador de PDF — `apps/recetas/pdf.py` (IMPLEMENTADO)
 
-- `prescription_pdf_build(prescription, format=None)`: resuelve el `PrescriptionFormat` (el pasado, o el `is_default` del tenant, o el "standard" de fábrica si no hay ninguno).
-- Selecciona el **template** según `base_layout`: `recetas/formats/standard.html` | `compact.html` | `digital.html` (refactor del actual a `formats/`).
-- Inyecta en el contexto: `accent`, `font`, `sections`, `paper`, `letterhead_mode` + los datos ya existentes (clínica, médico, paciente, items, signos).
-- `@page size` se fija por `paper`; el color por `{{ accent }}`; las secciones por flags.
-- Mantiene la seguridad ya implementada: `_link_callback` (solo `data:`), imágenes base64 con dimensiones proporcionales, autoescape de Django.
+- `prescription_pdf_build(prescription, format=None, layout_override=None)`: resuelve el `PrescriptionFormat` vía `prescription_format_resolve`.
+- Selecciona el **template** según `base_layout`: `recetas/formats/compact.html` | `recetas/formats/digital.html`. ~~`standard.html`~~ eliminado.
+- Inyecta en el contexto: `accent`, `font`, `sections`, `paper`, `letterhead_mode`, **`theme`**, `fmt_layout` + los datos ya existentes (clínica, médico, paciente, items, signos, credenciales validadas).
+- `@page size` por `paper`; color por `{{ accent }}` (variable Django, no CSS var); secciones por flags; tema por `{% include "_theme_bg.html" %}`.
+- Seguridad: `_link_callback` (solo `data:`), imágenes base64 con dimensiones proporcionales, autoescape Django.
+- **Arreglos PDF entregados 2026-06-23:**
+  - Formato `digital` ya no se recorta (márgenes y tamaño de logo de encabezado corregidos).
+  - Los temas decorativos (p. ej. `ondas`) son visibles: el encabezado/pie "running" no llevan `background:white` que los tapaba.
+  - El QR lleva `background:white` propio en el HTML para mantenerse escaneable en cualquier tema.
 
-## 8. Pantalla de configuración (Mi Consultorio → Recetas → Formato)
+### 7.1 Credenciales validadas en el PDF y en la tarjeta del historial
 
-- **Galería** de los 3 formatos con **vista previa** (mockup ya diseñado): la clínica elige uno como base.
-- **Panel de personalización:** logo (ya cargado), color de acento (paleta), tipografía, tamaño de hoja, secciones (checkboxes), modo de membrete.
-- Botones **"Vista previa PDF"** (genera un PDF de ejemplo con datos ficticios) y **"Guardar formato"**.
-- Permisos: owner/admin configuran; el médico puede elegir formato al emitir (si hay varios).
+- El PDF solo incluye las credenciales del médico con `validation_status="validada"`.
+- El serializer `_DoctorBriefSerializer` expone `cedulas_validadas`: lista de `credential_number` de las credenciales validadas, con prefetch para evitar N+1 (`validated_credentials` en `prescription_list`).
+- `cedula_profesional` (campo legacy del modelo `Doctor`) se mantiene como respaldo cuando el médico no tiene ninguna credencial validada.
+
+## 8. Pantalla de configuración — Mi Consultorio → Recetas (IMPLEMENTADO)
+
+_(Implementación 2026-06-23; difiere del plan original)_
+
+- Sección única de Recetas en Mi Consultorio. Se reestructuró: el médico responsable es siempre el tratante (se quitó el interruptor). Se quitaron los contactos de WhatsApp de la config (se moverán a Comunicaciones cuando se implemente el módulo).
+- **`SeccionFormatos.tsx`**: selector de formato base (`compact` / `digital`), selector de estilo (`ondas` / `minimal` / `barra` / `geometrico`), color de acento, tipografía, secciones (interruptores), modo de membrete. **Vista previa en vivo** (maqueta renderizada en el editor).
+- Botón **"Guardar formato"**.
+- Permisos: owner/admin configuran el formato de la clínica; el médico puede tener su propio formato con autorización del dueño (campo `is_authorized`).
+
+> ~~Galería de 3 formatos~~ — se simplificó a selector desplegable (2 opciones) con vista previa en vivo.
+
+## 8-bis. Validación híbrida de credenciales del médico (IMPLEMENTADO 2026-06-23)
+
+Flujo de 3 estados para `DoctorCredential.validation_status`:
+
+| Estado | Quién actúa | Resultado |
+|---|---|---|
+| `pendiente` (default) | El doctor captura/solicita revisión | La credencial NO aparece en la receta |
+| `validada` | Admin/dueño valida (con nota opcional) | La credencial SÍ aparece en la receta |
+| `rechazada` | Admin/dueño rechaza con motivo | La credencial NO aparece; el doctor ve el motivo |
+
+**Endpoints nuevos** (en `apps/clinica/urls.py`):
+- `GET /api/v1/clinica/credenciales/` — bandeja del administrador: lista todas las credenciales del tenant (para revisar y validar).
+- `PATCH /api/v1/clinica/credenciales/<credential_id>/validar/` — valida o rechaza con motivo.
+
+**Notificaciones** (integradas con `apps/notificaciones`):
+- `CREDENTIAL_REVIEW` → al admin/dueño cuando el doctor agrega una credencial (para que la revise).
+- `CREDENTIAL_RESULT` → al doctor cuando admin/dueño valida o rechaza (para que sepa el resultado).
+- Ambas son best-effort (dentro de `try/except`; un fallo no impide la acción principal).
+
+**Modelo** (`apps/clinica/models.py`):
+- `DoctorCredential.validation_status` (CharField, choices `pendiente`/`validada`/`rechazada`, default `pendiente`, db_index).
+- `DoctorCredential.validation_note` (CharField 300, blank, default `""`).
+- Clase `CredentialValidationStatus(TextChoices)` nueva.
+
+**Frontend** (`apps/clinica/` en `web-soft`):
+- `SeccionCredencialesValidar.tsx` — bandeja del admin: lista credenciales pendientes con botones "Validar" / "Rechazar + motivo".
+- `CredencialEstadoBadge.tsx` — badge de color por estado (pendiente/validada/rechazada) visible en la ficha del médico.
+- `types/credenciales.ts` — tipo `DoctorCredentialOut` con `validation_status` y `validation_note`.
 
 ## 9. Conexión con lo que ya existe (no se parte de cero)
 
@@ -86,21 +157,27 @@ Modelo nuevo **`PrescriptionFormat(TenantAwareModel)`** (1..N por tenant, permit
 - `ClinicTemplate` (kind=recipe) → **contenido** (recomendaciones), independiente del formato.
 - `_image_box` (dimensiones proporcionales), `_link_callback` (seguridad), bitácora, RLS → se reutilizan tal cual.
 
-## 10. Consideraciones técnicas (xhtml2pdf)
+## 10. Consideraciones técnicas — WeasyPrint
 
-- **CSS variables NO soportadas** → el color de acento se inyecta vía template Django, no `var()`.
-- **Tipografías:** solo fuentes base (Helvetica/Times/Courier) sin embeber; fuentes de marca requieren `@font-face` con TTF accesible → fase posterior (decidir si subir TTF por clínica o un set fijo curado).
-- **Tamaño/orientación:** `@page { size: 8.5in 5.5in; }` para media carta horizontal; validar márgenes.
-- **Evitar encimado:** maquetar en **flujo** (tablas, `page-break-inside: avoid` por bloque), nunca posiciones absolutas; si el contenido excede, paginar.
-- **Calidad visual:** si más adelante se quiere acabado superior (sombras, fuentes finas), evaluar **WeasyPrint** (requiere libs de sistema en el Dockerfile) vs seguir con xhtml2pdf.
+> Nota: el plan original evaluaba xhtml2pdf. Se optó por **WeasyPrint** (DR-3 de `recetas-plan.md`) por su mejor soporte CSS y calidad visual. Las consideraciones de CSS variables siguen aplicando.
 
-## 11. Plan por fases
+- **CSS variables NO soportadas por WeasyPrint** → el color de acento se inyecta vía template Django (`{{ accent }}`), no `var()`.
+- **Tipografías:** solo fuentes base (Helvetica/Times) sin embeber en el MVP; fuentes de marca requieren `@font-face` con TTF → fase futura.
+- **Tamaño/orientación:** `@page { size: 8.5in 5.5in; }` para media carta horizontal (formato `compact`); `@page { size: letter; }` para carta vertical (formato `digital`).
+- **Evitar encimado:** maquetado en flujo (tablas, `page-break-inside: avoid` por bloque), no posiciones absolutas.
+- **Fondo decorativo (`_theme_bg.html`):** usa `position:fixed` (WeasyPrint lo soporta para fondos de página); el encabezado/pie no llevan `background:white` para que los temas sean visibles; el QR lleva su propio `background:white`.
 
-1. **F1 — Formato "Compacta · media carta"** (resuelve Camsa, sin encimado) + refactor de `pdf.py` a `formats/` con selector. (Opcional: "Digital paciente" en paralelo.)
-2. **F2 — Modelo `PrescriptionFormat`** + personalización (color, tipografía, tamaño, secciones, modo membrete) + RLS + bitácora.
-3. **F3 — Pantalla de galería + vista previa** en Mi Consultorio (frontend).
-4. **F4 — Multi-formato:** selector de formato al emitir la receta (varios por clínica).
-5. **F5 (opcional)** — fuentes de marca embebidas / evaluación de WeasyPrint.
+## 11. Plan por fases — estado al 2026-06-23
+
+| Fase | Descripción original | Estado |
+|---|---|---|
+| **F1** | Formato "Compacta · media carta" + refactor `pdf.py` a `formats/` | **IMPLEMENTADO** |
+| **F2** | Modelo `PrescriptionFormat` + personalización (color, tipografía, secciones, membrete) | **IMPLEMENTADO** |
+| **F3** | Pantalla de configuración en Mi Consultorio (frontend) | **IMPLEMENTADO** (con vista previa en vivo; se simplificó de galería a selector desplegable) |
+| **F4** | Dos versiones al emitir (Farmacia + Paciente) | **IMPLEMENTADO** (como "dos versiones" del mismo formato, no como selector de formato distinto al emitir) |
+| **F5** | Estilos decorativos (`theme`) | **IMPLEMENTADO** (4 estilos: ondas / minimal / barra / geometrico) |
+| — | Validación híbrida de credenciales + cédulas validadas en PDF | **IMPLEMENTADO** (2026-06-23, añadido fuera del plan original) |
+| F5-orig | Fuentes de marca embebidas / evaluación WeasyPrint | Pendiente |
 
 ## 12. Decisiones tomadas con el dueño (2026-06-18)
 
@@ -116,9 +193,9 @@ Marco: Reglamento de Insumos para la Salud + Ley General de Salud (reforma DOF e
 | Requisito COFEPRIS | ¿Lo tenemos? | Acción |
 |---|---|---|
 | Nombre del médico, sin abreviaturas | ✅ `doctor.full_name` | — |
-| **Institución que expide el título** | ⚠️ parcial (`DoctorUniversity`) | estructurar en credenciales (decisión 2) |
-| Cédula profesional | ✅ `cedula_profesional` | validar formato; marcar si vencida |
-| **Cédula de especialidad** | ⚠️ texto (`cedulas_adicionales`) | estructurar en credenciales (decisión 2) |
+| **Institución que expide el título** | ✅ `DoctorCredential.institution` (validada) | — |
+| Cédula profesional | ✅ `cedula_profesional` / `DoctorCredential` | validar formato; marcar si vencida |
+| **Cédula de especialidad** | ✅ `DoctorCredential` (tipo + número, validada) | — |
 | Especialidad | ✅ `doctor.specialty` | — |
 | Firma autógrafa o digital | ✅ imagen de sello/firma | firma electrónica avanzada (e.firma) = futuro |
 | Domicilio del establecimiento | ✅ `ClinicSettings.address` | — |
@@ -128,16 +205,16 @@ Marco: Reglamento de Insumos para la Salud + Ley General de Salud (reforma DOF e
 | Nombre genérico del medicamento | ✅ `generic_name` (catálogo) | — |
 | Denominación comercial (opcional) | ✅ `commercial_name` | — |
 | Forma farmacéutica | ✅ `medication_form` | — |
-| **Dosis (sin abreviaturas)** | ⚠️ dentro de `indication` libre | **campo estructurado** |
-| **Frecuencia** | ⚠️ dentro de `indication` | **campo estructurado** |
-| **Vía de administración** | ❌ no existe | **agregar campo** |
-| **Duración del tratamiento** | ⚠️ dentro de `indication` | **campo estructurado** |
+| **Dosis (sin abreviaturas)** | ✅ `PrescriptionItem.dose` (F2) | — |
+| **Frecuencia** | ✅ `PrescriptionItem.frequency` (F2) | — |
+| **Vía de administración** | ✅ `PrescriptionItem.route` (F2) | — |
+| **Duración del tratamiento** | ✅ `PrescriptionItem.duration` (F2) | — |
 | Fecha de emisión | ✅ `issued_at` | — |
-| **Diagnóstico en la receta** | ⚠️ opcional/separado | incluirlo (COFEPRIS marca "receta sin diagnóstico" como error que invalida) |
+| **Diagnóstico en la receta** | ✅ `Prescription.diagnosis` (lo captura el médico) | — |
 | Folio | ✅ consecutivo por tenant | para controlados: **folio autorizado oficial** |
-| **Código de verificación (QR/barras)** | ❌ | **agregar QR** de validación de autenticidad |
+| **Código de verificación (QR/barras)** | ✅ QR de verificación (F5) | — |
 | Bitácora / trazabilidad | ✅ NOM-024 (`audit`) | reforzar para controlados |
-| **Medicamentos controlados** (grupo, vigencia, recetario especial) | ❌ | **módulo aparte** (ver abajo) |
+| **Medicamentos controlados** (grupo, vigencia, recetario especial) | ✅ `controlled_group` (F6) | el folio oficial del recetario especial sigue siendo trámite del médico |
 
 ### Brechas a cubrir (derivadas de la norma)
 - **Renglón de medicamento estructurado:** además del `indication` libre, separar **dosis · frecuencia · vía de administración · duración** (campos), para cumplir COFEPRIS y poder validar "sin abreviaturas". El `indication` libre puede quedar como nota adicional.

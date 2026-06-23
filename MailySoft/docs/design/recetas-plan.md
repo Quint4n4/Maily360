@@ -1,7 +1,8 @@
-# Fase B1 — Recetas médicas (plan)
+# Fase B1 — Recetas médicas
 
 > Parte de la **Fase B** del expediente (documentos y soporte). Ref. legacy: `expediente-clinico-analisis-legacy.md` §3.6 y §5.
-> Estado: **plan** (2026-06-18). Sub-fases B1.1–B1.4.
+> Estado: **IMPLEMENTADO** — B1.1–B1.4 completas (2026-06-19); formatos, estilos, dos versiones y validación de credenciales completas (2026-06-23).
+> Para el detalle de formatos configurables, estilos de fondo, validación híbrida de credenciales y plan de fases: ver [`recetas-formatos-plan.md`](recetas-formatos-plan.md).
 
 ## 1. Qué replica del legacy
 
