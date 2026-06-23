@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Building2, FileText, GraduationCap, LayoutTemplate, Tag } from 'lucide-react'
+import { BadgeCheck, Building2, FileText, GraduationCap, LayoutTemplate, Tag } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
@@ -13,8 +13,9 @@ import SeccionPlantillas from '../components/consultorio/SeccionPlantillas'
 import SeccionCategorias from '../components/consultorio/SeccionCategorias'
 import SeccionPerfilMedico from '../components/consultorio/SeccionPerfilMedico'
 import SeccionFormatos from '../components/consultorio/SeccionFormatos'
+import SeccionCredencialesValidar from '../components/consultorio/SeccionCredencialesValidar'
 
-type SeccionKey = 'datos' | 'formatos' | 'plantillas' | 'categorias' | 'perfil'
+type SeccionKey = 'datos' | 'formatos' | 'plantillas' | 'categorias' | 'validar-credenciales' | 'perfil'
 
 interface SeccionDef {
   key: SeccionKey
@@ -27,6 +28,7 @@ const SECCIONES: SeccionDef[] = [
   { key: 'formatos', label: 'Configuración de recetas', icon: LayoutTemplate },
   { key: 'plantillas', label: 'Plantillas', icon: FileText },
   { key: 'categorias', label: 'Categorías de pacientes', icon: Tag },
+  { key: 'validar-credenciales', label: 'Credenciales por validar', icon: BadgeCheck },
   { key: 'perfil', label: 'Mi perfil médico', icon: GraduationCap },
 ]
 
@@ -51,13 +53,19 @@ export default function MiConsultorioPage() {
         return <SeccionPlantillas editable={editaPlantillas} />
       case 'categorias':
         return <SeccionCategorias editable={gestionable} />
+      case 'validar-credenciales':
+        return <SeccionCredencialesValidar editable={gestionable} />
       case 'perfil':
         return editaPerfil ? <SeccionPerfilMedico /> : null
     }
   }
 
-  // El perfil médico solo aparece para owner/admin/doctor.
-  const seccionesVisibles = SECCIONES.filter((s) => s.key !== 'perfil' || editaPerfil)
+  // "Credenciales por validar" es solo para owner/admin; "Mi perfil médico" para owner/admin/doctor.
+  const seccionesVisibles = SECCIONES.filter((s) => {
+    if (s.key === 'perfil') return editaPerfil
+    if (s.key === 'validar-credenciales') return gestionable
+    return true
+  })
 
   return (
     <div className="min-h-screen relative">

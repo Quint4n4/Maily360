@@ -24,6 +24,8 @@ from apps.clinica.views import (
     ClinicTemplateListCreateApi,
     DoctorCredentialDetailApi,
     DoctorCredentialListCreateApi,
+    DoctorCredentialTenantListApi,
+    DoctorCredentialValidationApi,
     DoctorProfileApi,
     DoctorUniversityDetailApi,
     DoctorUniversityListCreateApi,
@@ -82,6 +84,17 @@ urlpatterns = [
         "clinica/doctores/<uuid:doctor_id>/credenciales/",
         DoctorCredentialListCreateApi.as_view(),
         name="doctor-credential-list-create",
+    ),
+    # Bandeja de validación del administrador (todas las del tenant)
+    path(
+        "clinica/credenciales/",
+        DoctorCredentialTenantListApi.as_view(),
+        name="doctor-credential-tenant-list",
+    ),
+    path(
+        "clinica/credenciales/<uuid:credential_id>/validar/",
+        DoctorCredentialValidationApi.as_view(),
+        name="doctor-credential-validate",
     ),
     path(
         "clinica/credenciales/<uuid:credential_id>/",

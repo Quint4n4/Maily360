@@ -806,3 +806,6 @@ class DoctorCredentialFactory(DjangoModelFactory):
     kind = CredentialKind.PROFESIONAL
     order = 0
     is_active = True
+    # Por defecto validada (visible en la receta). Pasar validation_status="pendiente"
+    # explícitamente para probar el flujo de validación.
+    validation_status = "validada"

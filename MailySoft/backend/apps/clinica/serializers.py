@@ -357,7 +357,7 @@ class PatientCategoryOutputSerializer(serializers.ModelSerializer["PatientCatego
 
     class Meta:
         model = PatientCategory
-        fields = ["id", "name", "is_active", "created_at"]
+        fields = ["id", "name", "kind", "is_active", "created_at"]
 
 
 # ---------------------------------------------------------------------------
@@ -515,6 +515,11 @@ class DoctorCredentialOutputSerializer(serializers.ModelSerializer["DoctorCreden
 
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     logo_url = serializers.ImageField(source="logo", read_only=True, allow_null=True)
+    validation_status_display = serializers.CharField(
+        source="get_validation_status_display", read_only=True
+    )
+    doctor_id = serializers.UUIDField(source="doctor.id", read_only=True)
+    doctor_name = serializers.CharField(source="doctor.full_name", read_only=True)
 
     class Meta:
         model = DoctorCredential
@@ -528,5 +533,31 @@ class DoctorCredentialOutputSerializer(serializers.ModelSerializer["DoctorCreden
             "order",
             "logo_url",
             "is_active",
+            "validation_status",
+            "validation_status_display",
+            "validation_note",
+            "doctor_id",
+            "doctor_name",
             "created_at",
         ]
+
+
+class DoctorCredentialValidationInputSerializer(serializers.Serializer):
+    """Entrada para validar/rechazar una credencial (solo owner/admin).
+
+    status: 'validada' o 'rechazada'. note: motivo (recomendado al rechazar).
+    """
+
+    status = serializers.ChoiceField(choices=["validada", "rechazada"])
+    note = serializers.CharField(
+        max_length=300, required=False, allow_blank=True, default=""
+    )
+
+    def validate_note(self, value: str) -> str:
+        if _HTML_TAG_RE.search(value):
+            raise serializers.ValidationError("La nota no puede contener etiquetas HTML.")
+        return value.strip()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs

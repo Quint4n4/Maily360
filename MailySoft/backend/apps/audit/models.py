@@ -134,6 +134,7 @@ class ActionType(models.TextChoices):
     # Recetas — cumplimiento COFEPRIS (Fase F2)
     CREDENTIAL_CREATE = "CREDENTIAL_CREATE", "Registrar credencial de médico"
     CREDENTIAL_UPDATE = "CREDENTIAL_UPDATE", "Actualizar credencial de médico"
+    CREDENTIAL_VALIDATE = "CREDENTIAL_VALIDATE", "Validar/rechazar credencial de médico"
     CREDENTIAL_DELETE = "CREDENTIAL_DELETE", "Eliminar credencial de médico"
 
     # Recetas — formatos configurables (Fase F3)

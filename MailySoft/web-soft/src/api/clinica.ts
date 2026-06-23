@@ -38,6 +38,8 @@ import type {
   TemplateKind,
 } from '../types/clinica'
 import type {
+  CredentialValidationInput,
+  CredentialValidationStatus,
   DoctorCredentialCreateInput,
   DoctorCredentialOut,
   DoctorCredentialUpdateInput,
@@ -229,4 +231,23 @@ export async function updateCredential(
 /** DELETE /clinica/credenciales/<id>/ — baja lógica de la credencial (204). */
 export async function deleteCredential(credentialId: string): Promise<void> {
   await request<void>(`/clinica/credenciales/${credentialId}/`, { method: 'DELETE' })
+}
+
+/** GET /clinica/credenciales/?status= — bandeja de validación del admin (todo el tenant). */
+export async function listCredentialsToValidate(
+  status?: CredentialValidationStatus,
+): Promise<DoctorCredentialOut[]> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+  return request<DoctorCredentialOut[]>(`/clinica/credenciales/${qs}`)
+}
+
+/** PATCH /clinica/credenciales/<id>/validar/ — valida o rechaza (solo owner/admin). */
+export async function validateCredential(
+  credentialId: string,
+  input: CredentialValidationInput,
+): Promise<DoctorCredentialOut> {
+  return request<DoctorCredentialOut>(`/clinica/credenciales/${credentialId}/validar/`, {
+    method: 'PATCH',
+    body: input,
+  })
 }

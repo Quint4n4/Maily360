@@ -149,6 +149,31 @@ def doctor_credential_list(*, doctor_id: uuid.UUID) -> QuerySet[DoctorCredential
     )
 
 
+def doctor_credentials_for_tenant(
+    *, status: str | None = None
+) -> QuerySet[DoctorCredential]:
+    """Retorna las credenciales activas de TODOS los médicos del tenant activo.
+
+    Para la bandeja de validación del administrador. El TenantManager limita al
+    tenant actual (RLS). Opcionalmente filtra por estado de validación.
+
+    Args:
+        status: 'pendiente' | 'validada' | 'rechazada' o None (todas).
+
+    Returns:
+        QuerySet[DoctorCredential] activas del tenant, con el doctor precargado.
+    """
+    qs = (
+        DoctorCredential.objects
+        .filter(is_active=True, deleted_at__isnull=True)
+        .select_related("doctor", "doctor__membership__user")
+        .order_by("validation_status", "doctor", "order", "id")
+    )
+    if status:
+        qs = qs.filter(validation_status=status)
+    return qs
+
+
 def doctor_credential_get(*, credential_id: uuid.UUID) -> DoctorCredential:
     """Retorna una DoctorCredential por su UUID.
 

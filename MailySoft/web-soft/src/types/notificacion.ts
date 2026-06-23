@@ -6,9 +6,17 @@ export type NotificationKind =
   | 'role_note'
   | 'broadcast'
   | 'nursing_instruction'
+  | 'credential_review'
+  | 'credential_result'
 
 /** Objeto destino al que apunta el clic. '' = sin destino. */
-export type NotificationTarget = 'appointment' | 'agenda_block' | 'note' | 'patient' | ''
+export type NotificationTarget =
+  | 'appointment'
+  | 'agenda_block'
+  | 'note'
+  | 'patient'
+  | 'credential'
+  | ''
 
 export interface NotificationActor {
   id: string

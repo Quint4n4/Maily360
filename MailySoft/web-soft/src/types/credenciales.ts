@@ -11,6 +11,9 @@
 /** Tipo de credencial académica (models.CredentialKind.choices). */
 export type CredentialKind = 'profesional' | 'especialidad' | 'posgrado'
 
+/** Estado de validación de la credencial (flujo híbrido). */
+export type CredentialValidationStatus = 'pendiente' | 'validada' | 'rechazada'
+
 /** Salida de DoctorCredential (DoctorCredentialOutputSerializer). */
 export interface DoctorCredentialOut {
   id: string
@@ -25,6 +28,21 @@ export interface DoctorCredentialOut {
   created_at: string
   /** URL del logo opcional de la institución que expide la credencial (o null). */
   logo_url: string | null
+  /** Estado de validación: solo las 'validada' aparecen en la receta. */
+  validation_status: CredentialValidationStatus
+  /** Etiqueta legible del estado (get_validation_status_display del backend). */
+  validation_status_display: string
+  /** Motivo del rechazo / nota de la validación (puede estar vacío). */
+  validation_note: string
+  /** Id y nombre del médico dueño (útil en la bandeja del administrador). */
+  doctor_id: string
+  doctor_name: string
+}
+
+/** Cuerpo para validar/rechazar una credencial (solo owner/admin). */
+export interface CredentialValidationInput {
+  status: 'validada' | 'rechazada'
+  note?: string
 }
 
 /**

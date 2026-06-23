@@ -13,6 +13,7 @@ import { erroresDe } from '../../lib/apiErrors'
 import type { CredentialKind, DoctorCredentialOut } from '../../types/credenciales'
 import { CREDENTIAL_KIND_OPTIONS } from '../../types/credenciales'
 import ImageUploader from './ImageUploader'
+import CredencialEstadoBadge from './CredencialEstadoBadge'
 import { AlertaErrores, AvisoGuardado, AvisoInfo, Nota } from './Avisos'
 import { useConfirm } from '../common/DialogProvider'
 
@@ -261,7 +262,9 @@ function SeccionCredenciales({ doctorId }: { doctorId: string }) {
         <p className="label mb-0">Credenciales (COFEPRIS)</p>
         <Nota>
           Cédula profesional, de especialidad y posgrados con la institución que los expide y su
-          logo opcional. Es la forma estructurada que exige COFEPRIS; aparece en el membrete de la receta.
+          logo opcional. <strong>Un administrador las revisa</strong>: solo las credenciales
+          <strong> validadas</strong> aparecen en la receta. Al agregar o editar una, queda
+          “pendiente de validación”.
         </Nota>
       </div>
 
@@ -305,11 +308,15 @@ function SeccionCredenciales({ doctorId }: { doctorId: string }) {
                     >
                       {c.kind_display}
                     </span>
+                    <CredencialEstadoBadge status={c.validation_status} label={c.validation_status_display} />
                   </div>
                   <p className="text-xs text-gray-500">
                     {[c.institution, c.credential_number ? `Céd. ${c.credential_number}` : '']
                       .filter(Boolean).join(' · ') || '—'}
                   </p>
+                  {c.validation_status === 'rechazada' && c.validation_note && (
+                    <p className="text-[11px] text-red-600 mt-0.5">Motivo del rechazo: {c.validation_note}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">

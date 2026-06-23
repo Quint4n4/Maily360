@@ -300,18 +300,34 @@ class ClinicTemplate(TenantAwareModel):
 
 
 class PatientCategory(TenantAwareModel):
-    """Catálogo de sugerencias de categoría de paciente por tenant.
+    """Etiqueta de paciente del catálogo por tenant.
 
-    No modifica Patient.category (que sigue siendo CharField libre).
-    Proporciona las opciones de autocompletado en la UI.
+    Las etiquetas clasifican pacientes (M2M con Patient.categories). Dos de ellas
+    son "del sistema" (Favorito y VIP): existen siempre en cada clínica, tienen
+    trato especial en la UI (estrella/corona, marcado de 1 clic) y NO se pueden
+    borrar ni renombrar. Las demás (kind=CUSTOM) las crea el médico libremente.
 
     Unicidad: nombre único por tenant en registros activos
     (deleted_at IS NULL). Un registro soft-deleted no bloquea la re-creación.
     """
 
+    class Kind(models.TextChoices):
+        """Tipo de etiqueta. Las de sistema no se borran ni renombran."""
+
+        CUSTOM = "custom", "Personalizada"
+        FAVORITE = "favorite", "Favorito (sistema)"
+        VIP = "vip", "VIP (sistema)"
+
     name = models.CharField(
         max_length=100,
         help_text="Nombre de la categoría (p. ej. 'VIP', 'Asegurado IMSS').",
+    )
+    kind = models.CharField(
+        max_length=10,
+        choices=Kind.choices,
+        default=Kind.CUSTOM,
+        db_index=True,
+        help_text="custom = creada por el médico; favorite/vip = del sistema (no se borran).",
     )
     is_active = models.BooleanField(
         default=True,
@@ -328,7 +344,18 @@ class PatientCategory(TenantAwareModel):
                 condition=Q(deleted_at__isnull=True),
                 name="clinic_category_tenant_name_active_uniq",
             ),
+            # Una sola etiqueta de cada tipo de sistema por clínica.
+            models.UniqueConstraint(
+                fields=["tenant", "kind"],
+                condition=Q(deleted_at__isnull=True) & ~Q(kind="custom"),
+                name="clinic_category_one_system_per_kind",
+            ),
         ]
+
+    @property
+    def is_system(self) -> bool:
+        """True si es una etiqueta del sistema (Favorito/VIP): no se borra ni renombra."""
+        return self.kind != self.Kind.CUSTOM
 
     def __str__(self) -> str:
         return self.name
@@ -403,6 +430,19 @@ class CredentialKind(models.TextChoices):
     PROFESIONAL = "profesional", "Cédula profesional"
     ESPECIALIDAD = "especialidad", "Cédula de especialidad"
     POSGRADO = "posgrado", "Posgrado (maestría / doctorado)"
+
+
+class CredentialValidationStatus(models.TextChoices):
+    """Estado de validación de una credencial del médico (flujo híbrido).
+
+    El médico captura sus credenciales: entran como PENDIENTE. Un administrador o
+    dueño las revisa (p. ej. contra el registro de la SEP) y las marca VALIDADA o
+    RECHAZADA (con motivo). Solo las VALIDADA aparecen en la receta impresa.
+    """
+
+    PENDIENTE = "pendiente", "Pendiente de validación"
+    VALIDADA = "validada", "Validada"
+    RECHAZADA = "rechazada", "Rechazada"
 
 
 class DoctorCredential(TenantAwareModel):
@@ -488,6 +528,23 @@ class DoctorCredential(TenantAwareModel):
         default=True,
         db_index=True,
         help_text="False = credencial dada de baja (baja lógica, sin borrado físico).",
+    )
+    validation_status = models.CharField(
+        max_length=12,
+        choices=CredentialValidationStatus.choices,
+        default=CredentialValidationStatus.PENDIENTE,
+        db_index=True,
+        help_text=(
+            "Estado de validación: el médico la captura como 'pendiente'; un "
+            "administrador la marca 'validada' o 'rechazada'. Solo las validadas "
+            "aparecen en la receta."
+        ),
+    )
+    validation_note = models.CharField(
+        max_length=300,
+        blank=True,
+        default="",
+        help_text="Motivo del rechazo o nota de la validación administrativa (opcional).",
     )
 
     class Meta:

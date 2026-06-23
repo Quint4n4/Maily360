@@ -37,6 +37,8 @@ class NotificationKind(models.TextChoices):
     ROLE_NOTE = "role_note", "Nota dirigida a un rol"
     BROADCAST = "broadcast", "Aviso a toda la clínica"
     NURSING_INSTRUCTION = "nursing_instruction", "Indicación de enfermería"
+    CREDENTIAL_REVIEW = "credential_review", "Credencial por validar"
+    CREDENTIAL_RESULT = "credential_result", "Resultado de validación de credencial"
 
 
 class NotificationTarget(models.TextChoices):
@@ -49,6 +51,7 @@ class NotificationTarget(models.TextChoices):
     AGENDA_BLOCK = "agenda_block", "Evento de agenda"
     NOTE = "note", "Nota"
     PATIENT = "patient", "Paciente"
+    CREDENTIAL = "credential", "Credencial de médico"
 
 
 class Notification(TenantAwareModel):

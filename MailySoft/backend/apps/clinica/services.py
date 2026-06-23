@@ -13,6 +13,7 @@ Principios:
     - Lanza django.core.exceptions.ValidationError (nunca DRF, que es HTTP).
 """
 
+import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -20,13 +21,85 @@ from django.core.exceptions import ValidationError
 
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
-from apps.clinica.models import ClinicSettings, ClinicTemplate, CredentialKind, DoctorCredential, DoctorUniversity, PatientCategory
+from apps.clinica.models import (
+    ClinicSettings,
+    ClinicTemplate,
+    CredentialKind,
+    CredentialValidationStatus,
+    DoctorCredential,
+    DoctorUniversity,
+    PatientCategory,
+)
 from apps.clinica.selectors import clinic_settings_get
 
 if TYPE_CHECKING:
     from apps.authn.models import User
     from apps.personal.models import Doctor
     from apps.tenancy.models import Tenant
+
+logger = logging.getLogger(__name__)
+
+
+def _notify_credential_pending(credential: DoctorCredential, actor: "User") -> None:
+    """Avisa a owner/admin que hay una credencial por validar.
+
+    Efecto secundario no crítico: si la notificación falla, NO interrumpe el alta
+    de la credencial (solo se registra en el log).
+    """
+    try:
+        from apps.notificaciones.models import NotificationKind, NotificationTarget
+        from apps.notificaciones.recipients import users_with_roles
+        from apps.notificaciones.services import notification_fanout
+
+        admins = users_with_roles(tenant=credential.tenant, roles=["owner", "admin"])
+        doctor_name = credential.doctor.full_name
+        notification_fanout(
+            tenant=credential.tenant,
+            recipients=admins,
+            kind=NotificationKind.CREDENTIAL_REVIEW,
+            title=f"Credencial por validar — {doctor_name}",
+            body=f"{credential.title} ({credential.institution}). Revísala y valídala.",
+            actor=actor,
+            target_type=NotificationTarget.CREDENTIAL,
+            target_id=credential.id,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "No se pudo notificar credencial por validar (cred=%s).", credential.id
+        )
+
+
+def _notify_credential_result(credential: DoctorCredential, actor: "User", status: str) -> None:
+    """Avisa al médico el resultado de la validación de su credencial.
+
+    Efecto secundario no crítico (no interrumpe si falla).
+    """
+    try:
+        from apps.notificaciones.models import NotificationKind, NotificationTarget
+        from apps.notificaciones.services import notification_create
+
+        doctor_user = credential.doctor.membership.user
+        if status == CredentialValidationStatus.VALIDADA.value:
+            title = "Tu credencial fue validada"
+            body = f"{credential.title} ya aparece en tus recetas."
+        else:
+            motivo = credential.validation_note or "sin motivo especificado"
+            title = "Tu credencial fue rechazada"
+            body = f"{credential.title}: {motivo}."
+        notification_create(
+            tenant=credential.tenant,
+            recipient=doctor_user,
+            kind=NotificationKind.CREDENTIAL_RESULT,
+            title=title,
+            body=body,
+            actor=actor,
+            target_type=NotificationTarget.CREDENTIAL,
+            target_id=credential.id,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "No se pudo notificar resultado de validación (cred=%s).", credential.id
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +448,14 @@ def patient_category_deactivate(
 
     Returns:
         La instancia PatientCategory con is_active=False.
+
+    Raises:
+        ValidationError: si la etiqueta es del sistema (Favorito/VIP).
     """
+    if category.is_system:
+        raise ValidationError(
+            "Las etiquetas del sistema (Favorito y VIP) no se pueden eliminar."
+        )
     category.is_active = False
     category.save(update_fields=["is_active", "updated_at"])
 
@@ -388,6 +468,35 @@ def patient_category_deactivate(
         resource_repr=category.name,
     )
     return category
+
+
+# Nombres visibles de las etiquetas de sistema que existen en cada clínica.
+SYSTEM_CATEGORY_NAMES: dict[str, str] = {
+    PatientCategory.Kind.FAVORITE: "Favorito",
+    PatientCategory.Kind.VIP: "VIP",
+}
+
+
+def seed_system_patient_categories(tenant: "Tenant") -> None:
+    """Crea (idempotente) las etiquetas de sistema Favorito y VIP del tenant.
+
+    Se invoca al dar de alta una clínica y desde la migración de datos. No
+    requiere `user`: created_by queda en null (permitido para semillas).
+    """
+    for kind, name in SYSTEM_CATEGORY_NAMES.items():
+        exists = PatientCategory.all_objects.filter(
+            tenant=tenant,
+            kind=kind,
+            deleted_at__isnull=True,
+        ).exists()
+        if not exists:
+            PatientCategory.objects.create(
+                tenant=tenant,
+                created_by=None,
+                name=name,
+                kind=kind,
+                is_active=True,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -621,6 +730,7 @@ def doctor_credential_create(
         resource_repr=f"[{kind}] {title} — doctor={str(doctor.id)}",
         metadata={"doctor_id": str(doctor.id), "kind": kind},
     )
+    _notify_credential_pending(credential, user)
     return credential
 
 
@@ -693,6 +803,17 @@ def doctor_credential_update(
         credential.logo = logo
         update_fields.append("logo")
 
+    # Si cambió información académica, la credencial vuelve a "pendiente" de
+    # validación (su contenido validado cambió). Cambios de logo/orden no invalidan.
+    academic_changed = any(
+        f in update_fields for f in ("title", "institution", "credential_number", "kind")
+    )
+    if academic_changed and credential.validation_status != CredentialValidationStatus.PENDIENTE:
+        credential.validation_status = CredentialValidationStatus.PENDIENTE
+        credential.validation_note = ""
+        update_fields.append("validation_status")
+        update_fields.append("validation_note")
+
     if update_fields:
         update_fields.append("updated_at")
         credential.save(update_fields=update_fields)
@@ -706,6 +827,60 @@ def doctor_credential_update(
         resource_repr=f"[{credential.kind}] {credential.title}",
         metadata={"doctor_id": str(credential.doctor_id), "fields": update_fields},
     )
+    # Si la edición la regresó a "pendiente", avisar de nuevo a los administradores.
+    if academic_changed:
+        _notify_credential_pending(credential, user)
+    return credential
+
+
+def doctor_credential_set_validation(
+    *,
+    credential: DoctorCredential,
+    user: "User",
+    status: str,
+    note: str = "",
+) -> DoctorCredential:
+    """Valida o rechaza una credencial del médico (acción administrativa).
+
+    Flujo híbrido: el médico captura sus credenciales (pendientes) y un owner/admin
+    las revisa aquí. Solo las 'validada' aparecen en la receta. El 'rechazada' guarda
+    el motivo en `validation_note`. La vista controla que solo owner/admin invoque.
+
+    Args:
+        credential: Credencial a validar/rechazar.
+        user:       Administrador que realiza la acción (auditoría).
+        status:     'validada' o 'rechazada'.
+        note:       Motivo/observación (recomendado al rechazar).
+
+    Returns:
+        La credencial actualizada.
+
+    Raises:
+        ValidationError: si el estado no es 'validada' ni 'rechazada'.
+    """
+    allowed = {
+        CredentialValidationStatus.VALIDADA.value,
+        CredentialValidationStatus.RECHAZADA.value,
+    }
+    if status not in allowed:
+        raise ValidationError(
+            "El estado de validación debe ser 'validada' o 'rechazada'."
+        )
+
+    credential.validation_status = status
+    credential.validation_note = (note or "").strip()
+    credential.save(update_fields=["validation_status", "validation_note", "updated_at"])
+
+    audit_record(
+        action=ActionType.CREDENTIAL_VALIDATE,
+        resource_type="DoctorCredential",
+        actor=user,
+        tenant=credential.tenant,
+        resource_id=credential.id,
+        resource_repr=f"[{credential.kind}] {credential.title} → {status}",
+        metadata={"doctor_id": str(credential.doctor_id), "status": status},
+    )
+    _notify_credential_result(credential, user, status)
     return credential
 
 

@@ -28,6 +28,7 @@ from apps.clinica.services import (
     clinic_settings_upsert,
     doctor_credential_create,
     doctor_credential_delete,
+    doctor_credential_set_validation,
     doctor_credential_update,
 )
 from tests.factories import (
@@ -808,3 +809,148 @@ def test_credential_api_patch_replaces_logo() -> None:
 
     assert resp.status_code == 200
     assert resp.data["logo_url"]
+
+
+# ---------------------------------------------------------------------------
+# Servicios — validación híbrida (el médico solicita → el admin valida)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_credential_create_entra_pendiente() -> None:
+    """Una credencial recién creada entra como 'pendiente' de validación."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="Médico Cirujano", institution="UNAM", kind="profesional",
+    )
+    assert cred.validation_status == "pendiente"
+
+
+@pytest.mark.django_db
+def test_credential_set_validation_validada() -> None:
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="X", institution="UNAM", kind="profesional",
+    )
+    doctor_credential_set_validation(credential=cred, user=user, status="validada")
+    cred.refresh_from_db()
+    assert cred.validation_status == "validada"
+
+
+@pytest.mark.django_db
+def test_credential_set_validation_rechazada_guarda_nota() -> None:
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="X", institution="UNAM", kind="profesional",
+    )
+    doctor_credential_set_validation(
+        credential=cred, user=user, status="rechazada", note="Cédula no encontrada en SEP",
+    )
+    cred.refresh_from_db()
+    assert cred.validation_status == "rechazada"
+    assert "SEP" in cred.validation_note
+
+
+@pytest.mark.django_db
+def test_credential_set_validation_estado_invalido() -> None:
+    """Solo se permite 'validada' o 'rechazada' (no 'pendiente' ni otros)."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="X", institution="UNAM", kind="profesional",
+    )
+    with pytest.raises(ValidationError, match="validada"):
+        doctor_credential_set_validation(credential=cred, user=user, status="pendiente")
+
+
+@pytest.mark.django_db
+def test_credential_update_academico_vuelve_a_pendiente() -> None:
+    """Editar info académica de una credencial validada la regresa a 'pendiente'."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="X", institution="UNAM", kind="profesional",
+    )
+    doctor_credential_set_validation(credential=cred, user=user, status="validada")
+    cred.refresh_from_db()
+    assert cred.validation_status == "validada"
+
+    doctor_credential_update(credential=cred, user=user, title="Título corregido")
+    cred.refresh_from_db()
+    assert cred.validation_status == "pendiente"
+
+
+@pytest.mark.django_db
+def test_credential_update_solo_orden_no_invalida() -> None:
+    """Cambiar solo el orden (no info académica) NO regresa a 'pendiente'."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    doctor = DoctorFactory(tenant=tenant)
+    cred = doctor_credential_create(
+        tenant=tenant, user=user, doctor=doctor,
+        title="X", institution="UNAM", kind="profesional",
+    )
+    doctor_credential_set_validation(credential=cred, user=user, status="validada")
+    doctor_credential_update(credential=cred, user=user, order=2)
+    cred.refresh_from_db()
+    assert cred.validation_status == "validada"
+
+
+@pytest.mark.django_db
+def test_credential_create_notifica_a_los_admins() -> None:
+    """Al solicitar (crear) una credencial, owner/admin reciben un aviso."""
+    from apps.notificaciones.models import Notification, NotificationKind
+
+    tenant = TenantFactory()
+    owner = _member(tenant, role="owner")
+    doctor_user = UserFactory()
+    membership = TenantMembershipFactory(
+        user=doctor_user, tenant=tenant, role="doctor", is_active=True
+    )
+    doctor = DoctorFactory(tenant=tenant, membership=membership)
+
+    doctor_credential_create(
+        tenant=tenant, user=doctor_user, doctor=doctor,
+        title="Médico Cirujano", institution="UNAM", kind="profesional",
+    )
+
+    assert Notification.objects.filter(
+        recipient=owner, kind=NotificationKind.CREDENTIAL_REVIEW
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_credential_validation_notifica_al_medico() -> None:
+    """Al validar, el médico dueño de la credencial recibe un aviso del resultado."""
+    from apps.notificaciones.models import Notification, NotificationKind
+
+    tenant = TenantFactory()
+    admin = _member(tenant, role="owner")
+    doctor_user = UserFactory()
+    membership = TenantMembershipFactory(
+        user=doctor_user, tenant=tenant, role="doctor", is_active=True
+    )
+    doctor = DoctorFactory(tenant=tenant, membership=membership)
+    cred = doctor_credential_create(
+        tenant=tenant, user=doctor_user, doctor=doctor,
+        title="Médico Cirujano", institution="UNAM", kind="profesional",
+    )
+
+    doctor_credential_set_validation(credential=cred, user=admin, status="validada")
+
+    assert Notification.objects.filter(
+        recipient=doctor_user, kind=NotificationKind.CREDENTIAL_RESULT
+    ).exists()

@@ -34,6 +34,7 @@ from apps.clinica.selectors import (
     clinic_template_list,
     doctor_credential_get,
     doctor_credential_list,
+    doctor_credentials_for_tenant,
     doctor_university_get,
     doctor_university_list,
     patient_category_get,
@@ -47,6 +48,7 @@ from apps.clinica.serializers import (
     ClinicTemplateOutputSerializer,
     DoctorCredentialInputSerializer,
     DoctorCredentialOutputSerializer,
+    DoctorCredentialValidationInputSerializer,
     DoctorProfileImageInputSerializer,
     DoctorUniversityInputSerializer,
     DoctorUniversityOutputSerializer,
@@ -57,6 +59,7 @@ from apps.clinica.services import (
     clinic_settings_upsert,
     doctor_credential_create,
     doctor_credential_delete,
+    doctor_credential_set_validation,
     doctor_credential_update,
     doctor_university_create,
     doctor_university_delete,
@@ -724,3 +727,71 @@ class DoctorCredentialDetailApi(TenantAPIView):
             user=request.user,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DoctorCredentialTenantListApi(TenantAPIView):
+    """GET /api/v1/clinica/credenciales/  — bandeja de validación (todo el tenant).
+
+    Lista las credenciales de TODOS los médicos de la clínica para que el
+    administrador las valide. Filtro opcional ?status=pendiente|validada|rechazada.
+    Solo owner/admin (un médico ve solo las suyas en /doctores/<id>/credenciales/).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        actor_role: str | None = getattr(request, "active_role", None)
+        if actor_role not in ("owner", "admin"):
+            return Response(
+                {"detail": "Solo un administrador puede ver la bandeja de validación."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        estado = request.query_params.get("status") or None
+        if estado and estado not in ("pendiente", "validada", "rechazada"):
+            return Response(
+                {"detail": "Estado de validación inválido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        qs = doctor_credentials_for_tenant(status=estado)
+        return Response(DoctorCredentialOutputSerializer(qs, many=True).data)
+
+
+class DoctorCredentialValidationApi(TenantAPIView):
+    """PATCH /api/v1/clinica/credenciales/<credential_id>/validar/  — valida o rechaza.
+
+    Acción administrativa (solo owner/admin): status='validada'|'rechazada' + note.
+    Solo las credenciales validadas aparecen en la receta.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request: Request, credential_id: uuid.UUID) -> Response:
+        actor_role: str | None = getattr(request, "active_role", None)
+        if actor_role not in ("owner", "admin"):
+            return Response(
+                {"detail": "Solo un administrador puede validar o rechazar credenciales."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            cred = doctor_credential_get(credential_id=credential_id)
+        except DoctorCredential.DoesNotExist:
+            return Response(
+                {"detail": "Credencial no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        s = DoctorCredentialValidationInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        try:
+            cred = doctor_credential_set_validation(
+                credential=cred,
+                user=request.user,
+                status=s.validated_data["status"],
+                note=s.validated_data.get("note", ""),
+            )
+        except DjangoValidationError as exc:
+            return Response(
+                {"detail": exc.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(DoctorCredentialOutputSerializer(cred).data)

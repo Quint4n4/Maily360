@@ -109,10 +109,14 @@ export type ClinicTemplateUpdateInput = Partial<ClinicTemplateCreateInput>
    Categorías de paciente  (clinica/categorias/)
    ──────────────────────────────────────────────────────────────────────── */
 
+/** Tipo de etiqueta: 'custom' la crea el médico; 'favorite'/'vip' son del sistema. */
+export type PatientCategoryKind = 'custom' | 'favorite' | 'vip'
+
 /** Salida de PatientCategory (PatientCategoryOutputSerializer). */
 export interface PatientCategoryOut {
   id: string
   name: string
+  kind: PatientCategoryKind
   is_active: boolean
   created_at: string
 }

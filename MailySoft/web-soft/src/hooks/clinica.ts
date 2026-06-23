@@ -18,12 +18,14 @@ import {
   getClinicSettings,
   listCategories,
   listCredentials,
+  listCredentialsToValidate,
   listTemplates,
   listUniversities,
   updateClinicSettings,
   updateCredential,
   updateDoctorProfile,
   updateTemplate,
+  validateCredential,
 } from '../api/clinica'
 import type {
   ClinicSettingsUpdateInput,
@@ -35,6 +37,8 @@ import type {
   TemplateKind,
 } from '../types/clinica'
 import type {
+  CredentialValidationInput,
+  CredentialValidationStatus,
   DoctorCredentialCreateInput,
   DoctorCredentialUpdateInput,
 } from '../types/credenciales'
@@ -47,6 +51,8 @@ export const clinicaKeys = {
   categories: ['clinica', 'categories'] as const,
   universities: (doctorId: string) => ['clinica', 'universities', doctorId] as const,
   credentials: (doctorId: string) => ['clinica', 'credentials', doctorId] as const,
+  credentialsToValidate: (status?: string) =>
+    ['clinica', 'credentials-validate', status ?? 'all'] as const,
 }
 
 /* ─── Configuración ───────────────────────────────────────────────────────── */
@@ -232,6 +238,27 @@ export function useDeleteCredential(doctorId: string | null) {
     mutationFn: (credentialId: string) => deleteCredential(credentialId),
     onSuccess: () => {
       if (doctorId) qc.invalidateQueries({ queryKey: clinicaKeys.credentials(doctorId) })
+    },
+  })
+}
+
+/** Bandeja de validación del administrador (credenciales de todo el tenant). */
+export function useCredentialsToValidate(status?: CredentialValidationStatus) {
+  return useQuery({
+    queryKey: clinicaKeys.credentialsToValidate(status),
+    queryFn: () => listCredentialsToValidate(status),
+  })
+}
+
+/** Valida o rechaza una credencial (solo owner/admin). */
+export function useValidateCredential() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: CredentialValidationInput }) =>
+      validateCredential(id, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clinica', 'credentials-validate'] })
+      qc.invalidateQueries({ queryKey: ['clinica', 'credentials'] })
     },
   })
 }

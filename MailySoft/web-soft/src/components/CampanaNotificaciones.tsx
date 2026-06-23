@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  BadgeCheck,
   Bell,
   CalendarClock,
   CheckCheck,
@@ -9,6 +10,7 @@ import {
   Megaphone,
   MessageSquare,
   Send,
+  ShieldAlert,
   type LucideIcon,
 } from 'lucide-react'
 import {
@@ -26,6 +28,8 @@ const META: Record<NotificationKind, { icon: LucideIcon; color: string; bg: stri
   role_note: { icon: Send, color: '#B8860B', bg: 'rgba(201,162,39,0.16)' },
   broadcast: { icon: Megaphone, color: '#B45309', bg: 'rgba(180,83,9,0.12)' },
   nursing_instruction: { icon: ClipboardList, color: '#0E7C7B', bg: 'rgba(14,124,123,0.12)' },
+  credential_review: { icon: ShieldAlert, color: '#9A7B1E', bg: 'rgba(201,162,39,0.16)' },
+  credential_result: { icon: BadgeCheck, color: '#2E7D5B', bg: 'rgba(46,125,91,0.12)' },
 }
 
 /** Tiempo relativo legible ("hace 5 min"). */
