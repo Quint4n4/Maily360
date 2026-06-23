@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, Plus, Tag, X } from 'lucide-react'
+import { Loader2, Plus, Tag, X, Lock } from 'lucide-react'
 import { useCategories, useCreateCategory, useDeleteCategory } from '../../hooks/clinica'
 import { erroresDe } from '../../lib/apiErrors'
 import type { PatientCategoryOut } from '../../types/clinica'
@@ -81,25 +81,32 @@ export default function SeccionCategorias({ editable }: Props) {
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
-          {categorias.map((cat) => (
-            <span
-              key={cat.id}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium"
-              style={{ background: 'rgba(201,162,39,0.14)', color: '#B8860B' }}
-            >
-              <Tag className="w-3.5 h-3.5" />
-              {cat.name}
-              {editable && (
-                <button
-                  onClick={() => onBorrar(cat)}
-                  className="ml-0.5 rounded-full hover:bg-black/10 p-0.5 transition-colors"
-                  aria-label={`Quitar ${cat.name}`}
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </span>
-          ))}
+          {categorias.map((cat) => {
+            const sistema = cat.kind !== 'custom'
+            return (
+              <span
+                key={cat.id}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium"
+                style={sistema
+                  ? { background: 'rgba(29,111,92,0.12)', color: '#1D6F5C' }
+                  : { background: 'rgba(201,162,39,0.14)', color: '#B8860B' }}
+                title={sistema ? 'Etiqueta del sistema: no se puede borrar ni renombrar' : undefined}
+              >
+                {sistema ? <Lock className="w-3.5 h-3.5" /> : <Tag className="w-3.5 h-3.5" />}
+                {cat.name}
+                {sistema && <span className="text-[10px] opacity-70">del sistema</span>}
+                {editable && !sistema && (
+                  <button
+                    onClick={() => onBorrar(cat)}
+                    className="ml-0.5 rounded-full hover:bg-black/10 p-0.5 transition-colors"
+                    aria-label={`Quitar ${cat.name}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </span>
+            )
+          })}
         </div>
       )}
     </div>

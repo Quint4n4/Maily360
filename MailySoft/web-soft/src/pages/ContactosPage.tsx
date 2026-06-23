@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle, AlertTriangle, Star, Crown, CalendarRange } from 'lucide-react'
+import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle, AlertTriangle, Star, Crown, CalendarRange, Tag } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import NuevoPacienteDrawer from '../components/contactos/NuevoPacienteDrawer'
 import ExpedienteDrawer from '../components/contactos/ExpedienteDrawer'
@@ -8,6 +8,7 @@ import MiniCalendario from '../components/agenda/MiniCalendario'
 import {
   usePatient, usePatients, useDeactivatePatient, useSetPatientClassification,
 } from '../hooks/pacientes'
+import { useCategories } from '../hooks/clinica'
 import { initialsOf } from '../lib/paciente'
 import { formatFechaCorta } from '../lib/fecha'
 import type { PatientOut, PatientSegment } from '../types/paciente'
@@ -46,6 +47,7 @@ export default function ContactosPage() {
   const [query, setQuery]         = useState('')
   const [debounced, setDebounced] = useState('')
   const [segment, setSegment]     = useState<PatientSegment>('all')
+  const [categoryId, setCategoryId] = useState<string | null>(null)
   const [dateFrom, setDateFrom]   = useState('')
   const [dateTo, setDateTo]       = useState('')
   const [nuevoOpen, setNuevo]     = useState(false)
@@ -101,8 +103,31 @@ export default function ContactosPage() {
     return () => clearTimeout(t)
   }, [query])
 
+  // Catálogo de etiquetas para los chips de filtro. Favorito/VIP son etiquetas
+  // del sistema que ya tienen su propio chip arriba, así que aquí solo van las
+  // personalizadas (kind='custom').
+  const { data: categoriasData } = useCategories()
+  const categorias = (categoriasData?.results ?? []).filter(c => c.kind === 'custom')
+
+  // Los chips son mutuamente excluyentes: elegir un segmento limpia la etiqueta
+  // activa y viceversa. Volver a tocar la etiqueta activa la deselecciona.
+  const elegirSegmento = (key: PatientSegment) => {
+    setSegment(key)
+    setCategoryId(null)
+  }
+  const elegirCategoria = (id: string) => {
+    setCategoryId((prev) => (prev === id ? null : id))
+    setSegment('all')
+  }
+
   const esperandoFechas = segment === 'date' && (!dateFrom || !dateTo)
-  const { data, isLoading, isError, error } = usePatients({ search: debounced, segment, dateFrom, dateTo })
+  const { data, isLoading, isError, error } = usePatients({
+    search: debounced,
+    segment,
+    dateFrom,
+    dateTo,
+    categoryId: categoryId ?? undefined,
+  })
   const lista = data?.results ?? []
   const total = data?.count ?? 0
 
@@ -150,12 +175,12 @@ export default function ContactosPage() {
             </div>
           </div>
 
-          {/* Chips de segmento */}
+          {/* Chips de segmento (dorado) + etiquetas del catálogo (verde) */}
           <div className="flex flex-wrap gap-2 mt-4">
             {SEGMENTOS.map(s => {
-              const activo = segment === s.key
+              const activo = categoryId === null && segment === s.key
               return (
-                <button key={s.key} type="button" onClick={() => setSegment(s.key)}
+                <button key={s.key} type="button" onClick={() => elegirSegmento(s.key)}
                   className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
                   style={activo
                     ? { background: '#C9A227', color: '#fff', boxShadow: '0 2px 8px rgba(201,162,39,0.35)' }
@@ -164,6 +189,26 @@ export default function ContactosPage() {
                   {s.key === 'favorites' && <Star className="w-3.5 h-3.5" />}
                   {s.key === 'vip' && <Crown className="w-3.5 h-3.5" />}
                   {s.label}
+                </button>
+              )
+            })}
+
+            {/* Separador entre segmentos fijos y las etiquetas configurables */}
+            {categorias.length > 0 && (
+              <span className="self-center mx-1 h-5 w-px bg-black/10" aria-hidden />
+            )}
+
+            {/* Etiquetas del catálogo (las que crea el doctor en Mi Consultorio) */}
+            {categorias.map(c => {
+              const activo = categoryId === c.id
+              return (
+                <button key={c.id} type="button" onClick={() => elegirCategoria(c.id)}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+                  style={activo
+                    ? { background: '#1D6F5C', color: '#fff', boxShadow: '0 2px 8px rgba(29,111,92,0.35)' }
+                    : { background: 'rgba(255,255,255,0.6)', color: '#7A756C' }}>
+                  <Tag className="w-3.5 h-3.5" />
+                  {c.name}
                 </button>
               )
             })}
@@ -281,6 +326,18 @@ export default function ContactosPage() {
                     </div>
                   ) : (
                     <p className="text-xs text-gray-400 mb-3">{p.sex_display || '—'}</p>
+                  )}
+
+                  {p.categories.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {p.categories.map(c => (
+                        <span key={c.id}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{ background: 'rgba(29,111,92,0.12)', color: '#1D6F5C' }}>
+                          <Tag className="w-2.5 h-2.5" />{c.name}
+                        </span>
+                      ))}
+                    </div>
                   )}
 
                   <div className="space-y-1.5 pt-3 border-t border-white/50">

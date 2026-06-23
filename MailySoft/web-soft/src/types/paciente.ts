@@ -23,6 +23,12 @@ export type Education =
 export type BloodType = 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-' | 'desconocido' | ''
 
 /** Respuesta de lista/detalle (PatientOutputSerializer). */
+/** Etiqueta (categoría del catálogo) asignada a un paciente. */
+export interface PatientTag {
+  id: string
+  name: string
+}
+
 export interface PatientOut {
   id: string
   full_name: string
@@ -73,6 +79,8 @@ export interface PatientOut {
   /** Tarifa de consulta personalizada (string decimal de DRF) o null. */
   custom_consultation_fee: string | null
   category: string
+  /** Etiquetas del catálogo asignadas al paciente (clasificación nueva). */
+  categories: PatientTag[]
   created_at: string // ISO datetime
 }
 
@@ -136,6 +144,8 @@ export interface PatientNom004Input {
   deceased_at?: string | null
   custom_consultation_fee?: number | null
   category?: string
+  /** IDs de las etiquetas del catálogo a asignar (reemplaza el set completo). */
+  category_ids?: string[]
 }
 
 /** Cuerpo para actualización parcial (PATCH). Sin is_active (solo se da de baja vía DELETE). */

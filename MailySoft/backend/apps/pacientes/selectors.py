@@ -52,6 +52,7 @@ def patient_list(
     segment: str = "all",
     date_from: Optional[datetime.date] = None,
     date_to: Optional[datetime.date] = None,
+    category_id: Optional[uuid.UUID] = None,
 ) -> QuerySet[Patient]:
     """Retorna el QuerySet de pacientes activos del tenant actual con anotaciones estadísticas.
 
@@ -71,8 +72,8 @@ def patient_list(
       "month"     — atendidos en el mes calendario actual.
       "date"      — atendidos entre date_from y date_to inclusive (ambos requeridos).
       "potential" — nunca atendidos pero con citas canceladas o reagendadas.
-      "favorites" — marcados como favorito (is_favorite=True).
-      "vip"       — marcados como VIP (is_vip=True).
+      "favorites" — con la etiqueta de sistema Favorito (categories kind=favorite).
+      "vip"       — con la etiqueta de sistema VIP (categories kind=vip).
 
     Args:
         search:    Término de búsqueda libre (icontains sobre nombre, apellidos,
@@ -80,6 +81,8 @@ def patient_list(
         segment:   Código del segmento (ver arriba). Desconocido → tratado como "all".
         date_from: Fecha de inicio del rango (solo para segment="date").
         date_to:   Fecha de fin del rango, inclusive (solo para segment="date").
+        category_id: Si se provee, filtra los pacientes que tengan esa etiqueta
+                   del catálogo asignada (combinable con el segmento).
 
     Returns:
         QuerySet[Patient] anotado, filtrado y ordenado. Sin paginar.
@@ -89,7 +92,8 @@ def patient_list(
     from apps.agenda.models import Appointment  # noqa: PLC0415
 
     # Base: pacientes activos del tenant activo (TenantManager filtra por tenant).
-    qs: QuerySet[Patient] = Patient.objects.filter(is_active=True)
+    # prefetch_related("categories") evita N+1 al serializar las etiquetas.
+    qs: QuerySet[Patient] = Patient.objects.filter(is_active=True).prefetch_related("categories")
 
     # Filtro de búsqueda libre (igual al selector original).
     if search:
@@ -179,14 +183,20 @@ def patient_list(
         ).order_by("-created_at")
 
     elif segment == "favorites":
-        qs = qs.filter(is_favorite=True).order_by("-created_at")
+        qs = qs.filter(categories__kind="favorite").order_by("-created_at")
 
     elif segment == "vip":
-        qs = qs.filter(is_vip=True).order_by("-created_at")
+        qs = qs.filter(categories__kind="vip").order_by("-created_at")
 
     else:
         # "all" y cualquier valor desconocido.
         qs = qs.order_by("-created_at")
+
+    # Filtro adicional por etiqueta del catálogo (combinable con cualquier
+    # segmento). Solo filtra por categorías del tenant activo: el join contra
+    # PatientCategory ya está aislado, así que un id ajeno no devuelve nada.
+    if category_id is not None:
+        qs = qs.filter(categories__id=category_id)
 
     return qs
 

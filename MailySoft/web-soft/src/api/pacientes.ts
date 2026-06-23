@@ -30,6 +30,8 @@ export interface ListPatientsParams {
   date_from?: string
   /** Solo con segment='date': fin del rango 'yyyy-mm-dd' (inclusive). */
   date_to?: string
+  /** UUID de una etiqueta del catálogo para filtrar por ella. */
+  category?: string
 }
 
 /** GET /pacientes/ — lista paginada de pacientes activos del tenant. */
@@ -40,6 +42,7 @@ export async function listPatients(params: ListPatientsParams = {}): Promise<Pag
   if (params.segment && params.segment !== 'all') qs.set('segment', params.segment)
   if (params.date_from) qs.set('date_from', params.date_from)
   if (params.date_to) qs.set('date_to', params.date_to)
+  if (params.category) qs.set('category', params.category)
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
   return request<Paginated<PatientOut>>(`/pacientes/${suffix}`)
 }

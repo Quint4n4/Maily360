@@ -138,16 +138,8 @@ class Patient(TenantAwareModel):
             "Falta completar la información personal (fecha nac., sexo, etc.)."
         ),
     )
-    is_favorite = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text="Marcado como favorito (visible para toda la clínica).",
-    )
-    is_vip = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text="Paciente VIP (visible para toda la clínica).",
-    )
+    # Favorito y VIP dejaron de ser banderas: ahora son etiquetas del sistema
+    # (PatientCategory kind=favorite/vip) en la relación `categories`.
     avatar = models.ImageField(
         upload_to=patient_avatar_path,
         null=True,
@@ -264,7 +256,20 @@ class Patient(TenantAwareModel):
         max_length=60,
         blank=True,
         default="",
-        help_text="Categoría libre del paciente (uso interno de la clínica, v1).",
+        help_text=(
+            "Categoría libre (legacy v1). Se conserva por compatibilidad; "
+            "la clasificación nueva usa `categories` (etiquetas del catálogo)."
+        ),
+    )
+    categories = models.ManyToManyField(
+        "clinica.PatientCategory",
+        blank=True,
+        related_name="patients",
+        help_text=(
+            "Etiquetas asignadas al paciente desde el catálogo de la clínica. "
+            "Con ellas el médico organiza y filtra a sus pacientes. "
+            "Todas deben pertenecer al mismo tenant que el paciente."
+        ),
     )
 
     class Meta:

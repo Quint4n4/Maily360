@@ -27,13 +27,23 @@ export interface UsePatientsParams {
   segment?: PatientSegment
   dateFrom?: string
   dateTo?: string
+  /** UUID de una etiqueta del catálogo para filtrar por ella. */
+  categoryId?: string
 }
 
 /** Claves de caché. Todo lo de pacientes cuelga de ['pacientes']. */
 export const pacientesKeys = {
   all: ['pacientes'] as const,
   list: (p: UsePatientsParams) =>
-    ['pacientes', 'list', p.segment ?? 'all', p.search ?? '', p.dateFrom ?? '', p.dateTo ?? ''] as const,
+    [
+      'pacientes',
+      'list',
+      p.segment ?? 'all',
+      p.search ?? '',
+      p.dateFrom ?? '',
+      p.dateTo ?? '',
+      p.categoryId ?? '',
+    ] as const,
   detail: (id: string) => ['pacientes', 'detail', id] as const,
 }
 
@@ -49,11 +59,12 @@ export function usePatient(id: string | null) {
 /** Lista paginada (primera página) con búsqueda + segmento server-side.
  *  Con segment='date' la consulta queda deshabilitada hasta tener ambas fechas. */
 export function usePatients(params: UsePatientsParams = {}) {
-  const { search = '', segment = 'all', dateFrom, dateTo } = params
+  const { search = '', segment = 'all', dateFrom, dateTo, categoryId } = params
   const faltanFechas = segment === 'date' && (!dateFrom || !dateTo)
   return useQuery({
     queryKey: pacientesKeys.list(params),
-    queryFn: () => listPatients({ search, segment, date_from: dateFrom, date_to: dateTo }),
+    queryFn: () =>
+      listPatients({ search, segment, date_from: dateFrom, date_to: dateTo, category: categoryId }),
     enabled: !faltanFechas,
   })
 }

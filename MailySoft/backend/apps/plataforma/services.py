@@ -33,6 +33,7 @@ from django.utils.timezone import now
 from apps.agenda.services import appointment_type_create
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
+from apps.clinica.services import seed_system_patient_categories
 from apps.authn.models import User
 from apps.core.tenant_context import clear_current_tenant, set_current_tenant
 from apps.personal.services import consultorio_create
@@ -237,6 +238,9 @@ def tenant_and_owner_create(
                     user=owner.user,
                     name=tipo_nombre,
                 )
+
+            # Etiquetas de sistema (Favorito y VIP) para clasificar pacientes.
+            seed_system_patient_categories(tenant=tenant)
 
         finally:
             # SIEMPRE limpiar el contexto de tenant, incluso si hubo excepción.

@@ -131,6 +131,8 @@ class PatientListCreateApi(TenantAPIView):
         )
         date_from = serializers.DateField(required=False, allow_null=True)
         date_to = serializers.DateField(required=False, allow_null=True)
+        # Filtro por etiqueta del catálogo (chip dinámico en el panel).
+        category = serializers.UUIDField(required=False, allow_null=True)
 
         def validate(self, attrs: dict) -> dict:  # type: ignore[override]
             if attrs.get("segment") == "date":
@@ -171,6 +173,7 @@ class PatientListCreateApi(TenantAPIView):
             segment=fd.get("segment", "all"),
             date_from=fd.get("date_from"),
             date_to=fd.get("date_to"),
+            category_id=fd.get("category"),
         )
 
         # FIX-B6: el paginator siempre pagina; si qs está vacío devuelve página vacía,
@@ -339,6 +342,10 @@ class PatientDetailApi(TenantAPIView):
             max_digits=10, decimal_places=2, required=False, allow_null=True
         )
         category = serializers.CharField(max_length=60, required=False, allow_blank=True)
+        # Etiquetas del catálogo asignadas al paciente (reemplaza el set completo).
+        category_ids = serializers.ListField(
+            child=serializers.UUIDField(), required=False, allow_empty=True
+        )
 
         def validate_curp(self, value: str) -> str:
             return _validate_curp(value)

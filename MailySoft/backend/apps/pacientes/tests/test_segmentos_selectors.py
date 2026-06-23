@@ -16,6 +16,16 @@ Nota sobre fechas:
     del presente — determinista y sin dependencia de la hora del sistema.
   - Las citas se crean directamente con AppointmentFactory forzando el status
     (más rápido y aislado que pasar por el service de estados).
+
+NOTA DE MIGRACIÓN (2026-06-23):
+  is_favorite e is_vip ya NO son BooleanFields del modelo Patient.
+  Son etiquetas del sistema (PatientCategory kind="favorite"/"vip") en la
+  relación M2M `Patient.categories`. El selector filtra con:
+    qs.filter(categories__kind="favorite")  /  qs.filter(categories__kind="vip")
+  - PatientFactory ya NO acepta is_favorite= ni is_vip=.
+  - Para crear un paciente "favorito/VIP", usar _assign_system_label().
+  - Los tests de aislamiento cross-tenant verifican que la etiqueta de sistema
+    del tenant B no es visible desde el contexto del tenant A.
 """
 
 import datetime
@@ -24,6 +34,7 @@ import pytest
 from django.utils import timezone
 
 from apps.agenda.models import Appointment
+from apps.clinica.models import PatientCategory
 from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
 from apps.pacientes.selectors import patient_list
 from tests.factories import AppointmentFactory, DoctorFactory, PatientFactory, TenantFactory
@@ -48,6 +59,21 @@ def _activate_tenant(tenant: object) -> None:
 def _deactivate_tenant() -> None:
     set_current_tenant(None)
     set_tenant_context_active(False)
+
+
+def _assign_system_label(patient: object, tenant: object, kind: str) -> None:
+    """Asigna una etiqueta de sistema (favorite/vip) al paciente.
+
+    Crea la etiqueta del sistema si no existe para el tenant. Este helper
+    reemplaza el antiguo PatientFactory(..., is_favorite=True/is_vip=True).
+    """
+    cat, _ = PatientCategory.objects.get_or_create(
+        tenant=tenant,  # type: ignore[misc]
+        kind=kind,
+        deleted_at=None,
+        defaults={"name": kind.title(), "created_by": None},
+    )
+    patient.categories.add(cat)  # type: ignore[union-attr]
 
 
 def _attended_appointment(
@@ -702,13 +728,14 @@ class TestSegmentPotential:
 
 
 class TestSegmentFavorites:
-    """Segmento 'favorites': solo pacientes con is_favorite=True."""
+    """Segmento 'favorites': solo pacientes con la etiqueta kind=favorite."""
 
-    def test_favorites_includes_patient_marked_as_favorite(self, db: None) -> None:
-        """Paciente con is_favorite=True aparece en 'favorites'."""
+    def test_favorites_includes_patient_with_favorite_label(self, db: None) -> None:
+        """Paciente con etiqueta kind=favorite aparece en 'favorites'."""
         # Arrange
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_active=True, is_favorite=True)
+        patient = PatientFactory(tenant=tenant, is_active=True)
+        _assign_system_label(patient, tenant, PatientCategory.Kind.FAVORITE)
 
         _activate_tenant(tenant)
         try:
@@ -720,11 +747,12 @@ class TestSegmentFavorites:
         finally:
             _deactivate_tenant()
 
-    def test_favorites_excludes_patient_not_marked_as_favorite(self, db: None) -> None:
-        """Paciente con is_favorite=False NO aparece en 'favorites'."""
+    def test_favorites_excludes_patient_without_favorite_label(self, db: None) -> None:
+        """Paciente sin etiqueta favorite NO aparece en 'favorites'."""
         # Arrange
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_active=True, is_favorite=False)
+        patient = PatientFactory(tenant=tenant, is_active=True)
+        # No se asigna ninguna etiqueta de sistema
 
         _activate_tenant(tenant)
         try:
@@ -737,11 +765,12 @@ class TestSegmentFavorites:
             _deactivate_tenant()
 
     def test_favorites_returns_exact_set(self, db: None) -> None:
-        """'favorites' devuelve exactamente los marcados como favorito."""
+        """'favorites' devuelve exactamente los que tienen la etiqueta favorite."""
         # Arrange
         tenant = TenantFactory()
-        fav = PatientFactory(tenant=tenant, is_active=True, is_favorite=True)
-        not_fav = PatientFactory(tenant=tenant, is_active=True, is_favorite=False)
+        fav = PatientFactory(tenant=tenant, is_active=True)
+        not_fav = PatientFactory(tenant=tenant, is_active=True)
+        _assign_system_label(fav, tenant, PatientCategory.Kind.FAVORITE)
 
         _activate_tenant(tenant)
         try:
@@ -756,18 +785,23 @@ class TestSegmentFavorites:
             _deactivate_tenant()
 
     def test_favorites_tenant_isolation(self, db: None) -> None:
-        """'favorites' no devuelve favoritos de otro tenant."""
+        """'favorites' no devuelve favoritos de otro tenant.
+
+        Cada tenant tiene SU PROPIA etiqueta de sistema kind=favorite.
+        La etiqueta del tenant B no es visible en el contexto del tenant A.
+        """
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
-        fav_b = PatientFactory(tenant=tenant_b, is_active=True, is_favorite=True)
+        fav_b = PatientFactory(tenant=tenant_b, is_active=True)
+        _assign_system_label(fav_b, tenant_b, PatientCategory.Kind.FAVORITE)
 
         _activate_tenant(tenant_a)
         try:
             # Act
             qs = patient_list(segment="favorites")
 
-            # Assert
+            # Assert — tenant A no tiene favoritos
             assert fav_b.id not in set(qs.values_list("id", flat=True))
         finally:
             _deactivate_tenant()
@@ -779,13 +813,14 @@ class TestSegmentFavorites:
 
 
 class TestSegmentVip:
-    """Segmento 'vip': solo pacientes con is_vip=True."""
+    """Segmento 'vip': solo pacientes con la etiqueta kind=vip."""
 
-    def test_vip_includes_patient_marked_as_vip(self, db: None) -> None:
-        """Paciente con is_vip=True aparece en 'vip'."""
+    def test_vip_includes_patient_with_vip_label(self, db: None) -> None:
+        """Paciente con etiqueta kind=vip aparece en 'vip'."""
         # Arrange
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_active=True, is_vip=True)
+        patient = PatientFactory(tenant=tenant, is_active=True)
+        _assign_system_label(patient, tenant, PatientCategory.Kind.VIP)
 
         _activate_tenant(tenant)
         try:
@@ -797,11 +832,12 @@ class TestSegmentVip:
         finally:
             _deactivate_tenant()
 
-    def test_vip_excludes_patient_not_marked_as_vip(self, db: None) -> None:
-        """Paciente con is_vip=False NO aparece en 'vip'."""
+    def test_vip_excludes_patient_without_vip_label(self, db: None) -> None:
+        """Paciente sin etiqueta vip NO aparece en 'vip'."""
         # Arrange
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_active=True, is_vip=False)
+        patient = PatientFactory(tenant=tenant, is_active=True)
+        # No se asigna etiqueta VIP
 
         _activate_tenant(tenant)
         try:
@@ -814,11 +850,12 @@ class TestSegmentVip:
             _deactivate_tenant()
 
     def test_vip_returns_exact_set(self, db: None) -> None:
-        """'vip' devuelve exactamente los marcados como VIP."""
+        """'vip' devuelve exactamente los que tienen la etiqueta vip."""
         # Arrange
         tenant = TenantFactory()
-        vip = PatientFactory(tenant=tenant, is_active=True, is_vip=True)
-        not_vip = PatientFactory(tenant=tenant, is_active=True, is_vip=False)
+        vip = PatientFactory(tenant=tenant, is_active=True)
+        not_vip = PatientFactory(tenant=tenant, is_active=True)
+        _assign_system_label(vip, tenant, PatientCategory.Kind.VIP)
 
         _activate_tenant(tenant)
         try:
@@ -833,18 +870,23 @@ class TestSegmentVip:
             _deactivate_tenant()
 
     def test_vip_tenant_isolation(self, db: None) -> None:
-        """'vip' no devuelve VIPs de otro tenant."""
+        """'vip' no devuelve VIPs de otro tenant.
+
+        Cada tenant tiene SU PROPIA etiqueta de sistema kind=vip.
+        La etiqueta del tenant B no es visible en el contexto del tenant A.
+        """
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
-        vip_b = PatientFactory(tenant=tenant_b, is_active=True, is_vip=True)
+        vip_b = PatientFactory(tenant=tenant_b, is_active=True)
+        _assign_system_label(vip_b, tenant_b, PatientCategory.Kind.VIP)
 
         _activate_tenant(tenant_a)
         try:
             # Act
             qs = patient_list(segment="vip")
 
-            # Assert
+            # Assert — tenant A no tiene VIPs
             assert vip_b.id not in set(qs.values_list("id", flat=True))
         finally:
             _deactivate_tenant()

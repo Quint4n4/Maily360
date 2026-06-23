@@ -22,6 +22,14 @@ Nota técnica sobre el contexto de tenant en tests de API:
   Se usa el mismo helper _tenant_context() que los tests existentes de
   test_apis.py: mockea get_current_tenant y el TenantManager.
 
+NOTA DE MIGRACIÓN (2026-06-23):
+  is_favorite e is_vip ya NO son BooleanFields del modelo Patient.
+  Son etiquetas del sistema (PatientCategory kind="favorite"/"vip") en M2M.
+  - PatientFactory ya NO acepta is_favorite= ni is_vip=.
+  - Para crear un paciente "favorito", usar _assign_favorite(patient, tenant).
+  - Las aserciones de la API siguen siendo sobre el JSON (is_favorite/is_vip),
+    ya que el serializer los sigue exponiendo como SerializerMethodField.
+
 Patrón: AAA (Arrange-Act-Assert). Todas tocan BD → fixture db.
 """
 
@@ -35,9 +43,11 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.agenda.models import Appointment
+from apps.clinica.models import PatientCategory
 from tests.factories import (
     AppointmentFactory,
     DoctorFactory,
+    PatientCategoryFactory,
     PatientFactory,
     TenantFactory,
     TenantMembershipFactory,
@@ -82,6 +92,29 @@ def _make_member_client(tenant: Any, role: str = "owner") -> APIClient:
     user = UserFactory()
     TenantMembershipFactory(user=user, tenant=tenant, role=role, is_active=True)
     return _make_auth_client(user)
+
+
+def _seed_system_category(tenant: Any, kind: str) -> PatientCategory:
+    """Crea (o recupera) una etiqueta de sistema para el tenant y la devuelve."""
+    cat, _ = PatientCategory.objects.get_or_create(
+        tenant=tenant,
+        kind=kind,
+        deleted_at=None,
+        defaults={"name": kind.title(), "created_by": None},
+    )
+    return cat
+
+
+def _assign_favorite(patient: Any, tenant: Any) -> None:
+    """Asigna la etiqueta 'favorite' al paciente (simula estar marcado como favorito)."""
+    cat = _seed_system_category(tenant, PatientCategory.Kind.FAVORITE)
+    patient.categories.add(cat)
+
+
+def _assign_vip(patient: Any, tenant: Any) -> None:
+    """Asigna la etiqueta 'vip' al paciente."""
+    cat = _seed_system_category(tenant, PatientCategory.Kind.VIP)
+    patient.categories.add(cat)
 
 
 def _attended_appointment(
@@ -145,10 +178,10 @@ class TestPatientClassifyApi:
         assert response.status_code == 401
 
     def test_classify_sets_is_favorite_true_returns_200(self, db: None) -> None:
-        """POST is_favorite=True devuelve 200 con el paciente actualizado."""
+        """POST is_favorite=True devuelve 200 con is_favorite=True en el JSON."""
         # Arrange
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_favorite=False)
+        patient = PatientFactory(tenant=tenant)  # sin etiqueta de favorito
         client = _make_member_client(tenant, role="doctor")
 
         # Act
@@ -162,10 +195,10 @@ class TestPatientClassifyApi:
         assert response.json()["is_favorite"] is True
 
     def test_classify_sets_is_vip_true_returns_200(self, db: None) -> None:
-        """POST is_vip=True devuelve 200 con el paciente actualizado."""
+        """POST is_vip=True devuelve 200 con is_vip=True en el JSON."""
         # Arrange
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_vip=False)
+        patient = PatientFactory(tenant=tenant)  # sin etiqueta VIP
         client = _make_member_client(tenant, role="nurse")
 
         # Act
@@ -179,10 +212,10 @@ class TestPatientClassifyApi:
         assert response.json()["is_vip"] is True
 
     def test_classify_sets_both_flags_returns_200(self, db: None) -> None:
-        """POST con is_favorite=True e is_vip=True actualiza ambos flags."""
+        """POST con is_favorite=True e is_vip=True actualiza ambas etiquetas."""
         # Arrange
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_favorite=False, is_vip=False)
+        patient = PatientFactory(tenant=tenant)
         client = _make_member_client(tenant, role="reception")
 
         # Act
@@ -200,10 +233,11 @@ class TestPatientClassifyApi:
         assert data["is_vip"] is True
 
     def test_classify_unmark_favorite_returns_200(self, db: None) -> None:
-        """POST is_favorite=False desmarca el favorito."""
-        # Arrange
+        """POST is_favorite=False desmarca el favorito (quita la etiqueta)."""
+        # Arrange — paciente con etiqueta 'favorite' ya asignada
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_favorite=True)
+        patient = PatientFactory(tenant=tenant)
+        _assign_favorite(patient, tenant)
         client = _make_member_client(tenant, role="owner")
 
         # Act
@@ -217,10 +251,11 @@ class TestPatientClassifyApi:
         assert response.json()["is_favorite"] is False
 
     def test_classify_with_empty_body_returns_200_no_change(self, db: None) -> None:
-        """POST sin campos devuelve 200 sin modificar al paciente."""
-        # Arrange
+        """POST sin campos devuelve 200 sin modificar las etiquetas del paciente."""
+        # Arrange — paciente con etiqueta 'favorite' asignada (VIP no)
         tenant = TenantFactory()
-        patient = PatientFactory(tenant=tenant, is_favorite=True, is_vip=False)
+        patient = PatientFactory(tenant=tenant)
+        _assign_favorite(patient, tenant)
         client = _make_member_client(tenant, role="admin")
 
         # Act
@@ -229,7 +264,7 @@ class TestPatientClassifyApi:
                 _classify_url(patient.id), data={}, format="json"
             )
 
-        # Assert — 200 y los flags no cambiaron
+        # Assert — 200 y el JSON refleja el estado actual (favorite=True, vip=False)
         assert response.status_code == 200
         data = response.json()
         assert data["is_favorite"] is True
@@ -253,8 +288,6 @@ class TestPatientClassifyApi:
         assert "is_favorite" in data
         assert "is_vip" in data
         # last_seen_at y attended_count pueden ser null si no hay citas anotadas
-        # (el endpoint de detalle usa patient_get, no patient_list; el serializer
-        # es tolerante con getattr ... None)
         assert "last_seen_at" in data
         assert "attended_count" in data
 
@@ -419,14 +452,15 @@ class TestSegmentDateApi:
 
 
 class TestSegmentFavoritesApi:
-    """GET /pacientes/?segment=favorites — filtro por is_favorite."""
+    """GET /pacientes/?segment=favorites — filtro por etiqueta kind=favorite."""
 
     def test_favorites_returns_only_favorite_patients(self, db: None) -> None:
-        """segment=favorites devuelve solo los marcados como favoritos."""
+        """segment=favorites devuelve solo los que tienen la etiqueta 'favorite'."""
         # Arrange
         tenant = TenantFactory()
-        fav = PatientFactory(tenant=tenant, is_active=True, is_favorite=True)
-        not_fav = PatientFactory(tenant=tenant, is_active=True, is_favorite=False)
+        fav = PatientFactory(tenant=tenant, is_active=True)
+        not_fav = PatientFactory(tenant=tenant, is_active=True)
+        _assign_favorite(fav, tenant)  # solo fav tiene la etiqueta
         client = _make_member_client(tenant, role="readonly")
 
         # Act
@@ -446,7 +480,8 @@ class TestSegmentFavoritesApi:
         # Arrange
         tenant_a = TenantFactory()
         tenant_b = TenantFactory()
-        PatientFactory(tenant=tenant_b, is_active=True, is_favorite=True)
+        fav_b = PatientFactory(tenant=tenant_b, is_active=True)
+        _assign_favorite(fav_b, tenant_b)
         client = _make_member_client(tenant_a, role="readonly")
 
         # Act
@@ -466,14 +501,15 @@ class TestSegmentFavoritesApi:
 
 
 class TestSegmentVipApi:
-    """GET /pacientes/?segment=vip — filtro por is_vip."""
+    """GET /pacientes/?segment=vip — filtro por etiqueta kind=vip."""
 
     def test_vip_returns_only_vip_patients(self, db: None) -> None:
-        """segment=vip devuelve solo los marcados como VIP."""
+        """segment=vip devuelve solo los que tienen la etiqueta 'vip'."""
         # Arrange
         tenant = TenantFactory()
-        vip = PatientFactory(tenant=tenant, is_active=True, is_vip=True)
-        not_vip = PatientFactory(tenant=tenant, is_active=True, is_vip=False)
+        vip = PatientFactory(tenant=tenant, is_active=True)
+        not_vip = PatientFactory(tenant=tenant, is_active=True)
+        _assign_vip(vip, tenant)  # solo vip tiene la etiqueta
         client = _make_member_client(tenant, role="readonly")
 
         # Act
@@ -537,7 +573,6 @@ class TestSegmentRecentApi:
         # Assert
         data = response.json()
         results = data.get("results", data) if isinstance(data, dict) else data
-        # Hay al menos un resultado y el primero tiene los campos requeridos
         assert len(results) >= 1
         first = results[0]
         assert "last_seen_at" in first
@@ -612,10 +647,11 @@ class TestOutputSerializerFields:
     def test_list_response_includes_is_favorite_and_is_vip_fields(
         self, db: None
     ) -> None:
-        """El output de GET /pacientes/ incluye is_favorite e is_vip."""
-        # Arrange
+        """El output de GET /pacientes/ incluye is_favorite e is_vip derivados."""
+        # Arrange — paciente con etiqueta favorite asignada, sin VIP
         tenant = TenantFactory()
-        PatientFactory(tenant=tenant, is_active=True, is_favorite=True, is_vip=False)
+        patient = PatientFactory(tenant=tenant, is_active=True)
+        _assign_favorite(patient, tenant)
         client = _make_member_client(tenant, role="readonly")
 
         # Act
@@ -627,12 +663,13 @@ class TestOutputSerializerFields:
         data = response.json()
         results = data.get("results", data) if isinstance(data, dict) else data
         assert len(results) >= 1
-        first = results[0]
-        assert "is_favorite" in first
-        assert "is_vip" in first
-        # El paciente creado tiene is_favorite=True
-        assert first["is_favorite"] is True
-        assert first["is_vip"] is False
+        # Buscar específicamente el paciente creado (puede haber otros del tenant)
+        patient_data = next((r for r in results if r["id"] == str(patient.id)), None)
+        assert patient_data is not None
+        assert "is_favorite" in patient_data
+        assert "is_vip" in patient_data
+        assert patient_data["is_favorite"] is True
+        assert patient_data["is_vip"] is False
 
     def test_list_response_null_last_seen_at_for_patient_without_appointments(
         self, db: None
@@ -640,7 +677,7 @@ class TestOutputSerializerFields:
         """last_seen_at es null para un paciente sin citas atendidas."""
         # Arrange
         tenant = TenantFactory()
-        PatientFactory(tenant=tenant, is_active=True)
+        patient = PatientFactory(tenant=tenant, is_active=True)
         client = _make_member_client(tenant, role="readonly")
 
         # Act
@@ -651,9 +688,10 @@ class TestOutputSerializerFields:
         data = response.json()
         results = data.get("results", data) if isinstance(data, dict) else data
         assert len(results) >= 1
-        first = results[0]
-        assert "last_seen_at" in first
-        assert first["last_seen_at"] is None
+        patient_data = next((r for r in results if r["id"] == str(patient.id)), None)
+        assert patient_data is not None
+        assert "last_seen_at" in patient_data
+        assert patient_data["last_seen_at"] is None
 
     def test_list_response_attended_count_zero_for_patient_without_attended_appointments(
         self, db: None
@@ -661,7 +699,7 @@ class TestOutputSerializerFields:
         """attended_count es 0 para un paciente sin citas atendidas."""
         # Arrange
         tenant = TenantFactory()
-        PatientFactory(tenant=tenant, is_active=True)
+        patient = PatientFactory(tenant=tenant, is_active=True)
         client = _make_member_client(tenant, role="readonly")
 
         # Act
@@ -672,6 +710,7 @@ class TestOutputSerializerFields:
         data = response.json()
         results = data.get("results", data) if isinstance(data, dict) else data
         assert len(results) >= 1
-        first = results[0]
-        assert "attended_count" in first
-        assert first["attended_count"] == 0
+        patient_data = next((r for r in results if r["id"] == str(patient.id)), None)
+        assert patient_data is not None
+        assert "attended_count" in patient_data
+        assert patient_data["attended_count"] == 0

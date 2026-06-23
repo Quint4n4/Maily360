@@ -11,10 +11,12 @@
 
 import { useState, useEffect } from 'react'
 import type { ChangeEvent } from 'react'
+import { Check } from 'lucide-react'
 import { ApiError } from '../../lib/http'
 import type {
   BloodType, Education, MaritalStatus, PatientOut, PatientUpdateInput, Sex,
 } from '../../types/paciente'
+import { useCategories } from '../../hooks/clinica'
 import { BLOOD_OPTIONS, EDUCATION_OPTIONS, MARITAL_OPTIONS } from '../expediente/ui'
 import {
   MSG, errorDeCampo, esCPValido, esCurpValido, esEmailValido, esTelefonoValido,
@@ -49,6 +51,8 @@ export interface PacienteFormState {
   religion: string
   blood_type: BloodType
   category: string
+  /** IDs de las etiquetas del catálogo asignadas al paciente. */
+  category_ids: string[]
   is_deceased: boolean
   deceased_at: string
   custom_consultation_fee: string
@@ -60,7 +64,7 @@ const VACIO: PacienteFormState = {
   email: '', curp: '', notes: '',
   address_street: '', address_neighborhood: '', city: '', state: '', postal_code: '',
   birthplace: '', marital_status: '', education: '', occupation: '', religion: '',
-  blood_type: '', category: '', is_deceased: false, deceased_at: '', custom_consultation_fee: '',
+  blood_type: '', category: '', category_ids: [], is_deceased: false, deceased_at: '', custom_consultation_fee: '',
 }
 
 /** Pasa los datos del paciente al estado editable del formulario. */
@@ -89,6 +93,7 @@ function desdePaciente(p: PatientOut): PacienteFormState {
     religion: p.religion,
     blood_type: p.blood_type,
     category: p.category,
+    category_ids: p.categories.map(c => c.id),
     is_deceased: p.is_deceased,
     deceased_at: p.deceased_at ?? '',
     custom_consultation_fee: p.custom_consultation_fee ?? '',
@@ -168,6 +173,7 @@ export function usePacienteForm(paciente: PatientOut | null): UsePacienteFormRes
       phone_secondary: form.phone_secondary.trim(),
       phone_label: form.phone_label.trim(),
       category: form.category.trim(),
+      category_ids: form.category_ids,
       is_deceased: form.is_deceased,
       deceased_at: form.is_deceased ? (form.deceased_at || null) : null,
       custom_consultation_fee: fee !== null && Number.isNaN(fee) ? null : fee,
@@ -367,6 +373,18 @@ export function CamposDomicilio({ form, set }: CamposProps) {
  */
 export function CamposNom004({ form, set, setForm }: CamposProps) {
   const errs = erroresFormatoPaciente(form)
+  // Favorito/VIP se asignan con la ⭐/👑 en la tarjeta, no aquí: solo etiquetas personalizadas.
+  const { data: categoriasData } = useCategories()
+  const categorias = (categoriasData?.results ?? []).filter(c => c.kind === 'custom')
+
+  const toggleEtiqueta = (id: string) =>
+    setForm(prev => ({
+      ...prev,
+      category_ids: prev.category_ids.includes(id)
+        ? prev.category_ids.filter(x => x !== id)
+        : [...prev.category_ids, id],
+    }))
+
   return (
     <div className="space-y-3">
       <div>
@@ -415,20 +433,38 @@ export function CamposNom004({ form, set, setForm }: CamposProps) {
           <input className="input" value={form.religion} onChange={set('religion')} />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">Categoría <span className="text-gray-400 font-normal">(opcional)</span></label>
-          <input className="input" value={form.category} onChange={set('category')} />
-        </div>
-        <div>
-          <label className="label">Costo de consulta <span className="text-gray-400 font-normal">(opcional)</span></label>
-          <input
-            type="number" min={0} step="0.01" className="input"
-            placeholder="Tarifa estándar"
-            value={form.custom_consultation_fee}
-            onChange={set('custom_consultation_fee')}
-          />
-        </div>
+      <div>
+        <label className="label">Etiquetas <span className="text-gray-400 font-normal">(opcional)</span></label>
+        {categorias.length === 0 ? (
+          <p className="text-xs text-gray-400">
+            Aún no hay etiquetas. Créalas en Mi Consultorio → Categorías de pacientes.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {categorias.map(c => {
+              const activo = form.category_ids.includes(c.id)
+              return (
+                <button key={c.id} type="button" onClick={() => toggleEtiqueta(c.id)}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold transition-all"
+                  style={activo
+                    ? { background: '#1D6F5C', color: '#fff' }
+                    : { background: 'rgba(0,0,0,0.05)', color: '#555' }}>
+                  {activo && <Check className="w-3.5 h-3.5" />}
+                  {c.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+      <div>
+        <label className="label">Costo de consulta <span className="text-gray-400 font-normal">(opcional)</span></label>
+        <input
+          type="number" min={0} step="0.01" className="input"
+          placeholder="Tarifa estándar"
+          value={form.custom_consultation_fee}
+          onChange={set('custom_consultation_fee')}
+        />
       </div>
       <div className="rounded-xl px-3 py-2.5" style={{ background: 'rgba(0,0,0,0.025)', border: '1px solid rgba(0,0,0,0.05)' }}>
         <label className="flex items-center gap-2.5 cursor-pointer">

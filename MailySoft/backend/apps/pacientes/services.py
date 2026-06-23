@@ -306,6 +306,9 @@ def patient_update(
                          provee un sex inválido, o si la nueva CURP ya existe
                          en el tenant.
     """
+    # Las etiquetas (M2M categories) se manejan aparte del setattr/save genérico.
+    category_ids = fields.pop("category_ids", None)
+
     # Rechazar explícitamente intentos de modificar campos inmutables.
     attempted_immutable = _IMMUTABLE_FIELDS.intersection(fields.keys())
     if attempted_immutable:
@@ -348,6 +351,23 @@ def patient_update(
     update_fields.append("updated_at")
     patient.save(update_fields=update_fields)
 
+    # Aplicar etiquetas del catálogo (M2M). category_ids=None ⇒ no se tocó;
+    # lista vacía ⇒ se quitan todas. Solo se asignan categorías del tenant
+    # activo (TenantManager filtra), así un id ajeno se ignora con seguridad.
+    changed_fields = list(fields.keys())
+    if category_ids is not None:
+        from apps.clinica.models import PatientCategory
+
+        cats = list(
+            PatientCategory.objects.filter(
+                id__in=category_ids,
+                is_active=True,
+                deleted_at__isnull=True,
+            )
+        )
+        patient.categories.set(cats)
+        changed_fields.append("categories")
+
     audit_record(
         action=ActionType.PATIENT_UPDATE,
         resource_type="Patient",
@@ -355,7 +375,7 @@ def patient_update(
         tenant=patient.tenant,
         resource_id=patient.id,
         resource_repr=patient.record_number,  # identificador no-PII (minimización LFPDPPP)
-        metadata={"changed_fields": sorted(fields.keys())},
+        metadata={"changed_fields": sorted(changed_fields)},
     )
     return patient
 
@@ -413,13 +433,11 @@ def patient_set_classification(
     is_favorite: Optional[bool] = None,
     is_vip: Optional[bool] = None,
 ) -> Patient:
-    """Actualiza las clasificaciones de un paciente (favorito y/o VIP).
+    """Marca/desmarca a un paciente como Favorito y/o VIP.
 
-    Solo modifica los flags que no sean None. Si ambos son None no hace
-    ninguna escritura ni auditoría y devuelve el paciente sin cambios.
-
-    Usa save(update_fields=[...]) para actualizar únicamente los campos
-    modificados, minimizando el impacto en columnas indexadas.
+    Favorito y VIP son etiquetas del sistema (PatientCategory kind=favorite/vip):
+    esta función agrega o quita esa etiqueta en la relación `categories`. Solo
+    actúa sobre los parámetros que no sean None. Si ambos son None no escribe.
 
     Args:
         patient:     Instancia Patient a clasificar (ya recuperada por selector).
@@ -428,24 +446,41 @@ def patient_set_classification(
         is_vip:      True/False para marcar/desmarcar como VIP. None = sin cambio.
 
     Returns:
-        La instancia Patient (actualizada si hubo cambios, sin modificar si no).
+        La instancia Patient (con la etiqueta agregada/quitada si hubo cambios).
     """
-    update_fields: list[str] = []
+    from apps.clinica.models import PatientCategory
+    from apps.clinica.services import seed_system_patient_categories
 
-    if is_favorite is not None:
-        patient.is_favorite = is_favorite
-        update_fields.append("is_favorite")
+    def _system_category(kind: str) -> "PatientCategory | None":
+        cat = PatientCategory.objects.filter(
+            tenant=patient.tenant, kind=kind, deleted_at__isnull=True
+        ).first()
+        if cat is None:
+            # Defensa: si faltara la etiqueta de sistema, la sembramos al vuelo.
+            seed_system_patient_categories(patient.tenant)
+            cat = PatientCategory.objects.filter(
+                tenant=patient.tenant, kind=kind, deleted_at__isnull=True
+            ).first()
+        return cat
 
-    if is_vip is not None:
-        patient.is_vip = is_vip
-        update_fields.append("is_vip")
+    changed: list[str] = []
+    for kind, value in (
+        (PatientCategory.Kind.FAVORITE, is_favorite),
+        (PatientCategory.Kind.VIP, is_vip),
+    ):
+        if value is None:
+            continue
+        cat = _system_category(kind)
+        if cat is None:
+            continue
+        if value:
+            patient.categories.add(cat)
+        else:
+            patient.categories.remove(cat)
+        changed.append(kind)
 
-    if not update_fields:
-        # Nada que cambiar: devolvemos sin tocar la BD.
+    if not changed:
         return patient
-
-    update_fields.append("updated_at")
-    patient.save(update_fields=update_fields)
 
     audit_record(
         action=ActionType.PATIENT_UPDATE,
@@ -454,7 +489,7 @@ def patient_set_classification(
         tenant=patient.tenant,
         resource_id=patient.id,
         resource_repr=patient.record_number,
-        metadata={"changed_fields": sorted(f for f in update_fields if f != "updated_at")},
+        metadata={"classification": sorted(changed)},
     )
     return patient
 

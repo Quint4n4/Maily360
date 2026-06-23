@@ -39,6 +39,9 @@ class PatientOutputSerializer(serializers.ModelSerializer):
     avatar = serializers.ImageField(read_only=True)
     last_seen_at = serializers.SerializerMethodField()
     attended_count = serializers.SerializerMethodField()
+    categories = serializers.SerializerMethodField()
+    is_favorite = serializers.SerializerMethodField()
+    is_vip = serializers.SerializerMethodField()
 
     def get_last_seen_at(self, obj: Patient) -> object:
         """Devuelve la anotación last_seen si existe (null si no viene anotada)."""
@@ -47,6 +50,23 @@ class PatientOutputSerializer(serializers.ModelSerializer):
     def get_attended_count(self, obj: Patient) -> object:
         """Devuelve la anotación attended_count si existe (null si no viene anotada)."""
         return getattr(obj, "attended_count", None)
+
+    def get_categories(self, obj: Patient) -> list[dict[str, str]]:
+        """Etiquetas PERSONALIZADAS asignadas (las de sistema Favorito/VIP se
+        exponen como is_favorite/is_vip). Usa el prefetch de patient_list."""
+        return [
+            {"id": str(c.id), "name": c.name}
+            for c in obj.categories.all()
+            if c.kind == "custom"
+        ]
+
+    def get_is_favorite(self, obj: Patient) -> bool:
+        """Derivado: el paciente tiene la etiqueta de sistema 'Favorito'."""
+        return any(c.kind == "favorite" for c in obj.categories.all())
+
+    def get_is_vip(self, obj: Patient) -> bool:
+        """Derivado: el paciente tiene la etiqueta de sistema 'VIP'."""
+        return any(c.kind == "vip" for c in obj.categories.all())
 
     class Meta:
         model = Patient
@@ -91,6 +111,7 @@ class PatientOutputSerializer(serializers.ModelSerializer):
             "deceased_at",
             "custom_consultation_fee",
             "category",
+            "categories",
             # Auditoría y anotaciones
             "created_at",
             "last_seen_at",
