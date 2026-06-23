@@ -36,11 +36,13 @@ import type {
   PrescriptionFormatCreateInput,
   PrescriptionFormatOut,
   PrescriptionFormatUpdateInput,
+  PrescriptionTheme,
 } from '../../types/recetas'
 import {
   BASE_LAYOUT_OPTIONS,
   FONT_OPTIONS,
   SECTION_OPTIONS,
+  THEME_OPTIONS,
 } from '../../types/recetas'
 import { AlertaErrores, AvisoSoloLectura, Nota } from './Avisos'
 import { useConfirm } from '../common/DialogProvider'
@@ -319,6 +321,7 @@ interface EditorState {
   base_layout: PrescriptionBaseLayout
   accent_color: string
   font: PrescriptionFont
+  theme: PrescriptionTheme
   sections: FormatSections
   is_default: boolean
   doctor_id: string | null
@@ -332,6 +335,7 @@ function estadoInicial(formato: PrescriptionFormatOut | null): EditorState {
       base_layout: formato.base_layout,
       accent_color: formato.accent_color,
       font: formato.font,
+      theme: formato.theme ?? 'ondas',
       sections: { ...SECCIONES_DEFAULT, ...formato.sections },
       is_default: formato.is_default,
       doctor_id: formato.doctor_id,
@@ -343,6 +347,7 @@ function estadoInicial(formato: PrescriptionFormatOut | null): EditorState {
     base_layout: 'digital',
     accent_color: ACCENT_DEFAULT,
     font: 'helvetica',
+    theme: 'ondas',
     sections: { ...SECCIONES_DEFAULT },
     is_default: false,
     doctor_id: null,
@@ -393,6 +398,7 @@ function FormatoEditor({
           base_layout: st.base_layout,
           accent_color: st.accent_color,
           font: st.font,
+          theme: st.theme,
           sections: st.sections,
           is_default: st.is_default,
           doctor_id: st.doctor_id,
@@ -405,6 +411,7 @@ function FormatoEditor({
           base_layout: st.base_layout,
           accent_color: st.accent_color,
           font: st.font,
+          theme: st.theme,
           sections: st.sections,
           is_default: st.is_default,
           doctor_id: st.doctor_id,
@@ -518,6 +525,22 @@ function FormatoEditor({
                   {FONT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
+            </div>
+
+            {/* Estilo decorativo */}
+            <div>
+              <label className="label" htmlFor="fmt-theme">Estilo (decoración)</label>
+              <select
+                id="fmt-theme"
+                className="input"
+                value={st.theme}
+                onChange={(e) => setSt((p) => ({ ...p, theme: e.target.value as PrescriptionTheme }))}
+              >
+                {THEME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <p className="text-[11px] text-gray-500 mt-1">
+                {THEME_OPTIONS.find((o) => o.value === st.theme)?.description}
+              </p>
             </div>
 
             {/* Secciones */}
@@ -673,8 +696,10 @@ function PreviewReceta({ st }: { st: EditorState }) {
           color: '#333',
           padding: '7px 9px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          position: 'relative',
         }}
       >
+        <ThemeDecorMini theme={st.theme} accent={accent} />
         {/* Encabezado */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <div style={{ width: '24px', height: '24px', borderRadius: '4px', background: '#f3eecf', flexShrink: 0 }} />
@@ -757,5 +782,31 @@ function PreviewReceta({ st }: { st: EditorState }) {
         Aproximada. Usa “Vista previa PDF” en la tarjeta para ver el resultado exacto.
       </p>
     </div>
+  )
+}
+
+/* ─── Decoración de la maqueta según el estilo (aproximada) ────────────────── */
+
+function ThemeDecorMini({ theme, accent }: { theme: PrescriptionTheme; accent: string }) {
+  const base: React.CSSProperties = { position: 'absolute', pointerEvents: 'none' }
+  if (theme === 'minimal') return null
+  if (theme === 'barra') {
+    return <div style={{ ...base, top: 0, left: 0, width: '4px', height: '100%', background: accent }} />
+  }
+  if (theme === 'geometrico') {
+    return (
+      <>
+        <div style={{ ...base, top: '-14px', right: '-14px', width: '46px', height: '46px', borderRadius: '50%', background: accent, opacity: 0.10 }} />
+        <div style={{ ...base, top: '-5px', right: '-5px', width: '22px', height: '22px', borderRadius: '50%', background: accent, opacity: 0.16 }} />
+        <div style={{ ...base, bottom: '-12px', left: '-12px', width: '36px', height: '36px', borderRadius: '50%', background: accent, opacity: 0.10 }} />
+      </>
+    )
+  }
+  // ondas (por defecto)
+  return (
+    <>
+      <div style={{ ...base, top: 0, right: 0, width: '58px', height: '34px', background: accent, opacity: 0.12, borderBottomLeftRadius: '60px' }} />
+      <div style={{ ...base, bottom: 0, left: 0, width: '68px', height: '20px', background: accent, opacity: 0.10, borderTopRightRadius: '60px' }} />
+    </>
   )
 }

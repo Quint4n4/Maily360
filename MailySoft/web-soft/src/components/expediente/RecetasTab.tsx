@@ -42,7 +42,7 @@ import {
   useCancelPrescription,
   useCreatePrescription,
   useMedicationSearch,
-  useOpenPrescriptionPdf,
+  useOpenPrescriptionPdfWithFormat,
   usePrescriptions,
 } from '../../hooks/recetas'
 import { getPrescription } from '../../api/recetas'
@@ -247,7 +247,7 @@ function RecetaCard({
   puedeAnular: boolean
   onCopiar: (detalle: PrescriptionDetail) => void
 }) {
-  const abrirPdf = useOpenPrescriptionPdf()
+  const abrirPdf = useOpenPrescriptionPdfWithFormat()
   const anular = useCancelPrescription(patientId)
   const aviso = useAviso()
   const [confirmAnular, setConfirmAnular] = useState(false)
@@ -256,10 +256,11 @@ function RecetaCard({
 
   const anulada = receta.status === 'cancelled'
 
-  const verPdf = async () => {
+  /** Abre el PDF en el layout indicado: 'compact' = Farmacia, 'digital' = Paciente. */
+  const verPdf = async (formato: 'compact' | 'digital') => {
     setError('')
     try {
-      await abrirPdf.mutateAsync(receta.id)
+      await abrirPdf.mutateAsync({ prescriptionId: receta.id, formato })
     } catch (err) {
       setError(erroresDe(err).join(' '))
     }
@@ -308,9 +309,18 @@ function RecetaCard({
           {receta.doctor.full_name && (
             <span className="text-gray-700 font-medium">{receta.doctor.full_name}</span>
           )}
-          {receta.doctor.cedula_profesional && (
+          {receta.doctor.cedulas_validadas?.length ? (
+            <span
+              className="text-xs text-gray-400"
+              title={receta.doctor.cedulas_validadas.map((c) => `Céd. ${c}`).join(' · ')}
+            >
+              Céd. {receta.doctor.cedulas_validadas[0]}
+              {receta.doctor.cedulas_validadas.length > 1 &&
+                ` +${receta.doctor.cedulas_validadas.length - 1}`}
+            </span>
+          ) : receta.doctor.cedula_profesional ? (
             <span className="text-xs text-gray-400">Céd. {receta.doctor.cedula_profesional}</span>
-          )}
+          ) : null}
           <span className="text-xs rounded-full px-2 py-0.5" style={{ background: 'rgba(201,162,39,0.12)', color: '#9A7B1E' }}>
             {receta.items_count} {receta.items_count === 1 ? 'medicamento' : 'medicamentos'}
           </span>
@@ -342,13 +352,20 @@ function RecetaCard({
         {/* Acciones */}
         <div className="flex flex-wrap gap-2 pt-1">
           <button
-            type="button" onClick={verPdf} disabled={abrirPdf.isPending}
+            type="button" onClick={() => verPdf('compact')} disabled={abrirPdf.isPending}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-60 rounded-lg px-3 py-1.5"
             style={{ background: 'rgba(201,162,39,0.10)' }}
+            title="Receta para llevar a la farmacia (media carta)"
           >
-            {abrirPdf.isPending
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Abriendo…</>
-              : <><FileText className="w-3.5 h-3.5" /> Ver PDF</>}
+            <FileText className="w-3.5 h-3.5" /> Farmacia
+          </button>
+          <button
+            type="button" onClick={() => verPdf('digital')} disabled={abrirPdf.isPending}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-60 rounded-lg px-3 py-1.5"
+            style={{ background: 'rgba(201,162,39,0.10)' }}
+            title="Receta del paciente (hoja completa, con recomendaciones)"
+          >
+            <FileText className="w-3.5 h-3.5" /> Paciente
           </button>
 
           <button
@@ -548,7 +565,7 @@ function NuevaReceta({
   onClose: () => void
 }) {
   const crear = useCreatePrescription(paciente.id)
-  const abrirPdf = useOpenPrescriptionPdf()
+  const abrirPdf = useOpenPrescriptionPdfWithFormat()
   const { data: signosData } = useVitalSigns(paciente.id)
 
   // Renglones: prellenados si "copiar de previa", o uno vacío de arranque.
@@ -738,17 +755,28 @@ function NuevaReceta({
               Receta <strong>folio {creada.folio}</strong> emitida correctamente.
             </p>
           </div>
+          <p className="text-xs text-gray-500">
+            Se generan dos versiones: la de <strong>farmacia</strong> (para comprar los medicamentos)
+            y la del <strong>paciente</strong> (hoja completa con recomendaciones, para enviar o imprimir).
+          </p>
           <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
-              onClick={() => abrirPdf.mutate(creada.id)}
+              onClick={() => abrirPdf.mutate({ prescriptionId: creada.id, formato: 'compact' })}
               disabled={abrirPdf.isPending}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-60"
               style={{ background: 'rgba(201,162,39,0.10)' }}
             >
-              {abrirPdf.isPending
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Abriendo…</>
-                : <><FileText className="w-4 h-4" /> Ver PDF</>}
+              <FileText className="w-4 h-4" /> Farmacia
+            </button>
+            <button
+              type="button"
+              onClick={() => abrirPdf.mutate({ prescriptionId: creada.id, formato: 'digital' })}
+              disabled={abrirPdf.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-60"
+              style={{ background: 'rgba(201,162,39,0.10)' }}
+            >
+              <FileText className="w-4 h-4" /> Paciente (digital)
             </button>
             <button
               type="button" onClick={onClose}

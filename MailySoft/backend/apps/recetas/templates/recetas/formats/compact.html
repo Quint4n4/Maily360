@@ -105,16 +105,7 @@
 <body>
 
   <div class="page-bg">
-    <svg class="wave-tr" width="250" height="150" viewBox="0 0 250 150">
-      <path d="M250,0 L250,150 Q185,112 132,70 Q78,28 0,0 Z" fill="{{ accent }}" fill-opacity="0.09"/>
-      <path d="M250,0 L250,150 Q208,118 172,80 Q118,28 55,0 Z" fill="{{ accent }}" fill-opacity="0.18"/>
-    </svg>
-    <svg class="wave-bot" width="612" height="70" viewBox="0 0 612 70" preserveAspectRatio="none">
-      <path d="M0,70 L612,70 L612,36 Q500,10 380,30 Q250,54 130,26 Q60,12 0,34 Z" fill="{{ accent }}" fill-opacity="0.09"/>
-      <path d="M0,70 L612,70 L612,52 Q500,34 380,48 Q250,66 130,42 Q60,30 0,50 Z" fill="{{ accent }}" fill-opacity="0.18"/>
-    </svg>
-    {% if logo_watermark_b64 %}<div class="wm-logo"><img src="{{ logo_watermark_b64 }}" alt="" /></div>{% endif %}
-    {% if cancelled %}<div class="wm-anulada"><span>ANULADA</span></div>{% endif %}
+    {% include "recetas/formats/_theme_bg.html" with fmt_layout="compact" %}
   </div>
 
   <!-- Membrete: logo grande | clínica + doctor | QR -->

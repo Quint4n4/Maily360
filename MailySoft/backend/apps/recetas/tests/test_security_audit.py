@@ -551,10 +551,11 @@ class TestM5ItemsCountNoNPlusOne:
         prefetch_related y NO dispara queries adicionales, a diferencia de
         obj.items.count() que haría una query por cada receta en el listado.
 
-        Queries esperadas al evaluar el QS: exactamente 2:
+        Queries esperadas al evaluar el QS: exactamente 3:
           - 1 SELECT de Prescription con select_related (doctor, membership, user)
           - 1 SELECT de PrescriptionItem (prefetch)
-        Con .count() sería 2 + 3 = 5 (una query COUNT por receta).
+          - 1 SELECT de DoctorCredential validadas (prefetch, constante: NO N+1)
+        Con .count() sería 3 + 3 = 6 (una query COUNT por receta).
         """
         tenant = TenantFactory()
         user, _ = _member_with_doctor(tenant)
@@ -577,8 +578,9 @@ class TestM5ItemsCountNoNPlusOne:
 
         with tenant_ctx(tenant):
             qs = prescription_list(patient=patient)
-            # 2 queries: SELECT prescriptions + prefetch items (sin N+1)
-            with django_assert_num_queries(2):
+            # 3 queries: SELECT prescriptions + prefetch items + prefetch
+            # credenciales validadas (todas constantes, sin N+1 por receta)
+            with django_assert_num_queries(3):
                 prescriptions_cache = list(qs)
 
         # La serialización fuera del bloque NO dispara queries extras (usa cache del prefetch)

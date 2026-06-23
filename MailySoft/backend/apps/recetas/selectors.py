@@ -239,6 +239,53 @@ def prescription_format_list(
     ).order_by("-is_default", "name")
 
 
+def _resolve_configured_format(prescription: Any, tenant: Any) -> PrescriptionFormat:
+    """Formato configurado del tenant/doctor: doctor autorizado → default → fábrica.
+
+    Devuelve el formato real (con su color, tipografía y secciones) o un objeto de
+    fábrica en memoria si la clínica no configuró ninguno. No aplica overrides.
+    """
+    doctor_id = getattr(prescription, "doctor_id", None)
+    if doctor_id is not None:
+        fmt_doctor = (
+            PrescriptionFormat.all_objects.filter(
+                tenant=tenant,
+                doctor_id=doctor_id,
+                is_authorized=True,
+                is_active=True,
+                deleted_at__isnull=True,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if fmt_doctor is not None:
+            return fmt_doctor
+
+    fmt_default = (
+        PrescriptionFormat.all_objects.filter(
+            tenant=tenant,
+            is_default=True,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+        .first()
+    )
+    if fmt_default is not None:
+        return fmt_default
+
+    fmt_factory = PrescriptionFormat.__new__(PrescriptionFormat)
+    fmt_factory.base_layout = "digital"
+    fmt_factory.accent_color = "#9A7B1E"
+    fmt_factory.font = "helvetica"
+    fmt_factory.theme = "ondas"
+    fmt_factory.sections = {}
+    fmt_factory.letterhead_mode = "digital"
+    fmt_factory.is_default = False
+    fmt_factory.is_authorized = False
+    fmt_factory.doctor_id = None
+    return fmt_factory
+
+
 def prescription_format_resolve(
     *,
     prescription: Any,
@@ -280,61 +327,31 @@ def prescription_format_resolve(
         except PrescriptionFormat.DoesNotExist:
             pass  # fallback al siguiente nivel
 
-    # --- 2. Override por nombre de layout (preview rápido) ---
-    if layout_override and layout_override in VALID_LAYOUTS:
-        fmt = PrescriptionFormat.__new__(PrescriptionFormat)
-        # Inicializar solo los campos necesarios para el contexto del PDF.
-        fmt.base_layout = layout_override
-        fmt.accent_color = "#9A7B1E"
-        fmt.font = "helvetica"
-        fmt.sections = {}
-        fmt.letterhead_mode = "digital"
-        fmt.is_default = False
-        fmt.is_authorized = False
-        fmt.doctor_id = None
-        return fmt
+    # --- Formato configurado del tenant/doctor (color, tipografía, secciones) ---
+    fmt = _resolve_configured_format(prescription, tenant)
 
-    # --- 3. Formato del médico de la receta con is_authorized=True ---
-    doctor_id = getattr(prescription, "doctor_id", None)
-    if doctor_id is not None:
-        fmt_doctor = (
-            PrescriptionFormat.all_objects.filter(
-                tenant=tenant,
-                doctor_id=doctor_id,
-                is_authorized=True,
-                is_active=True,
-                deleted_at__isnull=True,
-            )
-            .order_by("-created_at")
-            .first()
-        )
-        if fmt_doctor is not None:
-            return fmt_doctor
+    # --- 2. Override por nombre de layout: forzar la hoja SIN perder el diseño ---
+    # Genera la versión Paciente (digital) o Farmacia (compact) usando el MISMO
+    # formato configurado (color, tipografía y secciones del tenant), solo cambiando
+    # el layout. Así el color elegido se aplica a ambas versiones.
+    if (
+        layout_override
+        and layout_override in VALID_LAYOUTS
+        and getattr(fmt, "base_layout", None) != layout_override
+    ):
+        forced = PrescriptionFormat.__new__(PrescriptionFormat)
+        forced.base_layout = layout_override
+        forced.accent_color = fmt.accent_color
+        forced.font = fmt.font
+        forced.theme = getattr(fmt, "theme", "ondas")
+        forced.sections = fmt.sections if isinstance(fmt.sections, dict) else {}
+        forced.letterhead_mode = getattr(fmt, "letterhead_mode", "digital")
+        forced.is_default = False
+        forced.is_authorized = False
+        forced.doctor_id = None
+        return forced
 
-    # --- 4. Formato default del tenant ---
-    fmt_default = (
-        PrescriptionFormat.all_objects.filter(
-            tenant=tenant,
-            is_default=True,
-            is_active=True,
-            deleted_at__isnull=True,
-        )
-        .first()
-    )
-    if fmt_default is not None:
-        return fmt_default
-
-    # --- 5. Objeto en memoria con defaults de fábrica ---
-    fmt_factory = PrescriptionFormat.__new__(PrescriptionFormat)
-    fmt_factory.base_layout = "digital"
-    fmt_factory.accent_color = "#9A7B1E"
-    fmt_factory.font = "helvetica"
-    fmt_factory.sections = {}
-    fmt_factory.letterhead_mode = "digital"
-    fmt_factory.is_default = False
-    fmt_factory.is_authorized = False
-    fmt_factory.doctor_id = None
-    return fmt_factory
+    return fmt
 
 
 def prescription_list(*, patient: Patient) -> "QuerySet[Prescription]":
@@ -350,13 +367,33 @@ def prescription_list(*, patient: Patient) -> "QuerySet[Prescription]":
     Returns:
         QuerySet[Prescription] ordenado por -issued_at.
     """
+    from django.db.models import Prefetch
+
+    from apps.clinica.models import DoctorCredential
+
+    # Solo las credenciales VALIDADAS aparecen en la receta; las precargamos
+    # (mismo filtro/orden que el generador de PDF) para que el listado pueda
+    # mostrar las cédulas reales sin disparar N+1 por receta.
+    validated_creds = DoctorCredential.objects.filter(
+        is_active=True,
+        validation_status="validada",
+        deleted_at__isnull=True,
+    ).order_by("order", "id")
+
     return (
         Prescription.objects.select_related(
             "doctor",
             "doctor__membership",
             "doctor__membership__user",
         )
-        .prefetch_related("items")
+        .prefetch_related(
+            "items",
+            Prefetch(
+                "doctor__credentials",
+                queryset=validated_creds,
+                to_attr="validated_credentials",
+            ),
+        )
         .filter(patient=patient)
         .order_by("-issued_at")
     )

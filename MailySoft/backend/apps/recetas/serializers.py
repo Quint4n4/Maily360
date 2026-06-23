@@ -47,6 +47,7 @@ _HEX_RE = _re.compile(r"^#[0-9A-Fa-f]{6}$")
 _LAYOUT_CHOICES: list[str] = [c[0] for c in PrescriptionFormat.BaseLayout.choices]
 _FONT_CHOICES: list[str] = [c[0] for c in PrescriptionFormat.FontChoice.choices]
 _LETTERHEAD_CHOICES: list[str] = [c[0] for c in PrescriptionFormat.LetterheadMode.choices]
+_THEME_CHOICES: list[str] = [c[0] for c in PrescriptionFormat.Theme.choices]
 
 _ROUTE_CHOICES: list[str] = [c[0] for c in RouteOfAdministration.choices]
 _ITEM_KIND_CHOICES: list[str] = [c[0] for c in ItemKind.choices]
@@ -622,12 +623,41 @@ class _DoctorBriefSerializer(serializers.Serializer):
     full_name = serializers.SerializerMethodField()
     cedula_profesional = serializers.CharField()
     specialty = serializers.CharField()
+    # Cédulas que SÍ salen en la receta (credenciales validadas). El campo
+    # cedula_profesional es legacy y solo se usa como respaldo cuando el médico
+    # no tiene ninguna credencial validada.
+    cedulas_validadas = serializers.SerializerMethodField()
 
     def get_full_name(self, obj: object) -> str:
         try:
             return obj.membership.user.get_full_name()  # type: ignore[union-attr]
         except AttributeError:
             return ""
+
+    def get_cedulas_validadas(self, obj: object) -> list[str]:
+        # Usa el prefetch `validated_credentials` (prescription_list) si está
+        # disponible; si no, cae a una consulta directa (mismo filtro/orden
+        # que el generador de PDF) para mantener consistencia.
+        creds = getattr(obj, "validated_credentials", None)
+        if creds is None:
+            try:
+                from apps.clinica.models import DoctorCredential
+
+                creds = list(
+                    DoctorCredential.objects.filter(
+                        doctor=obj,
+                        is_active=True,
+                        validation_status="validada",
+                        deleted_at__isnull=True,
+                    ).order_by("order", "id")
+                )
+            except Exception:  # noqa: BLE001
+                creds = []
+        return [
+            c.credential_number
+            for c in creds
+            if getattr(c, "credential_number", "")
+        ]
 
 
 class PrescriptionListOutputSerializer(serializers.Serializer):
@@ -758,6 +788,7 @@ class PrescriptionFormatCreateInputSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=120, allow_blank=False)
     base_layout = serializers.ChoiceField(choices=_LAYOUT_CHOICES, default="digital")
+    theme = serializers.ChoiceField(choices=_THEME_CHOICES, default="ondas")
     accent_color = serializers.CharField(max_length=7, default="#9A7B1E")
     font = serializers.ChoiceField(choices=_FONT_CHOICES, default="helvetica")
     sections = SectionsField(required=False, default=dict)
@@ -786,6 +817,7 @@ class PrescriptionFormatUpdateInputSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=120, allow_blank=False, required=False)
     base_layout = serializers.ChoiceField(choices=_LAYOUT_CHOICES, required=False)
+    theme = serializers.ChoiceField(choices=_THEME_CHOICES, required=False)
     accent_color = serializers.CharField(max_length=7, required=False)
     font = serializers.ChoiceField(choices=_FONT_CHOICES, required=False)
     sections = SectionsField(required=False)
@@ -812,6 +844,7 @@ class PrescriptionFormatOutputSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     name = serializers.CharField()
     base_layout = serializers.CharField()
+    theme = serializers.CharField()
     accent_color = serializers.CharField()
     font = serializers.CharField()
     sections = serializers.DictField(child=serializers.BooleanField())

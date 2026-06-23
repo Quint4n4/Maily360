@@ -125,7 +125,10 @@ export type PrescriptionStatus = 'active' | 'cancelled'
 export interface PrescriptionDoctor {
   id: string
   full_name: string
+  /** Cédula legacy (un solo valor); solo es respaldo si no hay credenciales validadas. */
   cedula_profesional: string
+  /** Cédulas validadas que SÍ aparecen en la receta (credenciales del médico). */
+  cedulas_validadas: string[]
   specialty: string
 }
 
@@ -332,6 +335,13 @@ export type PrescriptionBaseLayout = 'compact' | 'digital'
 /** Tipografía del PDF (PrescriptionFormat.FontChoice.choices). */
 export type PrescriptionFont = 'helvetica' | 'times'
 
+/** Estilo decorativo del fondo/marco del PDF (PrescriptionFormat.Theme.choices). */
+export type PrescriptionTheme =
+  | 'ondas'
+  | 'minimal'
+  | 'barra'
+  | 'geometrico'
+
 /** Modo de membrete (heredado; ya no se expone en el editor). */
 export type LetterheadMode = 'digital' | 'preprinted'
 
@@ -359,6 +369,8 @@ export interface PrescriptionFormatOut {
   /** Color de acento en #RRGGBB. */
   accent_color: string
   font: PrescriptionFont
+  /** Estilo decorativo del fondo/marco. */
+  theme: PrescriptionTheme
   sections: FormatSections
   letterhead_mode: LetterheadMode
   is_default: boolean
@@ -375,6 +387,7 @@ export interface PrescriptionFormatCreateInput {
   base_layout?: PrescriptionBaseLayout
   accent_color?: string
   font?: PrescriptionFont
+  theme?: PrescriptionTheme
   sections?: FormatSections
   letterhead_mode?: LetterheadMode
   is_default?: boolean
@@ -391,6 +404,7 @@ export interface PrescriptionFormatUpdateInput {
   base_layout?: PrescriptionBaseLayout
   accent_color?: string
   font?: PrescriptionFont
+  theme?: PrescriptionTheme
   sections?: FormatSections
   letterhead_mode?: LetterheadMode
   is_default?: boolean
@@ -420,6 +434,14 @@ export const BASE_LAYOUT_OPTIONS: {
 export const FONT_OPTIONS: { value: PrescriptionFont; label: string }[] = [
   { value: 'helvetica', label: 'Helvetica / Arial (sans-serif)' },
   { value: 'times', label: 'Times New Roman (serif)' },
+]
+
+/** Estilos decorativos disponibles (con descripción para el editor). */
+export const THEME_OPTIONS: { value: PrescriptionTheme; label: string; description: string }[] = [
+  { value: 'ondas', label: 'Ondas', description: 'Bandas curvas suaves en las esquinas.' },
+  { value: 'minimal', label: 'Minimalista', description: 'Sin fondo, solo líneas del color. Sobrio.' },
+  { value: 'barra', label: 'Barra lateral', description: 'Franja de color en el borde izquierdo.' },
+  { value: 'geometrico', label: 'Geométrico', description: 'Círculos suaves en las esquinas.' },
 ]
 
 /** Opciones de modo de membrete. */

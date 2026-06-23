@@ -1,0 +1,45 @@
+{% comment %}
+Fondo decorativo de la receta según `theme` (estilo elegido en el formato).
+Se incluye dentro de un contenedor .page-bg (position:fixed) que cubre la hoja.
+Estilos inline para funcionar igual en compact y digital sin duplicar CSS.
+Variables: theme, accent, logo_watermark_b64, cancelled.
+{% endcomment %}
+{% if theme == 'ondas' or not theme %}
+  {% if fmt_layout == 'digital' %}
+    {# Hoja carta: ondas más grandes para que se aprecien con cualquier color #}
+    <svg style="position:absolute; top:0; right:0;" width="9.8cm" height="6.2cm" viewBox="0 0 250 150" preserveAspectRatio="none">
+      <path d="M250,0 L250,150 Q185,112 132,70 Q78,28 0,0 Z" fill="{{ accent }}" fill-opacity="0.11"/>
+      <path d="M250,0 L250,150 Q208,118 172,80 Q118,28 55,0 Z" fill="{{ accent }}" fill-opacity="0.20"/>
+    </svg>
+    <svg style="position:absolute; bottom:0; left:0; width:21.6cm;" height="3.4cm" viewBox="0 0 612 70" preserveAspectRatio="none">
+      <path d="M0,70 L612,70 L612,36 Q500,10 380,30 Q250,54 130,26 Q60,12 0,34 Z" fill="{{ accent }}" fill-opacity="0.11"/>
+      <path d="M0,70 L612,70 L612,52 Q500,34 380,48 Q250,66 130,42 Q60,30 0,50 Z" fill="{{ accent }}" fill-opacity="0.20"/>
+    </svg>
+  {% else %}
+    <svg style="position:absolute; top:0; right:0;" width="250" height="150" viewBox="0 0 250 150">
+      <path d="M250,0 L250,150 Q185,112 132,70 Q78,28 0,0 Z" fill="{{ accent }}" fill-opacity="0.09"/>
+      <path d="M250,0 L250,150 Q208,118 172,80 Q118,28 55,0 Z" fill="{{ accent }}" fill-opacity="0.18"/>
+    </svg>
+    <svg style="position:absolute; bottom:0; left:0; width:21.6cm;" height="70" viewBox="0 0 612 70" preserveAspectRatio="none">
+      <path d="M0,70 L612,70 L612,36 Q500,10 380,30 Q250,54 130,26 Q60,12 0,34 Z" fill="{{ accent }}" fill-opacity="0.09"/>
+      <path d="M0,70 L612,70 L612,52 Q500,34 380,48 Q250,66 130,42 Q60,30 0,50 Z" fill="{{ accent }}" fill-opacity="0.18"/>
+    </svg>
+  {% endif %}
+{% elif theme == 'barra' %}
+  <div style="position:absolute; top:0; bottom:0; left:0; width:0.32cm; background:{{ accent }};"></div>
+{% elif theme == 'geometrico' %}
+  <div style="position:absolute; top:-1.3cm; right:-1.3cm; width:4.6cm; height:4.6cm; border-radius:50%; background:{{ accent }}; opacity:0.10;"></div>
+  <div style="position:absolute; top:-0.4cm; right:-0.4cm; width:2.2cm; height:2.2cm; border-radius:50%; background:{{ accent }}; opacity:0.16;"></div>
+  <div style="position:absolute; bottom:-1.1cm; left:-1.1cm; width:3.6cm; height:3.6cm; border-radius:50%; background:{{ accent }}; opacity:0.10;"></div>
+{% endif %}
+{# 'minimal': sin decoración de fondo #}
+{% if logo_watermark_b64 %}
+  <div style="position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center;">
+    <img src="{{ logo_watermark_b64 }}" alt="" style="max-width:8cm; max-height:8cm; width:auto; height:auto;" />
+  </div>
+{% endif %}
+{% if cancelled %}
+  <div style="position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center;">
+    <span style="font-size:70pt; font-weight:bold; color:rgba(200,0,0,0.10); transform:rotate(-26deg); letter-spacing:5pt;">ANULADA</span>
+  </div>
+{% endif %}

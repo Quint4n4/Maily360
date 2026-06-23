@@ -650,7 +650,7 @@ def test_build_context_credential_with_logo_includes_logo_b64() -> None:
     set_current_tenant(tenant)
     set_tenant_context_active(True)
     try:
-        doctor_credential_create(
+        cred = doctor_credential_create(
             tenant=tenant,
             user=UserFactory(),
             doctor=doctor,
@@ -659,6 +659,9 @@ def test_build_context_credential_with_logo_includes_logo_b64() -> None:
             kind="profesional",
             logo=logo_file,
         )
+        # Solo las credenciales validadas aparecen en la receta (flujo híbrido).
+        cred.validation_status = "validada"
+        cred.save(update_fields=["validation_status"])
         from apps.recetas.selectors import prescription_get as _pg
         full_rx = _pg(prescription_id=rx.id)
     finally:
@@ -700,6 +703,8 @@ def test_build_context_credential_without_logo_has_empty_logo_b64() -> None:
             institution="IPN",
             kind="posgrado",
         )
+        from apps.clinica.models import DoctorCredential as _DC
+        _DC.objects.filter(doctor=doctor).update(validation_status="validada")
         from apps.recetas.selectors import prescription_get as _pg
         full_rx = _pg(prescription_id=rx.id)
     finally:
@@ -741,6 +746,8 @@ def test_build_context_credential_blocks_equals_credentials() -> None:
             tenant=tenant, user=UserFactory(), doctor=doctor,
             title="Cred B", institution="UANL", kind="especialidad",
         )
+        from apps.clinica.models import DoctorCredential as _DC
+        _DC.objects.filter(doctor=doctor).update(validation_status="validada")
         from apps.recetas.selectors import prescription_get as _pg
         full_rx = _pg(prescription_id=rx.id)
     finally:

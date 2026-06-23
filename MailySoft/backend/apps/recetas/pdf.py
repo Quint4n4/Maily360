@@ -297,9 +297,12 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
     # que los logos aparecieran descolocados respecto a su cédula.
     credentials: list[dict[str, Any]] = []
     try:
+        # Solo credenciales VALIDADAS por un administrador aparecen en la receta
+        # (flujo híbrido: las pendientes/rechazadas no se imprimen).
         cred_qs = DoctorCredential.objects.filter(
             doctor=doctor,
             is_active=True,
+            validation_status="validada",
             deleted_at__isnull=True,
         ).order_by("order", "id")
         for cred in cred_qs:
@@ -497,6 +500,7 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
     font_family: str = _DEFAULT_FONT_FAMILY
     sections_ctx: dict[str, bool] = dict(_DEFAULT_SECTIONS)
     letterhead_mode_ctx: str = "digital"
+    theme_ctx: str = "ondas"
 
     if fmt is not None:
         accent = getattr(fmt, "accent_color", _DEFAULT_ACCENT) or _DEFAULT_ACCENT
@@ -516,6 +520,7 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
             sections_ctx = dict(_DEFAULT_SECTIONS)
             sections_ctx.update(_sections_raw)
         letterhead_mode_ctx = getattr(fmt, "letterhead_mode", "digital") or "digital"
+        theme_ctx = getattr(fmt, "theme", "ondas") or "ondas"
 
     # --- F5: QR de verificación ---
     # Se genera en memoria como PNG base64; NO contiene PII del paciente.
@@ -609,6 +614,7 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
         "font_family": font_family,
         "sections": sections_ctx,
         "letterhead_mode": letterhead_mode_ctx,
+        "theme": theme_ctx,
         # F5 — QR de verificación de autenticidad (PNG base64, sin PII)
         "qr_b64": qr_b64,
         "qr_mime": qr_mime,

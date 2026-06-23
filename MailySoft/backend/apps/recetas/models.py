@@ -863,6 +863,14 @@ class PrescriptionFormat(TenantAwareModel):
         DIGITAL = "digital", "Digital (el sistema imprime el encabezado)"
         PREPRINTED = "preprinted", "Pre-impreso (deja espacio superior)"
 
+    class Theme(models.TextChoices):
+        """Estilo decorativo del fondo/marco del PDF (no altera la estructura)."""
+
+        ONDAS = "ondas", "Ondas suaves"
+        MINIMAL = "minimal", "Minimalista"
+        BARRA = "barra", "Barra lateral"
+        GEOMETRICO = "geometrico", "Geométrico"
+
     name = models.CharField(
         max_length=120,
         help_text="Nombre descriptivo del formato. Ej: 'Estándar clínica', 'Compacta Camsa'.",
@@ -888,6 +896,12 @@ class PrescriptionFormat(TenantAwareModel):
         choices=FontChoice.choices,
         default=FontChoice.HELVETICA,
         help_text="Tipografía del PDF. Solo fuentes base (Helvetica/Times); fase futura: embeber TTF.",
+    )
+    theme = models.CharField(
+        max_length=12,
+        choices=Theme.choices,
+        default=Theme.ONDAS,
+        help_text="Estilo decorativo del fondo/marco del PDF (no cambia la estructura).",
     )
     sections = models.JSONField(
         default=dict,

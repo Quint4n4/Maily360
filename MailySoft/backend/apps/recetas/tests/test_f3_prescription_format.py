@@ -475,6 +475,25 @@ def test_resolve_factory_fallback() -> None:
     assert result.accent_color == "#9A7B1E"
 
 
+@pytest.mark.django_db
+def test_resolve_layout_override_conserva_color_configurado() -> None:
+    """?formato=digital usa el color/secciones del formato configurado, no los defaults.
+
+    Anti-regresión: antes el layout_override descartaba el formato del tenant y
+    aplicaba el dorado por defecto, así que las versiones Paciente/Farmacia ignoraban
+    el color elegido por la clínica.
+    """
+    tenant = TenantFactory()
+    with tenant_ctx(tenant):
+        prescription = PrescriptionFactory(tenant=tenant)
+        PrescriptionFormatFactory(
+            tenant=tenant, base_layout="compact", accent_color="#0c0e12", is_default=True,
+        )
+        result = prescription_format_resolve(prescription=prescription, layout_override="digital")
+    assert result.base_layout == "digital"
+    assert result.accent_color == "#0c0e12"
+
+
 # ---------------------------------------------------------------------------
 # PDF — contexto y generación
 # ---------------------------------------------------------------------------
@@ -504,6 +523,22 @@ def test_build_context_includes_format_vars() -> None:
     assert ctx["sections"]["sueros"] is False
     # las secciones no especificadas se rellenan con True
     assert ctx["sections"]["diagnostico"] is True
+
+
+@pytest.mark.django_db
+def test_build_context_includes_theme() -> None:
+    """_build_context expone el estilo decorativo (theme) del formato."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    membership = TenantMembershipFactory(user=user, tenant=tenant, role=TenantMembership.Role.DOCTOR)
+    doctor = DoctorFactory(tenant=tenant, membership=membership)
+    with tenant_ctx(tenant):
+        prescription = PrescriptionFactory(tenant=tenant, doctor=doctor)
+        PrescriptionItemFactory(prescription=prescription, tenant=tenant)
+        fmt = PrescriptionFormatFactory(tenant=tenant, theme="geometrico")
+        ctx = _build_context(prescription, fmt=fmt)
+
+    assert ctx["theme"] == "geometrico"
 
 
 @pytest.mark.django_db

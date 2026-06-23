@@ -12,8 +12,8 @@
     ================================================================ */
     @page {
       size: letter;
-      margin-top: 4.1cm;
-      margin-bottom: 2.4cm;
+      margin-top: 5cm;
+      margin-bottom: 2.8cm;
       margin-left: 1.4cm;
       margin-right: 1.4cm;
       @top-center { content: element(rx-header); width: 100%; }
@@ -22,23 +22,21 @@
     * { box-sizing: border-box; }
     body { font-family: {{ font_family }}; font-size: 10pt; color: #2b2b2b; margin: 0; padding: 0; }
 
-    @page cancelled-page {
-      background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='240'><text x='50%' y='50%' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='90' font-weight='bold' fill='rgba(200,0,0,0.12)' transform='rotate(-35,300,120)'>ANULADA</text></svg>") center center no-repeat;
-    }
-    .page-cancelled { page: cancelled-page; }
+    /* Fondo decorativo (cubre la hoja física carta; se repite en cada página). */
+    .page-bg { position: fixed; top: -5cm; left: -1.4cm; width: 21.6cm; height: 27.9cm; z-index: -1; }
 
     /* ================ RUNNING HEADER ================ */
-    #rx-header { position: running(rx-header); width: 100%; background: white; }
+    #rx-header { position: running(rx-header); width: 100%; }
     .hdr { width: 100%; border-collapse: collapse; }
     .hdr td { vertical-align: middle; }
     .h-logo { width: 96pt; }
-    .h-logo img { max-width: 86pt; max-height: 76pt; }
+    .h-logo img { max-width: 74pt; max-height: 62pt; }
     .h-center { text-align: center; padding: 0 8pt; }
     .h-clinic { font-size: 16pt; font-weight: bold; color: {{ accent }}; letter-spacing: 0.5pt; text-transform: uppercase; line-height: 1.05; }
     .h-doctor { font-size: 11pt; font-weight: bold; color: #1a1a1a; margin-top: 1pt; }
     .h-spec { font-size: 8.5pt; color: #555; margin-top: 0.5pt; }
     .h-qr { width: 82pt; text-align: right; }
-    .h-qr img { width: 1.65cm; height: 1.65cm; }
+    .h-qr img { width: 1.65cm; height: 1.65cm; background: white; }
     .h-qr .ql { font-size: 5pt; color: #aaa; }
 
     .creds { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 6pt; }
@@ -50,7 +48,7 @@
     .h-rule { border-bottom: 2pt solid {{ accent }}; margin-top: 7pt; }
 
     /* ================ RUNNING FOOTER ================ */
-    #rx-footer { position: running(rx-footer); width: 100%; background: white; border-top: 1pt solid {{ accent }}; padding-top: 5pt; }
+    #rx-footer { position: running(rx-footer); width: 100%; border-top: 1pt solid {{ accent }}; padding-top: 5pt; }
     .ftr { width: 100%; border-collapse: collapse; }
     .ftr td { vertical-align: bottom; }
     .f-firma { width: 50%; text-align: center; }
@@ -104,7 +102,11 @@
     .rec-text { font-size: 10.5pt; color: #333; line-height: 1.55; white-space: pre-line; }
   </style>
 </head>
-<body{% if cancelled %} class="page-cancelled"{% endif %}>
+<body>
+
+  <div class="page-bg">
+    {% include "recetas/formats/_theme_bg.html" with fmt_layout="digital" %}
+  </div>
 
   <!-- ================ RUNNING HEADER ================ -->
   <div id="rx-header">
