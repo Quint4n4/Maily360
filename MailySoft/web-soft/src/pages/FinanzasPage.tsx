@@ -8,6 +8,7 @@ import {
   Lock,
   LineChart,
   CalendarClock,
+  HeartHandshake,
 } from 'lucide-react'
 
 import Topbar from '../components/Topbar'
@@ -18,11 +19,20 @@ import CobrosPagosTab from '../components/finanzas/CobrosPagosTab'
 import CotizacionesTab from '../components/finanzas/CotizacionesTab'
 import CfdiTab from '../components/finanzas/CfdiTab'
 import EstadoCuentaTab from '../components/finanzas/EstadoCuentaTab'
+import RetencionTab from '../components/finanzas/RetencionTab'
 import { can, canAccessFinance, type FinanceCapability } from '../auth/permisos'
 import { ALL_ROLES, useRole } from '../auth/useRole'
 import { toIsoDate } from '../lib/format'
 
-type TabKey = 'dashboard' | 'reportes' | 'cierre' | 'cobros' | 'cotizaciones' | 'cfdi' | 'estado'
+type TabKey =
+  | 'dashboard'
+  | 'reportes'
+  | 'cierre'
+  | 'cobros'
+  | 'cotizaciones'
+  | 'cfdi'
+  | 'estado'
+  | 'retencion'
 
 interface TabDef {
   key: TabKey
@@ -40,6 +50,8 @@ const TABS: TabDef[] = [
   { key: 'cotizaciones', label: 'Cotizaciones', icon: ScrollText, capability: 'viewModule' },
   { key: 'cfdi', label: 'CFDI', icon: FileText, capability: 'viewCfdi' },
   { key: 'estado', label: 'Estado de cuenta', icon: Receipt, capability: 'viewStatement' },
+  // Retención (RFM, Fase 3): misma matriz que el dashboard (owner/admin/finance/readonly).
+  { key: 'retencion', label: 'Retención', icon: HeartHandshake, capability: 'viewDashboard' },
 ]
 
 const RANGE_PRESETS = [
@@ -153,6 +165,7 @@ export default function FinanzasPage() {
             {current?.key === 'cotizaciones' && <CotizacionesTab role={role} />}
             {current?.key === 'cfdi' && <CfdiTab role={role} />}
             {current?.key === 'estado' && <EstadoCuentaTab />}
+            {current?.key === 'retencion' && <RetencionTab role={role} />}
           </>
         )}
       </main>

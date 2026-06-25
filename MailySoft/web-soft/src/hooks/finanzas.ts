@@ -18,6 +18,7 @@ export const finanzasKeys = {
   dashboard: (range: api.DateRangeParams) => ['finanzas', 'dashboard', range] as const,
   report: (params: api.PeriodReportParams) => ['finanzas', 'report', params] as const,
   dailySheet: (date: string) => ['finanzas', 'dailySheet', date] as const,
+  retencion: () => ['finanzas', 'retencion'] as const,
   concepts: () => ['finanzas', 'concepts'] as const,
   quotes: (params: object) => ['finanzas', 'quotes', params] as const,
   charges: (params: object) => ['finanzas', 'charges', params] as const,
@@ -73,6 +74,18 @@ export function useCierreDiario(date: string) {
     queryKey: finanzasKeys.dailySheet(date),
     queryFn: () => api.fetchDailySheet(date),
     enabled: Boolean(date),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Fase 3 — Panel de retención (RFM)
+// ---------------------------------------------------------------------------
+
+/** Panel de retención RFM: distribución por segmento + listas accionables + métricas. */
+export function useRetencion() {
+  return useQuery({
+    queryKey: finanzasKeys.retencion(),
+    queryFn: () => api.fetchRetention(),
   })
 }
 

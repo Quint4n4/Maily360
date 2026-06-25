@@ -42,6 +42,7 @@ from apps.core.permissions import (
     FinanceQuotePermission,
     HasClinicRole,
     PatientStatementPermission,
+    RetentionPermission,
 )
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
@@ -916,3 +917,59 @@ class DailySheetApi(TenantAPIView):
 
         sheet = selectors.finance_daily_sheet(date=sheet_date)
         return Response(sheet)
+
+
+# ===========================================================================
+# Fase 3 — Panel de retención (RFM)
+# ===========================================================================
+
+
+class RetentionPanelApi(TenantAPIView):
+    """GET /api/v1/finanzas/retencion/ — panel de analítica de retención RFM.
+
+    Calcula en VIVO (sin tabla intermedia) la segmentación RFM de todos los
+    pacientes del tenant. No modifica ningún registro (solo lectura).
+
+    Decisión D-7 (plan §3): solo visualización. El sistema identifica y lista
+    los segmentos en riesgo / perdidos para que la clínica los contacte de forma
+    manual. NO se envía ninguna campaña automática.
+
+    Segmentos devueltos en ``segments``:
+      - nuevo      : 1.ª cita atendida en los últimos 90 días.
+      - vip        : top 20% gasto 12m + recencia <6m + ≥2 visitas/año.
+      - frecuente  : ≥2 visitas/año + recencia <6m.
+      - en_riesgo  : antes regular (≥2 visitas en el año previo) pero sin
+                     visita en los últimos 150 días.
+      - perdido    : sin ninguna visita atendida en los últimos 365 días.
+      - ocasional  : el resto.
+
+    Listas accionables:
+      - ``at_risk_list`` / ``lost_list``: hasta 500 registros (cap documentado)
+        con nombre, teléfono, email, última visita y gasto 12m.
+      - ``total_at_risk`` / ``total_lost``: total real (puede superar el cap).
+      - ``truncated``: True si alguna lista fue recortada.
+
+    Métricas:
+      - ``retention_rate``       : pacientes vistos 12m / pacientes vistos 12-24m previos.
+      - ``avg_ticket``           : pago promedio de los últimos 12 meses.
+      - ``no_show_rate``         : tasa de inasistencias (NO_SHOW / (NO_SHOW + ATTENDED)).
+      - ``pct_with_future_appt`` : % de pacientes activos con cita futura agendada.
+
+    Permiso: RetentionPermission → owner, admin, finance, readonly.
+    Recepción, médicos y enfermería NO acceden (analítica de dirección).
+
+    El endpoint puede tardar >200ms en clínicas grandes (aggregación sobre citas
+    históricas). En v2 se añadirá caché de 1h o tarea Celery periódica.
+    """
+
+    permission_classes = [IsAuthenticated, RetentionPermission]
+
+    def get(self, request: Request) -> Response:
+        tenant = get_current_tenant()
+        if tenant is None:
+            return _NO_TENANT
+
+        from apps.finanzas.retention import retention_panel_build  # noqa: PLC0415
+
+        panel = retention_panel_build(tenant_id=tenant.id)
+        return Response(panel)

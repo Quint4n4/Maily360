@@ -26,6 +26,7 @@ from apps.finanzas.views import (
     QuoteDetailApi,
     QuoteListCreateApi,
     QuoteSendApi,
+    RetentionPanelApi,
 )
 
 urlpatterns = [
@@ -57,4 +58,6 @@ urlpatterns = [
     path("finanzas/reporte/", PeriodReportApi.as_view(), name="finanzas-period-report"),
     path("finanzas/reporte/pdf/", PeriodReportPdfApi.as_view(), name="finanzas-period-report-pdf"),
     path("finanzas/cierre-diario/", DailySheetApi.as_view(), name="finanzas-daily-sheet"),
+    # Fase 3 — Panel de retención / analítica RFM
+    path("finanzas/retencion/", RetentionPanelApi.as_view(), name="finanzas-retention-panel"),
 ]

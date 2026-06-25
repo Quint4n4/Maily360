@@ -258,6 +258,77 @@ export function fetchDailySheet(date: string): Promise<DailySheet> {
 }
 
 // ---------------------------------------------------------------------------
+// Fase 3 — Panel de retención (RFM) — SOLO VISUALIZACIÓN (D-7: sin campañas)
+//
+// Refleja EXACTO el dict de apps/finanzas/retention.py::retention_panel_build
+// (selector llamado desde RetentionPanelApi). No inventar nombres de campo.
+// Los montos llegan como string decimal o number desde DRF; se tipan como
+// `number` y se normalizan con toNumber/formatMoney en la UI.
+// ---------------------------------------------------------------------------
+
+/** Segmentos RFM devueltos por el backend (claves EXACTAS de `segments`). */
+export type RetentionSegment =
+  | 'nuevo'
+  | 'vip'
+  | 'frecuente'
+  | 'en_riesgo'
+  | 'perdido'
+  | 'ocasional'
+
+/** Conteo de pacientes por segmento. Una clave por cada RetentionSegment. */
+export type RetentionSegments = Record<RetentionSegment, number>
+
+/**
+ * Una entrada de las listas accionables (`at_risk_list` / `lost_list`).
+ * `last_visited` es la fecha ISO (YYYY-MM-DD) de la última cita atendida o null.
+ * `recency_days` puede venir null si el paciente nunca tuvo cita registrada.
+ */
+export interface RetentionActionablePatient {
+  patient_id: string
+  full_name: string
+  phone: string
+  email: string
+  last_visited: string | null
+  recency_days: number | null
+  spent_12m: number
+  freq_12m: number
+}
+
+/**
+ * Métricas globales del panel. retention_rate / no_show_rate / pct_with_future_appt
+ * pueden venir null cuando no hay base de cálculo (denominador 0).
+ * avg_ticket siempre llega como número (0 si no hubo pagos).
+ */
+export interface RetentionMetrics {
+  retention_rate: number | null
+  avg_ticket: number
+  no_show_rate: number | null
+  pct_with_future_appt: number | null
+  patients_seen_12m: number
+  patients_seen_prev_12m: number
+}
+
+/**
+ * Dataset completo del panel de retención. Refleja 1:1 retention_panel_build().
+ * `total_at_risk` / `total_lost` son los totales reales (pueden superar el cap de
+ * 500 con que vienen las listas); `truncated` es true si alguna lista fue recortada.
+ */
+export interface RetentionPanel {
+  segments: RetentionSegments
+  at_risk_list: RetentionActionablePatient[]
+  lost_list: RetentionActionablePatient[]
+  total_at_risk: number
+  total_lost: number
+  truncated: boolean
+  metrics: RetentionMetrics
+}
+
+/** GET /finanzas/retencion/ — panel RFM (distribución + listas accionables + métricas). */
+export function fetchRetention(): Promise<RetentionPanel> {
+  return http.get<RetentionPanel>('/finanzas/retencion/')
+}
+
+// ---------------------------------------------------------------------------
 // Conceptos
 // ---------------------------------------------------------------------------
 

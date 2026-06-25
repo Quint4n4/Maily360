@@ -918,6 +918,26 @@ _PLATFORM_ROLES_SUPER_ADMIN_ONLY: frozenset[str] = frozenset(
 )
 
 
+class RetentionPermission(HasClinicRole):
+    """Permisos para GET /finanzas/retencion/ — panel de analítica RFM.
+
+    El panel de retención contiene datos de negocio sensibles (gasto por paciente,
+    frecuencia de visitas, listas de pacientes en riesgo con datos de contacto).
+    Recepción, médicos y enfermería NO acceden: es analítica de dirección/finanzas.
+
+    Decisión D-7 (plan §3): solo visualización; ninguna escritura desde aquí.
+
+    Matriz:
+        GET → owner, admin, finance + readonly (solo-ver).
+        (Recepción NO: opera caja pero no ve analítica de retención/RFM.)
+        (Doctor/Nurse NO: acceden a la agenda y expediente, no a finanzas.)
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.FINANCE, Role.READONLY}),
+    }
+
+
 class IsPlatformStaff(BasePermission):
     """Permiso base para el panel interno: exige is_platform_staff=True.
 
