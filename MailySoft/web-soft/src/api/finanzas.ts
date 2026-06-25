@@ -6,7 +6,7 @@
  * src/hooks/finanzas.ts (TanStack Query).
  */
 
-import { http } from '../lib/http'
+import { http, requestBlob } from '../lib/http'
 
 // ---------------------------------------------------------------------------
 // Tipos compartidos
@@ -81,6 +81,180 @@ export interface DashboardMetrics {
 
 export function fetchDashboard(params: DateRangeParams = {}): Promise<DashboardMetrics> {
   return http.get<DashboardMetrics>('/finanzas/dashboard/', params)
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2 — Reporte de periodo
+//
+// Los nombres de campo reflejan EXACTO el dict de
+// apps/finanzas/selectors.py::finance_period_report (no inventar). Todos los
+// montos llegan como string decimal o number desde DRF; se tipan como
+// `number` y se normalizan con toNumber/formatMoney en la UI.
+// ---------------------------------------------------------------------------
+
+/** Granularidad de la serie temporal del reporte. */
+export type ReportGroup = 'day' | 'week' | 'month'
+
+/** Parámetros del reporte de periodo: rango requerido + agrupación. */
+export interface PeriodReportParams {
+  date_from: string
+  date_to: string
+  group?: ReportGroup
+}
+
+/** Un bucket de antigüedad de A/R (mismo shape que AgingBucket del dashboard). */
+export type ReportAgingBucket = AgingBucket
+
+/** Desglose por método de pago (mismo shape que IncomeByMethod). */
+export type ReportByMethod = IncomeByMethod
+
+/** Top servicios por producción (cargos del periodo). */
+export interface ReportByService {
+  concept_id: string | null
+  name: string
+  amount: number
+  count: number
+}
+
+/** Producción por doctor (vía appointment__doctor; "Sin cita" agrupa cobros manuales). */
+export interface ReportByDoctor {
+  doctor_id: string | null
+  name: string
+  amount: number
+  count: number
+}
+
+/** Punto de la serie temporal: producción y cobranza por periodo agrupado. */
+export interface ReportSeriesPoint {
+  period: string
+  production: number
+  collection: number
+}
+
+/**
+ * Dataset completo del reporte de periodo. Refleja 1:1 finance_period_report().
+ * Los Δ% pueden venir null cuando el periodo anterior fue cero (sin base de comparación).
+ */
+export interface PeriodReport {
+  range: { date_from: string; date_to: string }
+  prev_range: { date_from: string; date_to: string }
+  group: ReportGroup
+  // KPIs actuales
+  production: number
+  collection: number
+  collection_pct: number
+  ar_total: number
+  aging: ReportAgingBucket[]
+  average_ticket: number
+  charges_count: number
+  // Comparativa con el periodo anterior
+  prev_production: number
+  prev_collection: number
+  prev_collection_pct: number
+  delta_production_pct: number | null
+  delta_collection_pct: number | null
+  delta_collection_rate_ppt: number | null
+  // Desglose
+  by_method: ReportByMethod[]
+  by_service: ReportByService[]
+  by_doctor: ReportByDoctor[]
+  series: ReportSeriesPoint[]
+  // Ajustes (placeholder backend: 0 + nota; el modelo Adjustment no existe aún)
+  adjustments_total: number
+  adjustments_note: string
+}
+
+/** GET /finanzas/reporte/ — dataset de KPIs/series/aging/método/servicio/doctor + comparativa. */
+export function fetchPeriodReport(params: PeriodReportParams): Promise<PeriodReport> {
+  return http.get<PeriodReport>('/finanzas/reporte/', params)
+}
+
+/**
+ * GET /finanzas/reporte/pdf/ — descarga el PDF del reporte (Bearer vía requestBlob).
+ * El endpoint solo negocia application/pdf; sin este Accept, DRF responde 406.
+ * El token nunca va en la URL: viaja en el header Authorization del cliente central.
+ */
+export async function fetchReportPdfBlob(params: {
+  date_from: string
+  date_to: string
+  group?: ReportGroup
+}): Promise<Blob> {
+  const qs = new URLSearchParams({ date_from: params.date_from, date_to: params.date_to })
+  if (params.group) qs.set('group', params.group)
+  return requestBlob(`/finanzas/reporte/pdf/?${qs.toString()}`, {
+    headers: { Accept: 'application/pdf' },
+  })
+}
+
+/**
+ * Descarga el PDF del reporte y dispara la descarga del archivo en el navegador.
+ * Mismo patrón blob + object URL que getPatientBookPdf (libro clínico): intenta
+ * abrir en pestaña nueva; si el navegador la bloquea, cae a descarga directa.
+ */
+export async function downloadReportPdf(params: {
+  date_from: string
+  date_to: string
+  group?: ReportGroup
+}): Promise<void> {
+  const blob = await fetchReportPdfBlob(params)
+  const url = URL.createObjectURL(blob)
+  const filename = `reporte-${params.date_from}-${params.date_to}.pdf`
+  const win = window.open(url, '_blank', 'noopener,noreferrer')
+  if (!win) {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2 — Cierre diario (day sheet)
+//
+// Refleja EXACTO apps/finanzas/selectors.py::finance_daily_sheet.
+// ---------------------------------------------------------------------------
+
+/** Movimiento del cierre diario: cargo o pago. Los campos opcionales dependen del tipo. */
+export interface DailySheetMovement {
+  at: string
+  type: 'charge' | 'payment'
+  patient_id: string
+  amount: number
+  // Solo en cargos:
+  description?: string
+  status?: ChargeStatus
+  // Solo en pagos:
+  method?: PaymentMethod
+  method_label?: string
+  reference?: string
+}
+
+/** Totales-resumen del cierre diario. */
+export interface DailySheetTotals {
+  charges_count: number
+  payments_count: number
+  production: number
+  collection: number
+}
+
+/** Cierre de caja de un día concreto (producción/cobranza/ajustes + desglose + movimientos). */
+export interface DailySheet {
+  date: string
+  production: number
+  collection: number
+  adjustments_total: number
+  collection_pct: number
+  by_method: ReportByMethod[]
+  movements: DailySheetMovement[]
+  totals: DailySheetTotals
+}
+
+/** GET /finanzas/cierre-diario/?date=YYYY-MM-DD — cierre de caja del día. */
+export function fetchDailySheet(date: string): Promise<DailySheet> {
+  return http.get<DailySheet>('/finanzas/cierre-diario/', { date })
 }
 
 // ---------------------------------------------------------------------------

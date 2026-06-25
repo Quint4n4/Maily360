@@ -6,10 +6,14 @@ import {
   Receipt,
   ScrollText,
   Lock,
+  LineChart,
+  CalendarClock,
 } from 'lucide-react'
 
 import Topbar from '../components/Topbar'
 import DashboardTab from '../components/finanzas/DashboardTab'
+import ReporteTab from '../components/finanzas/ReporteTab'
+import CierreDiarioTab from '../components/finanzas/CierreDiarioTab'
 import CobrosPagosTab from '../components/finanzas/CobrosPagosTab'
 import CotizacionesTab from '../components/finanzas/CotizacionesTab'
 import CfdiTab from '../components/finanzas/CfdiTab'
@@ -18,7 +22,7 @@ import { can, canAccessFinance, type FinanceCapability } from '../auth/permisos'
 import { ALL_ROLES, useRole } from '../auth/useRole'
 import { toIsoDate } from '../lib/format'
 
-type TabKey = 'dashboard' | 'cobros' | 'cotizaciones' | 'cfdi' | 'estado'
+type TabKey = 'dashboard' | 'reportes' | 'cierre' | 'cobros' | 'cotizaciones' | 'cfdi' | 'estado'
 
 interface TabDef {
   key: TabKey
@@ -29,6 +33,9 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { key: 'dashboard', label: 'Dashboard', icon: BarChart3, capability: 'viewDashboard' },
+  { key: 'reportes', label: 'Reportes', icon: LineChart, capability: 'viewDashboard' },
+  // Cierre diario = caja: misma matriz que registerPayment (owner/admin/finance/reception).
+  { key: 'cierre', label: 'Cierre diario', icon: CalendarClock, capability: 'registerPayment' },
   { key: 'cobros', label: 'Cobros y pagos', icon: Wallet, capability: 'viewModule' },
   { key: 'cotizaciones', label: 'Cotizaciones', icon: ScrollText, capability: 'viewModule' },
   { key: 'cfdi', label: 'CFDI', icon: FileText, capability: 'viewCfdi' },
@@ -140,6 +147,8 @@ export default function FinanzasPage() {
 
             {/* Contenido */}
             {current?.key === 'dashboard' && <DashboardTab range={range} />}
+            {current?.key === 'reportes' && <ReporteTab role={role} />}
+            {current?.key === 'cierre' && <CierreDiarioTab role={role} />}
             {current?.key === 'cobros' && <CobrosPagosTab role={role} />}
             {current?.key === 'cotizaciones' && <CotizacionesTab role={role} />}
             {current?.key === 'cfdi' && <CfdiTab role={role} />}

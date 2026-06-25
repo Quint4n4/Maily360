@@ -15,10 +15,13 @@ from apps.finanzas.views import (
     ChargeListCreateApi,
     ConceptDetailApi,
     ConceptListCreateApi,
+    DailySheetApi,
     DashboardApi,
     FiscalConfigApi,
     PaymentDetailApi,
     PaymentListCreateApi,
+    PeriodReportApi,
+    PeriodReportPdfApi,
     QuoteAcceptApi,
     QuoteDetailApi,
     QuoteListCreateApi,
@@ -50,4 +53,8 @@ urlpatterns = [
     path("finanzas/cfdi/<uuid:cfdi_id>/cancelar/", CfdiCancelApi.as_view(), name="finanzas-cfdi-cancel"),
     # Dashboard
     path("finanzas/dashboard/", DashboardApi.as_view(), name="finanzas-dashboard"),
+    # Fase 2 — Reporte de periodo + PDF + Cierre diario
+    path("finanzas/reporte/", PeriodReportApi.as_view(), name="finanzas-period-report"),
+    path("finanzas/reporte/pdf/", PeriodReportPdfApi.as_view(), name="finanzas-period-report-pdf"),
+    path("finanzas/cierre-diario/", DailySheetApi.as_view(), name="finanzas-daily-sheet"),
 ]

@@ -2,20 +2,39 @@
  * lib/exportEstadoCuenta — exporta el estado de cuenta de un paciente a PDF y Excel.
  *
  * El PDF usa jsPDF + autoTable (tabla de movimientos con totales).
- * El Excel usa SheetJS (xlsx). Ambos toman el AccountStatement que ya devuelve
- * la API (api/finanzas.ts) y se disparan desde EstadoCuentaTab.
+ * El Excel usa ExcelJS (decisión D-8 del plan: ExcelJS sustituye a xlsx/SheetJS).
+ * Ambos toman el AccountStatement que ya devuelve la API (api/finanzas.ts) y se
+ * disparan desde EstadoCuentaTab.
+ *
+ * Nota: ExcelJS escribe a un ArrayBuffer (writeBuffer es async), así que el export
+ * a Excel es asíncrono y dispara la descarga con un object URL temporal.
  */
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 import type { AccountStatement } from '../api/finanzas'
 import { formatDate, formatMoney } from './format'
 
+const GOLD_HEX = 'FFC9A227'
+const FOOT_HEX = 'FFF0E8CF'
+
 function fileBase(statement: AccountStatement): string {
   const record = statement.patient?.record_number || statement.patient?.id || 'paciente'
   return `estado-cuenta-${record}`
+}
+
+/** Dispara la descarga de un Blob como archivo (object URL temporal). */
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 /** Genera y descarga el estado de cuenta como PDF. */
@@ -58,28 +77,53 @@ export function exportStatementPdf(statement: AccountStatement): void {
   doc.save(`${fileBase(statement)}.pdf`)
 }
 
-/** Genera y descarga el estado de cuenta como hoja de cálculo (.xlsx). */
-export function exportStatementExcel(statement: AccountStatement): void {
-  const rows = statement.movements.map((m) => ({
-    Fecha: formatDate(m.date),
-    Concepto: m.description,
-    Cargo: m.charge || '',
-    Pago: m.payment || '',
-    Saldo: m.balance,
-    Referencia: m.reference,
-  }))
+/** Genera y descarga el estado de cuenta como hoja de cálculo (.xlsx) con ExcelJS. */
+export async function exportStatementExcel(statement: AccountStatement): Promise<void> {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('Estado de cuenta')
 
-  rows.push({
-    Fecha: 'Totales',
-    Concepto: '',
-    Cargo: statement.total_charged,
-    Pago: statement.total_paid,
-    Saldo: statement.balance,
-    Referencia: '',
+  sheet.columns = [
+    { header: 'Fecha', key: 'fecha', width: 16 },
+    { header: 'Concepto', key: 'concepto', width: 36 },
+    { header: 'Cargo', key: 'cargo', width: 14, style: { numFmt: '$#,##0.00' } },
+    { header: 'Pago', key: 'pago', width: 14, style: { numFmt: '$#,##0.00' } },
+    { header: 'Saldo', key: 'saldo', width: 14, style: { numFmt: '$#,##0.00' } },
+    { header: 'Referencia', key: 'referencia', width: 20 },
+  ]
+
+  // Encabezado en negritas + relleno dorado de marca.
+  const headerRow = sheet.getRow(1)
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD_HEX } }
+
+  for (const m of statement.movements) {
+    sheet.addRow({
+      fecha: formatDate(m.date),
+      concepto: m.description,
+      // Montos como número real (no string) para que Excel los sume/formatee.
+      cargo: m.charge || null,
+      pago: m.payment || null,
+      saldo: m.balance,
+      referencia: m.reference,
+    })
+  }
+
+  const totals = sheet.addRow({
+    fecha: 'Totales',
+    concepto: '',
+    cargo: statement.total_charged,
+    pago: statement.total_paid,
+    saldo: statement.balance,
+    referencia: '',
   })
+  totals.font = { bold: true }
+  totals.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FOOT_HEX } }
 
-  const worksheet = XLSX.utils.json_to_sheet(rows)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Estado de cuenta')
-  XLSX.writeFile(workbook, `${fileBase(statement)}.xlsx`)
+  const buffer = await workbook.xlsx.writeBuffer()
+  triggerDownload(
+    new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    `${fileBase(statement)}.xlsx`,
+  )
 }

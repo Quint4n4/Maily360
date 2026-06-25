@@ -16,6 +16,8 @@ import * as api from '../api/finanzas'
 export const finanzasKeys = {
   all: ['finanzas'] as const,
   dashboard: (range: api.DateRangeParams) => ['finanzas', 'dashboard', range] as const,
+  report: (params: api.PeriodReportParams) => ['finanzas', 'report', params] as const,
+  dailySheet: (date: string) => ['finanzas', 'dailySheet', date] as const,
   concepts: () => ['finanzas', 'concepts'] as const,
   quotes: (params: object) => ['finanzas', 'quotes', params] as const,
   charges: (params: object) => ['finanzas', 'charges', params] as const,
@@ -34,6 +36,43 @@ export function useDashboard(range: api.DateRangeParams = {}) {
   return useQuery({
     queryKey: finanzasKeys.dashboard(range),
     queryFn: () => api.fetchDashboard(range),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2 — Reporte de periodo
+// ---------------------------------------------------------------------------
+
+/** Dataset completo del reporte financiero del periodo (KPIs + series + desglose). */
+export function useReporte(params: api.PeriodReportParams) {
+  return useQuery({
+    queryKey: finanzasKeys.report(params),
+    queryFn: () => api.fetchPeriodReport(params),
+    enabled: Boolean(params.date_from && params.date_to),
+  })
+}
+
+/**
+ * Dispara la descarga del PDF del reporte. Mutación (efecto secundario: abre/
+ * descarga un archivo); no cachea. La UI muestra isPending mientras genera.
+ */
+export function useDescargarReportePdf() {
+  return useMutation({
+    mutationFn: (params: { date_from: string; date_to: string; group?: api.ReportGroup }) =>
+      api.downloadReportPdf(params),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2 — Cierre diario (day sheet)
+// ---------------------------------------------------------------------------
+
+/** Cierre de caja de un día. `date` en formato YYYY-MM-DD. */
+export function useCierreDiario(date: string) {
+  return useQuery({
+    queryKey: finanzasKeys.dailySheet(date),
+    queryFn: () => api.fetchDailySheet(date),
+    enabled: Boolean(date),
   })
 }
 

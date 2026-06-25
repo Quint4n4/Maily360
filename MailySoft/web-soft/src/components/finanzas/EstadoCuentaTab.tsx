@@ -49,7 +49,7 @@ export default function EstadoCuentaTab() {
               <button className="btn-secondary" onClick={() => exportStatementPdf(statement.data!)}>
                 <FileDown className="w-4 h-4" /> PDF
               </button>
-              <button className="btn-secondary" onClick={() => exportStatementExcel(statement.data!)}>
+              <button className="btn-secondary" onClick={() => void exportStatementExcel(statement.data!)}>
                 <FileSpreadsheet className="w-4 h-4" /> Excel
               </button>
             </div>

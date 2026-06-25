@@ -8,21 +8,30 @@ Manejo de errores:
   - <Model>.DoesNotExist     → 404 (no revelar existencia cross-tenant).
   - ValidationError (django) → 400 (con exc.messages).
   - tenant None              → 403.
+
+Fase 2 — nuevos endpoints:
+  - PeriodReportApi  : GET /finanzas/reporte/ — dataset KPIs + series para reporte.
+  - PeriodReportPdfApi: GET /finanzas/reporte/pdf/ — PDF del reporte (Bearer auth).
+  - DailySheetApi    : GET /finanzas/cierre-diario/ — cierre diario de caja.
 """
 
 import datetime
+import logging
 import uuid
 from decimal import Decimal
 from typing import Any, Optional
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import HttpResponse
 from rest_framework import serializers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BaseRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.core.permissions import (
+    FINANCE_DESK_ROLES,
     CfdiPermission,
     ChargeListPermission,
     FinanceChargePermission,
@@ -31,6 +40,7 @@ from apps.core.permissions import (
     FinanceDashboardPermission,
     FinancePaymentPermission,
     FinanceQuotePermission,
+    HasClinicRole,
     PatientStatementPermission,
 )
 from apps.core.tenant_context import get_current_tenant
@@ -53,6 +63,47 @@ from apps.finanzas.serializers import (
 )
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
+
+logger = logging.getLogger("apps.finanzas.views")
+
+
+# ---------------------------------------------------------------------------
+# Permiso para endpoints de caja (cierre diario).
+# ---------------------------------------------------------------------------
+
+
+class FinanceDeskPermission(HasClinicRole):
+    """Permisos para endpoints de caja (cierre diario).
+
+    Matriz:
+        GET → FINANCE_DESK_ROLES: owner, admin, finance, reception.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": FINANCE_DESK_ROLES,
+    }
+
+
+# ---------------------------------------------------------------------------
+# PdfRenderer — reutiliza el patrón exacto de apps/recetas/views.py
+# ---------------------------------------------------------------------------
+
+
+class _PdfRenderer(BaseRenderer):
+    """Renderer que permite a DRF negociar Accept: application/pdf.
+
+    La vista devuelve HttpResponse directo, pero DRF ejecuta la negociación de
+    contenido al entrar. Sin este renderer, un cliente que envíe
+    Accept: application/pdf recibiría 406. El método render() no se usa
+    (la vista responde con HttpResponse crudo).
+    """
+
+    media_type = "application/pdf"
+    format = "pdf"
+    charset = None
+
+    def render(self, data: Any, accepted_media_type: Any = None, renderer_context: Any = None) -> Any:  # type: ignore[override]
+        return data
 
 
 # ---------------------------------------------------------------------------
@@ -708,3 +759,160 @@ class DashboardApi(TenantAPIView):
             date_to=_parse_date(request.query_params.get("date_to")),
         )
         return Response(metrics)
+
+
+# ===========================================================================
+# Fase 2 — Reporte de periodo
+# ===========================================================================
+
+_VALID_GROUPS: frozenset[str] = frozenset({"day", "week", "month"})
+
+
+class PeriodReportApi(TenantAPIView):
+    """GET /api/v1/finanzas/reporte/ — dataset completo para el reporte de periodo.
+
+    Parámetros:
+        date_from   — YYYY-MM-DD (requerido; se usa hoy - 30 días si falta).
+        date_to     — YYYY-MM-DD (requerido; se usa hoy si falta).
+        group       — day | week | month (default: day).
+
+    Devuelve el dict de finance_period_report: KPIs del periodo, comparativa con el
+    anterior, series temporales, desglose por método/servicio/doctor y A/R aging.
+
+    Permiso: FinanceDashboardPermission (GET → owner, admin, finance, readonly).
+    """
+
+    permission_classes = [IsAuthenticated, FinanceDashboardPermission]
+
+    def get(self, request: Request) -> Response:
+        today = datetime.date.today()
+        date_from = _parse_date(request.query_params.get("date_from")) or (
+            today - datetime.timedelta(days=30)
+        )
+        date_to = _parse_date(request.query_params.get("date_to")) or today
+
+        if date_from > date_to:
+            return Response(
+                {"detail": "date_from no puede ser posterior a date_to."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        group = request.query_params.get("group", "day")
+        if group not in _VALID_GROUPS:
+            return Response(
+                {"detail": f"group debe ser uno de: {', '.join(sorted(_VALID_GROUPS))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        report = selectors.finance_period_report(
+            date_from=date_from,
+            date_to=date_to,
+            group=group,
+        )
+        return Response(report)
+
+
+class PeriodReportPdfApi(TenantAPIView):
+    """GET /api/v1/finanzas/reporte/pdf/ — PDF del reporte de periodo.
+
+    Mismo rango que PeriodReportApi (date_from / date_to). Devuelve el PDF
+    con Content-Disposition: inline para abrir en el navegador.
+
+    Permiso: FinanceDashboardPermission (owner, admin, finance, readonly).
+    Auth: Bearer token (el endpoint NO es público — el PDF contiene datos financieros).
+
+    Seguridad:
+        - WeasyPrint usa _secure_fetcher: solo data URIs (bloquea LFI/SSRF).
+        - X-Frame-Options: DENY, X-Content-Type-Options: nosniff.
+        - Si la generación falla, devuelve 500 con mensaje genérico.
+    """
+
+    permission_classes = [IsAuthenticated, FinanceDashboardPermission]
+    renderer_classes = [_PdfRenderer]
+
+    def get(self, request: Request) -> HttpResponse:
+        today = datetime.date.today()
+        date_from = _parse_date(request.query_params.get("date_from")) or (
+            today - datetime.timedelta(days=30)
+        )
+        date_to = _parse_date(request.query_params.get("date_to")) or today
+
+        if date_from > date_to:
+            return HttpResponse(
+                content=b"date_from no puede ser posterior a date_to.",
+                status=400,
+                content_type="text/plain",
+            )
+
+        group = request.query_params.get("group", "day")
+        if group not in _VALID_GROUPS:
+            group = "day"
+
+        tenant = get_current_tenant()
+        clinic_name: str = getattr(tenant, "name", "Clínica") if tenant else "Clínica"
+
+        report = selectors.finance_period_report(
+            date_from=date_from,
+            date_to=date_to,
+            group=group,
+        )
+
+        from apps.finanzas.pdf import finance_report_pdf_build  # noqa: PLC0415
+
+        try:
+            pdf_bytes = finance_report_pdf_build(report=report, clinic_name=clinic_name)
+        except RuntimeError as exc:
+            logger.error(
+                "PeriodReportPdfApi: error al generar PDF — %s",
+                exc,
+            )
+            return HttpResponse(
+                content=b"Error al generar el PDF. Intente nuevamente.",
+                status=500,
+                content_type="text/plain",
+            )
+
+        filename = f"reporte-{date_from}-{date_to}.pdf"
+        response = HttpResponse(content=pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        response["X-Frame-Options"] = "DENY"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+
+# ===========================================================================
+# Fase 2 — Cierre diario (day sheet)
+# ===========================================================================
+
+
+class DailySheetApi(TenantAPIView):
+    """GET /api/v1/finanzas/cierre-diario/ — cierre de caja del día.
+
+    Parámetros:
+        date — YYYY-MM-DD (default: hoy).
+
+    Devuelve producción, cobranza, ajustes, desglose por método y lista de
+    movimientos del día (cargos + pagos) ordenados cronológicamente.
+
+    Permiso: FinanceDeskPermission → FINANCE_DESK_ROLES (owner, admin, finance, reception).
+    Reception puede consultar el cierre de caja propio del día; no puede ver el
+    panel analítico (DashboardApi / PeriodReportApi).
+    """
+
+    permission_classes = [IsAuthenticated, FinanceDeskPermission]
+
+    def get(self, request: Request) -> Response:
+        raw_date = request.query_params.get("date")
+        if raw_date:
+            parsed = _parse_date(raw_date)
+            if parsed is None:
+                return Response(
+                    {"detail": "El parámetro 'date' debe tener formato YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            sheet_date = parsed
+        else:
+            sheet_date = datetime.date.today()
+
+        sheet = selectors.finance_daily_sheet(date=sheet_date)
+        return Response(sheet)

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    /*
+      Reporte Financiero de Periodo — Maily Platform
+      Generado con WeasyPrint. Sin JavaScript.
+      SVG inline para el gráfico de A/R aging.
+    */
+    @page {
+      size: letter;
+      margin: 1.8cm 1.5cm 2cm 1.5cm;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 8.5pt;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* ---- Encabezado ---- */
+    .header {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14pt;
+      border-bottom: 1.5pt solid #1e6ab0;
+      padding-bottom: 8pt;
+    }
+    .header td { vertical-align: middle; }
+    .header .clinic-name {
+      font-size: 14pt;
+      font-weight: bold;
+      color: #1e6ab0;
+      letter-spacing: 0.3pt;
+    }
+    .header .report-title {
+      font-size: 10pt;
+      font-weight: bold;
+      color: #333;
+      margin-top: 2pt;
+    }
+    .header .period-info {
+      font-size: 7.5pt;
+      color: #666;
+      margin-top: 3pt;
+    }
+    .header .gen-date {
+      font-size: 6.5pt;
+      color: #aaa;
+      text-align: right;
+    }
+
+    /* ---- Fila de KPIs ---- */
+    .kpi-row {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 6pt 0;
+      margin-bottom: 12pt;
+    }
+    .kpi-box {
+      background: #f4f8fd;
+      border: 0.6pt solid #c8ddf3;
+      border-radius: 4pt;
+      padding: 7pt 8pt 6pt;
+      text-align: center;
+      width: 16.6%;
+    }
+    .kpi-label {
+      font-size: 6.5pt;
+      color: #777;
+      text-transform: uppercase;
+      letter-spacing: 0.3pt;
+    }
+    .kpi-value {
+      font-size: 13pt;
+      font-weight: bold;
+      color: #1e6ab0;
+      margin: 3pt 0 2pt;
+      white-space: nowrap;
+    }
+    .kpi-delta {
+      font-size: 7pt;
+      color: #444;
+    }
+    .kpi-delta.up   { color: #1a7a3f; }
+    .kpi-delta.down { color: #c0392b; }
+    .kpi-delta.neutral { color: #888; }
+
+    /* ---- Sección ---- */
+    .section-title {
+      font-size: 9pt;
+      font-weight: bold;
+      color: #1e6ab0;
+      border-bottom: 0.8pt solid #1e6ab0;
+      margin: 12pt 0 6pt;
+      padding-bottom: 2pt;
+      text-transform: uppercase;
+      letter-spacing: 0.3pt;
+    }
+
+    /* ---- Tablas ---- */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+      margin-bottom: 10pt;
+    }
+    .data-table th {
+      background: #1e6ab0;
+      color: #fff;
+      padding: 4pt 6pt;
+      text-align: left;
+      font-size: 7.5pt;
+      font-weight: bold;
+    }
+    .data-table th.right { text-align: right; }
+    .data-table td {
+      padding: 3.5pt 6pt;
+      border-bottom: 0.4pt solid #e5e5e5;
+    }
+    .data-table td.right { text-align: right; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr.total-row td {
+      font-weight: bold;
+      background: #f0f6fc;
+      border-top: 0.8pt solid #c8ddf3;
+    }
+
+    /* ---- Gráfica A/R Aging (SVG inline) ---- */
+    .aging-chart-wrap {
+      margin-bottom: 10pt;
+    }
+    .aging-note {
+      font-size: 7pt;
+      color: #888;
+      margin-top: 3pt;
+    }
+
+    /* ---- Pie de página ---- */
+    .footer {
+      position: fixed;
+      bottom: -1.8cm;
+      left: -1.5cm;
+      right: -1.5cm;
+      border-top: 0.6pt solid #c8ddf3;
+      padding: 5pt 14pt 3pt;
+      font-size: 6pt;
+      color: #aaa;
+      text-align: center;
+    }
+    .footer .note { color: #c0392b; font-size: 5.5pt; }
+
+    /* ---- Comparativa anterior ---- */
+    .comparison-note {
+      font-size: 7pt;
+      color: #555;
+      background: #fffde7;
+      border: 0.5pt solid #f0c040;
+      border-radius: 3pt;
+      padding: 4pt 8pt;
+      margin-bottom: 10pt;
+    }
+
+    /* ---- Dos columnas en la misma fila ---- */
+    .two-col { width: 100%; border-collapse: separate; border-spacing: 8pt 0; }
+    .two-col td { vertical-align: top; width: 50%; }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================ PIE FIJO -->
+<div class="footer">
+  <span>Maily Platform — Reporte Financiero Confidencial</span>
+  &nbsp;·&nbsp;
+  <span>Generado el {{ generated_at }}</span>
+  <br>
+  <span class="note">Este documento contiene información financiera confidencial. No distribuir sin autorización.</span>
+</div>
+
+<!-- ============================================================ ENCABEZADO -->
+<table class="header">
+  <tr>
+    <td>
+      <div class="clinic-name">{{ clinic_name }}</div>
+      <div class="report-title">Reporte Financiero de Periodo</div>
+      <div class="period-info">
+        Periodo: <strong>{{ date_from }}</strong> al <strong>{{ date_to }}</strong>
+        &nbsp;·&nbsp; Comparado con: {{ prev_date_from }} al {{ prev_date_to }}
+      </div>
+    </td>
+    <td style="text-align:right; width: 30%;">
+      <div class="gen-date">Generado: {{ generated_at }}</div>
+    </td>
+  </tr>
+</table>
+
+<!-- ============================================================ FILA DE KPIs -->
+<table class="kpi-row">
+  <tr>
+    <td class="kpi-box">
+      <div class="kpi-label">Producción</div>
+      <div class="kpi-value">{{ production }}</div>
+      <div class="kpi-delta {% if delta_prod_sign == 'up' %}up{% elif delta_prod_sign == 'down' %}down{% else %}neutral{% endif %}">
+        {% if delta_production_pct is not None %}
+          {% if delta_production_pct > 0 %}▲{% elif delta_production_pct < 0 %}▼{% else %}—{% endif %}
+          {{ delta_production_pct|floatformat:1 }}% vs anterior
+        {% else %}
+          — sin período anterior
+        {% endif %}
+      </div>
+    </td>
+    <td class="kpi-box">
+      <div class="kpi-label">Cobranza</div>
+      <div class="kpi-value">{{ collection }}</div>
+      <div class="kpi-delta {% if delta_col_sign == 'up' %}up{% elif delta_col_sign == 'down' %}down{% else %}neutral{% endif %}">
+        {% if delta_collection_pct is not None %}
+          {% if delta_collection_pct > 0 %}▲{% elif delta_collection_pct < 0 %}▼{% else %}—{% endif %}
+          {{ delta_collection_pct|floatformat:1 }}% vs anterior
+        {% else %}
+          — sin período anterior
+        {% endif %}
+      </div>
+    </td>
+    <td class="kpi-box">
+      <div class="kpi-label">Collection %</div>
+      <div class="kpi-value">{{ collection_pct_display }}%</div>
+      <div class="kpi-delta neutral">
+        {% if delta_collection_rate_ppt is not None %}
+          Δ {{ delta_collection_rate_ppt|floatformat:1 }} pp
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    </td>
+    <td class="kpi-box">
+      <div class="kpi-label">A/R Total</div>
+      <div class="kpi-value">{{ ar_total }}</div>
+      <div class="kpi-delta neutral">Saldo por cobrar</div>
+    </td>
+    <td class="kpi-box">
+      <div class="kpi-label">Ticket Prom.</div>
+      <div class="kpi-value">{{ average_ticket }}</div>
+      <div class="kpi-delta neutral">Por cargo</div>
+    </td>
+    <td class="kpi-box">
+      <div class="kpi-label">Nº Cargos</div>
+      <div class="kpi-value">{{ charges_count }}</div>
+      <div class="kpi-delta neutral">En el periodo</div>
+    </td>
+  </tr>
+</table>
+
+<!-- ============================================================ NOTA COMPARATIVA -->
+<div class="comparison-note">
+  <strong>Comparativa:</strong> periodo anterior {{ prev_date_from }} – {{ prev_date_to }}
+  &nbsp;·&nbsp; Producción anterior: <strong>{{ prev_production }}</strong>
+  &nbsp;·&nbsp; Cobranza anterior: <strong>{{ prev_collection }}</strong>
+  &nbsp;·&nbsp; Collection % anterior: <strong>{{ prev_collection_pct_display }}%</strong>
+</div>
+
+<!-- ============================================================ DOS COLUMNAS: MÉTODO / SERVICIOS -->
+<table class="two-col">
+<tr>
+  <td>
+    <!-- MÉTODO DE PAGO -->
+    <div class="section-title">Por método de pago</div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Método</th>
+          <th class="right">Monto</th>
+          <th class="right">Transacciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in by_method %}
+        <tr>
+          <td>{{ row.label }}</td>
+          <td class="right">${{ row.amount }}</td>
+          <td class="right">{{ row.count }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" style="color:#aaa; text-align:center;">Sin pagos en el periodo</td></tr>
+        {% endfor %}
+        {% if by_method %}
+        <tr class="total-row">
+          <td>Total cobranza</td>
+          <td class="right">${{ collection }}</td>
+          <td class="right">{{ total_payments_count }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </td>
+  <td>
+    <!-- TOP SERVICIOS -->
+    <div class="section-title">Top servicios (producción)</div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Servicio</th>
+          <th class="right">Importe</th>
+          <th class="right">Actos</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in by_service %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td class="right">${{ row.amount }}</td>
+          <td class="right">{{ row.count }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" style="color:#aaa; text-align:center;">Sin cargos en el periodo</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </td>
+</tr>
+</table>
+
+<!-- ============================================================ A/R AGING (SVG barras horizontales) -->
+<div class="section-title">A/R Aging — Cuentas por cobrar pendientes</div>
+<div class="aging-chart-wrap">
+  {{ aging_svg }}
+  <div class="aging-note">
+    Las barras representan el saldo pendiente (amount - amount_paid) de los cargos con estado PENDING o PARTIAL,
+    agrupados por antigüedad desde su fecha de emisión. La escala es relativa al saldo mayor.
+  </div>
+</div>
+
+<!-- ============================================================ POR DOCTOR -->
+{% if by_doctor %}
+<div class="section-title">Por doctor (producción)</div>
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Doctor</th>
+      <th class="right">Producción</th>
+      <th class="right">Actos</th>
+      <th class="right">% del total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in by_doctor %}
+    <tr>
+      <td>{{ row.name }}</td>
+      <td class="right">${{ row.amount }}</td>
+      <td class="right">{{ row.count }}</td>
+      <td class="right">{{ row.pct|floatformat:1 }}%</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- ============================================================ PIE / EXCLUSIONES -->
+<div style="margin-top:12pt; font-size:6.5pt; color:#888; border-top:0.4pt solid #ddd; padding-top:6pt;">
+  <strong>Notas:</strong>
+  Producción = suma de cargos emitidos en el periodo (excluye cancelados).
+  Cobranza = suma de pagos recibidos en el periodo.
+  A/R = saldo pendiente global (todos los periodos, no solo el seleccionado).
+  Ajustes: {{ adjustments_note }}
+</div>
+
+</body>
+</html>

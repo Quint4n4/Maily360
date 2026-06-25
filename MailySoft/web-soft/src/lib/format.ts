@@ -70,6 +70,22 @@ export function formatPercent(
   return `${pct.toFixed(fractionDigits)}%`
 }
 
+/**
+ * Formatea una variación porcentual ya expresada en PUNTOS (ej. 12.5 → "+12.5%").
+ * A diferencia de formatPercent, NO multiplica por 100 (el backend ya manda el Δ%
+ * en puntos). Antepone el signo y devuelve '—' si el valor es null/None (el
+ * periodo anterior fue cero y no hay base de comparación).
+ */
+export function formatDeltaPercent(
+  value: number | string | null | undefined,
+  fractionDigits = 1,
+): string {
+  const n = toNumber(value)
+  if (n === null) return EMPTY
+  const sign = n > 0 ? '+' : ''
+  return `${sign}${n.toFixed(fractionDigits)}%`
+}
+
 /** Normaliza una fecha (ISO o Date) a 'yyyy-mm-dd' para query params. */
 export function toIsoDate(value: string | Date | null | undefined): string {
   if (!value) return ''
