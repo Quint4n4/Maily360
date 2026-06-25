@@ -98,3 +98,21 @@ def test_patient_update_ignora_categoria_de_otro_tenant() -> None:
     patient_update(patient=patient, user=user, category_ids=[cat_ajena.id])
 
     assert patient.categories.count() == 0
+
+
+@pytest.mark.django_db
+def test_patient_update_category_ids_preserva_favorito_vip() -> None:
+    """Editar las etiquetas personalizadas NO debe quitar las de sistema (Favorito/VIP)."""
+    tenant = TenantFactory()
+    _activate(tenant)
+    user = UserFactory()
+    patient = PatientFactory(tenant=tenant)
+    custom = PatientCategoryFactory(tenant=tenant, name="Premium", kind="custom")
+    vip = PatientCategoryFactory(tenant=tenant, name="VIP", kind="vip")
+    patient.categories.add(vip)  # ya es VIP
+
+    # Al asignar SOLO la etiqueta custom, el VIP debe conservarse.
+    patient_update(patient=patient, user=user, category_ids=[custom.id])
+
+    kinds = set(patient.categories.values_list("kind", flat=True))
+    assert kinds == {"custom", "vip"}

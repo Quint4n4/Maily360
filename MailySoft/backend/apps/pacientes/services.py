@@ -351,21 +351,29 @@ def patient_update(
     update_fields.append("updated_at")
     patient.save(update_fields=update_fields)
 
-    # Aplicar etiquetas del catálogo (M2M). category_ids=None ⇒ no se tocó;
-    # lista vacía ⇒ se quitan todas. Solo se asignan categorías del tenant
-    # activo (TenantManager filtra), así un id ajeno se ignora con seguridad.
+    # Aplicar etiquetas del catálogo (M2M). category_ids gestiona SOLO las
+    # etiquetas PERSONALIZADAS (kind=custom): None ⇒ no se tocó; lista vacía ⇒
+    # se quitan todas las custom. Las de SISTEMA (Favorito/VIP) se CONSERVAN tal
+    # cual — se marcan/desmarcan con la ⭐/👑 (patient_set_classification), no aquí.
+    # Solo se asignan categorías del tenant activo (TenantManager filtra).
     changed_fields = list(fields.keys())
     if category_ids is not None:
         from apps.clinica.models import PatientCategory
 
-        cats = list(
+        nuevas_custom = list(
             PatientCategory.objects.filter(
                 id__in=category_ids,
+                kind=PatientCategory.Kind.CUSTOM,
                 is_active=True,
                 deleted_at__isnull=True,
             )
         )
-        patient.categories.set(cats)
+        sistema_actual = list(
+            patient.categories.filter(
+                kind__in=[PatientCategory.Kind.FAVORITE, PatientCategory.Kind.VIP]
+            )
+        )
+        patient.categories.set(nuevas_custom + sistema_actual)
         changed_fields.append("categories")
 
     audit_record(

@@ -4,6 +4,7 @@ import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle, AlertTriangle,
 import Topbar from '../components/Topbar'
 import NuevoPacienteDrawer from '../components/contactos/NuevoPacienteDrawer'
 import ExpedienteDrawer from '../components/contactos/ExpedienteDrawer'
+import EtiquetasQuickMenu from '../components/contactos/EtiquetasQuickMenu'
 import MiniCalendario from '../components/agenda/MiniCalendario'
 import {
   usePatient, usePatients, useDeactivatePatient, useSetPatientClassification,
@@ -298,6 +299,7 @@ export default function ContactosPage() {
                       style={{ background: 'rgba(255,255,255,0.7)' }}>
                       <Crown className="w-4 h-4" style={{ fill: p.is_vip ? '#C9A227' : 'transparent', color: p.is_vip ? '#B8860B' : '#9aa0a6' }} />
                     </button>
+                    <EtiquetasQuickMenu patient={p} categorias={categorias} />
                   </div>
                 )}
 
