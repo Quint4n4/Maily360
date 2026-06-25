@@ -249,6 +249,16 @@ class MedicalHistory(TenantAwareModel):
         default="",
         help_text="Prioridades de análisis clínico (texto libre).",
     )
+    custom_answers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Respuestas a preguntas extra configurables por la clínica (Fase 2). "
+            "Estructura: {\"<question_uuid>\": <valor>}. "
+            "Las claves son UUIDs de MedicalHistoryQuestion activas del mismo tenant. "
+            "Las claves que no correspondan a preguntas activas se ignoran silenciosamente."
+        ),
+    )
 
     class Meta:
         db_table = "expediente_medical_histories"
@@ -838,3 +848,101 @@ class EvolutionImage(TenantAwareModel):
             f"EvolutionImage({self.id}) — evolución {self.evolution_id} "
             f"(tenant={self.tenant_id})"
         )
+
+
+# ---------------------------------------------------------------------------
+# MedicalHistoryQuestion — Preguntas extra configurables por clínica (Fase 2)
+# ---------------------------------------------------------------------------
+
+
+class QuestionFieldType(models.TextChoices):
+    """Tipo de campo para una pregunta extra de HC."""
+
+    TEXT = "text", "Texto corto"
+    TEXTAREA = "textarea", "Texto largo"
+    BOOLEAN = "boolean", "Sí / No"
+    SELECT = "select", "Selección única"
+    NUMBER = "number", "Número"
+    DATE = "date", "Fecha"
+
+
+class MedicalHistoryQuestion(TenantAwareModel):
+    """Pregunta extra (adicional al núcleo NOM-004) definida por el admin de la clínica.
+
+    Permite que cada clínica extienda la Historia Clínica con campos propios
+    sin requerir migraciones. Las respuestas se almacenan en `MedicalHistory.custom_answers`
+    como un JSONField `{"<question_uuid>": <valor>}`.
+
+    Campos:
+        label       Texto de la pregunta visible en el formulario.
+        field_type  Tipo de entrada (text, textarea, boolean, select, number, date).
+        options     Lista de opciones para field_type='select'. Vacío para otros tipos.
+        section     Agrupador opcional (ej. "Datos socioeconómicos", "Antecedentes extras").
+        order       Posición en el formulario (menor = primero).
+        is_required Si True, el frontend debe exigir respuesta antes de guardar.
+        is_active   True = pregunta activa. False = baja lógica (D-EC-5).
+
+    Decisión de diseño:
+        is_active=False hace la pregunta invisible para nuevas capturas.
+        Las respuestas a preguntas desactivadas permanecen en custom_answers (no se purgan)
+        para preservar trazabilidad histórica del expediente.
+
+    Auditoría y timestamps heredados de TenantAwareModel:
+        id, created_at, updated_at, deleted_at, tenant, created_by.
+    """
+
+    label = models.CharField(
+        max_length=255,
+        help_text="Texto de la pregunta visible en el formulario clínico.",
+    )
+    field_type = models.CharField(
+        max_length=12,
+        choices=QuestionFieldType.choices,
+        help_text="Tipo de campo de captura.",
+    )
+    options = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Lista de opciones para field_type='select'. "
+            "Debe ser lista no vacía de strings cuando field_type=select. "
+            "Debe ser lista vacía para todos los demás tipos."
+        ),
+    )
+    section = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Agrupador opcional (ej. 'Antecedentes extras', 'Datos socioeconómicos').",
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Posición en el formulario. Menor número = aparece primero.",
+    )
+    is_required = models.BooleanField(
+        default=False,
+        help_text="Si True, el frontend debe exigir respuesta antes de guardar la HC.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text=(
+            "True = pregunta activa (visible en el formulario). "
+            "False = baja lógica (no se muestra en nuevas capturas, "
+            "las respuestas históricas permanecen)."
+        ),
+    )
+
+    class Meta:
+        db_table = "expediente_medical_history_questions"
+        ordering = ["order", "id"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "is_active"],
+                name="mhq_tenant_active_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        estado = "activa" if self.is_active else "inactiva"
+        return f"[{self.field_type}] {self.label} ({estado}) — tenant={self.tenant_id}"

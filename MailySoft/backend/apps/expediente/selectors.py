@@ -29,6 +29,16 @@ Funciones públicas (A4):
     diagnosis_list           — diagnósticos de un paciente (filtrado por status opcional).
     evolution_nursing_instructions_for_patient — notas del paciente que tienen indicaciones
                                de enfermería no vacías, ordenadas por -created_at.
+
+Funciones públicas (Libro Clínico — Fase 1):
+    book_build               — arma el libro clínico del paciente (portada + HC viva +
+                               capítulos paginados). Solo lectura; sin efectos secundarios.
+                               Evita N+1 con prefetch_related sobre la página de evoluciones.
+
+Funciones públicas (Libro Clínico — Fase 3):
+    book_build_all           — igual que book_build pero sin paginación: trae todos los
+                               capítulos (o solo el último / ninguno según el modo).
+                               Usado por el generador de PDF para los 3 modos (D-LIB-5).
 """
 
 import uuid
@@ -36,6 +46,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Optional
 
+from django.core.paginator import InvalidPage, Paginator
 from django.db.models import QuerySet
 
 from apps.expediente.models import (
@@ -46,6 +57,7 @@ from apps.expediente.models import (
     EvolutionImage,
     EvolutionNote,
     MedicalHistory,
+    MedicalHistoryQuestion,
     VitalSignsRecord,
 )
 from apps.pacientes.models import Patient
@@ -528,4 +540,346 @@ def evolution_images_list(*, evolution: EvolutionNote) -> "QuerySet[EvolutionIma
         EvolutionImage.objects.select_related("created_by")
         .filter(evolution=evolution)
         .order_by("created_at")
+    )
+
+
+# ---------------------------------------------------------------------------
+# Libro Clínico — selector de armado (Fase 1)
+# ---------------------------------------------------------------------------
+
+# Tamaño de página por defecto para los capítulos del libro.
+BOOK_DEFAULT_PAGE_SIZE: int = 10
+# Límite máximo para proteger contra page_size abusivos (DoS).
+BOOK_MAX_PAGE_SIZE: int = 50
+
+
+class PatientBook:
+    """Resultado del selector book_build.
+
+    Contenedor inmutable con todos los datos del libro clínico del paciente
+    necesarios para serializar la respuesta JSON.
+
+    Atributos:
+        patient          Instancia de Patient (portada).
+        clinic_settings  Instancia de ClinicSettings o None (portada).
+        medical_history  Instancia de MedicalHistory o None (HC viva).
+        allergies        QuerySet[Allergy] de alergias vigentes.
+        capitulos_count  Número total de evoluciones del paciente.
+        capitulos        Lista de EvolutionNote de la página actual.
+                         Cada nota tiene precargados:
+                           - vital_signs (VitalSignsRecord)
+                           - images (EvolutionImage)
+                           - prescriptions (Prescription) con items
+                           - addenda
+                           - diagnoses
+                           - doctor + doctor__membership
+        page             Número de página actual (1-based).
+        total_pages      Número total de páginas.
+        page_size        Tamaño de página usado.
+    """
+
+    __slots__ = (
+        "patient",
+        "clinic_settings",
+        "medical_history",
+        "allergies",
+        "capitulos_count",
+        "capitulos",
+        "page",
+        "total_pages",
+        "page_size",
+    )
+
+    def __init__(
+        self,
+        *,
+        patient: Patient,
+        clinic_settings: Any,
+        medical_history: Optional[MedicalHistory],
+        allergies: QuerySet[Allergy],
+        capitulos_count: int,
+        capitulos: list[EvolutionNote],
+        page: int,
+        total_pages: int,
+        page_size: int,
+    ) -> None:
+        self.patient = patient
+        self.clinic_settings = clinic_settings
+        self.medical_history = medical_history
+        self.allergies = allergies
+        self.capitulos_count = capitulos_count
+        self.capitulos = capitulos
+        self.page = page
+        self.total_pages = total_pages
+        self.page_size = page_size
+
+
+def book_build(
+    *,
+    patient: Patient,
+    page: int = 1,
+    page_size: int = BOOK_DEFAULT_PAGE_SIZE,
+) -> PatientBook:
+    """Arma el libro clínico del paciente sin crear ni duplicar datos.
+
+    El libro es una VISTA AGREGADA: reúsa los selectors/modelos existentes
+    sin copiar ni desnormalizar información. Todas las secciones se componen
+    a partir de tablas ya existentes.
+
+    DECISIONES TOMADAS:
+
+    Diagnósticos por capítulo:
+        Diagnosis tiene FK `evolution` nullable (EvolutionNote). Cuando un
+        diagnóstico está vinculado a una evolución, se muestra en el capítulo
+        de esa evolución (via el prefetch "diagnoses" sobre EvolutionNote).
+        Los diagnósticos SIN FK de evolución (creados directamente desde la
+        vista de diagnósticos) son diagnósticos del paciente, no de una nota;
+        NO se incluyen en capítulos individuales para evitar duplicación — el
+        frontend puede mostrarlos en una sección aparte del libro si lo requiere
+        (pendiente Fase 2). Este enfoque respeta la realidad del modelo: si el
+        médico usó la FK, el diagnóstico pertenece a esa evolución.
+
+    Recetas por capítulo:
+        Prescription tiene FK `evolution_note` nullable. Se usa el related_name
+        "prescriptions" (definido en Prescription.evolution_note) para precargar
+        las recetas vinculadas a cada evolución con prefetch_related. Solo
+        se devuelve un resumen ligero (id, folio, status, items_resumen) —
+        nunca el PDF ni el contenido completo de la receta.
+
+    Orden:
+        Las evoluciones se ordenan por -created_at (más reciente primero, D-LIB-3).
+
+    Anti-N+1:
+        Se hace un único queryset de la página de evoluciones con
+        prefetch_related para todas las relaciones anidadas (signos vitales,
+        imágenes, addenda, diagnósticos, recetas+items). La paginación ocurre
+        en Python via Paginator sobre el QuerySet evaluado una sola vez.
+
+    Args:
+        patient:   Instancia de Patient del tenant activo.
+        page:      Número de página (1-based). Clamped al rango válido.
+        page_size: Número de evoluciones por página (max BOOK_MAX_PAGE_SIZE).
+
+    Returns:
+        PatientBook con todos los datos listos para serialización.
+    """
+    from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
+    from apps.recetas.models import Prescription  # noqa: PLC0415
+    from django.db.models import Prefetch  # noqa: PLC0415
+
+    # --- Cota de page_size (anti-DoS) ---
+    page_size = min(max(1, page_size), BOOK_MAX_PAGE_SIZE)
+
+    # --- Portada: datos de la clínica ---
+    clinic_settings = clinic_settings_get(tenant_id=patient.tenant_id)
+
+    # --- Historia Clínica viva (siempre versión actual — D-LIB-1) ---
+    medical_history = medical_history_get_for_patient(patient=patient)
+
+    # --- Alergias vigentes (para el libro siempre activas) ---
+    allergies = allergy_list(patient=patient, only_active=True)
+
+    # --- Capítulos: evoluciones paginadas (más reciente primero — D-LIB-3) ---
+    # Un solo queryset con TODOS los prefetch necesarios para la página.
+    # Anti-N+1: select_related para FKs directas (doctor, vital_signs) y
+    # prefetch_related para relaciones inversas (addenda, diagnoses, images, prescriptions).
+    # Prescription se precarga via related_name "prescriptions" con sus items en
+    # una sola query adicional por página (Prefetch explícito con queryset personalizado).
+    evolutions_qs = (
+        EvolutionNote.objects.filter(patient=patient)
+        .select_related(
+            "doctor",
+            "doctor__membership",
+            "vital_signs",
+        )
+        .prefetch_related(
+            "addenda",
+            "addenda__author",
+            "diagnoses",
+            "images",
+            Prefetch(
+                "prescriptions",
+                queryset=Prescription.objects.filter(
+                    deleted_at__isnull=True
+                ).prefetch_related("items"),
+            ),
+        )
+        .order_by("-created_at")
+    )
+
+    # --- Paginación ---
+    paginator = Paginator(evolutions_qs, page_size)
+    capitulos_count: int = paginator.count
+    total_pages: int = paginator.num_pages
+
+    # Clampear la página al rango válido (evitar InvalidPage).
+    page = max(1, min(page, total_pages if total_pages > 0 else 1))
+
+    try:
+        page_obj = paginator.page(page)
+    except InvalidPage:
+        page_obj = paginator.page(1)
+
+    capitulos: list[EvolutionNote] = list(page_obj.object_list)
+
+    return PatientBook(
+        patient=patient,
+        clinic_settings=clinic_settings,
+        medical_history=medical_history,
+        allergies=allergies,
+        capitulos_count=capitulos_count,
+        capitulos=capitulos,
+        page=page,
+        total_pages=total_pages,
+        page_size=page_size,
+    )
+
+
+# ---------------------------------------------------------------------------
+# MedicalHistoryQuestion selectors (Fase 2)
+# ---------------------------------------------------------------------------
+
+
+def medical_history_question_get(
+    *, question_id: uuid.UUID
+) -> MedicalHistoryQuestion:
+    """Retorna una pregunta extra de HC por su UUID.
+
+    Usa el TenantManager (filtra por tenant del contexto activo + excluye
+    soft-deleted). Lanza MedicalHistoryQuestion.DoesNotExist si no existe
+    o no pertenece al tenant activo. Las vistas capturan DoesNotExist y
+    devuelven 404 (anti-IDOR).
+
+    Incluye preguntas tanto activas como inactivas (para operaciones admin).
+
+    Args:
+        question_id: UUID de la pregunta a recuperar.
+
+    Returns:
+        Instancia de MedicalHistoryQuestion del tenant activo.
+
+    Raises:
+        MedicalHistoryQuestion.DoesNotExist: si no existe en el tenant activo.
+    """
+    return MedicalHistoryQuestion.objects.get(id=question_id)
+
+
+def medical_history_questions_list(
+    *, only_active: bool = True
+) -> QuerySet[MedicalHistoryQuestion]:
+    """Retorna las preguntas extra de HC del tenant activo.
+
+    Usa el TenantManager (filtra por tenant del contexto activo + excluye
+    soft-deleted). Ordena por [order, id] (Meta.ordering).
+
+    Args:
+        only_active: Si True (default), solo las preguntas activas (is_active=True).
+                     Si False, retorna todas (activas + inactivas).
+
+    Returns:
+        QuerySet[MedicalHistoryQuestion] ordenado por [order, id].
+    """
+    qs: QuerySet[MedicalHistoryQuestion] = MedicalHistoryQuestion.objects.all()
+    if only_active:
+        qs = qs.filter(is_active=True)
+    return qs
+
+
+def book_build_all(
+    *,
+    patient: Patient,
+    modo: str = "completo",
+) -> "PatientBook":
+    """Arma el libro clínico completo para PDF (sin paginación).
+
+    A diferencia de `book_build`, este selector trae TODOS los capítulos
+    en una sola operación, optimizado para la generación del PDF donde no
+    hay paginación de usuario. Evita N+1 con el mismo patrón de prefetch.
+
+    Modos (D-LIB-5):
+        completo — portada + HC viva + TODOS los capítulos (más reciente primero).
+        hc       — portada + HC viva + alergias (sin capítulos).
+        ultimo   — portada + el ÚLTIMO capítulo + sus recetas.
+
+    Args:
+        patient: Instancia de Patient del tenant activo.
+        modo:    "completo" | "hc" | "ultimo". Cualquier valor inválido se trata
+                 como "completo" (fallback defensivo).
+
+    Returns:
+        PatientBook con capitulos ya resueltos (lista Python, no QuerySet paginado).
+        Para modo "hc": capitulos = [].
+        Para modo "ultimo": capitulos = [la nota más reciente] o [] si no hay notas.
+        capitulos_count refleja el total real del paciente en todos los modos.
+        page=1, total_pages=1, page_size=capitulos_count (convención para PDF).
+    """
+    from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
+    from apps.recetas.models import Prescription  # noqa: PLC0415
+    from django.db.models import Prefetch  # noqa: PLC0415
+
+    # Validar modo; fallback defensivo.
+    _VALID_MODOS = {"completo", "hc", "ultimo"}
+    if modo not in _VALID_MODOS:
+        modo = "completo"
+
+    # --- Portada ---
+    clinic_settings = clinic_settings_get(tenant_id=patient.tenant_id)
+
+    # --- Historia Clínica viva (siempre versión actual — D-LIB-1) ---
+    medical_history = medical_history_get_for_patient(patient=patient)
+
+    # --- Alergias vigentes ---
+    allergies = allergy_list(patient=patient, only_active=True)
+
+    # --- Queryset base de evoluciones (con todos los prefetch) ---
+    _evolutions_base = (
+        EvolutionNote.objects.filter(patient=patient)
+        .select_related(
+            "doctor",
+            "doctor__membership",
+            "vital_signs",
+        )
+        .prefetch_related(
+            "addenda",
+            "addenda__author",
+            "diagnoses",
+            "images",
+            Prefetch(
+                "prescriptions",
+                queryset=Prescription.objects.filter(
+                    deleted_at__isnull=True
+                ).prefetch_related("items"),
+            ),
+        )
+        .order_by("-created_at")
+    )
+
+    # --- Contar total de capítulos (siempre el real del paciente) ---
+    capitulos_count: int = EvolutionNote.objects.filter(patient=patient).count()
+
+    # --- Seleccionar capítulos según el modo ---
+    if modo == "hc":
+        # Solo portada + HC + alergias; ningún capítulo.
+        capitulos: list[EvolutionNote] = []
+    elif modo == "ultimo":
+        # Solo el capítulo más reciente (primero en -created_at).
+        capitulos = list(_evolutions_base[:1])
+    else:
+        # completo: todos los capítulos, más reciente primero.
+        # IMPORTANTE: evaluar el QuerySet a lista aquí para materializar
+        # los prefetch. No se usa Paginator — el PDF no pagina.
+        capitulos = list(_evolutions_base)
+
+    page_size_pdf = len(capitulos) if capitulos else 1
+
+    return PatientBook(
+        patient=patient,
+        clinic_settings=clinic_settings,
+        medical_history=medical_history,
+        allergies=allergies,
+        capitulos_count=capitulos_count,
+        capitulos=capitulos,
+        page=1,
+        total_pages=1,
+        page_size=page_size_pdf,
     )

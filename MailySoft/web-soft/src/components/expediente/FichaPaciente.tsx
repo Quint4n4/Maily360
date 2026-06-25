@@ -13,11 +13,12 @@
  */
 
 import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Phone, Mail, Fingerprint, StickyNote, User,
   AlertTriangle, Plus, X, Loader2, MapPin, Heart,
   Droplet, GraduationCap, Briefcase, Cake, Calendar, Tag, Users, BookOpen, Baby,
-  Pencil, AlertCircle, DollarSign, ClipboardList,
+  Pencil, AlertCircle, DollarSign, ClipboardList, FileHeart,
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type { Allergy, AllergyInput, AllergySeverity } from '../../types/expediente'
@@ -29,6 +30,7 @@ import { useUpdatePatient } from '../../hooks/pacientes'
 import { edad } from '../../lib/paciente'
 import { errorMsg } from '../../lib/apiErrors'
 import { Card, Cargando, SEVERITY_OPTIONS } from './ui'
+import HistoriaTab from './HistoriaTab'
 import {
   CamposContacto, CamposDatosPersonales, CamposDomicilio, CamposNom004,
   SECCION_LABEL, erroresDePaciente, hayErroresFormato, usePacienteForm,
@@ -68,6 +70,7 @@ export default function FichaPaciente({
   paciente, verClinico, puedeEditarClinico, puedeEditar = false,
 }: FichaPacienteProps) {
   const [editando, setEditando] = useState(false)
+  const [hcAbierta, setHcAbierta] = useState(false)
 
   return (
     <div className="space-y-4">
@@ -76,6 +79,27 @@ export default function FichaPaciente({
 
       {/* Indicaciones para enfermería (solo roles clínicos) */}
       {verClinico && <IndicacionesEnfermeriaBlock patientId={paciente.id} />}
+
+      {/* Acceso a la Historia Clínica (se llena una vez y se actualiza) */}
+      {verClinico && !editando && (
+        <button
+          type="button"
+          onClick={() => setHcAbierta(true)}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+          style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
+        >
+          <FileHeart className="w-4 h-4" /> Historia clínica
+        </button>
+      )}
+
+      {verClinico && (
+        <HistoriaClinicaModal
+          paciente={paciente}
+          abierto={hcAbierta}
+          puedeEditar={puedeEditarClinico}
+          onClose={() => setHcAbierta(false)}
+        />
+      )}
 
       {editando ? (
         <FichaEditar
@@ -93,6 +117,65 @@ export default function FichaPaciente({
         />
       )}
     </div>
+  )
+}
+
+// ── Modal de Historia Clínica (captura + render dinámico) ────────────────────
+
+/**
+ * Modal que monta HistoriaTab: núcleo NOM-004 + preguntas extra de la clínica.
+ * Se abre desde la columna izquierda del expediente. La edición respeta
+ * `puedeEditar` (puedeEditarClinico); el backend es la autoridad y devuelve 403.
+ */
+function HistoriaClinicaModal({
+  paciente, abierto, puedeEditar, onClose,
+}: {
+  paciente: PatientOut
+  abierto: boolean
+  puedeEditar: boolean
+  onClose: () => void
+}) {
+  return (
+    <AnimatePresence>
+      {abierto && (
+        <motion.div
+          className="fixed inset-0 z-[60] p-2 sm:p-4 flex items-center justify-center"
+          style={{ background: 'rgba(40,28,8,0.35)', backdropFilter: 'blur(8px)' }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <motion.div
+            className="relative w-full glass-card rounded-3xl flex flex-col overflow-hidden"
+            style={{ maxWidth: '900px', height: '92vh' }}
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-amber-900/10">
+              <div className="flex items-center gap-2.5">
+                <FileHeart className="w-5 h-5" style={{ color: '#C9A227' }} />
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-700/70">Historia clínica</p>
+                  <h3 className="text-base font-bold text-gray-900 leading-tight">{paciente.full_name}</h3>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/70 hover:bg-white transition-colors shadow-sm"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6">
+              <HistoriaTab paciente={paciente} puedeEditar={puedeEditar} />
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

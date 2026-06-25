@@ -1,0 +1,113 @@
+"""
+Migración: agrega PATIENT_BOOK_PDF a ActionType del AuditLog.
+
+PATIENT_BOOK_PDF se registra cuando un usuario clínico genera el PDF del
+libro clínico del paciente (endpoint GET /expediente/<id>/libro/pdf/).
+Cada PDF es un snapshot inmutable (D-LIB-4); la bitácora registra quién lo
+generó, cuándo, el modo (completo/hc/ultimo) y si incluyó imágenes.
+"""
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("audit", "0032_add_patient_book_view_action"),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name="auditlog",
+            name="action",
+            field=models.CharField(
+                choices=[
+                    ("PATIENT_CREATE", "Crear paciente"),
+                    ("PATIENT_READ", "Leer ficha de paciente"),
+                    ("PATIENT_UPDATE", "Actualizar paciente"),
+                    ("PATIENT_DEACTIVATE", "Desactivar paciente"),
+                    ("APPOINTMENT_CREATE", "Crear cita"),
+                    ("APPOINTMENT_UPDATE", "Actualizar cita"),
+                    ("APPOINTMENT_STATUS", "Cambiar estado de cita"),
+                    ("APPOINTMENT_RESCHEDULE", "Reagendar cita"),
+                    ("APPOINTMENT_REACTIVATE", "Reactivar cita cancelada"),
+                    ("APPOINTMENT_TYPE_CREATE", "Crear tipo de cita"),
+                    ("APPOINTMENT_TYPE_UPDATE", "Actualizar tipo de cita"),
+                    ("APPOINTMENT_TYPE_DEACTIVATE", "Desactivar tipo de cita"),
+                    ("AGENDA_EVENT_CREATE", "Crear evento de agenda (reunión/bloqueo)"),
+                    ("AGENDA_EVENT_UPDATE", "Actualizar evento de agenda"),
+                    ("AGENDA_EVENT_DELETE", "Eliminar evento de agenda"),
+                    ("DOCTOR_CREATE", "Crear médico"),
+                    ("DOCTOR_UPDATE", "Actualizar médico"),
+                    ("DOCTOR_DEACTIVATE", "Desactivar médico"),
+                    ("DOCTOR_CONSULTORIOS", "Asignar consultorios a médico"),
+                    ("CONSULTORIO_CREATE", "Crear consultorio"),
+                    ("CONSULTORIO_UPDATE", "Actualizar consultorio"),
+                    ("CONSULTORIO_DEACTIVATE", "Desactivar consultorio"),
+                    ("SCHEDULE_CREATE", "Crear horario"),
+                    ("SCHEDULE_DEACTIVATE", "Desactivar horario"),
+                    ("CONFIG_UPDATE", "Actualizar configuración de agenda"),
+                    ("MEMBER_CREATE", "Alta de miembro"),
+                    ("MEMBER_UPDATE", "Actualizar miembro (nombre/rol)"),
+                    ("MEMBER_BLOCK", "Bloquear o reactivar cuenta de miembro"),
+                    ("MEMBER_PASSWORD", "Restablecer contraseña de miembro"),
+                    ("NOTE_CREATE", "Crear nota personal"),
+                    ("NOTE_UPDATE", "Actualizar nota"),
+                    ("NOTE_DELETE", "Eliminar nota"),
+                    ("NOTE_GLOBAL_SEND", "Enviar nota global"),
+                    ("AGENDA_NOTE_ADD", "Agregar nota a evento de agenda"),
+                    ("AGENDA_NOTE_DELETE", "Eliminar nota de evento de agenda"),
+                    ("ALLERGY_CREATE", "Registrar alergia"),
+                    ("ALLERGY_RESOLVE", "Resolver alergia"),
+                    ("MEDICAL_HISTORY_READ", "Leer historia clínica"),
+                    ("MEDICAL_HISTORY_UPDATE", "Actualizar historia clínica"),
+                    ("VITALSIGNS_CREATE", "Registrar signos vitales"),
+                    ("VITALSIGNS_READ", "Consultar signos vitales"),
+                    ("EVOLUTION_CREATE", "Crear nota de evolución"),
+                    ("EVOLUTION_READ", "Consultar notas de evolución"),
+                    ("ADDENDUM_CREATE", "Agregar addendum a nota de evolución"),
+                    ("DIAGNOSIS_CREATE", "Registrar diagnóstico"),
+                    ("DIAGNOSIS_RESOLVE", "Resolver diagnóstico"),
+                    ("DIAGNOSIS_READ", "Consultar diagnósticos"),
+                    ("EVOLUTION_IMAGE_ADD", "Agregar imagen a evolución"),
+                    ("EVOLUTION_IMAGE_REMOVE", "Dar de baja imagen de evolución"),
+                    ("MEDICATION_CREATE", "Crear medicamento custom"),
+                    ("PRESCRIPTION_CREATE", "Emitir receta médica"),
+                    ("PRESCRIPTION_READ", "Consultar receta médica"),
+                    ("PRESCRIPTION_CANCEL", "Anular receta médica"),
+                    ("PRESCRIPTION_PDF", "Generar PDF de receta médica"),
+                    ("TENANT_CREATE", "Crear clínica nueva"),
+                    ("TENANT_STATUS_CHANGE", "Cambiar estado de clínica"),
+                    ("LOGIN", "Inicio de sesión"),
+                    ("LOGOUT", "Cierre de sesión"),
+                    ("LOGIN_FAILED", "Intento de sesión fallido"),
+                    ("CLINIC_SETTINGS_UPDATE", "Actualizar configuración de clínica"),
+                    ("TEMPLATE_CREATE", "Crear plantilla clínica"),
+                    ("TEMPLATE_UPDATE", "Actualizar plantilla clínica"),
+                    ("TEMPLATE_DELETE", "Desactivar plantilla clínica"),
+                    ("PATIENT_CATEGORY_CREATE", "Crear categoría de paciente"),
+                    ("PATIENT_CATEGORY_DELETE", "Desactivar categoría de paciente"),
+                    ("CREDENTIAL_CREATE", "Registrar credencial de médico"),
+                    ("CREDENTIAL_UPDATE", "Actualizar credencial de médico"),
+                    ("CREDENTIAL_VALIDATE", "Validar/rechazar credencial de médico"),
+                    ("CREDENTIAL_DELETE", "Eliminar credencial de médico"),
+                    ("FORMAT_CREATE", "Crear formato de receta"),
+                    ("FORMAT_UPDATE", "Actualizar formato de receta"),
+                    ("FORMAT_DELETE", "Desactivar formato de receta"),
+                    (
+                        "PRESCRIPTION_VERIFY",
+                        "Verificar autenticidad de receta (público)",
+                    ),
+                    (
+                        "PRESCRIPTION_CONTROLLED_CREATE",
+                        "Emitir receta con medicamento controlado",
+                    ),
+                    ("PATIENT_BOOK_VIEW", "Consultar libro clínico del paciente"),
+                    ("PATIENT_BOOK_PDF", "Generar PDF del libro clínico"),
+                ],
+                db_index=True,
+                help_text="Tipo de acción realizada (ActionType).",
+                max_length=30,
+            ),
+        ),
+    ]

@@ -59,6 +59,8 @@ from apps.expediente.models import (
     EvolutionImage,
     EvolutionNote,
     MedicalHistory,
+    MedicalHistoryQuestion,
+    QuestionFieldType,
     Severity,
     VitalSignsRecord,
 )
@@ -253,6 +255,7 @@ def medical_history_upsert(
     padecimiento_actual: str = "",
     tratamientos_actuales: str = "",
     prioridad_analisis: str = "",
+    custom_answers: dict[str, Any] | None = None,
 ) -> MedicalHistory:
     """Crea o actualiza la historia clínica formal del paciente (upsert).
 
@@ -293,6 +296,10 @@ def medical_history_upsert(
         padecimiento_actual:      Texto libre.
         tratamientos_actuales:    Texto libre.
         prioridad_analisis:       Texto libre.
+        custom_answers:           Respuestas a preguntas extra (Fase 2).
+                                  None = no tocar. Dict = reemplaza completamente.
+                                  Las claves que no correspondan a UUIDs de preguntas
+                                  activas del tenant se ignoran silenciosamente.
 
     Returns:
         La instancia MedicalHistory creada o actualizada.
@@ -354,6 +361,20 @@ def medical_history_upsert(
         h.padecimiento_actual = padecimiento_actual
         h.tratamientos_actuales = tratamientos_actuales
         h.prioridad_analisis = prioridad_analisis
+
+        # Fase 2: custom_answers — filtrar claves para quedarse solo con las que
+        # corresponden a preguntas activas del tenant (ignora claves desconocidas).
+        if custom_answers is not None:
+            valid_ids: set[str] = set(
+                str(pk)
+                for pk in MedicalHistoryQuestion.objects.filter(
+                    tenant=tenant, is_active=True
+                ).values_list("id", flat=True)
+            )
+            h.custom_answers = {
+                k: v for k, v in custom_answers.items() if k in valid_ids
+            }
+
         return h
 
     if is_new:
@@ -392,6 +413,7 @@ def medical_history_upsert(
                     "padecimiento_actual",
                     "tratamientos_actuales",
                     "prioridad_analisis",
+                    "custom_answers",
                     "updated_at",
                 ]
             )
@@ -411,6 +433,7 @@ def medical_history_upsert(
                 "padecimiento_actual",
                 "tratamientos_actuales",
                 "prioridad_analisis",
+                "custom_answers",
                 "updated_at",
             ]
         )
@@ -1185,6 +1208,273 @@ def evolution_image_add(
     )
 
     return evo_image
+
+
+# ---------------------------------------------------------------------------
+# MedicalHistoryQuestion CRUD (Fase 2)
+# ---------------------------------------------------------------------------
+
+#: Campos que no se pueden modificar mediante el service de update.
+_MHQ_IMMUTABLE_FIELDS: frozenset[str] = frozenset(
+    {"id", "tenant", "tenant_id", "created_at", "updated_at", "deleted_at", "is_active"}
+)
+
+
+@transaction.atomic
+def medical_history_question_create(
+    *,
+    tenant: Tenant,
+    user: Any,
+    label: str,
+    field_type: str,
+    options: list[Any] | None = None,
+    section: str = "",
+    order: int = 0,
+    is_required: bool = False,
+) -> MedicalHistoryQuestion:
+    """Crea una pregunta extra para la HC de la clínica.
+
+    Valida:
+    - Que tenant no sea None (defensa para llamadas desde Celery sin contexto HTTP).
+    - Que field_type sea un valor válido de QuestionFieldType.
+    - Que si field_type == 'select', options sea lista no vacía de strings.
+    - Que si field_type != 'select', options sea [] (o None → se fuerza a []).
+
+    Registra MEDICAL_HISTORY_QUESTION_CREATE en AuditLog.
+    resource_repr = str(question.id) — NUNCA label (podría contener PII).
+
+    Args:
+        tenant:      Clínica del contexto activo. No puede ser None.
+        user:        Usuario que crea la pregunta (para created_by/auditoría).
+        label:       Texto de la pregunta (requerido, no vacío).
+        field_type:  Tipo de campo (text|textarea|boolean|select|number|date).
+        options:     Lista de opciones para type=select. None → [] para otros tipos.
+        section:     Agrupador opcional.
+        order:       Posición en el formulario (default=0).
+        is_required: Si True, el frontend exige respuesta.
+
+    Returns:
+        La instancia MedicalHistoryQuestion recién creada.
+
+    Raises:
+        ValidationError: si tenant es None, label está vacío, field_type es inválido,
+                         o las opciones no son coherentes con el tipo de campo.
+    """
+    if tenant is None:
+        raise ValidationError(
+            "Se requiere un tenant activo para crear una pregunta de HC."
+        )
+
+    label = label.strip()
+    if not label:
+        raise ValidationError("El texto de la pregunta no puede estar vacío.")
+
+    # Validar field_type en whitelist.
+    valid_types = [choice[0] for choice in QuestionFieldType.choices]
+    if field_type not in valid_types:
+        raise ValidationError(
+            f"Tipo de campo inválido '{field_type}'. "
+            f"Debe ser uno de: {', '.join(valid_types)}."
+        )
+
+    options_clean: list[Any] = options or []
+
+    # Si field_type == 'select', options no puede ser vacío.
+    if field_type == QuestionFieldType.SELECT and not options_clean:
+        raise ValidationError(
+            "Las opciones son requeridas para tipo 'select'."
+        )
+
+    # Si field_type != 'select', options debe ser vacío.
+    if field_type != QuestionFieldType.SELECT and options_clean:
+        raise ValidationError(
+            "Las opciones solo aplican para tipo 'select'."
+        )
+
+    question = MedicalHistoryQuestion.objects.create(
+        tenant=tenant,
+        created_by=user,
+        label=label,
+        field_type=field_type,
+        options=options_clean,
+        section=section,
+        order=order,
+        is_required=is_required,
+        is_active=True,
+    )
+
+    logger.info(
+        "medical_history_question_create: pregunta %s creada (tenant=%s)",
+        question.pk,
+        tenant.pk,
+    )
+
+    audit_record(
+        action=ActionType.MEDICAL_HISTORY_QUESTION_CREATE,
+        resource_type="MedicalHistoryQuestion",
+        actor=user,
+        tenant=tenant,
+        resource_id=question.id,
+        resource_repr=str(question.id),
+        metadata={"field_type": field_type, "order": order},
+    )
+
+    return question
+
+
+@transaction.atomic
+def medical_history_question_update(
+    *,
+    question: MedicalHistoryQuestion,
+    user: Any,
+    **fields: Any,
+) -> MedicalHistoryQuestion:
+    """Actualiza campos mutables de la pregunta extra de HC.
+
+    Campos mutables: label, field_type, options, section, order, is_required.
+    Campos inmutables (_MHQ_IMMUTABLE_FIELDS): id, tenant, tenant_id, created_at,
+    updated_at, deleted_at, is_active.
+
+    Para desactivar la pregunta usar medical_history_question_deactivate.
+
+    Valida:
+    - Que ningún campo de _MHQ_IMMUTABLE_FIELDS esté en `fields`.
+    - Que field_type, si se actualiza, sea un valor válido.
+    - Coherencia options/field_type si alguno de los dos cambia.
+
+    Registra MEDICAL_HISTORY_QUESTION_UPDATE en AuditLog.
+
+    Args:
+        question: Instancia de MedicalHistoryQuestion a actualizar.
+        user:     Usuario que realiza la actualización (para auditoría).
+        **fields: Campos a actualizar (solo mutables).
+
+    Returns:
+        La instancia MedicalHistoryQuestion actualizada.
+
+    Raises:
+        ValidationError: si se intenta modificar campos inmutables o los datos
+                         no son coherentes.
+    """
+    if question.tenant is None:
+        raise ValidationError(
+            "La pregunta no tiene un tenant asociado."
+        )
+
+    # Bloquear campos inmutables.
+    bad = set(fields) & _MHQ_IMMUTABLE_FIELDS
+    if bad:
+        raise ValidationError(
+            f"No se pueden modificar los campos: {', '.join(sorted(bad))}."
+        )
+
+    # Determinar el field_type resultante (el nuevo o el actual).
+    new_field_type: str = fields.get("field_type", question.field_type)
+
+    # Validar field_type si se cambia.
+    if "field_type" in fields:
+        valid_types = [choice[0] for choice in QuestionFieldType.choices]
+        if new_field_type not in valid_types:
+            raise ValidationError(
+                f"Tipo de campo inválido '{new_field_type}'."
+            )
+
+    # Determinar options resultantes.
+    new_options: list[Any] = fields.get("options", question.options)
+
+    # Validar coherencia options/field_type.
+    if new_field_type == QuestionFieldType.SELECT and not new_options:
+        raise ValidationError(
+            "Las opciones son requeridas para tipo 'select'."
+        )
+    if new_field_type != QuestionFieldType.SELECT and new_options:
+        raise ValidationError(
+            "Las opciones solo aplican para tipo 'select'."
+        )
+
+    # Normalizar label si se provee.
+    if "label" in fields:
+        fields["label"] = fields["label"].strip()
+        if not fields["label"]:
+            raise ValidationError("El texto de la pregunta no puede estar vacío.")
+
+    for attr, value in fields.items():
+        setattr(question, attr, value)
+
+    question.save(
+        update_fields=list(fields.keys()) + ["updated_at"],
+    )
+
+    logger.info(
+        "medical_history_question_update: pregunta %s actualizada (tenant=%s)",
+        question.pk,
+        question.tenant_id,
+    )
+
+    audit_record(
+        action=ActionType.MEDICAL_HISTORY_QUESTION_UPDATE,
+        resource_type="MedicalHistoryQuestion",
+        actor=user,
+        tenant=question.tenant,
+        resource_id=question.id,
+        resource_repr=str(question.id),
+        metadata={"updated_fields": sorted(fields.keys())},
+    )
+
+    return question
+
+
+@transaction.atomic
+def medical_history_question_deactivate(
+    *,
+    question: MedicalHistoryQuestion,
+    user: Any,
+) -> MedicalHistoryQuestion:
+    """Baja lógica de una pregunta extra de HC (D-EC-5).
+
+    NUNCA borra el registro físicamente. Pone is_active=False.
+    Si ya estaba inactiva, la operación es idempotente (no error).
+
+    Las respuestas históricas en custom_answers permanecen intactas.
+
+    Registra MEDICAL_HISTORY_QUESTION_DEACTIVATE en AuditLog.
+
+    Args:
+        question: Instancia de MedicalHistoryQuestion a desactivar.
+        user:     Usuario que ejecuta la acción (para auditoría).
+
+    Returns:
+        La instancia MedicalHistoryQuestion con is_active=False.
+
+    Raises:
+        ValidationError: si el tenant de la instancia es None.
+    """
+    if question.tenant is None:
+        raise ValidationError(
+            "La pregunta no tiene un tenant asociado. No se puede desactivar."
+        )
+
+    if question.is_active:
+        question.is_active = False
+        question.save(update_fields=["is_active", "updated_at"])
+
+        logger.info(
+            "medical_history_question_deactivate: pregunta %s desactivada por usuario %s",
+            question.pk,
+            getattr(user, "pk", None),
+        )
+
+        audit_record(
+            action=ActionType.MEDICAL_HISTORY_QUESTION_DEACTIVATE,
+            resource_type="MedicalHistoryQuestion",
+            actor=user,
+            tenant=question.tenant,
+            resource_id=question.id,
+            resource_repr=str(question.id),
+            metadata={},
+        )
+
+    return question
 
 
 @transaction.atomic

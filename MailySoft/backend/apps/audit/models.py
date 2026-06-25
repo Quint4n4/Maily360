@@ -153,6 +153,33 @@ class ActionType(models.TextChoices):
         "Emitir receta con medicamento controlado",
     )
 
+    # Libro clínico del paciente (Fase 1 — NOM-024)
+    # Se usa resource_repr = patient.record_number (no-PII) para identificar el acceso.
+    # Se elige un ActionType propio (no PATIENT_READ) porque el libro es un acceso
+    # compuesto que agrega HC + evoluciones + recetas: merece trazabilidad diferenciada
+    # para auditorías de acceso masivo al expediente completo (NOM-024 §5.3).
+    PATIENT_BOOK_VIEW = "PATIENT_BOOK_VIEW", "Consultar libro clínico del paciente"
+
+    # Libro clínico del paciente — PDF (Fase 3 — NOM-024)
+    # Se registra cada PDF generado (snapshot inmutable según D-LIB-4).
+    # metadata incluye el modo (completo/hc/ultimo) e imagenes (0/1).
+    # resource_repr = patient.record_number (no-PII, identificador de expediente).
+    PATIENT_BOOK_PDF = "PATIENT_BOOK_PDF", "Generar PDF del libro clínico"
+
+    # Historia Clínica configurable (Fase 2)
+    MEDICAL_HISTORY_QUESTION_CREATE = (
+        "MEDICAL_HISTORY_QUESTION_CREATE",
+        "Crear pregunta extra de HC",
+    )
+    MEDICAL_HISTORY_QUESTION_UPDATE = (
+        "MEDICAL_HISTORY_QUESTION_UPDATE",
+        "Actualizar pregunta extra de HC",
+    )
+    MEDICAL_HISTORY_QUESTION_DEACTIVATE = (
+        "MEDICAL_HISTORY_QUESTION_DEACTIVATE",
+        "Desactivar pregunta extra de HC",
+    )
+
 
 class AuditLog(TenantAwareModel):
     """Registro inmutable de un evento auditable en la plataforma.
@@ -195,8 +222,10 @@ class AuditLog(TenantAwareModel):
     )
 
     # --- Acción ---
+    # max_length=40: se aumentó de 30 a 40 en Fase 2 para acomodar
+    # MEDICAL_HISTORY_QUESTION_DEACTIVATE (35 chars) con margen para futuras acciones.
     action = models.CharField(
-        max_length=30,
+        max_length=40,
         choices=ActionType.choices,
         db_index=True,
         help_text="Tipo de acción realizada (ActionType).",

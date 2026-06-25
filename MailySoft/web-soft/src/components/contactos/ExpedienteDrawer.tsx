@@ -1,46 +1,46 @@
 /**
- * ExpedienteDrawer — expediente del paciente en layout de DOS COLUMNAS (estilo legacy).
+ * ExpedienteDrawer — expediente del paciente "CENTRADO EN LA VISITA" (rediseño Fase 1).
  *
  *   Header (franja superior, ancho completo): avatar + nombre + nº de expediente
- *     + chips (Activo/Inactivo, VIP, Finado) + acciones (Editar, Agendar, Dar de baja, X).
+ *     + chips (Activo/Inactivo, VIP, Finado) + acciones (Agendar, Dar de baja, X).
  *
  *   Cuerpo (dos columnas con scroll independiente):
- *     Izquierda (fija ~360px): FichaPaciente — alergias + contacto + identificación + NOM-004.
- *     Derecha  (flex-1):       Historia Clínica en ACORDEÓN:
- *       1. Enfermería (SignosTab, abierta por defecto)   [solo clínico]
- *       2. Historia clínica (HistoriaTab)                [solo clínico]
- *       3. Evolución (EvolucionTab)                      [solo clínico]
- *       4. Diagnósticos (DiagnosticosTab)                [solo clínico]
- *       5. Citas (CitasSection)                          [todos los que ven el expediente]
+ *     Izquierda (fija ~360px): FichaPaciente — identificación, alergias,
+ *       indicaciones de enfermería + botón "Editar datos" (lo que ya existía).
+ *     Derecha  (flex-1):
+ *       - "Visita de hoy" (VisitaDeHoy): ① Enfermería → ② Evolución SOAP → ③ Receta.
+ *       - Historial (HistorialExpediente): franja de citas + Libro clínico.
+ *
+ * Se eliminó la pila de acordeones (Acordeon/AcordeonItem, SignosTab, HistoriaTab,
+ * EvolucionTab, DiagnosticosTab, RecetasTab, CitasSection en ese formato). TODAS
+ * las funciones siguen accesibles:
+ *   - Signos → paso ① de la visita (VisitaSignos, mismos hooks).
+ *   - Evolución + exploración + imágenes + addenda → SOAP guiado / libro clínico.
+ *   - Recetas → botón directo "+ Receta" en la visita (mismo NuevaReceta).
+ *   - Historia clínica viva + evoluciones → Libro clínico (sin cambios).
+ *   - Citas → franja-recordatorio del historial.
+ *   - Diagnósticos formales (CIE-10) → ver "Pendientes" del reporte (Fase 2).
  *
  * Las secciones clínicas solo se muestran si puedeVerExpedienteClinico(role).
- * Los botones de captura/edición se ocultan según puedeEditarClinico / puedeCapturarSignos
- * (solo UX; el backend es la autoridad y devuelve 403).
+ * Los botones de captura/edición se ocultan según los permisos de rol (solo UX;
+ * el backend es la autoridad y devuelve 403).
  */
 
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  X, CalendarPlus, UserX, Loader2, AlertTriangle,
-  FileText, Stethoscope, Activity, ClipboardCheck, CalendarClock, Pill,
-} from 'lucide-react'
+import { X, CalendarPlus, UserX, Loader2, AlertTriangle, CalendarClock } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { initialsOf } from '../../lib/paciente'
 import { useUploadPatientAvatar } from '../../hooks/pacientes'
 import { ApiError } from '../../lib/http'
 import { useRole } from '../../auth/RoleContext'
 import {
-  puedeVerExpedienteClinico, puedeEditarClinico, puedeCapturarSignos,
-  puedeEmitirReceta, puedeAnularReceta,
+  puedeVerExpedienteClinico, puedeEditarClinico, puedeCapturarSignos, puedeEmitirReceta,
 } from '../../auth/permisos'
 import AvatarUploader from '../common/AvatarUploader'
 import { useAviso } from '../common/DialogProvider'
 import FichaPaciente from '../expediente/FichaPaciente'
-import { Acordeon, AcordeonItem } from '../expediente/Acordeon'
-import HistoriaTab from '../expediente/HistoriaTab'
-import SignosTab from '../expediente/SignosTab'
-import EvolucionTab from '../expediente/EvolucionTab'
-import DiagnosticosTab from '../expediente/DiagnosticosTab'
-import RecetasTab from '../expediente/RecetasTab'
+import VisitaDeHoy from '../expediente/VisitaDeHoy'
+import HistorialExpediente from '../expediente/HistorialExpediente'
 import CitasSection from '../expediente/CitasSection'
 
 interface ExpedienteDrawerProps {
@@ -64,7 +64,6 @@ export default function ExpedienteDrawer({
   const editarClinico = puedeEditarClinico(role)
   const capturarSignos = puedeCapturarSignos(role)
   const emitirReceta = puedeEmitirReceta(role)
-  const anularReceta = puedeAnularReceta(role)
 
   const subirAvatar = useUploadPatientAvatar()
   const aviso = useAviso()
@@ -100,7 +99,7 @@ export default function ExpedienteDrawer({
             onClick={e => e.stopPropagation()}
           >
             {/* ════ Header (franja superior, ancho completo) ════ */}
-            <div className="shrink-0 px-6 md:px-8 pt-6 pb-5 border-b border-amber-900/10">
+            <div className="shrink-0 px-4 sm:px-6 md:px-8 pt-6 pb-5 border-b border-amber-900/10">
               <button
                 onClick={onClose}
                 className="absolute top-5 right-5 z-10 w-9 h-9 rounded-full flex items-center justify-center bg-white/70 hover:bg-white transition-colors shadow-sm"
@@ -108,7 +107,7 @@ export default function ExpedienteDrawer({
                 <X className="w-5 h-5 text-gray-600" />
               </button>
 
-              <div className="flex items-start gap-5">
+              <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-5">
                 <div className="relative shrink-0">
                   <div className="absolute -inset-2 rounded-full"
                     style={{ background: 'conic-gradient(from 120deg, #E8C766, #C9A227, #F5E6B8, #C9A227, #E8C766)', filter: 'blur(8px)', opacity: 0.5 }} />
@@ -124,7 +123,7 @@ export default function ExpedienteDrawer({
 
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-700/70">Expediente del paciente</p>
-                  <h2 className="text-2xl font-bold text-gray-900 leading-tight truncate">{paciente.full_name}</h2>
+                  <h2 className="text-2xl font-bold text-gray-900 leading-tight break-words">{paciente.full_name}</h2>
                   <p className="text-sm text-gray-500 mt-0.5">{paciente.record_number}</p>
                   <div className="flex items-center gap-2 mt-2">
                     <span className={`badge ${paciente.is_active ? 'badge-success' : 'badge-neutral'}`}>
@@ -136,10 +135,10 @@ export default function ExpedienteDrawer({
                 </div>
 
                 {/* Acciones del paciente */}
-                <div className="flex flex-col gap-2 shrink-0 mr-10">
+                <div className="flex flex-col gap-2 shrink-0 w-full sm:w-auto mr-0 sm:mr-10">
                   <div className="flex gap-2">
                     <button
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
                       style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
                       <CalendarPlus className="w-4 h-4" /> Agendar
                     </button>
@@ -157,8 +156,8 @@ export default function ExpedienteDrawer({
             </div>
 
             {/* ════ Cuerpo en dos columnas (scroll independiente) ════ */}
-            <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-5 p-6 md:p-8 overflow-y-auto lg:overflow-hidden">
-              {/* Columna izquierda: ficha fija */}
+            <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-5 p-4 sm:p-6 md:p-8 overflow-y-auto lg:overflow-hidden">
+              {/* Columna izquierda: ficha fija (identificación + alergias + enfermería + editar) */}
               <aside className="w-full lg:w-[380px] lg:shrink-0 lg:h-full lg:overflow-y-auto lg:pr-1">
                 {/* Aviso de expediente provisional */}
                 {paciente.is_provisional && (
@@ -181,38 +180,28 @@ export default function ExpedienteDrawer({
                 />
               </aside>
 
-              {/* Columna derecha: Historia Clínica en acordeón */}
-              <section className="flex-1 min-w-0 lg:h-full lg:overflow-y-auto lg:pr-1">
-                <Acordeon>
-                  {accesoClinico && (
-                    <>
-                      <AcordeonItem title="Enfermería" icon={Activity} defaultOpen>
-                        {() => <SignosTab paciente={paciente} puedeCapturar={capturarSignos} />}
-                      </AcordeonItem>
-                      <AcordeonItem title="Historia clínica" icon={FileText}>
-                        {() => <HistoriaTab paciente={paciente} puedeEditar={editarClinico} />}
-                      </AcordeonItem>
-                      <AcordeonItem title="Evolución" icon={Stethoscope}>
-                        {() => <EvolucionTab paciente={paciente} puedeEditar={editarClinico} />}
-                      </AcordeonItem>
-                      <AcordeonItem title="Diagnósticos" icon={ClipboardCheck}>
-                        {() => <DiagnosticosTab paciente={paciente} puedeEditar={editarClinico} />}
-                      </AcordeonItem>
-                      <AcordeonItem title="Recetas" icon={Pill}>
-                        {() => (
-                          <RecetasTab
-                            paciente={paciente}
-                            puedeEmitir={emitirReceta}
-                            puedeAnular={anularReceta}
-                          />
-                        )}
-                      </AcordeonItem>
-                    </>
-                  )}
-                  <AcordeonItem title="Citas" icon={CalendarClock} defaultOpen={!accesoClinico}>
-                    {() => <CitasSection paciente={paciente} />}
-                  </AcordeonItem>
-                </Acordeon>
+              {/* Columna central/derecha: visita de hoy + historial */}
+              <section className="flex-1 min-w-0 lg:h-full lg:overflow-y-auto lg:pr-1 space-y-6">
+                {accesoClinico ? (
+                  <>
+                    <VisitaDeHoy
+                      paciente={paciente}
+                      puedeCapturarSignos={capturarSignos}
+                      puedeEditarClinico={editarClinico}
+                      puedeEmitirReceta={emitirReceta}
+                    />
+                    <HistorialExpediente paciente={paciente} verClinico={accesoClinico} />
+                  </>
+                ) : (
+                  // Roles sin acceso clínico (recepción/finanzas): solo citas.
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <CalendarClock className="w-4 h-4" style={{ color: '#C9A227' }} />
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-700/80">Citas</h3>
+                    </div>
+                    <CitasSection paciente={paciente} />
+                  </div>
+                )}
               </section>
             </div>
           </motion.div>

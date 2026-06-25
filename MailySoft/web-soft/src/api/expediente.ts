@@ -26,7 +26,7 @@
  *     POST   /expediente/diagnosticos/<id>/resolver/
  */
 
-import { request } from '../lib/http'
+import { request, requestBlob } from '../lib/http'
 import type { Paginated } from '../types/paciente'
 import type {
   Addendum,
@@ -40,7 +40,11 @@ import type {
   EvolutionNoteInput,
   MedicalHistory,
   MedicalHistoryInput,
+  MedicalHistoryQuestion,
+  MedicalHistoryQuestionInput,
+  MedicalHistoryQuestionUpdateInput,
   NursingInstruction,
+  PatientBook,
   VitalSignsInput,
   VitalSignsRecord,
   VitalSignsSeries,
@@ -80,6 +84,42 @@ export async function upsertMedicalHistory(
   input: MedicalHistoryInput,
 ): Promise<MedicalHistory> {
   return request<MedicalHistory>(`/expediente/${patientId}/historia/`, { method: 'PUT', body: input })
+}
+
+// ── Fase 2 — Preguntas configurables de la HC ─────────────────────────────────
+
+/**
+ * GET /expediente/preguntas-hc/ — preguntas extra de la clínica (array directo).
+ * Disponible para roles clínicos (para render); el CRUD lo restringe el backend.
+ */
+export async function listHistoryQuestions(): Promise<MedicalHistoryQuestion[]> {
+  return request<MedicalHistoryQuestion[]>('/expediente/preguntas-hc/')
+}
+
+/** POST /expediente/preguntas-hc/ — crea una pregunta extra (owner/admin, 201). */
+export async function createHistoryQuestion(
+  input: MedicalHistoryQuestionInput,
+): Promise<MedicalHistoryQuestion> {
+  return request<MedicalHistoryQuestion>('/expediente/preguntas-hc/', {
+    method: 'POST',
+    body: input,
+  })
+}
+
+/** PATCH /expediente/preguntas-hc/<id>/ — edita una pregunta extra (owner/admin). */
+export async function updateHistoryQuestion(
+  questionId: string,
+  input: MedicalHistoryQuestionUpdateInput,
+): Promise<MedicalHistoryQuestion> {
+  return request<MedicalHistoryQuestion>(`/expediente/preguntas-hc/${questionId}/`, {
+    method: 'PATCH',
+    body: input,
+  })
+}
+
+/** DELETE /expediente/preguntas-hc/<id>/ — baja lógica de una pregunta (204). */
+export async function deleteHistoryQuestion(questionId: string): Promise<void> {
+  await request<void>(`/expediente/preguntas-hc/${questionId}/`, { method: 'DELETE' })
 }
 
 // ── A3 — Signos vitales ───────────────────────────────────────────────────────
@@ -212,4 +252,44 @@ export async function createDiagnosis(
 /** POST /expediente/diagnosticos/<id>/resolver/ — marca como resuelto (200). */
 export async function resolveDiagnosis(diagnosisId: string): Promise<Diagnosis> {
   return request<Diagnosis>(`/expediente/diagnosticos/${diagnosisId}/resolver/`, { method: 'POST', body: {} })
+}
+
+// ── Fase 2 — Libro clínico (vista agregada) ───────────────────────────────────
+
+/**
+ * GET /expediente/<patient_id>/libro/?page=N&page_size=M — arma el libro clínico:
+ * portada + HC viva + alergias + capítulos paginados (más reciente primero).
+ *
+ * Permiso: roles clínicos. El backend responde 403 a recepción/finanzas — el
+ * cliente http propaga ese error para que la UI lo refleje (es la autoridad).
+ */
+export async function getPatientBook(
+  patientId: string,
+  page = 1,
+  pageSize?: number,
+): Promise<PatientBook> {
+  const qs = new URLSearchParams()
+  if (page > 1) qs.set('page', String(page))
+  if (pageSize) qs.set('page_size', String(pageSize))
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return request<PatientBook>(`/expediente/${patientId}/libro/${suffix}`)
+}
+
+/** Modo de impresión del libro: completo, solo historia clínica, o solo el último capítulo. */
+export type LibroModo = 'completo' | 'hc' | 'ultimo'
+
+/**
+ * GET /expediente/<patient_id>/libro/pdf/?modo=&imagenes= — PDF del libro (Blob).
+ * Descarga autenticada (Bearer vía requestBlob); el token nunca va en la URL.
+ */
+export async function getPatientBookPdf(
+  patientId: string,
+  modo: LibroModo,
+  incluirImagenes: boolean,
+): Promise<Blob> {
+  const qs = new URLSearchParams({ modo, imagenes: incluirImagenes ? '1' : '0' })
+  // El endpoint solo negocia application/pdf; sin este Accept, DRF responde 406.
+  return requestBlob(`/expediente/${patientId}/libro/pdf/?${qs.toString()}`, {
+    headers: { Accept: 'application/pdf' },
+  })
 }

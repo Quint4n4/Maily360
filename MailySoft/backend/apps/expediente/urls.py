@@ -38,7 +38,11 @@ from apps.expediente.views import (
     EvolutionImageListCreateApi,
     EvolutionNoteListCreateApi,
     MedicalHistoryApi,
+    MedicalHistoryQuestionDetailApi,
+    MedicalHistoryQuestionListCreateApi,
     NursingInstructionListApi,
+    PatientBookApi,
+    PatientBookPdfApi,
     VitalSignsListCreateApi,
     VitalSignsSeriesApi,
 )
@@ -112,5 +116,29 @@ urlpatterns = [
         "expediente/evoluciones/<uuid:evolution_id>/imagenes/",
         EvolutionImageListCreateApi.as_view(),
         name="evolution-image-list-create",
+    ),
+    # Libro Clínico — Fase 1 (GET JSON, solo lectura, roles clínicos)
+    # La ruta del PDF va ANTES para evitar que el router confunda "pdf" con otro recurso.
+    path(
+        "expediente/<uuid:patient_id>/libro/pdf/",
+        PatientBookPdfApi.as_view(),
+        name="patient-book-pdf",
+    ),
+    path(
+        "expediente/<uuid:patient_id>/libro/",
+        PatientBookApi.as_view(),
+        name="patient-book",
+    ),
+    # Fase 2 — Preguntas extra configurables de HC
+    # La ruta de detalle va ANTES de la de listado para evitar colisiones de segmentos.
+    path(
+        "expediente/preguntas-hc/<uuid:question_id>/",
+        MedicalHistoryQuestionDetailApi.as_view(),
+        name="mhq-detail",
+    ),
+    path(
+        "expediente/preguntas-hc/",
+        MedicalHistoryQuestionListCreateApi.as_view(),
+        name="mhq-list-create",
     ),
 ]

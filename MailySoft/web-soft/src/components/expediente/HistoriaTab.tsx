@@ -5,10 +5,12 @@
  * El bloque gineco-obstétrico se oculta si el paciente no es sexo F.
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Save, Loader2, FileText } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronDown, Save, Loader2, FileText, ListChecks } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type {
+  CustomAnswers,
+  CustomAnswerValue,
   ExploracionFisicaBasal,
   ExploracionSistema,
   GinecoObstetricos,
@@ -16,12 +18,16 @@ import type {
   HeredoFamiliares,
   MedicalHistory,
   MedicalHistoryInput,
+  MedicalHistoryQuestion,
   NoPatologicos,
   PersonalesPatologicos,
   ViviendaChoice,
 } from '../../types/expediente'
 import { useMedicalHistory, useUpsertMedicalHistory } from '../../hooks/expediente'
 import { erroresDe } from '../../lib/apiErrors'
+import {
+  AGO_FIELDS, AHF_FIELDS, APNP_FIELDS, APP_FIELDS, HABITOS_FIELDS, NUCLEO_TITULOS_SET,
+} from '../../lib/nucleoHistoriaClinica'
 import {
   Cargando, ErroresAlerta, EXPLORACION_BASAL_OPTIONS, SistemaLabelConIcono, VIVIENDA_OPTIONS,
 } from './ui'
@@ -38,6 +44,8 @@ interface FormState {
   padecimiento_actual: string
   tratamientos_actuales: string
   prioridad_analisis: string
+  /** Respuestas a las preguntas extra de la clínica: { <question_id>: valor }. */
+  custom_answers: CustomAnswers
 }
 
 /** Bloques objeto (JSON) de la HC — excluye los campos de texto plano. */
@@ -61,97 +69,43 @@ function fromHistory(h: MedicalHistory): FormState {
     padecimiento_actual: h.padecimiento_actual,
     tratamientos_actuales: h.tratamientos_actuales,
     prioridad_analisis: h.prioridad_analisis,
+    custom_answers: { ...h.custom_answers },
   }
 }
 
-// ── Metadatos de los campos string de cada bloque (clave → etiqueta) ──────────
+/** Agrupa las preguntas extra activas por sección, conservando el orden del backend. */
+function agruparPorSeccion(
+  questions: MedicalHistoryQuestion[],
+): { section: string; preguntas: MedicalHistoryQuestion[] }[] {
+  const orden: string[] = []
+  const mapa = new Map<string, MedicalHistoryQuestion[]>()
+  for (const q of questions) {
+    const sec = q.section || 'General'
+    if (!mapa.has(sec)) { mapa.set(sec, []); orden.push(sec) }
+    mapa.get(sec)!.push(q)
+  }
+  return orden.map(section => ({
+    section,
+    preguntas: [...(mapa.get(section) ?? [])].sort((a, b) => a.order - b.order),
+  }))
+}
 
-const AHF_FIELDS: { key: keyof HeredoFamiliares; label: string }[] = [
-  { key: 'diabetes', label: 'Diabetes' },
-  { key: 'hipertension_arterial', label: 'Hipertensión arterial' },
-  { key: 'cardiopatias', label: 'Cardiopatías' },
-  { key: 'hepatopatias', label: 'Hepatopatías' },
-  { key: 'urologicos', label: 'Urológicos' },
-  { key: 'neurologicos', label: 'Neurológicos' },
-  { key: 'respiratorias', label: 'Respiratorias' },
-  { key: 'cancer', label: 'Cáncer' },
-  { key: 'alergicas', label: 'Alérgicas' },
-  { key: 'metabolicas', label: 'Metabólicas' },
-  { key: 'sanguineas', label: 'Sanguíneas' },
-  { key: 'articulares', label: 'Articulares' },
-  { key: 'inmunologicas', label: 'Inmunológicas' },
-  { key: 'malformaciones', label: 'Malformaciones' },
-  { key: 'dermatologicas', label: 'Dermatológicas' },
-  { key: 'otros', label: 'Otros' },
-]
+/** Valor por defecto de una respuesta extra vacía según su tipo. */
+function respuestaVacia(q: MedicalHistoryQuestion): CustomAnswerValue {
+  return q.field_type === 'boolean' ? false : ''
+}
 
-const APP_FIELDS: { key: keyof PersonalesPatologicos; label: string }[] = [
-  { key: 'enfermedades_infancia', label: 'Enfermedades de la infancia' },
-  { key: 'diabetes', label: 'Diabetes' },
-  { key: 'hipertension', label: 'Hipertensión' },
-  { key: 'respiratorias', label: 'Respiratorias' },
-  { key: 'oftalmico', label: 'Oftálmico' },
-  { key: 'cardiovasculares', label: 'Cardiovasculares' },
-  { key: 'neurologicos', label: 'Neurológicos' },
-  { key: 'gastrointestinales', label: 'Gastrointestinales' },
-  { key: 'hepatopatias', label: 'Hepatopatías' },
-  { key: 'metabolicas', label: 'Metabólicas' },
-  { key: 'urologicos', label: 'Urológicos' },
-  { key: 'circulatorio', label: 'Circulatorio' },
-  { key: 'traumaticas', label: 'Traumáticas' },
-  { key: 'articulares', label: 'Articulares' },
-  { key: 'dermatologicas', label: 'Dermatológicas' },
-  { key: 'quirurgicos', label: 'Quirúrgicos' },
-  { key: 'transfusionales', label: 'Transfusionales' },
-  { key: 'vectores', label: 'Vectores' },
-  { key: 'autoinmunes', label: 'Autoinmunes' },
-  { key: 'emocionales', label: 'Emocionales' },
-  { key: 'adicciones', label: 'Adicciones' },
-  { key: 'hospitalizaciones_previas', label: 'Hospitalizaciones previas' },
-  { key: 'pesticidas', label: 'Pesticidas' },
-  { key: 'dx_cancer', label: 'Diagnóstico de cáncer' },
-  { key: 'otros', label: 'Otros' },
-]
+/** true si la respuesta a una pregunta requerida está "sin contestar". */
+function respuestaFaltante(q: MedicalHistoryQuestion, valor: CustomAnswerValue): boolean {
+  if (q.field_type === 'boolean') return false // un checkbox siempre tiene valor (sí/no)
+  if (valor === null || valor === undefined) return true
+  if (typeof valor === 'string') return valor.trim() === ''
+  return false
+}
 
-const APNP_FIELDS: { key: keyof NoPatologicos; label: string }[] = [
-  { key: 'servicios_basicos', label: 'Servicios básicos' },
-  { key: 'actividad_fisica', label: 'Actividad física' },
-  { key: 'tabaquismo', label: 'Tabaquismo' },
-  { key: 'alcoholismo', label: 'Alcoholismo' },
-  { key: 'otras_toxicomanias', label: 'Otras toxicomanías' },
-  { key: 'inmunizaciones', label: 'Inmunizaciones' },
-  { key: 'ultima_desparasitacion', label: 'Última desparasitación' },
-  { key: 'otros', label: 'Otros' },
-]
-
-const HABITOS_FIELDS: { key: keyof HabitosAlimenticios; label: string }[] = [
-  { key: 'dieta_especial', label: 'Dieta especial' },
-  { key: 'intolerancias_alimentarias', label: 'Intolerancias alimentarias' },
-  { key: 'consumo_agua_litros', label: 'Consumo de agua (litros)' },
-  { key: 'suplementos', label: 'Suplementos' },
-]
-
-const AGO_FIELDS: { key: keyof GinecoObstetricos; label: string }[] = [
-  { key: 'menarca', label: 'Menarca' },
-  { key: 'ritmo_menstrual', label: 'Ritmo menstrual' },
-  { key: 'alteraciones', label: 'Alteraciones' },
-  { key: 'fum', label: 'FUM (última menstruación)' },
-  { key: 'ivsa', label: 'IVSA' },
-  { key: 'numero_parejas', label: 'Número de parejas' },
-  { key: 'gestas', label: 'Gestas' },
-  { key: 'abortos', label: 'Abortos' },
-  { key: 'partos', label: 'Partos' },
-  { key: 'cesareas', label: 'Cesáreas' },
-  { key: 'fup', label: 'FUP (último parto)' },
-  { key: 'metodo_planificacion', label: 'Método de planificación' },
-  { key: 'citologia_vaginal', label: 'Citología vaginal' },
-  { key: 'colposcopia', label: 'Colposcopia' },
-  { key: 'usg_pelvico', label: 'USG pélvico' },
-  { key: 'mastografia', label: 'Mastografía' },
-  { key: 'usg_mamas', label: 'USG de mamas' },
-  { key: 'menopausia_climaterio', label: 'Menopausia / climaterio' },
-  { key: 'tratamientos_hormonales', label: 'Tratamientos hormonales' },
-]
+// ── Metadatos de los campos de cada bloque (clave → etiqueta) ─────────────────
+// Las listas `*_FIELDS` viven en src/lib/nucleoHistoriaClinica.ts (fuente única
+// que comparten esta captura y el configurador de preguntas extra).
 
 const SISTEMAS: ExploracionSistema[] = [
   'cerebro', 'sistema_nervioso', 'ocular', 'endocrino', 'corazon', 'circulatorio',
@@ -173,6 +127,26 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
   const [okMsg, setOkMsg] = useState('')
   const esFemenino = paciente.sex === 'F'
 
+  // Preguntas extra ACTIVAS de la clínica (vienen embebidas en la HC, Fase 2).
+  const preguntasActivas = useMemo(() => data?.active_questions ?? [], [data])
+  const seccionesExtra = useMemo(() => agruparPorSeccion(preguntasActivas), [preguntasActivas])
+
+  // Las preguntas extra cuya sección coincide con un bloque del núcleo NOM-004 se
+  // intercalan DENTRO de ese bloque; las de secciones nuevas/personalizadas van en
+  // su propio grupo "Preguntas de la clínica" (como antes).
+  const extraPorTituloNucleo = useMemo(() => {
+    const mapa = new Map<string, MedicalHistoryQuestion[]>()
+    for (const grupo of seccionesExtra) {
+      if (NUCLEO_TITULOS_SET.has(grupo.section)) mapa.set(grupo.section, grupo.preguntas)
+    }
+    return mapa
+  }, [seccionesExtra])
+
+  const seccionesPersonalizadas = useMemo(
+    () => seccionesExtra.filter(g => !NUCLEO_TITULOS_SET.has(g.section)),
+    [seccionesExtra],
+  )
+
   useEffect(() => {
     if (data) setForm(fromHistory(data))
   }, [data])
@@ -185,6 +159,9 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
 
   const setTexto = (key: 'antecedentes_importancia' | 'padecimiento_actual' | 'tratamientos_actuales' | 'prioridad_analisis') =>
     (value: string) => setForm(f => (f ? { ...f, [key]: value } : f))
+
+  const setCustom = (questionId: string, value: CustomAnswerValue) =>
+    setForm(f => (f ? { ...f, custom_answers: { ...f.custom_answers, [questionId]: value } } : f))
 
   const setSistema = (sistema: ExploracionSistema, patch: Partial<{ estado: string; detalle: string }>) =>
     setForm(f => {
@@ -202,6 +179,13 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
   const onGuardar = async () => {
     if (!form) return
     setErrores([]); setOkMsg('')
+
+    // Validación UX de las preguntas extra requeridas (el backend es la autoridad).
+    const faltantes = preguntasActivas
+      .filter(q => q.is_required && respuestaFaltante(q, form.custom_answers[q.id] ?? respuestaVacia(q)))
+      .map(q => `“${q.label}” es obligatoria.`)
+    if (faltantes.length) { setErrores(faltantes); return }
+
     // Construir payload: gineco solo si es femenino (el backend rechaza si no lo es).
     const payload: MedicalHistoryInput = {
       heredo_familiares: form.heredo_familiares,
@@ -213,6 +197,10 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
       padecimiento_actual: form.padecimiento_actual,
       tratamientos_actuales: form.tratamientos_actuales,
       prioridad_analisis: form.prioridad_analisis,
+      // Solo se envían respuestas de preguntas ACTIVAS; el backend descarta claves inválidas.
+      custom_answers: Object.fromEntries(
+        preguntasActivas.map(q => [q.id, form.custom_answers[q.id] ?? respuestaVacia(q)]),
+      ),
     }
     if (esFemenino) payload.gineco_obstetricos = form.gineco_obstetricos
     try {
@@ -222,6 +210,23 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
       setErrores(erroresDe(err))
     }
   }
+
+  // Renderiza, como campos de la HC, las preguntas extra asignadas a un título del
+  // núcleo. Se intercalan al final del bloque correspondiente (mismo grid).
+  const renderExtrasDe = useCallback((titulo: string) => {
+    if (!form) return null
+    const preguntas = extraPorTituloNucleo.get(titulo)
+    if (!preguntas || preguntas.length === 0) return null
+    return preguntas.map(q => (
+      <PreguntaExtraField
+        key={q.id}
+        pregunta={q}
+        value={form.custom_answers[q.id] ?? respuestaVacia(q)}
+        onChange={v => setCustom(q.id, v)}
+        disabled={!puedeEditar}
+      />
+    ))
+  }, [form, extraPorTituloNucleo, puedeEditar])
 
   const bloques = useMemo(() => {
     if (!form) return []
@@ -242,6 +247,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
                 value={(form.heredo_familiares[key] as string | null | undefined) ?? ''}
                 onChange={set('heredo_familiares')(key)} placeholder="Negado" disabled={!puedeEditar} />
             ))}
+            {renderExtrasDe('Antecedentes heredo-familiares')}
           </BloqueGrid>
         ),
       },
@@ -254,6 +260,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
                 value={(form.personales_patologicos[key] as string | null | undefined) ?? ''}
                 onChange={set('personales_patologicos')(key)} placeholder="Negado" disabled={!puedeEditar} />
             ))}
+            {renderExtrasDe('Antecedentes personales patológicos')}
           </BloqueGrid>
         ),
       },
@@ -275,6 +282,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
                 value={(form.no_patologicos[key] as string | null | undefined) ?? ''}
                 onChange={set('no_patologicos')(key)} placeholder="Sin alteraciones" disabled={!puedeEditar} />
             ))}
+            {renderExtrasDe('Antecedentes no patológicos')}
           </BloqueGrid>
         ),
       },
@@ -293,6 +301,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
                 value={(form.habitos_alimenticios[key] as string | null | undefined) ?? ''}
                 onChange={set('habitos_alimenticios')(key)} disabled={!puedeEditar} />
             ))}
+            {renderExtrasDe('Hábitos alimenticios')}
           </BloqueGrid>
         ),
       },
@@ -308,6 +317,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
                 value={(form.gineco_obstetricos[key] as string | null | undefined) ?? ''}
                 onChange={set('gineco_obstetricos')(key)} disabled={!puedeEditar} />
             ))}
+            {renderExtrasDe('Antecedentes gineco-obstétricos')}
           </BloqueGrid>
         ),
       })
@@ -336,6 +346,9 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
               </div>
             )
           })}
+          {extraPorTituloNucleo.has('Exploración física basal') && (
+            <BloqueGrid>{renderExtrasDe('Exploración física basal')}</BloqueGrid>
+          )}
         </div>
       ),
     })
@@ -346,18 +359,30 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
         <div className="space-y-3">
           <TextArea label="Antecedentes de importancia"
             value={form.antecedentes_importancia} onChange={setTexto('antecedentes_importancia')} disabled={!puedeEditar} />
+          {extraPorTituloNucleo.has('Antecedentes de importancia') && (
+            <BloqueGrid>{renderExtrasDe('Antecedentes de importancia')}</BloqueGrid>
+          )}
           <TextArea label="Padecimiento actual"
             value={form.padecimiento_actual} onChange={setTexto('padecimiento_actual')} disabled={!puedeEditar} />
+          {extraPorTituloNucleo.has('Padecimiento actual') && (
+            <BloqueGrid>{renderExtrasDe('Padecimiento actual')}</BloqueGrid>
+          )}
           <TextArea label="Tratamientos actuales"
             value={form.tratamientos_actuales} onChange={setTexto('tratamientos_actuales')} disabled={!puedeEditar} />
+          {extraPorTituloNucleo.has('Tratamientos actuales') && (
+            <BloqueGrid>{renderExtrasDe('Tratamientos actuales')}</BloqueGrid>
+          )}
           <TextArea label="Prioridad de análisis"
             value={form.prioridad_analisis} onChange={setTexto('prioridad_analisis')} disabled={!puedeEditar} />
+          {extraPorTituloNucleo.has('Prioridad de análisis') && (
+            <BloqueGrid>{renderExtrasDe('Prioridad de análisis')}</BloqueGrid>
+          )}
         </div>
       ),
     })
 
     return list
-  }, [form, esFemenino, puedeEditar])
+  }, [form, esFemenino, puedeEditar, extraPorTituloNucleo, renderExtrasDe])
 
   if (isLoading) return <Cargando texto="Cargando historia clínica…" />
   if (isError) return <p className="text-sm text-red-600 py-8 text-center">No se pudo cargar la historia clínica.</p>
@@ -371,6 +396,35 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
       )}
 
       {bloques.map(b => <Acordeon key={b.id} titulo={b.titulo}>{b.render()}</Acordeon>)}
+
+      {/* ── Preguntas de la clínica (Fase 2) — solo las de SECCIONES NUEVAS.
+          Las preguntas asignadas a una sección del núcleo ya se intercalaron
+          dentro de su bloque del acordeón (arriba). ── */}
+      {seccionesPersonalizadas.length > 0 && (
+        <div className="pt-2 space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <ListChecks className="w-4 h-4" style={{ color: '#C9A227' }} />
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700/80">
+              Preguntas de la clínica
+            </h4>
+          </div>
+          {seccionesPersonalizadas.map(grupo => (
+            <Acordeon key={grupo.section} titulo={grupo.section}>
+              <BloqueGrid>
+                {grupo.preguntas.map(q => (
+                  <PreguntaExtraField
+                    key={q.id}
+                    pregunta={q}
+                    value={form.custom_answers[q.id] ?? respuestaVacia(q)}
+                    onChange={v => setCustom(q.id, v)}
+                    disabled={!puedeEditar}
+                  />
+                ))}
+              </BloqueGrid>
+            </Acordeon>
+          ))}
+        </div>
+      )}
 
       {puedeEditar && (
         <div className="flex justify-end pt-2">
@@ -442,6 +496,101 @@ function TextArea({
     <div>
       <label className="label">{label}</label>
       <textarea className="input resize-none" rows={3} value={value} disabled={disabled}
+        onChange={e => onChange(e.target.value)} />
+    </div>
+  )
+}
+
+/**
+ * Campo dinámico de una pregunta extra de la clínica (Fase 2). Renderiza el
+ * control según `field_type` y prellena desde la respuesta guardada.
+ *   text→input · textarea→textarea · boolean→checkbox · select→dropdown
+ *   number→input numérico · date→input date.
+ */
+function PreguntaExtraField({
+  pregunta, value, onChange, disabled,
+}: {
+  pregunta: MedicalHistoryQuestion
+  value: CustomAnswerValue
+  onChange: (v: CustomAnswerValue) => void
+  disabled?: boolean
+}) {
+  const label = (
+    <label className="label">
+      {pregunta.label}
+      {pregunta.is_required && <span className="text-red-500"> *</span>}
+    </label>
+  )
+
+  // El checkbox ocupa la fila completa con el label a la derecha.
+  if (pregunta.field_type === 'boolean') {
+    return (
+      <label className="flex items-center gap-2.5 cursor-pointer select-none py-1.5">
+        <input
+          type="checkbox"
+          className="w-4 h-4 rounded accent-amber-600"
+          checked={value === true}
+          disabled={disabled}
+          onChange={e => onChange(e.target.checked)}
+        />
+        <span className="text-sm text-gray-800">
+          {pregunta.label}
+          {pregunta.is_required && <span className="text-red-500"> *</span>}
+        </span>
+      </label>
+    )
+  }
+
+  const strValue = typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+
+  if (pregunta.field_type === 'textarea') {
+    return (
+      <div className="sm:col-span-full">
+        {label}
+        <textarea className="input resize-none" rows={3} value={strValue} disabled={disabled}
+          onChange={e => onChange(e.target.value)} />
+      </div>
+    )
+  }
+
+  if (pregunta.field_type === 'select') {
+    return (
+      <div>
+        {label}
+        <select className="input" value={strValue} disabled={disabled}
+          onChange={e => onChange(e.target.value)}>
+          <option value="">Sin especificar</option>
+          {pregunta.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      </div>
+    )
+  }
+
+  if (pregunta.field_type === 'number') {
+    return (
+      <div>
+        {label}
+        <input className="input" type="number" value={strValue} disabled={disabled}
+          onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))} />
+      </div>
+    )
+  }
+
+  if (pregunta.field_type === 'date') {
+    return (
+      <div>
+        {label}
+        <input className="input" type="date" value={strValue} disabled={disabled}
+          onChange={e => onChange(e.target.value)} />
+      </div>
+    )
+  }
+
+  // 'text' (default)
+  return (
+    <div>
+      {label}
+      <input className="input" value={strValue} disabled={disabled}
         onChange={e => onChange(e.target.value)} />
     </div>
   )

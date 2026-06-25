@@ -174,6 +174,76 @@ export interface ExploracionBasalCelda {
 /** Exploración física basal por sistema (bloque JSON de la HC). */
 export type ExploracionFisicaBasal = Partial<Record<ExploracionSistema, ExploracionBasalCelda>>
 
+// ───────────────────────────────────────────────────────────────────────────
+// Fase 2 — Historia clínica CONFIGURABLE (preguntas extra por clínica)
+//
+// El núcleo NOM-004 de la HC NO se toca; estas preguntas son SOLO adicionales.
+// Reflejan EXACTAMENTE el backend (apps/expediente — MedicalHistoryQuestion):
+//   GET    /expediente/preguntas-hc/        → lista de preguntas de la clínica
+//   POST   /expediente/preguntas-hc/        (owner/admin) → crea
+//   PATCH  /expediente/preguntas-hc/<id>/   (owner/admin) → edita
+//   DELETE /expediente/preguntas-hc/<id>/   (owner/admin) → baja lógica
+// ───────────────────────────────────────────────────────────────────────────
+
+/** Tipo de campo de una pregunta extra de la HC (choices del backend). */
+export type QuestionFieldType =
+  | 'text'
+  | 'textarea'
+  | 'boolean'
+  | 'select'
+  | 'number'
+  | 'date'
+
+/** Una pregunta extra de la HC definida por la clínica (MedicalHistoryQuestion). */
+export interface MedicalHistoryQuestion {
+  id: string
+  /** Texto de la pregunta que ve el médico. */
+  label: string
+  field_type: QuestionFieldType
+  /** Opciones del dropdown (solo aplica cuando field_type === 'select'). */
+  options: string[]
+  /** Agrupador opcional (ej. "Estilo de vida"); '' si no se especificó. */
+  section: string
+  /** Orden dentro de su sección (ascendente). */
+  order: number
+  is_required: boolean
+  /** false = pregunta dada de baja (baja lógica). */
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Cuerpo para crear una pregunta extra de la HC (POST). */
+export interface MedicalHistoryQuestionInput {
+  label: string
+  field_type: QuestionFieldType
+  /** Solo para 'select'. */
+  options?: string[]
+  section?: string
+  order?: number
+  is_required?: boolean
+}
+
+/** Cuerpo para editar una pregunta extra (PATCH). Todos los campos opcionales. */
+export interface MedicalHistoryQuestionUpdateInput {
+  label?: string
+  field_type?: QuestionFieldType
+  options?: string[]
+  section?: string
+  order?: number
+  is_required?: boolean
+  is_active?: boolean
+}
+
+/**
+ * Valor de una respuesta a una pregunta extra. El backend acepta texto, número
+ * o booleano según el field_type (las claves inválidas se descartan en el PUT).
+ */
+export type CustomAnswerValue = string | number | boolean | null
+
+/** Mapa { <question_id>: valor } de las respuestas a preguntas extra. */
+export type CustomAnswers = Record<string, CustomAnswerValue>
+
 /** Salida de MedicalHistory (MedicalHistoryOutputSerializer / documento vacío). */
 export interface MedicalHistory {
   /** null cuando la HC aún no existe (documento vacío que devuelve el backend). */
@@ -189,6 +259,10 @@ export interface MedicalHistory {
   padecimiento_actual: string
   tratamientos_actuales: string
   prioridad_analisis: string
+  /** Respuestas a las preguntas extra de la clínica (Fase 2): { <question_id>: valor }. */
+  custom_answers: CustomAnswers
+  /** Preguntas extra ACTIVAS de la clínica para renderizar dinámicamente (Fase 2). */
+  active_questions: MedicalHistoryQuestion[]
   created_at: string | null
   updated_at: string | null
 }
@@ -205,6 +279,8 @@ export interface MedicalHistoryInput {
   padecimiento_actual?: string
   tratamientos_actuales?: string
   prioridad_analisis?: string
+  /** Respuestas a las preguntas extra (Fase 2). Las claves inválidas se descartan. */
+  custom_answers?: CustomAnswers
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -413,4 +489,110 @@ export interface DiagnosisInput {
   cie_code?: string
   kind?: DiagnosisKind
   evolution_id?: string | null
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Fase 2 — Libro clínico (vista agregada, NO crea tablas nuevas)
+//
+// Refleja EXACTAMENTE el endpoint del backend (Fase 1):
+//   GET /api/v1/expediente/<patient_id>/libro/?page=N&page_size=M
+// Solo se COMPONE de datos que ya existen (HC viva + alergias + evoluciones).
+// Más reciente primero (D-LIB-3).
+// ───────────────────────────────────────────────────────────────────────────
+
+/** Datos de la clínica para la portada del libro (subset de ClinicSettings). */
+export interface BookClinica {
+  name: string
+  /** URL del logo de la clínica, o null. */
+  logo: string | null
+  address: string
+  phone: string
+}
+
+/** Firma del médico que firmó la evolución (encabezado/pie del capítulo). */
+export interface BookDoctor {
+  full_name: string
+  /** Cédulas profesionales validadas (COFEPRIS), ya filtradas por el backend. */
+  cedulas_validadas: string[]
+}
+
+/** Una fila de la exploración por aparatos dentro del capítulo. */
+export interface BookExploracion {
+  sistema: string
+  estado: string
+  detalle: string
+}
+
+/** Bloque "Análisis" (A del SOAP): texto libre + diagnósticos asociados. */
+export interface BookAnalisis {
+  texto: string
+  diagnosticos: Diagnosis[]
+}
+
+/** Bloque "Plan" (P del SOAP). */
+export interface BookPlan {
+  tratamiento: string
+  recomendaciones: string
+  indicaciones_enfermeria: string
+}
+
+/** Resumen de una receta dentro de un capítulo (no el detalle completo). */
+export interface BookRecetaResumen {
+  id: string
+  folio: number
+  /** Estado de la receta (models.PrescriptionStatus): 'active' | 'cancelled'. */
+  status: string
+  /** ISO datetime de emisión. */
+  issued_at: string
+  /** Líneas resumidas de los ítems (ej. "Paracetamol 500mg · 1 c/8h"). */
+  items_resumen: string[]
+}
+
+/**
+ * Un capítulo del libro = una nota de evolución compuesta (SOAP + signos +
+ * exploración + imágenes + diagnósticos + recetas + addenda). Inmutable.
+ */
+export interface BookCapitulo {
+  id: string
+  /** ISO datetime (created_at de la evolución). */
+  fecha: string
+  doctor: BookDoctor
+  /** Snapshot de signos de enfermería de la visita, o null. */
+  signos: VitalSignsRecord | null
+  /** S — subjetivo (interrogatorio + antecedentes). */
+  subjetivo: string
+  /** O — objetivo (estudios). */
+  objetivo: string
+  /** Exploración por aparatos (solo los sistemas evaluados). */
+  exploracion: BookExploracion[]
+  /** A — análisis. */
+  analisis: BookAnalisis
+  /** P — plan. */
+  plan: BookPlan
+  imagenes: EvolutionImage[]
+  recetas: BookRecetaResumen[]
+  addenda: Addendum[]
+}
+
+/**
+ * Respuesta del armador del libro (PatientBookSerializer).
+ * Portada + HC viva + alergias + capítulos paginados (más reciente primero).
+ */
+export interface PatientBook {
+  /** Datos del paciente (mismo serializer que el detalle de paciente). */
+  paciente: import('./paciente').PatientOut
+  /** Datos de la clínica para la portada, o null si no hay configuración. */
+  clinica: BookClinica | null
+  /** Historia clínica VIVA (versión actual), o null si aún no existe. */
+  historia_clinica: MedicalHistory | null
+  alergias: Allergy[]
+  /** Total de capítulos (evoluciones) del paciente, sin importar la página. */
+  capitulos_count: number
+  /** Total de páginas con el page_size actual. */
+  total_pages: number
+  /** Página actual (1-based). */
+  page: number
+  page_size: number
+  /** Capítulos de esta página, MÁS RECIENTE PRIMERO. */
+  capitulos: BookCapitulo[]
 }

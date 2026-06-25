@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    /* ================================================================
+       Libro Clínico del Paciente — Maily Platform
+       WeasyPrint: todas las imágenes son data-URI base64 (sin file:// ni http://)
+       Colores SOAP: S azul #185FA5, O teal #0F6E56, A morado #534AB7, P verde #3B6D11
+    ================================================================ */
+
+    @page {
+      size: letter portrait;
+      margin: 2cm 1.8cm 2.5cm 1.8cm;
+      @bottom-center {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 7pt;
+        color: #888;
+      }
+      @bottom-right {
+        content: "Generado: {{ fecha_generacion }}";
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 6.5pt;
+        color: #aaa;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 9pt;
+      color: #1e1e1e;
+      line-height: 1.4;
+    }
+
+    /* ----------------------------------------------------------------
+       Portada
+    ---------------------------------------------------------------- */
+    .portada {
+      page-break-after: always;
+      padding-top: 2cm;
+      text-align: center;
+    }
+
+    .portada-logo {
+      margin-bottom: 1cm;
+    }
+    .portada-logo img {
+      display: block;
+      margin: 0 auto;
+      max-width: {{ logo_w }}pt;
+      max-height: {{ logo_h }}pt;
+    }
+
+    .portada-clinica {
+      font-size: 18pt;
+      font-weight: bold;
+      color: #9A7B1E;
+      text-align: center;
+      letter-spacing: 0.5pt;
+      text-transform: uppercase;
+      margin-bottom: 4pt;
+    }
+
+    .portada-subtitulo {
+      font-size: 9pt;
+      color: #555;
+      text-align: center;
+      margin-bottom: 1.5cm;
+    }
+
+    .portada-titulo-libro {
+      font-size: 22pt;
+      font-weight: bold;
+      color: #1a1a1a;
+      text-align: center;
+      border-top: 2pt solid #9A7B1E;
+      border-bottom: 2pt solid #9A7B1E;
+      padding: 10pt 0;
+      margin-bottom: 1.2cm;
+      width: 100%;
+    }
+
+    .portada-tabla {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10pt;
+    }
+    .portada-tabla td {
+      padding: 5pt 8pt;
+      border-bottom: 0.5pt solid #ddd;
+      vertical-align: top;
+      text-align: left;
+    }
+    .portada-tabla .etiqueta {
+      font-weight: bold;
+      color: #444;
+      width: 38%;
+    }
+    .portada-tabla .valor {
+      color: #1e1e1e;
+    }
+
+    .portada-modo {
+      margin-top: 1.5cm;
+      font-size: 8pt;
+      color: #888;
+      text-align: center;
+    }
+
+    /* ----------------------------------------------------------------
+       Sección Historia Clínica
+    ---------------------------------------------------------------- */
+    .seccion-titulo {
+      font-size: 13pt;
+      font-weight: bold;
+      color: #fff;
+      background-color: #9A7B1E;
+      padding: 5pt 10pt;
+      margin-bottom: 10pt;
+      letter-spacing: 0.3pt;
+    }
+
+    .hc-bloque {
+      margin-bottom: 14pt;
+    }
+    .hc-bloque-titulo {
+      font-size: 9pt;
+      font-weight: bold;
+      color: #9A7B1E;
+      border-bottom: 0.6pt solid #9A7B1E;
+      padding-bottom: 2pt;
+      margin-bottom: 5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.3pt;
+    }
+    .hc-campo {
+      margin-bottom: 4pt;
+      font-size: 8.5pt;
+    }
+    .hc-campo strong {
+      color: #333;
+    }
+
+    .alergias-lista {
+      margin: 0;
+      padding-left: 14pt;
+    }
+    .alergias-lista li {
+      font-size: 8.5pt;
+      color: #c0392b;
+      margin-bottom: 2pt;
+    }
+    .sin-alergias {
+      font-size: 8.5pt;
+      color: #888;
+      font-style: italic;
+    }
+
+    /* ----------------------------------------------------------------
+       Capítulos (evoluciones)
+    ---------------------------------------------------------------- */
+    .capitulo {
+      page-break-before: always;
+    }
+
+    .capitulo-encabezado {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 8pt;
+      border-bottom: 1.5pt solid #9A7B1E;
+      padding-bottom: 5pt;
+    }
+    .capitulo-encabezado td {
+      vertical-align: top;
+    }
+    .cap-num {
+      font-size: 22pt;
+      font-weight: bold;
+      color: #9A7B1E;
+      width: 60pt;
+      text-align: center;
+      padding-right: 10pt;
+    }
+    .cap-num-label {
+      font-size: 7pt;
+      color: #9A7B1E;
+      text-align: center;
+      display: block;
+      margin-top: -4pt;
+    }
+    .cap-info {
+      padding: 0;
+    }
+    .cap-fecha {
+      font-size: 11pt;
+      font-weight: bold;
+      color: #1a1a1a;
+    }
+    .cap-doctor {
+      font-size: 8.5pt;
+      color: #444;
+      margin-top: 2pt;
+    }
+    .cap-cedulas {
+      font-size: 7.5pt;
+      color: #888;
+      margin-top: 1pt;
+    }
+
+    /* ---- Signos de enfermería ---- */
+    .signos-box {
+      background: #FCF8EE;
+      border: 0.6pt solid #9A7B1E66;
+      border-radius: 3pt;
+      padding: 6pt 10pt;
+      margin-bottom: 10pt;
+    }
+    .signos-titulo {
+      font-size: 7.5pt;
+      font-weight: bold;
+      color: #9A7B1E;
+      text-transform: uppercase;
+      margin-bottom: 4pt;
+      letter-spacing: 0.3pt;
+    }
+    .signos-tabla {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+    }
+    .signos-tabla td {
+      padding: 2pt 8pt 2pt 0;
+      vertical-align: top;
+    }
+    .signos-tabla .s-etiqueta {
+      color: #555;
+      font-weight: bold;
+      width: 25%;
+    }
+
+    /* ---- SOAP ---- */
+    .soap-seccion {
+      margin-bottom: 10pt;
+      border-left: 3pt solid;
+      padding-left: 8pt;
+    }
+    .soap-s { border-left-color: #185FA5; }
+    .soap-o { border-left-color: #0F6E56; }
+    .soap-a { border-left-color: #534AB7; }
+    .soap-p { border-left-color: #3B6D11; }
+
+    .soap-label {
+      font-size: 8pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.4pt;
+      margin-bottom: 3pt;
+    }
+    .soap-s .soap-label { color: #185FA5; }
+    .soap-o .soap-label { color: #0F6E56; }
+    .soap-a .soap-label { color: #534AB7; }
+    .soap-p .soap-label { color: #3B6D11; }
+
+    .soap-texto {
+      font-size: 8.5pt;
+      color: #1e1e1e;
+      white-space: pre-wrap;
+    }
+
+    /* ---- Exploración por aparatos ---- */
+    .exploracion-tabla {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+      margin-bottom: 10pt;
+    }
+    .exploracion-tabla th {
+      background: #f0f0f0;
+      font-weight: bold;
+      text-align: left;
+      padding: 3pt 6pt;
+      border-bottom: 0.5pt solid #ccc;
+      font-size: 7.5pt;
+      color: #444;
+    }
+    .exploracion-tabla td {
+      padding: 3pt 6pt;
+      border-bottom: 0.4pt solid #e8e8e8;
+      vertical-align: top;
+    }
+    .estado-normal { color: #0F6E56; }
+    .estado-anormal { color: #c0392b; font-weight: bold; }
+    .estado-no-explorado { color: #aaa; font-style: italic; }
+
+    /* ---- Imágenes de evolución ---- */
+    .imagenes-grid {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10pt;
+    }
+    .imagenes-grid td {
+      padding: 4pt;
+      text-align: center;
+      vertical-align: top;
+      width: 33%;
+    }
+    .imagen-cap {
+      font-size: 7pt;
+      color: #666;
+      margin-top: 2pt;
+    }
+
+    /* ---- Diagnósticos ---- */
+    .diagnosticos-lista {
+      margin: 0 0 10pt 0;
+      padding: 0;
+      list-style: none;
+    }
+    .diagnosticos-lista li {
+      font-size: 8.5pt;
+      padding: 3pt 0 3pt 10pt;
+      border-left: 3pt solid #534AB7;
+      margin-bottom: 4pt;
+    }
+    .dx-desc { font-weight: bold; }
+    .dx-cie { color: #666; font-size: 7.5pt; }
+    .dx-resuelto { color: #888; text-decoration: line-through; }
+
+    /* ---- Recetas (resumen) ---- */
+    .recetas-resumen {
+      margin-bottom: 10pt;
+    }
+    .receta-item {
+      background: #f7f4ee;
+      border: 0.5pt solid #9A7B1E44;
+      border-radius: 2pt;
+      padding: 5pt 8pt;
+      margin-bottom: 5pt;
+      font-size: 8pt;
+    }
+    .receta-folio {
+      font-weight: bold;
+      color: #9A7B1E;
+      font-size: 8.5pt;
+    }
+    .receta-medicamentos {
+      color: #333;
+      margin-top: 2pt;
+    }
+
+    /* ---- Addenda ---- */
+    .addendum-item {
+      background: #fffdf5;
+      border-left: 3pt solid #9A7B1E;
+      padding: 5pt 8pt;
+      margin-bottom: 6pt;
+      font-size: 8pt;
+    }
+    .addendum-meta {
+      font-size: 7pt;
+      color: #888;
+      margin-bottom: 2pt;
+    }
+
+    /* ---- Pie de capítulo / firma ---- */
+    .pie-capitulo {
+      margin-top: 16pt;
+      border-top: 0.5pt solid #ccc;
+      padding-top: 8pt;
+      font-size: 7.5pt;
+      color: #666;
+    }
+
+    /* ---- Utilidades ---- */
+    .vacio { font-style: italic; color: #aaa; font-size: 8pt; }
+    .no-page-break-inside { page-break-inside: avoid; }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     PORTADA
+================================================================ -->
+<div class="portada">
+  {% if logo_b64 %}
+  <div class="portada-logo">
+    <img src="data:image/{{ logo_mime }};base64,{{ logo_b64 }}"
+         style="max-width:{{ logo_w }}pt; max-height:{{ logo_h }}pt;" />
+  </div>
+  {% endif %}
+
+  <div class="portada-clinica">{{ clinica_nombre }}</div>
+  {% if clinica_direccion %}
+  <div class="portada-subtitulo">{{ clinica_direccion }}{% if clinica_telefono %} · Tel: {{ clinica_telefono }}{% endif %}</div>
+  {% endif %}
+
+  <div class="portada-titulo-libro">LIBRO CLÍNICO DEL PACIENTE</div>
+
+  <table class="portada-tabla">
+    <tr>
+      <td class="etiqueta">Nombre completo:</td>
+      <td class="valor">{{ paciente_nombre }}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">No. de expediente:</td>
+      <td class="valor">{{ paciente_record_number }}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Fecha de nacimiento:</td>
+      <td class="valor">{{ paciente_fecha_nacimiento }}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Edad / Sexo:</td>
+      <td class="valor">{{ paciente_edad_sexo }}</td>
+    </tr>
+    {% if paciente_curp %}
+    <tr>
+      <td class="etiqueta">CURP:</td>
+      <td class="valor">{{ paciente_curp }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td class="etiqueta">Total de capítulos:</td>
+      <td class="valor">{{ capitulos_count }}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Fecha de generación:</td>
+      <td class="valor">{{ fecha_generacion }}</td>
+    </tr>
+  </table>
+
+  <div class="portada-modo">
+    Modo: {{ modo_label }}{% if sin_imagenes %} · Sin imágenes{% endif %}
+  </div>
+</div>
+
+
+<!-- ================================================================
+     HISTORIA CLÍNICA (modos: completo y hc)
+================================================================ -->
+{% if mostrar_hc %}
+<div class="no-page-break-inside">
+  <div class="seccion-titulo">HISTORIA CLÍNICA</div>
+
+  <!-- Alergias activas -->
+  <div class="hc-bloque">
+    <div class="hc-bloque-titulo">Alergias conocidas</div>
+    {% if alergias %}
+    <ul class="alergias-lista">
+      {% for alergia in alergias %}
+      <li>
+        <strong>{{ alergia.substance }}</strong>
+        {% if alergia.reaction %} — {{ alergia.reaction }}{% endif %}
+        {% if alergia.severity %} ({{ alergia.severity }}){% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <span class="sin-alergias">Sin alergias registradas.</span>
+    {% endif %}
+  </div>
+
+  {% if historia_clinica %}
+    {% with hc=historia_clinica %}
+
+    {% if hc.padecimiento_actual %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Padecimiento actual</div>
+      <div class="hc-campo" style="white-space:pre-wrap;">{{ hc.padecimiento_actual }}</div>
+    </div>
+    {% endif %}
+
+    {% if hc.antecedentes_importancia %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Antecedentes de importancia</div>
+      <div class="hc-campo" style="white-space:pre-wrap;">{{ hc.antecedentes_importancia }}</div>
+    </div>
+    {% endif %}
+
+    {% if hc.tratamientos_actuales %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Tratamientos actuales</div>
+      <div class="hc-campo" style="white-space:pre-wrap;">{{ hc.tratamientos_actuales }}</div>
+    </div>
+    {% endif %}
+
+    {% if hc.heredo_familiares %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Antecedentes heredo-familiares</div>
+      {% for clave, valor in hc.heredo_familiares.items %}
+      <div class="hc-campo"><strong>{{ clave }}:</strong> {{ valor }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if hc.personales_patologicos %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Antecedentes personales patológicos</div>
+      {% for clave, valor in hc.personales_patologicos.items %}
+      <div class="hc-campo"><strong>{{ clave }}:</strong> {{ valor }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if hc.no_patologicos %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Antecedentes no patológicos</div>
+      {% for clave, valor in hc.no_patologicos.items %}
+      <div class="hc-campo"><strong>{{ clave }}:</strong> {{ valor }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if hc.habitos_alimenticios %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Hábitos alimenticios</div>
+      {% for clave, valor in hc.habitos_alimenticios.items %}
+      <div class="hc-campo"><strong>{{ clave }}:</strong> {{ valor }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if hc.gineco_obstetricos %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Antecedentes gineco-obstétricos</div>
+      {% for clave, valor in hc.gineco_obstetricos.items %}
+      <div class="hc-campo"><strong>{{ clave }}:</strong> {{ valor }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if hc.exploracion_fisica_basal %}
+    <div class="hc-bloque">
+      <div class="hc-bloque-titulo">Exploración física basal</div>
+      {% for clave, valor in hc.exploracion_fisica_basal.items %}
+      <div class="hc-campo"><strong>{{ clave }}:</strong> {{ valor }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% endwith %}
+  {% else %}
+  <div class="vacio">Historia Clínica no registrada aún.</div>
+  {% endif %}
+</div>
+{% endif %}
+
+
+<!-- ================================================================
+     CAPÍTULOS (evoluciones)
+================================================================ -->
+{% for cap in capitulos %}
+<div class="capitulo">
+
+  <!-- Encabezado del capítulo -->
+  <table class="capitulo-encabezado" style="width:100%;">
+    <tr>
+      <td class="cap-num">
+        {{ cap.numero }}
+        <span class="cap-num-label">capítulo</span>
+      </td>
+      <td class="cap-info">
+        <div class="cap-fecha">{{ cap.fecha_display }}</div>
+        <div class="cap-doctor">Dr(a). {{ cap.doctor_nombre }}</div>
+        {% if cap.doctor_cedulas %}
+        <div class="cap-cedulas">Cédula(s): {{ cap.doctor_cedulas }}</div>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Signos de enfermería -->
+  {% if cap.signos %}
+  <div class="signos-box no-page-break-inside">
+    <div class="signos-titulo">Signos vitales de enfermería</div>
+    <table class="signos-tabla">
+      <tr>
+        {% if cap.signos.weight_kg is not None %}<td class="s-etiqueta">Peso:</td><td>{{ cap.signos.weight_kg }} kg</td>{% endif %}
+        {% if cap.signos.height_m is not None %}<td class="s-etiqueta">Talla:</td><td>{{ cap.signos.height_m }} m</td>{% endif %}
+        {% if cap.signos.imc is not None %}<td class="s-etiqueta">IMC:</td><td>{{ cap.signos.imc }}</td>{% endif %}
+      </tr>
+      <tr>
+        {% if cap.signos.systolic is not None %}<td class="s-etiqueta">T/A:</td><td>{{ cap.signos.systolic }}/{{ cap.signos.diastolic }} mmHg</td>{% endif %}
+        {% if cap.signos.heart_rate is not None %}<td class="s-etiqueta">F.C.:</td><td>{{ cap.signos.heart_rate }} lpm</td>{% endif %}
+        {% if cap.signos.temperature_c is not None %}<td class="s-etiqueta">Temp:</td><td>{{ cap.signos.temperature_c }} °C</td>{% endif %}
+      </tr>
+      <tr>
+        {% if cap.signos.oxygen_saturation is not None %}<td class="s-etiqueta">SpO₂:</td><td>{{ cap.signos.oxygen_saturation }}%</td>{% endif %}
+        {% if cap.signos.resp_rate is not None %}<td class="s-etiqueta">F.R.:</td><td>{{ cap.signos.resp_rate }} rpm</td>{% endif %}
+        {% if cap.signos.glucose is not None %}<td class="s-etiqueta">Glucosa:</td><td>{{ cap.signos.glucose }} mg/dL</td>{% endif %}
+      </tr>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- S — Subjetivo (interrogatorio + antecedentes) -->
+  {% if cap.subjetivo %}
+  <div class="soap-seccion soap-s no-page-break-inside">
+    <div class="soap-label">S — Subjetivo</div>
+    <div class="soap-texto">{{ cap.subjetivo }}</div>
+  </div>
+  {% endif %}
+
+  <!-- O — Objetivo (estudios) -->
+  {% if cap.objetivo %}
+  <div class="soap-seccion soap-o no-page-break-inside">
+    <div class="soap-label">O — Objetivo</div>
+    <div class="soap-texto">{{ cap.objetivo }}</div>
+  </div>
+  {% endif %}
+
+  <!-- Exploración por aparatos (dentro del Objetivo) -->
+  {% if cap.exploracion %}
+  <div style="margin-bottom:10pt;">
+    <div class="hc-bloque-titulo" style="color:#0F6E56; border-bottom-color:#0F6E56; margin-bottom:5pt;">
+      Exploración física por aparatos y sistemas
+    </div>
+    <table class="exploracion-tabla">
+      <thead>
+        <tr>
+          <th style="width:30%;">Sistema / Aparato</th>
+          <th style="width:18%;">Estado</th>
+          <th>Detalle</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in cap.exploracion %}
+        <tr>
+          <td>{{ item.sistema }}</td>
+          <td>
+            {% if item.estado == "normal" %}
+            <span class="estado-normal">Normal</span>
+            {% elif item.estado == "anormal" %}
+            <span class="estado-anormal">Anormal</span>
+            {% else %}
+            <span class="estado-no-explorado">No explorado</span>
+            {% endif %}
+          </td>
+          <td>{{ item.detalle|default:"" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Imágenes de la evolución (si aplica) -->
+  {% if cap.imagenes and not sin_imagenes %}
+  <div style="margin-bottom:10pt;">
+    <div class="hc-bloque-titulo" style="margin-bottom:5pt;">Imágenes clínicas</div>
+    <table class="imagenes-grid">
+      <tr>
+        {% for img in cap.imagenes %}
+        <td>
+          {% if img.b64 %}
+          <img src="data:image/{{ img.mime }};base64,{{ img.b64 }}"
+               style="max-width:{{ img.w }}pt; max-height:{{ img.h }}pt; display:block; margin:auto;" />
+          {% endif %}
+          {% if img.caption %}
+          <div class="imagen-cap">{{ img.caption }}</div>
+          {% endif %}
+        </td>
+        {% if forloop.counter|divisibleby:3 %}
+        </tr><tr>
+        {% endif %}
+        {% endfor %}
+      </tr>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- A — Análisis (diagnóstico textual + diagnósticos estructurados) -->
+  {% if cap.analisis or cap.diagnosticos %}
+  <div class="soap-seccion soap-a no-page-break-inside">
+    <div class="soap-label">A — Análisis</div>
+    {% if cap.analisis %}
+    <div class="soap-texto" style="margin-bottom:6pt;">{{ cap.analisis }}</div>
+    {% endif %}
+    {% if cap.diagnosticos %}
+    <ul class="diagnosticos-lista">
+      {% for dx in cap.diagnosticos %}
+      <li class="{% if dx.resuelto %}dx-resuelto{% endif %}">
+        <span class="dx-desc">{{ dx.description }}</span>
+        {% if dx.cie_code %}<span class="dx-cie"> ({{ dx.cie_code }})</span>{% endif %}
+        {% if dx.resuelto %} — Resuelto{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- P — Plan (tratamiento, recomendaciones, indicaciones de enfermería) -->
+  {% if cap.plan %}
+  <div class="soap-seccion soap-p no-page-break-inside">
+    <div class="soap-label">P — Plan</div>
+    <div class="soap-texto">{{ cap.plan }}</div>
+  </div>
+  {% endif %}
+
+  <!-- Recetas (resumen: folio + medicamentos) -->
+  {% if cap.recetas %}
+  <div class="recetas-resumen no-page-break-inside">
+    <div class="hc-bloque-titulo" style="margin-bottom:5pt;">Recetas emitidas</div>
+    {% for rx in cap.recetas %}
+    <div class="receta-item">
+      <div class="receta-folio">Folio: {{ rx.folio }}{% if rx.estado_display %} · {{ rx.estado_display }}{% endif %}</div>
+      {% if rx.medicamentos %}
+      <div class="receta-medicamentos">
+        {% for med in rx.medicamentos %}
+        <div>• {{ med }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Addenda -->
+  {% if cap.addenda %}
+  <div style="margin-bottom:10pt;">
+    <div class="hc-bloque-titulo" style="margin-bottom:5pt;">Addenda</div>
+    {% for ad in cap.addenda %}
+    <div class="addendum-item no-page-break-inside">
+      <div class="addendum-meta">
+        {{ ad.fecha }} — {{ ad.autor }}
+      </div>
+      <div style="white-space:pre-wrap;">{{ ad.body }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Pie del capítulo -->
+  <div class="pie-capitulo">
+    <span style="margin-right:20pt;">Médico: {{ cap.doctor_nombre }}</span>
+    {% if cap.doctor_cedulas %}<span>Cédula(s): {{ cap.doctor_cedulas }}</span>{% endif %}
+  </div>
+
+</div><!-- /capitulo -->
+{% endfor %}
+
+</body>
+</html>

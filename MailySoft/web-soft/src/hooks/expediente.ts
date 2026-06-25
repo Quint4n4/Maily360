@@ -5,33 +5,42 @@
  * Convención de claves: ['expediente', patientId, <recurso>].
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createAddendum,
   createAllergy,
   createDiagnosis,
   createEvolutionNote,
+  createHistoryQuestion,
   createVitalSigns,
   deleteEvolutionImage,
+  deleteHistoryQuestion,
   getEvolutionImages,
   getMedicalHistory,
   getNursingInstructions,
+  getPatientBook,
+  getPatientBookPdf,
   getVitalSignsSeries,
   listAllergies,
   listDiagnoses,
   listEvolutionNotes,
+  listHistoryQuestions,
   listVitalSigns,
   resolveAllergy,
   resolveDiagnosis,
+  updateHistoryQuestion,
   uploadEvolutionImage,
   upsertMedicalHistory,
 } from '../api/expediente'
+import type { LibroModo } from '../api/expediente'
 import type {
   AddendumInput,
   AllergyInput,
   DiagnosisInput,
   EvolutionNoteInput,
   MedicalHistoryInput,
+  MedicalHistoryQuestionInput,
+  MedicalHistoryQuestionUpdateInput,
   VitalSignsInput,
 } from '../types/expediente'
 
@@ -41,6 +50,8 @@ export const expedienteKeys = {
   alergias: (patientId: string, includeResolved: boolean) =>
     ['expediente', patientId, 'alergias', includeResolved] as const,
   historia: (patientId: string) => ['expediente', patientId, 'historia'] as const,
+  /** Preguntas configurables de la HC: cuelgan de la clínica (no de un paciente). */
+  preguntasHc: ['expediente', 'preguntas-hc'] as const,
   signos: (patientId: string) => ['expediente', patientId, 'signos'] as const,
   signosSeries: (patientId: string, since: string) =>
     ['expediente', patientId, 'signos', 'series', since] as const,
@@ -51,6 +62,8 @@ export const expedienteKeys = {
     ['expediente', patientId, 'indicaciones-enfermeria'] as const,
   diagnosticos: (patientId: string, onlyActive: boolean) =>
     ['expediente', patientId, 'diagnosticos', onlyActive] as const,
+  libro: (patientId: string, page: number) =>
+    ['expediente', patientId, 'libro', page] as const,
 }
 
 // ── A1 — Alergias ───────────────────────────────────────────────────────────
@@ -99,6 +112,48 @@ export function useUpsertMedicalHistory(patientId: string) {
   return useMutation({
     mutationFn: (input: MedicalHistoryInput) => upsertMedicalHistory(patientId, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: expedienteKeys.historia(patientId) }),
+  })
+}
+
+// ── Fase 2 — Preguntas configurables de la HC ─────────────────────────────────
+
+/**
+ * Preguntas extra de la HC de la clínica. Por defecto se usan en el form builder
+ * (todas, incluso inactivas) y como respaldo del render. El render del expediente
+ * usa `active_questions` que ya vienen embebidas en la HC.
+ */
+export function useHistoryQuestions() {
+  return useQuery({
+    queryKey: expedienteKeys.preguntasHc,
+    queryFn: listHistoryQuestions,
+  })
+}
+
+/** Alta de pregunta extra (owner/admin). Invalida el catálogo de preguntas. */
+export function useCreateHistoryQuestion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: MedicalHistoryQuestionInput) => createHistoryQuestion(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: expedienteKeys.preguntasHc }),
+  })
+}
+
+/** Edición de pregunta extra (owner/admin). Invalida el catálogo de preguntas. */
+export function useUpdateHistoryQuestion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: MedicalHistoryQuestionUpdateInput }) =>
+      updateHistoryQuestion(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: expedienteKeys.preguntasHc }),
+  })
+}
+
+/** Baja lógica de pregunta extra (owner/admin). Invalida el catálogo de preguntas. */
+export function useDeleteHistoryQuestion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteHistoryQuestion(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: expedienteKeys.preguntasHc }),
   })
 }
 
@@ -232,5 +287,50 @@ export function useResolveDiagnosis(patientId: string) {
     mutationFn: (diagnosisId: string) => resolveDiagnosis(diagnosisId),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ['expediente', patientId, 'diagnosticos'] }),
+  })
+}
+
+// ── Fase 2 — Libro clínico ─────────────────────────────────────────────────────
+
+/**
+ * Libro clínico del paciente (portada + HC viva + capítulos paginados).
+ * Lazy por página: la queryKey incluye `page` para cachear cada página y
+ * `keepPreviousData` evita el parpadeo al navegar hacia el pasado (page+1).
+ */
+export function usePatientBook(patientId: string | null, page = 1) {
+  return useQuery({
+    queryKey: expedienteKeys.libro(patientId ?? '', page),
+    queryFn: () => getPatientBook(patientId as string, page),
+    enabled: !!patientId,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * Abre el PDF del libro clínico en una pestaña nueva (descarga autenticada Bearer).
+ * Mismo patrón blob + object URL que los PDF de recetas. `modo`: completo | hc | ultimo.
+ */
+export function useOpenPatientBookPdf() {
+  return useMutation({
+    mutationFn: async (params: {
+      patientId: string
+      modo: LibroModo
+      incluirImagenes: boolean
+    }): Promise<void> => {
+      const blob = await getPatientBookPdf(params.patientId, params.modo, params.incluirImagenes)
+      const url = URL.createObjectURL(blob)
+      // Intenta abrir en pestaña nueva. Si el navegador la bloquea (el PDF tarda
+      // en generarse y se pierde el gesto del clic), cae a descarga directa.
+      const win = window.open(url, '_blank', 'noopener,noreferrer')
+      if (!win) {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `libro-clinico-${params.modo}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    },
   })
 }

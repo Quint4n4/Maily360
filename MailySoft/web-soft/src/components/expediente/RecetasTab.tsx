@@ -557,7 +557,12 @@ function SignosVitalesEditor({
 
 // ── Formulario de nueva receta ─────────────────────────────────────────────────
 
-function NuevaReceta({
+/**
+ * Formulario de nueva receta. Exportado para reusarse fuera del acordeón (la
+ * tarjeta "Visita de hoy" del expediente rediseñado lo monta directo, sin pasar
+ * por RecetasTab). Mismo flujo de guardado (useCreatePrescription) y PDF.
+ */
+export function NuevaReceta({
   paciente, prefill, onClose,
 }: {
   paciente: PatientOut

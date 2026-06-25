@@ -570,6 +570,34 @@ class PrescriptionFormatPermission(HasClinicRole):
     }
 
 
+class MedicalHistoryQuestionPermission(HasClinicRole):
+    """Permisos para el CRUD de preguntas extra de HC (Fase 2).
+
+    Las preguntas son configuración clínica del catálogo de la clínica:
+        GET    → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
+                 Todos los roles clínicos necesitan leer el catálogo para
+                 renderizar el formulario de HC en el frontend.
+        POST   → MANAGE_ROLES: solo owner y admin configuran el catálogo.
+        PATCH  → MANAGE_ROLES.
+        DELETE → MANAGE_ROLES (baja lógica — D-EC-5).
+
+    Recepción y finanzas NO tienen acceso (la HC es contenido clínico sensible).
+
+    Matriz:
+        GET    → CLINICAL_READ: owner, admin, doctor, nurse, readonly.
+        POST   → MANAGE_ROLES: owner, admin.
+        PATCH  → MANAGE_ROLES: owner, admin.
+        DELETE → MANAGE_ROLES: owner, admin.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": CLINICAL_READ,
+        "POST": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+        "DELETE": MANAGE_ROLES,
+    }
+
+
 class NotificationPermission(HasClinicRole):
     """Permisos para la campana de notificaciones.
 

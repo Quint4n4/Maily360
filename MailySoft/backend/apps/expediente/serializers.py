@@ -50,6 +50,8 @@ from apps.expediente.models import (
     EvolutionImage,
     EvolutionNote,
     MedicalHistory,
+    MedicalHistoryQuestion,
+    QuestionFieldType,
     Severity,
     VitalSignsRecord,
     EXTRA_PARAMS_WHITELIST,
@@ -180,6 +182,7 @@ _MEDICAL_HISTORY_INPUT_FIELDS: frozenset[str] = frozenset(
         "padecimiento_actual",
         "tratamientos_actuales",
         "prioridad_analisis",
+        "custom_answers",
     }
 )
 
@@ -220,6 +223,9 @@ class MedicalHistoryInputSerializer(serializers.Serializer):
     prioridad_analisis = serializers.CharField(
         required=False, default="", allow_blank=True, max_length=5_000
     )
+    # Fase 2: respuestas a preguntas extra configurables por la clínica.
+    # El service filtra las claves para quedarse solo con preguntas activas del tenant.
+    custom_answers = serializers.JSONField(required=False, default=dict)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Validación de nivel raíz: rechaza campos desconocidos (D-EC-7) y
@@ -285,8 +291,17 @@ class MedicalHistoryOutputSerializer(serializers.ModelSerializer):
     """Serializer de salida para MedicalHistory.
 
     Expone todos los bloques JSON y los campos de texto del padecimiento.
+    Incluye custom_answers (respuestas a preguntas extra) y active_questions
+    (catálogo de preguntas activas del tenant para renderizar el formulario).
     No expone deleted_at, created_by_id ni tenant_id (campos internos).
+
+    Anti-N+1: active_questions usa el TenantManager que ya está configurado;
+    el QuerySet se evalúa una sola vez por serialización.
     """
+
+    active_questions = serializers.SerializerMethodField(
+        help_text="Lista de preguntas extra activas del tenant (para renderizar el formulario)."
+    )
 
     class Meta:
         model = MedicalHistory
@@ -303,10 +318,23 @@ class MedicalHistoryOutputSerializer(serializers.ModelSerializer):
             "padecimiento_actual",
             "tratamientos_actuales",
             "prioridad_analisis",
+            "custom_answers",
+            "active_questions",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_active_questions(self, obj: MedicalHistory) -> list[dict[str, Any]]:
+        """Retorna las preguntas activas del tenant para renderizar el formulario.
+
+        Usa el selector del módulo (filtra por TenantManager). Sin N+1:
+        una sola query por serialización de una HC.
+        """
+        from apps.expediente.selectors import medical_history_questions_list  # noqa: PLC0415
+
+        qs = medical_history_questions_list(only_active=True)
+        return MedicalHistoryQuestionOutputSerializer(qs, many=True).data
 
 
 # ---------------------------------------------------------------------------
@@ -943,3 +971,340 @@ class EvolutionImageOutputSerializer(serializers.ModelSerializer):
         if request is not None:
             return request.build_absolute_uri(obj.image.url)
         return obj.image.url
+
+
+# ---------------------------------------------------------------------------
+# MedicalHistoryQuestion — Input/Output (Fase 2)
+# ---------------------------------------------------------------------------
+
+
+class MedicalHistoryQuestionInputSerializer(serializers.Serializer):
+    """Valida la entrada para crear o actualizar una pregunta extra de HC.
+
+    D-EC-7: rechaza campos no declarados (incluyendo is_active — se gestiona
+    con el endpoint DELETE, no con PATCH).
+
+    Regla de coherencia options/field_type:
+        Si field_type == 'select': options debe ser lista no vacía de strings.
+        Si field_type != 'select': options debe ser [] (o ausente).
+    """
+
+    label = serializers.CharField(max_length=255)
+    field_type = serializers.ChoiceField(choices=QuestionFieldType.choices)
+    options = serializers.ListField(
+        child=serializers.CharField(),
+        default=list,
+        required=False,
+        help_text="Lista de opciones para field_type='select'. Vacío para otros tipos.",
+    )
+    section = serializers.CharField(
+        max_length=100,
+        allow_blank=True,
+        default="",
+        required=False,
+    )
+    order = serializers.IntegerField(min_value=0, default=0, required=False)
+    is_required = serializers.BooleanField(default=False, required=False)
+
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Validación: rechaza campos desconocidos y valida coherencia options/field_type."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+
+        field_type = data.get("field_type", "")
+        options = data.get("options", [])
+
+        # Si field_type == 'select', options no puede ser vacía.
+        if field_type == QuestionFieldType.SELECT and not options:
+            raise serializers.ValidationError(
+                {"options": "Las opciones son requeridas para tipo 'select'."}
+            )
+
+        # Si field_type != 'select', options debe ser [].
+        if field_type != QuestionFieldType.SELECT and options:
+            raise serializers.ValidationError(
+                {"options": "Las opciones solo aplican para tipo 'select'."}
+            )
+
+        return data
+
+
+class MedicalHistoryQuestionOutputSerializer(serializers.ModelSerializer):
+    """Serializer de salida para MedicalHistoryQuestion.
+
+    No expone tenant_id, deleted_at, created_by_id (campos internos).
+    """
+
+    class Meta:
+        model = MedicalHistoryQuestion
+        fields = [
+            "id",
+            "label",
+            "field_type",
+            "options",
+            "section",
+            "order",
+            "is_required",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
+# Libro Clínico — Serializers de salida (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+class BookDoctorSerializer(serializers.Serializer):
+    """Snapshot ligero del médico autor de un capítulo del libro.
+
+    Solo expone el nombre para el libro (sin datos sensibles del doctor).
+    Las cédulas validadas se incluyen para cumplir con NOM-004.
+    """
+
+    full_name = serializers.SerializerMethodField()
+    cedulas_validadas = serializers.SerializerMethodField()
+
+    def get_full_name(self, obj: Any) -> str:
+        """Retorna el nombre completo del médico desde su membership.user."""
+        try:
+            user = obj.membership.user
+            return str(user.get_full_name() or user.email)
+        except Exception:
+            return ""
+
+    def get_cedulas_validadas(self, obj: Any) -> list[str]:
+        """Retorna lista de cédulas validadas del médico (desde DoctorCredential).
+
+        Accede a las credenciales validadas del doctor. Si no están precargadas
+        o no existen, devuelve lista vacía para no fallar en serialización.
+        """
+        try:
+            # DoctorCredential vive en apps.clinica; se accede via related_name.
+            # El select_related de book_build no precarga credenciales (son opcionales
+            # para el libro y se pueden agregar en Fase 4 de optimización).
+            return [
+                c
+                for c in obj.credentials.filter(
+                    validation_status="validada",
+                    is_active=True,
+                    deleted_at__isnull=True,
+                ).values_list("credential_number", flat=True)
+                if c
+            ]
+        except Exception:
+            return []
+
+
+class BookPrescriptionSummarySerializer(serializers.Serializer):
+    """Resumen ligero de una receta vinculada a un capítulo del libro.
+
+    Devuelve solo metadatos de la receta (id, folio, estado, resumen de ítems).
+    NO devuelve el PDF ni el contenido completo — eso es Fase 3.
+
+    El campo items_resumen es una lista de textos con el nombre y dosis de cada
+    ítem, suficiente para la navegación del libro clínico en pantalla.
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    folio = serializers.IntegerField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    issued_at = serializers.DateTimeField(read_only=True)
+    items_resumen = serializers.SerializerMethodField()
+
+    def get_items_resumen(self, obj: Any) -> list[str]:
+        """Construye lista de strings 'Nombre (dosis)' a partir de los ítems.
+
+        Usa los ítems ya precargados por book_build (Prefetch "prescriptions__items").
+        """
+        try:
+            parts: list[str] = []
+            for item in obj.items.all():
+                label = item.medication_name
+                if item.dose:
+                    label = f"{label} ({item.dose})"
+                parts.append(label)
+            return parts
+        except Exception:
+            return []
+
+
+class BookCapituloSerializer(serializers.Serializer):
+    """Serializer de un capítulo del libro clínico (una nota de evolución completa).
+
+    Ensambla todos los sub-serializers existentes en la estructura del contrato
+    de API definido en el plan (docs/design/libro-clinico-plan.md §3).
+
+    Estructura producida:
+        id          UUID de la nota de evolución.
+        fecha       Fecha/hora de creación de la nota (ISO 8601).
+        doctor      { full_name, cedulas_validadas }.
+        signos      VitalSignsOutputSerializer | null.
+        subjetivo   Texto libre (interrogatorio + antecedentes).
+        objetivo    Texto de estudios solicitados/reportados.
+        exploracion Lista de { sistema, estado, detalle } del JSONField.
+        analisis    { texto: diagnosticos_texto, diagnosticos: [DiagnosisOutputSerializer] }.
+        plan        { tratamiento, recomendaciones, indicaciones_enfermeria }.
+        imagenes    [EvolutionImageOutputSerializer].
+        recetas     [BookPrescriptionSummarySerializer].
+        addenda     [AddendumOutputSerializer].
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    fecha = serializers.DateTimeField(source="created_at", read_only=True)
+    doctor = BookDoctorSerializer(read_only=True)
+    signos = serializers.SerializerMethodField()
+    subjetivo = serializers.SerializerMethodField()
+    objetivo = serializers.SerializerMethodField()
+    exploracion = serializers.SerializerMethodField()
+    analisis = serializers.SerializerMethodField()
+    plan = serializers.SerializerMethodField()
+    imagenes = serializers.SerializerMethodField()
+    recetas = serializers.SerializerMethodField()
+    addenda = serializers.SerializerMethodField()
+
+    def get_signos(self, obj: EvolutionNote) -> Optional[dict[str, Any]]:
+        """Serializa los signos vitales de la nota (o null si no los tiene)."""
+        if obj.vital_signs is None:
+            return None
+        return VitalSignsOutputSerializer(obj.vital_signs).data
+
+    def get_subjetivo(self, obj: EvolutionNote) -> str:
+        """Concatena interrogatorio + antecedentes como campo subjetivo (S del SOAP)."""
+        parts = [obj.interrogatorio, obj.antecedentes]
+        return "\n\n".join(p for p in parts if p.strip())
+
+    def get_objetivo(self, obj: EvolutionNote) -> str:
+        """Devuelve el campo estudios como objetivo (O del SOAP)."""
+        return obj.estudios
+
+    def get_exploracion(self, obj: EvolutionNote) -> list[dict[str, Any]]:
+        """Convierte el JSONField exploracion_fisica en lista navegable.
+
+        Estructura de salida: [{ "sistema": str, "estado": str, "detalle": str }].
+        Se mantiene el orden de inserción del dict (Python 3.7+).
+        """
+        if not obj.exploracion_fisica:
+            return []
+        result: list[dict[str, Any]] = []
+        for sistema, data in obj.exploracion_fisica.items():
+            if not isinstance(data, dict):
+                continue
+            result.append(
+                {
+                    "sistema": sistema,
+                    "estado": data.get("estado", "no_evaluado"),
+                    "detalle": data.get("detalle", ""),
+                }
+            )
+        return result
+
+    def get_analisis(self, obj: EvolutionNote) -> dict[str, Any]:
+        """Arma la sección de análisis (A del SOAP).
+
+        Diagnósticos: solo los vinculados a esta evolución (evolution FK).
+        Ver docstring de book_build para la decisión sobre diagnósticos sin FK.
+        """
+        return {
+            "texto": obj.diagnosticos_texto,
+            "diagnosticos": DiagnosisOutputSerializer(
+                obj.diagnoses.all(), many=True
+            ).data,
+        }
+
+    def get_plan(self, obj: EvolutionNote) -> dict[str, Any]:
+        """Arma la sección de plan y tratamiento (P del SOAP)."""
+        return {
+            "tratamiento": obj.tratamiento,
+            "recomendaciones": obj.plan_recomendaciones,
+            "indicaciones_enfermeria": obj.indicaciones_enfermeria,
+        }
+
+    def get_imagenes(self, obj: EvolutionNote) -> list[dict[str, Any]]:
+        """Serializa las imágenes activas de la nota.
+
+        Usa el prefetch "images" cargado por book_build. No pasa request
+        en el context porque el serializer de imágenes no lo necesita para
+        la URL relativa. El frontend puede construir la URL absoluta.
+        """
+        return EvolutionImageOutputSerializer(
+            obj.images.all(), many=True
+        ).data
+
+    def get_recetas(self, obj: EvolutionNote) -> list[dict[str, Any]]:
+        """Serializa el resumen de recetas vinculadas a esta evolución.
+
+        Usa el prefetch "prescriptions" + "prescriptions__items" de book_build.
+        """
+        return BookPrescriptionSummarySerializer(
+            obj.prescriptions.all(), many=True
+        ).data
+
+    def get_addenda(self, obj: EvolutionNote) -> list[dict[str, Any]]:
+        """Serializa los addenda de la nota en orden cronológico."""
+        return AddendumOutputSerializer(
+            obj.addenda.all(), many=True
+        ).data
+
+
+class PatientBookSerializer(serializers.Serializer):
+    """Serializer de salida del libro clínico completo del paciente.
+
+    Ensambla los serializers existentes en la estructura del contrato de API:
+
+        {
+          "paciente":         PatientOutputSerializer (portada),
+          "clinica":          ClinicSettingsOutputSerializer | null (portada),
+          "historia_clinica": MedicalHistoryOutputSerializer | null (HC viva),
+          "alergias":         [AllergyOutputSerializer],
+          "capitulos_count":  int (total de evoluciones),
+          "total_pages":      int,
+          "page":             int (actual),
+          "page_size":        int,
+          "capitulos":        [BookCapituloSerializer] (página actual, MÁS RECIENTE PRIMERO)
+        }
+
+    Los campos de paginación (page, total_pages, page_size, capitulos_count)
+    dan contexto al frontend para implementar la navegación.
+
+    No tiene campos de entrada (solo de salida): es un serializer de respuesta puro.
+    """
+
+    paciente = serializers.SerializerMethodField()
+    clinica = serializers.SerializerMethodField()
+    historia_clinica = serializers.SerializerMethodField()
+    alergias = serializers.SerializerMethodField()
+    capitulos_count = serializers.IntegerField(read_only=True)
+    total_pages = serializers.IntegerField(read_only=True)
+    page = serializers.IntegerField(read_only=True)
+    page_size = serializers.IntegerField(read_only=True)
+    capitulos = serializers.SerializerMethodField()
+
+    def get_paciente(self, obj: Any) -> dict[str, Any]:
+        """Serializa el paciente (portada del libro)."""
+        from apps.pacientes.serializers import PatientOutputSerializer  # noqa: PLC0415
+        return PatientOutputSerializer(obj.patient).data
+
+    def get_clinica(self, obj: Any) -> Optional[dict[str, Any]]:
+        """Serializa la configuración de la clínica (portada)."""
+        if obj.clinic_settings is None:
+            return None
+        from apps.clinica.serializers import ClinicSettingsOutputSerializer  # noqa: PLC0415
+        return ClinicSettingsOutputSerializer(
+            obj.clinic_settings, context=self.context
+        ).data
+
+    def get_historia_clinica(self, obj: Any) -> Optional[dict[str, Any]]:
+        """Serializa la HC viva del paciente (null si no existe aún)."""
+        if obj.medical_history is None:
+            return None
+        return MedicalHistoryOutputSerializer(obj.medical_history).data
+
+    def get_alergias(self, obj: Any) -> list[dict[str, Any]]:
+        """Serializa las alergias vigentes del paciente."""
+        return AllergyOutputSerializer(obj.allergies, many=True).data
+
+    def get_capitulos(self, obj: Any) -> list[dict[str, Any]]:
+        """Serializa los capítulos (evoluciones) de la página actual."""
+        return BookCapituloSerializer(obj.capitulos, many=True).data
