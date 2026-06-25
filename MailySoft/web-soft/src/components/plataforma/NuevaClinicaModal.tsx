@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void
 }
 
-const INPUT = 'w-full rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all'
+const INPUT = 'w-full rounded-xl px-3.5 py-2.5 text-base sm:text-sm text-gray-800 outline-none transition-all'
 const INPUT_STYLE = { background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(201,162,39,0.3)' }
 const LABEL = 'block text-xs font-semibold mb-1.5'
 

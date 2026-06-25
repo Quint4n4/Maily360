@@ -11,7 +11,7 @@ export default function PlatformLayout({ active, children }: { active: PlatModul
 
       <PlatformTopbar active={active} />
 
-      <div className="p-5 max-w-[1300px] mx-auto space-y-5">
+      <div className="p-3 sm:p-5 max-w-[1300px] mx-auto space-y-4 sm:space-y-5">
         {children}
       </div>
     </div>

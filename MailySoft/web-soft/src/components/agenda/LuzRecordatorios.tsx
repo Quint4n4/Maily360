@@ -83,7 +83,7 @@ export default function LuzRecordatorios() {
     count === 1 ? '1 recordatorio pendiente' : `${count} recordatorios pendientes`
 
   return (
-    <div className="fixed bottom-6 right-6 z-[90]">
+    <div className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[90]">
       <button
         onClick={() => navigate('/agenda')}
         title={etiqueta}

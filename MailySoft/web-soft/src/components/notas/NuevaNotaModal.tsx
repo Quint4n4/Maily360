@@ -14,7 +14,7 @@ interface Props {
   editing?: Note | null
 }
 
-const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
+const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-base sm:text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
 const LABEL = 'block text-xs font-medium text-gray-500 mb-1'
 
 function erroresDe(err: unknown): string[] {

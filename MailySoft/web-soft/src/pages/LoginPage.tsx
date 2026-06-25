@@ -148,7 +148,7 @@ export default function LoginPage() {
                 style={{ color: '#b89a52' }} />
               <input id="email" type="email" name="email" value={form.email} onChange={handleChange}
                 placeholder="Correo electrónico" autoComplete="email" autoFocus disabled={isLoading}
-                className="w-full rounded-xl pl-11 pr-4 py-3 text-sm text-gray-800 placeholder-gray-500 outline-none transition-all duration-150"
+                className="w-full rounded-xl pl-11 pr-4 py-3 text-base sm:text-sm text-gray-800 placeholder-gray-500 outline-none transition-all duration-150"
                 style={{ background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(255,240,200,0.5)' }}
               />
             </div>
@@ -162,7 +162,7 @@ export default function LoginPage() {
               <input id="password" type={showPassword ? 'text' : 'password'} name="password"
                 value={form.password} onChange={handleChange} placeholder="Contraseña"
                 autoComplete="current-password" disabled={isLoading}
-                className="w-full rounded-xl pl-11 pr-11 py-3 text-sm text-gray-800 placeholder-gray-500 outline-none transition-all duration-150"
+                className="w-full rounded-xl pl-11 pr-11 py-3 text-base sm:text-sm text-gray-800 placeholder-gray-500 outline-none transition-all duration-150"
                 style={{ background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(255,240,200,0.5)' }}
               />
               <button type="button" tabIndex={-1} onClick={() => setShowPassword(v => !v)}

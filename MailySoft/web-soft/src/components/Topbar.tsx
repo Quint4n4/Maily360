@@ -5,6 +5,7 @@ import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
 import { Modulo, accesoModulo, puedeAccederConsultorio, ROLE_LABEL } from '../auth/permisos'
 import CampanaNotificaciones from './CampanaNotificaciones'
+import BottomNav from './BottomNav'
 
 interface TopbarProps {
   active?: Modulo
@@ -40,15 +41,16 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
   const nombreUsuario = user?.full_name?.trim() || 'Mi cuenta'
 
   return (
-    <header className="glass-topbar sticky top-0 z-30 flex items-center justify-between px-6 h-16">
+    <>
+    <header className="glass-topbar sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 h-16">
 
       {/* ── Izquierda: logo + navegación ── */}
-      <div className="flex items-center gap-8">
+      <div className="flex items-center gap-4 md:gap-8">
         <span className="text-xl font-bold tracking-tight" style={{ color: '#2A241B' }}>
           maily<span style={{ color: '#C9A227' }}>360</span>
         </span>
 
-        <nav className="flex items-center gap-1">
+        <nav className="hidden md:flex items-center gap-1">
           {visibles.map(({ key, label, icon: Icon }) => {
             const isActive = key === active
             return (
@@ -83,7 +85,7 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
               ? <img src={user.avatar} alt="" className="w-full h-full object-cover" />
               : <User className="w-4 h-4" style={{ color: '#C9A227' }} />}
           </div>
-          <div className="text-left leading-tight">
+          <div className="text-left leading-tight hidden sm:block">
             <p className="text-sm font-medium" style={{ color: '#2A241B' }}>{nombreUsuario}</p>
             <p className="text-xs" style={{ color: '#9A958C' }}>{ROLE_LABEL[role]}</p>
           </div>
@@ -142,5 +144,16 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
         </div>
       </div>
     </header>
+
+    <BottomNav
+      items={visibles.map(({ key, label, icon: Icon }) => ({
+        key,
+        label,
+        Icon,
+        active: key === active,
+        onClick: () => navigate(`/${key}`),
+      }))}
+    />
+    </>
   )
 }

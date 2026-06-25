@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { CircleDollarSign, TrendingUp, Clock, Receipt, Plus } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
@@ -76,31 +77,55 @@ export default function FinanzasPage() {
 
         {/* Cuentas por cobrar */}
         <div className="glass-card rounded-2xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-white/50">
+          <div className="px-4 sm:px-6 py-4 border-b border-white/50">
             <h2 className="text-base font-semibold text-gray-800">Cuentas por cobrar</h2>
           </div>
 
-          <div className="grid items-center px-6 py-3 text-xs font-semibold text-gray-500 border-b border-white/40"
+          {/* Encabezado de tabla (solo escritorio) */}
+          <div className="hidden md:grid items-center px-6 py-3 text-xs font-semibold text-gray-500 border-b border-white/40"
             style={{ gridTemplateColumns: '1.4fr 2fr 1fr 1fr 120px' }}>
             <span>Paciente</span><span>Concepto</span><span>Monto</span><span>Estado</span><span></span>
           </div>
 
           {CUENTAS.map((c, i) => (
-            <div key={i} className="grid items-center px-6 py-3 border-b border-white/30"
-              style={{ gridTemplateColumns: '1.4fr 2fr 1fr 1fr 120px' }}>
-              <span className="text-sm font-medium text-gray-800">{c.paciente}</span>
-              <span className="text-sm text-gray-600">{c.concepto}</span>
-              <span className="text-sm font-semibold text-gray-800">{mxn(c.monto)}</span>
-              <span><span className={`badge ${ESTADO_BADGE[c.estado]}`}>{c.estado}</span></span>
-              <span className="text-right">
-                {editar && c.estado !== 'Pagada' && (
-                  <button className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                    style={{ color: '#B8860B', background: 'rgba(201,162,39,0.12)' }}>
-                    Cobrar
-                  </button>
-                )}
-              </span>
-            </div>
+            <Fragment key={i}>
+              {/* Móvil: tarjeta apilada */}
+              <div className="md:hidden px-4 py-3.5 border-b border-white/30">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-800">{c.paciente}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{c.concepto}</p>
+                  </div>
+                  <span className="text-sm font-bold text-gray-900 shrink-0">{mxn(c.monto)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 mt-2.5">
+                  <span className={`badge ${ESTADO_BADGE[c.estado]}`}>{c.estado}</span>
+                  {editar && c.estado !== 'Pagada' && (
+                    <button className="text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                      style={{ color: '#B8860B', background: 'rgba(201,162,39,0.12)' }}>
+                      Cobrar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Escritorio: fila de tabla */}
+              <div className="hidden md:grid items-center px-6 py-3 border-b border-white/30"
+                style={{ gridTemplateColumns: '1.4fr 2fr 1fr 1fr 120px' }}>
+                <span className="text-sm font-medium text-gray-800">{c.paciente}</span>
+                <span className="text-sm text-gray-600">{c.concepto}</span>
+                <span className="text-sm font-semibold text-gray-800">{mxn(c.monto)}</span>
+                <span><span className={`badge ${ESTADO_BADGE[c.estado]}`}>{c.estado}</span></span>
+                <span className="text-right">
+                  {editar && c.estado !== 'Pagada' && (
+                    <button className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                      style={{ color: '#B8860B', background: 'rgba(201,162,39,0.12)' }}>
+                      Cobrar
+                    </button>
+                  )}
+                </span>
+              </div>
+            </Fragment>
           ))}
         </div>
 

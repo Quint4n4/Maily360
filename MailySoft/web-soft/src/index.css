@@ -121,7 +121,7 @@
   /* ─── Input ───────────────────────────────────────────────────────────── */
   .input {
     @apply w-full bg-white border border-gray-200 text-gray-900
-           placeholder-gray-400 text-sm
+           placeholder-gray-400 text-base sm:text-sm
            px-3.5 py-2.5 rounded-xl
            transition-all duration-150
            focus:outline-none focus:ring-2 focus:ring-amber-500/30
@@ -155,4 +155,27 @@
   .badge-info    { @apply bg-blue-50    text-blue-700    ring-1 ring-blue-200;    }
   .badge-primary { @apply bg-teal-50    text-teal-700    ring-1 ring-teal-200;    }
   .badge-neutral { @apply bg-gray-100   text-gray-600    ring-1 ring-gray-200;    }
+
+  /* ─── Barra de navegación inferior (solo móvil) ───────────────────────── */
+  .bottom-nav {
+    background:               rgba(255, 255, 255, 0.85);
+    backdrop-filter:          blur(24px) saturate(150%);
+    -webkit-backdrop-filter:  blur(24px) saturate(150%);
+    border-top:               1px solid rgba(201, 162, 39, 0.18);
+    box-shadow:               0 -4px 24px rgba(60, 42, 12, 0.10);
+  }
+}
+
+@layer utilities {
+  /* Oculta la barra de scroll pero mantiene el desplazamiento (carruseles, tablas). */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+/* En móvil, reserva espacio al pie para que la barra de navegación inferior
+   fija no tape el contenido. La clase la añade/quita el componente BottomNav. */
+@media (max-width: 767px) {
+  body.has-bottom-nav {
+    padding-bottom: calc(3.75rem + env(safe-area-inset-bottom));
+  }
 }

@@ -5,6 +5,7 @@ import { usePlatformRole } from './PlatformRoleContext'
 import { PlatModulo, accesoModuloPlat, inicioPlat, ROLES_PLAT, ROLE_PLAT_LABEL } from './permisos'
 import { useAuth } from '../auth/AuthContext'
 import { inicioDeRol } from '../auth/permisos'
+import BottomNav from '../components/BottomNav'
 
 interface Props {
   active?: PlatModulo
@@ -42,8 +43,9 @@ export default function PlatformTopbar({ active = 'dashboard' }: Props) {
   }
 
   return (
-    <header className="glass-topbar sticky top-0 z-30 flex items-center justify-between px-6 h-16">
-      <div className="flex items-center gap-8">
+    <>
+    <header className="glass-topbar sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 h-16">
+      <div className="flex items-center gap-4 md:gap-8">
         <div className="flex items-center gap-2">
           <span className="text-xl font-bold tracking-tight" style={{ color: '#2A241B' }}>
             maily<span style={{ color: '#C9A227' }}>360</span>
@@ -54,7 +56,7 @@ export default function PlatformTopbar({ active = 'dashboard' }: Props) {
           </span>
         </div>
 
-        <nav className="flex items-center gap-1">
+        <nav className="hidden md:flex items-center gap-1">
           {visibles.map(({ key, label, icon: Icon }) => {
             const isActive = key === active
             return (
@@ -76,7 +78,7 @@ export default function PlatformTopbar({ active = 'dashboard' }: Props) {
             style={{ background: 'rgba(201,162,39,0.18)', border: '1px solid rgba(201,162,39,0.45)' }}>
             <User className="w-4 h-4" style={{ color: '#C9A227' }} />
           </div>
-          <div className="text-left leading-tight">
+          <div className="text-left leading-tight hidden sm:block">
             <p className="text-sm font-medium" style={{ color: '#2A241B' }}>{user?.full_name?.trim() || 'Equipo Maily'}</p>
             <p className="text-xs" style={{ color: '#9A958C' }}>{ROLE_PLAT_LABEL[role]}</p>
           </div>
@@ -115,5 +117,16 @@ export default function PlatformTopbar({ active = 'dashboard' }: Props) {
         )}
       </div>
     </header>
+
+    <BottomNav
+      items={visibles.map(({ key, label, icon: Icon }) => ({
+        key,
+        label,
+        Icon,
+        active: key === active,
+        onClick: () => navigate(`/plataforma/${key}`),
+      }))}
+    />
+    </>
   )
 }

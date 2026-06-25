@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { Check } from 'lucide-react'
 import PlatformLayout from '../../platform/PlatformLayout'
 import { CLINICAS, ESTADO_CLINICA, mxn } from '../../data/clinicas'
@@ -43,21 +44,39 @@ export default function SuscripcionesPage() {
 
       {/* Tabla de suscripciones */}
       <div className="glass-card rounded-2xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-white/50">
+        <div className="px-4 sm:px-6 py-4 border-b border-white/50">
           <h2 className="text-base font-semibold text-gray-800">Clínicas suscritas</h2>
         </div>
-        <div className="grid items-center px-6 py-3 text-xs font-semibold text-gray-500 border-b border-white/40"
+        {/* Encabezado de tabla (solo escritorio) */}
+        <div className="hidden md:grid items-center px-6 py-3 text-xs font-semibold text-gray-500 border-b border-white/40"
           style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
           <span>Clínica</span><span>Plan</span><span>Estado</span><span>Ingreso/mes</span>
         </div>
         {CLINICAS.map(c => (
-          <div key={c.id} className="grid items-center px-6 py-3 border-b border-white/30"
-            style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
-            <span className="text-sm font-medium text-gray-800">{c.nombre}</span>
-            <span className="text-sm text-gray-600">{c.plan}</span>
-            <span><span className={`badge ${ESTADO_CLINICA[c.estado].badge}`}>{ESTADO_CLINICA[c.estado].label}</span></span>
-            <span className="text-sm font-semibold text-gray-800">{c.ingresoMensual ? mxn(c.ingresoMensual) : '—'}</span>
-          </div>
+          <Fragment key={c.id}>
+            {/* Móvil: tarjeta apilada */}
+            <div className="md:hidden px-4 py-3.5 border-b border-white/30">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{c.nombre}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Plan {c.plan}</p>
+                </div>
+                <span className="text-sm font-bold text-gray-900 shrink-0">{c.ingresoMensual ? mxn(c.ingresoMensual) : '—'}</span>
+              </div>
+              <div className="mt-2.5">
+                <span className={`badge ${ESTADO_CLINICA[c.estado].badge}`}>{ESTADO_CLINICA[c.estado].label}</span>
+              </div>
+            </div>
+
+            {/* Escritorio: fila de tabla */}
+            <div className="hidden md:grid items-center px-6 py-3 border-b border-white/30"
+              style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
+              <span className="text-sm font-medium text-gray-800">{c.nombre}</span>
+              <span className="text-sm text-gray-600">{c.plan}</span>
+              <span><span className={`badge ${ESTADO_CLINICA[c.estado].badge}`}>{ESTADO_CLINICA[c.estado].label}</span></span>
+              <span className="text-sm font-semibold text-gray-800">{c.ingresoMensual ? mxn(c.ingresoMensual) : '—'}</span>
+            </div>
+          </Fragment>
         ))}
       </div>
     </PlatformLayout>

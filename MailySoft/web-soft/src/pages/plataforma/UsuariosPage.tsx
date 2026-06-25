@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { Search, UserCog, Loader2, AlertCircle } from 'lucide-react'
 import PlatformLayout from '../../platform/PlatformLayout'
 import { usePlatformStaff } from '../../hooks/plataforma'
@@ -49,27 +49,47 @@ export default function UsuariosPage() {
 
       {!isLoading && !isError && (
         <div className="glass-card rounded-2xl overflow-hidden">
-          <div className="grid items-center px-6 py-3 text-xs font-semibold text-gray-500 border-b border-white/40"
+          {/* Encabezado de tabla (solo escritorio) */}
+          <div className="hidden md:grid items-center px-6 py-3 text-xs font-semibold text-gray-500 border-b border-white/40"
             style={{ gridTemplateColumns: '2fr 2fr 1fr 1fr' }}>
             <span>Nombre</span><span>Correo</span><span>Rol</span><span>Estado</span>
           </div>
           {lista.map(u => (
-            <div key={u.id} className="grid items-center px-6 py-3 border-b border-white/30"
-              style={{ gridTemplateColumns: '2fr 2fr 1fr 1fr' }}>
-              <span className="flex items-center gap-3 min-w-0">
-                <span className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                  style={{ background: 'rgba(201,162,39,0.16)', color: '#B8860B' }}>{ini(u.full_name)}</span>
-                <span className="text-sm font-medium text-gray-800 truncate">{u.full_name || '—'}</span>
-              </span>
-              <span className="text-sm text-gray-600 truncate">{u.email}</span>
-              <span className="flex items-center gap-1.5 text-sm text-gray-600">
-                <UserCog className="w-3.5 h-3.5 text-gray-400" /> {u.platform_role_display || '—'}
-              </span>
-              <span><span className={`badge ${u.is_active ? 'badge-success' : 'badge-neutral'}`}>{u.is_active ? 'Activo' : 'Inactivo'}</span></span>
-            </div>
+            <Fragment key={u.id}>
+              {/* Móvil: tarjeta apilada */}
+              <div className="md:hidden px-4 py-3.5 border-b border-white/30">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ background: 'rgba(201,162,39,0.16)', color: '#B8860B' }}>{ini(u.full_name)}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-800 truncate">{u.full_name || '—'}</p>
+                    <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                  </div>
+                  <span className={`badge shrink-0 ${u.is_active ? 'badge-success' : 'badge-neutral'}`}>{u.is_active ? 'Activo' : 'Inactivo'}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-2">
+                  <UserCog className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {u.platform_role_display || '—'}
+                </div>
+              </div>
+
+              {/* Escritorio: fila de tabla */}
+              <div className="hidden md:grid items-center px-6 py-3 border-b border-white/30"
+                style={{ gridTemplateColumns: '2fr 2fr 1fr 1fr' }}>
+                <span className="flex items-center gap-3 min-w-0">
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ background: 'rgba(201,162,39,0.16)', color: '#B8860B' }}>{ini(u.full_name)}</span>
+                  <span className="text-sm font-medium text-gray-800 truncate">{u.full_name || '—'}</span>
+                </span>
+                <span className="text-sm text-gray-600 truncate">{u.email}</span>
+                <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                  <UserCog className="w-3.5 h-3.5 text-gray-400" /> {u.platform_role_display || '—'}
+                </span>
+                <span><span className={`badge ${u.is_active ? 'badge-success' : 'badge-neutral'}`}>{u.is_active ? 'Activo' : 'Inactivo'}</span></span>
+              </div>
+            </Fragment>
           ))}
           {lista.length === 0 && (
-            <p className="px-6 py-12 text-center text-sm text-gray-400">No hay usuarios con ese criterio.</p>
+            <p className="px-4 sm:px-6 py-12 text-center text-sm text-gray-400">No hay usuarios con ese criterio.</p>
           )}
         </div>
       )}
