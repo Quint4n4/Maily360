@@ -71,6 +71,10 @@ export const puedeAgendar = (role: ClinicRole): boolean =>
 export const puedeCambiarEstadoCita = (role: ClinicRole): boolean =>
   role === 'owner' || role === 'admin' || role === 'doctor' || role === 'nurse' || role === 'reception'
 
+/** Cancelar una cita → owner/admin/doctor/recepción. Enfermería NO (el backend también lo bloquea). */
+export const puedeCancelarCita = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor' || role === 'reception'
+
 /** Ruta de inicio según el rol (a dónde llega al entrar / cambiar de rol). */
 export const inicioDeRol = (role: ClinicRole): string =>
   role === 'finance' ? '/finanzas' : '/agenda'

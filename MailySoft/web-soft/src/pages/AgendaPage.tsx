@@ -15,7 +15,7 @@ import { ApiError } from '../lib/http'
 import type { Appointment, AppointmentStatus, AgendaBlock, AppointmentModality } from '../types/agenda'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
-import { puedeAgendar, puedeCambiarEstadoCita } from '../auth/permisos'
+import { puedeAgendar, puedeCambiarEstadoCita, puedeCancelarCita } from '../auth/permisos'
 import { useAviso } from '../components/common/DialogProvider'
 
 /* ─── Rejilla horaria 9:00–17:30 ─────────────────────────────────────────── */
@@ -82,6 +82,7 @@ export default function AgendaPage() {
   const { user } = useAuth()
   const agendar = puedeAgendar(role)           // crear/reagendar/eventos (NO enfermería)
   const cambiarStatus = puedeCambiarEstadoCita(role) // cambiar estado (incluye enfermería)
+  const cancelar = puedeCancelarCita(role)     // cancelar cita (NO enfermería)
   const gestor = role === 'owner' || role === 'admin'
   const soyDoctor = !!user?.doctor_id
   const cambiarEstado = useChangeAppointmentStatus()
@@ -163,6 +164,7 @@ export default function AgendaPage() {
     return {
       id: a.id,
       paciente: a.patient.full_name,
+      pacienteId: a.patient.id,
       doctor: a.doctor.full_name,
       consultorioName: a.consultorio?.name ?? 'Sin consultorio',
       consultorioColor: col?.color ?? '#C9A227',
@@ -196,7 +198,7 @@ export default function AgendaPage() {
     )
   }
 
-  const gridCols = `70px repeat(${Math.max(1, cols.length)}, 1fr)`
+  const gridCols = `60px repeat(${Math.max(1, cols.length)}, minmax(132px, 1fr))`
 
   return (
     <div className="min-h-screen relative">
@@ -207,10 +209,10 @@ export default function AgendaPage() {
 
       <Topbar active="agenda" />
 
-      <div className="flex gap-5 p-5 max-w-[1500px] mx-auto">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-5 p-3 sm:p-5 max-w-[1500px] mx-auto">
 
-        {/* ════════ Panel izquierdo ════════ */}
-        <aside className="w-80 shrink-0 space-y-4">
+        {/* ════════ Panel izquierdo (en móvil va DEBAJO del horario) ════════ */}
+        <aside className="w-full lg:w-80 lg:shrink-0 space-y-4 order-2 lg:order-none">
 
           {/* Calendario */}
           <div className="glass-card rounded-2xl p-5">
@@ -309,16 +311,27 @@ export default function AgendaPage() {
           ) : null}
         </aside>
 
-        {/* ════════ Panel derecho — rejilla ════════ */}
-        <main className="glass-card flex-1 rounded-2xl overflow-hidden">
+        {/* ════════ Panel derecho — rejilla (en móvil va ARRIBA) ════════ */}
+        <main className="glass-card flex-1 min-w-0 rounded-2xl overflow-hidden order-1 lg:order-none">
 
           {/* Título del día */}
-          <div className="px-5 py-3 border-b border-white/50 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-              <CalendarCheck className="w-4 h-4" style={{ color: '#C9A227' }} />
-              {formatLargo(selectedDate)}
-            </h2>
-            <span className="text-xs text-gray-500">
+          <div className="px-3 sm:px-5 py-3 border-b border-white/50 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              {/* Navegación de día (solo móvil; en escritorio se usa el calendario) */}
+              <button onClick={() => setSelectedDate(d => addDays(d, -1))}
+                className="lg:hidden p-1.5 -ml-1 rounded-lg hover:bg-white/40 text-gray-500 shrink-0" title="Día anterior">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2 min-w-0">
+                <CalendarCheck className="w-4 h-4 shrink-0" style={{ color: '#C9A227' }} />
+                <span className="truncate">{formatLargo(selectedDate)}</span>
+              </h2>
+              <button onClick={() => setSelectedDate(d => addDays(d, 1))}
+                className="lg:hidden p-1.5 rounded-lg hover:bg-white/40 text-gray-500 shrink-0" title="Día siguiente">
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+            <span className="text-xs text-gray-500 shrink-0">
               {loadingCitas ? 'Cargando…' : `${citas.length} cita${citas.length === 1 ? '' : 's'}`}
             </span>
           </div>
@@ -340,12 +353,12 @@ export default function AgendaPage() {
           )}
 
           {!loadingCons && !loadingCitas && cols.length > 0 && (
-            <>
+            <div className="overflow-x-auto">
               {/* Encabezado de columnas */}
               <div className="grid border-b" style={{ gridTemplateColumns: gridCols, borderColor: GRID_LINE_STRONG }}>
                 <div className="py-3 text-center text-sm font-bold text-gray-500">Hr.</div>
                 {cols.map(c => (
-                  <div key={c.id} className="py-3 text-center text-[15px] font-semibold border-l" style={{ color: '#374151', borderColor: GRID_LINE_STRONG }}>
+                  <div key={c.id} className="py-3 px-1 text-center text-[13px] sm:text-[15px] font-semibold border-l" style={{ color: '#374151', borderColor: GRID_LINE_STRONG }}>
                     <span className="inline-flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.color }} />
                       {c.name}
@@ -360,7 +373,7 @@ export default function AgendaPage() {
                   const pasado = slotEsPasado(s)
                   return (
                     <div key={`row-${r}`} className="contents">
-                      <div className="flex items-start justify-center pt-1 text-sm border-b"
+                      <div className="flex items-start justify-center pt-1 text-xs sm:text-sm border-b"
                         style={{ gridColumn: 1, gridRow: r + 1, borderColor: GRID_LINE, color: pasado ? '#C4BFB6' : '#6B7280' }}>
                         {s.display}
                       </div>
@@ -486,7 +499,7 @@ export default function AgendaPage() {
                   )
                 })}
               </div>
-            </>
+            </div>
           )}
         </main>
       </div>
@@ -540,6 +553,7 @@ export default function AgendaPage() {
         cita={citaSel ? toDetalle(citaSel) : null}
         onClose={() => setCitaSel(null)}
         puedeCambiarEstado={cambiarStatus}
+        puedeCancelar={cancelar}
         puedeAgendar={agendar}
         onCambiarEstado={handleCambiarEstado}
         cambiando={cambiarEstado.isPending}

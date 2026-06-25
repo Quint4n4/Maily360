@@ -496,6 +496,17 @@ class AppointmentChangeStatusApi(TenantAPIView):
         s = self.InputSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
+        # Seguridad: enfermería NO puede CANCELAR citas (decisión administrativa).
+        # Sí puede mover estados operativos (llegó, en consulta, atendida, no asistió).
+        if (
+            s.validated_data["status"] == Appointment.Status.CANCELLED
+            and (getattr(request, "active_role", "") or "") == "nurse"
+        ):
+            return Response(
+                {"detail": "Enfermería no puede cancelar citas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             appointment = appointment_get(appointment_id=appointment_id)
         except Appointment.DoesNotExist:

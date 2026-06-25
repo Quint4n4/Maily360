@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock, Video } from 'lucide-react'
+import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock, Video, FolderOpen } from 'lucide-react'
 import NotasHilo from './NotasHilo'
 
 export type EstadoCita =
@@ -15,6 +16,8 @@ export interface RecordatorioVista {
 export interface CitaDetalle {
   id: string
   paciente: string
+  /** Id del paciente — para abrir su expediente desde la agenda. */
+  pacienteId: string
   doctor: string
   consultorioName: string
   consultorioColor: string
@@ -31,8 +34,10 @@ export interface CitaDetalle {
 interface Props {
   cita: CitaDetalle | null
   onClose: () => void
-  /** Puede mover el estado (En sala/En consulta/Atendida/Cancelar/No asistió). Incluye enfermería. */
+  /** Puede mover estados operativos (En sala/En consulta/Atendida/No asistió). Incluye enfermería. */
   puedeCambiarEstado?: boolean
+  /** Puede CANCELAR la cita. Excluye enfermería (el backend también lo bloquea). */
+  puedeCancelar?: boolean
   /** Puede reagendar/reactivar (acciones de agendado). Excluye enfermería. */
   puedeAgendar?: boolean
   onCambiarEstado?: (nuevo: EstadoCita) => void
@@ -101,7 +106,8 @@ function Dato({ icon: Icon, label, value, dot }: { icon: typeof User; label: str
   )
 }
 
-export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = false, puedeAgendar = false, onCambiarEstado, cambiando = false, onReactivar, reactivando = false, onReagendar }: Props) {
+export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = false, puedeCancelar = false, puedeAgendar = false, onCambiarEstado, cambiando = false, onReactivar, reactivando = false, onReagendar }: Props) {
+  const navigate = useNavigate()
   const [estado, setEstado] = useState<EstadoCita>('agendada')
   useEffect(() => { if (cita) setEstado(cita.estadoInicial) }, [cita])
 
@@ -148,6 +154,12 @@ export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = f
               <div className="flex-1 min-w-0">
                 <h2 className="text-xl font-bold text-gray-900 truncate">{cita.paciente}</h2>
                 <p className="text-sm text-gray-500">{cita.fecha} · {cita.horario}</p>
+                <button
+                  onClick={() => { navigate(`/contactos?paciente=${cita.pacienteId}`); onClose() }}
+                  className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" /> Ver expediente
+                </button>
               </div>
               <span className="px-3 py-1 rounded-full text-xs font-semibold shrink-0" style={{ background: m.bg, color: m.color }}>
                 {m.label}
@@ -278,7 +290,7 @@ export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = f
               ) : (
                 <>
                   <div className="flex items-center gap-2">
-                    {puedeCambiarEstado && permitidas.includes('cancelada') && (
+                    {puedeCancelar && permitidas.includes('cancelada') && (
                       <button onClick={() => cambiar('cancelada')} disabled={cambiando}
                         className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:brightness-95 disabled:opacity-50"
                         style={{ color: '#C0392B', background: '#FDE8E8' }}>

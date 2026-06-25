@@ -428,6 +428,55 @@ class TestAppointmentChangeStatusApi:
         # Assert
         assert response.status_code == 400
 
+    def test_nurse_no_puede_cancelar_cita_returns_403(self, db: None) -> None:
+        """Seguridad: enfermería NO puede cancelar una cita (scheduled→cancelled = 403)."""
+        # Arrange
+        tenant = TenantFactory()
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+        appt = AppointmentFactory(
+            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            status=Appointment.Status.SCHEDULED, starts_at=_BASE_DT,
+        )
+        client = _make_member_client(tenant, role="nurse")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.post(
+                _cita_estado_url(appt.id),
+                data={"status": Appointment.Status.CANCELLED},
+                format="json",
+            )
+
+        # Assert — enfermería bloqueada; la cita no cambió
+        assert response.status_code == 403
+        appt.refresh_from_db()
+        assert appt.status == Appointment.Status.SCHEDULED
+
+    def test_reception_si_puede_cancelar_cita_returns_200(self, db: None) -> None:
+        """Recepción SÍ puede cancelar (scheduled→cancelled = 200)."""
+        # Arrange
+        tenant = TenantFactory()
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+        appt = AppointmentFactory(
+            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            status=Appointment.Status.SCHEDULED, starts_at=_BASE_DT,
+        )
+        client = _make_member_client(tenant, role="reception")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.post(
+                _cita_estado_url(appt.id),
+                data={"status": Appointment.Status.CANCELLED},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 200
+        assert response.json()["status"] == Appointment.Status.CANCELLED
+
     def test_change_status_nonexistent_appointment_returns_404(
         self, db: None
     ) -> None:
