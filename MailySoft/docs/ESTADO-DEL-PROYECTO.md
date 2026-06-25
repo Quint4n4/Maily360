@@ -1,6 +1,6 @@
 # Estado del Proyecto — Maily Soft / Maily360
 
-> Foto consolidada **full-stack** (backend + frontend). Actualizado: **2026-06-23**.
+> Foto consolidada **full-stack** (backend + frontend). Actualizado: **2026-06-25**.
 > Referencia rápida para entender **dónde está el proyecto hoy** — para el dueño y para cualquier dev nuevo.
 > Decisiones técnicas detalladas en [`DECISIONES-CLAVE.md`](DECISIONES-CLAVE.md).
 
@@ -8,13 +8,13 @@
 
 ## 1. Resumen
 
-**Maily Soft / Maily360** es una plataforma SaaS **multi-tenant** de gestión de clínicas (muchas clínicas, mismo software, datos aislados). Migra de un sistema PHP legacy (`app.maily.mx`). Hoy es un **MVP clínico funcional de punta a punta**: el backend está construido y probado, y el frontend está **conectado al backend real** panel por panel (auth, pacientes, agenda, personal, expediente, recetas).
+**Maily Soft / Maily360** es una plataforma SaaS **multi-tenant** de gestión de clínicas (muchas clínicas, mismo software, datos aislados). Migra de un sistema PHP legacy (`app.maily.mx`). Hoy es un **MVP clínico funcional de punta a punta**: el backend está construido y probado, y el frontend está **conectado al backend real** panel por panel (auth, pacientes, agenda, personal, expediente, recetas, **finanzas**).
 
 | | |
 |---|---|
 | **Stack backend** | Django 5 + DRF · PostgreSQL 16 · Redis · Celery · Docker |
 | **Stack frontend** | React 18 + Vite + TypeScript + Tailwind + TanStack Query (carpeta `web-soft/`) |
-| **Apps Django** | 11 (core, tenancy, authn, pacientes, personal, agenda, audit, notas, notificaciones, **clinica**, **recetas**) |
+| **Apps Django** | 12 (core, tenancy, authn, pacientes, personal, agenda, audit, notas, notificaciones, **clinica**, **recetas**, **finanzas**) |
 | **Tests backend** | Suite en verde — ver `pytest -q` para cifra actualizada (las cifras de hitos anteriores son históricas) |
 | **Repo** | github.com/Quint4n4/Maily360 · rama `main` |
 | **Cumplimiento** | NOM-024 / LFPDPPP (bitácora, minimización de PII, Argon2) |
@@ -54,6 +54,7 @@
 | **notificaciones** | Avisos in-app por fan-out on write. Modelo `Notification` con RLS. Tipos: `meeting`, `team_note`, `role_note`, `broadcast`, **`credential_review`**, **`credential_result`** (2026-06-23). Services: `notification_fanout`, `notification_mark_read`, `notification_mark_all_read`. |
 | **clinica** | Configuración de Mi Consultorio. `ClinicSettings` (logo, membrete, config de receta). `DoctorCredential` con **validación híbrida** (pendiente/validada/rechazada): el doctor captura, el admin valida, solo las validadas salen en la receta. `PatientCategory` con `kind` (custom/favorite/vip): catálogo de etiquetas de pacientes. Plantillas de texto (`ClinicTemplate`). |
 | **recetas** | Recetas médicas inmutables (crear, anular con motivo, historial, PDF, copia de previa). Catálogo de medicamentos (global + custom por clínica). PDF con **WeasyPrint**: 2 formatos base (`compact` Farmacia / `digital` Paciente), 4 estilos de fondo (`ondas`/`minimal`/`barra`/`geometrico`), personalización de color, tipografía y secciones. Al emitir se generan **ambas versiones**. Módulo de medicamentos controlados (grupo COFEPRIS, folio, vigencia). |
+| **finanzas** | Facturación y cobranza (integrado 2026-06-25). Catálogo de **conceptos** cobrables con claves SAT, **configuración fiscal** del emisor (RFC, razón social, régimen, serie/folio), **cotizaciones** (con enviar/aceptar), **cargos** (cuentas por cobrar), **pagos** con asignación a cargos (`PaymentAllocation`), **estado de cuenta** por paciente, **CFDI 4.0** (emitir/consultar/cancelar) y **dashboard** de métricas. Arquitectura por capas + RLS, como el resto. |
 
 ---
 
@@ -71,7 +72,7 @@
 | **Mi Consultorio — Recetas** | ✅ Real | Configuración del formato de receta: 2 bases (`compact`/`digital`), 4 estilos de fondo, color de acento, tipografía, secciones, modo membrete. Vista previa en vivo. |
 | **Mi Consultorio — Credenciales** | ✅ Real | El médico captura credenciales académicas; el admin las valida/rechaza con motivo. Badge de estado. Solo las validadas salen en la receta impresa. |
 | **Expediente — Recetas** | ✅ Real | Crear receta (buscador de medicamentos, renglones, recomendaciones, signos vitales, copia de previa). Historial. Botones **"Farmacia"** (media carta) y **"Paciente"** (carta completa). Anular con motivo. |
-| **Finanzas** | 🔴 Mock | Sin backend conectado. |
+| **Finanzas** | ✅ Real | `FinanzasPage` con 5 pestañas conectadas al backend: **Dashboard** (métricas + gráficas con `recharts`, rango 7/30/90 días), **Cobros y pagos**, **Cotizaciones**, **CFDI** y **Estado de cuenta** (exportable a **PDF**/**Excel** con `jspdf`/`xlsx`). Las pestañas visibles se filtran por rol (UX; el backend es la autoridad). |
 | **Panel de plataforma** (dueño SaaS) | 🔴 Mock | Sin backend (Fase 4 — pendiente de construir). |
 
 ---
@@ -102,6 +103,11 @@
 | **Credenciales del médico** — **validar / rechazar** | Solo Dueño, Admin |
 | **Catálogo de etiquetas de pacientes** — ver | Todos · **crear/borrar** | Dueño, Admin |
 | **Etiquetas a un paciente · Favorito/VIP** | Dueño, Admin, Médico, Enfermería, Recepción (igual que editar paciente) |
+| **Finanzas — dashboard** (métricas/reportes) | Dueño, Admin, Finanzas, Solo lectura **(Recepción NO)** |
+| **Finanzas — conceptos/cotizaciones/cargos/pagos/estado de cuenta** — ver | Dueño, Admin, Finanzas, Recepción, Solo lectura |
+| **Conceptos cobrables · Configuración fiscal** — crear/editar | Solo Dueño, Admin |
+| **Cotizaciones · Pagos** — crear/registrar (caja) | Dueño, Admin, Finanzas, Recepción |
+| **Cargos · CFDI** — crear/emitir/cancelar | Dueño, Admin, Finanzas **(Recepción NO factura)** |
 
 > Regla base: sin membresía activa → **403** en todo. El staff de plataforma sin membresía también (opera vía Django admin).
 
@@ -140,6 +146,26 @@
   - **Validación híbrida de credenciales del médico**: el doctor captura → admin valida o rechaza con motivo → solo las validadas (`validation_status="validada"`) salen en el PDF. Notificaciones en la campana.
   - Medicamentos controlados (grupo COFEPRIS, folio oficial, vigencia automática).
 - **Mi Consultorio** — configuración de recetas con vista previa en vivo; sección de credenciales del médico con bandeja de validación para el administrador.
+- **Finanzas** (facturación y cobranza — integrado 2026-06-25):
+  - **Catálogo de conceptos** cobrables con claves SAT (producto/unidad).
+  - **Configuración fiscal** del emisor (RFC, razón social, régimen, serie y folios) — solo Dueño/Admin.
+  - **Cotizaciones** con renglones, descuento y total; acciones **enviar** y **aceptar**.
+  - **Cargos** (cuentas por cobrar) y **pagos** con asignación a cargos (`PaymentAllocation`).
+  - **Estado de cuenta** por paciente, exportable a **PDF**/**Excel** desde el frontend.
+  - **CFDI 4.0** (emitir / consultar / cancelar) con datos SAT (UUID, serie, folio, RFC receptor).
+  - **Dashboard** de métricas y series para gráficas (`recharts`), con rango configurable.
+  - Endpoints bajo `api/v1/finanzas/`:
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `GET/POST` | `/finanzas/conceptos/` · `/<id>/` | Catálogo de conceptos cobrables. |
+| `GET/PATCH` | `/finanzas/config/` | Configuración fiscal del emisor. |
+| `GET/POST` | `/finanzas/cotizaciones/` · `/<id>/` · `/<id>/enviar/` · `/<id>/aceptar/` | Cotizaciones y acciones de estado. |
+| `GET/POST` | `/finanzas/cargos/` · `/<id>/` | Cargos / cuentas por cobrar. |
+| `GET/POST` | `/finanzas/pagos/` · `/<id>/` | Cobros / pagos. |
+| `GET` | `/finanzas/estado-cuenta/<patient_id>/` | Estado de cuenta de un paciente. |
+| `GET/POST` | `/finanzas/cfdi/` · `/<id>/` · `/<id>/cancelar/` | CFDI 4.0 (emitir/consultar/cancelar). |
+| `GET` | `/finanzas/dashboard/` | Métricas y series para el panel. |
 
 ---
 
@@ -185,7 +211,7 @@ El proxy de Vite reenvía `/api` y `/media` al backend. Entra con un usuario de 
 - **Recordatorios reales**: hoy el envío de WhatsApp es `SimulatedWhatsAppAdapter` (solo loguea). Falta `MetaWhatsAppAdapter` con credenciales. Mismo motor serviría para los **avisos de cita offline** (push) de la alerta de seguimiento.
 - **Especialidad/cédula al alta del médico** (quick win): hoy se capturan en la ficha, no en el form de "Nuevo miembro".
 - **Catálogo configurable de especialidades** (D-12): después del expediente clínico.
-- **Finanzas**: conectar al backend (módulo por construir).
+- **Finanzas** (✅ integrado 2026-06-25): conectado al backend (conceptos, cotizaciones, cargos, pagos, estado de cuenta, CFDI 4.0, dashboard). Pendiente menor: la lib `xlsx` (export a Excel) tiene CVE sin parche oficial → evaluar reemplazo (p. ej. `exceljs`); validar el flujo de CFDI contra el PAC real.
 - **Panel de plataforma** (dueño SaaS): construir backend + conectar.
 - **Recetas — pendientes normativos (COFEPRIS)**: campo estructurado de dosis/frecuencia/vía/duración; diagnóstico obligatorio/recomendado en la receta; validación de formato de cédula. Ver `recetas-formatos-plan.md §13`.
 - **Recetas — fuentes de marca**: hoy solo Helvetica/Times (fuentes seguras para WeasyPrint). Embeber TTF de marca requiere fase adicional.
