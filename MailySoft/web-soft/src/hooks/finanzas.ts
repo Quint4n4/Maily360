@@ -98,7 +98,7 @@ export function useAcceptQuote() {
 // Cargos
 // ---------------------------------------------------------------------------
 
-export function useCharges(params: { patient_id?: string; status?: string } = {}) {
+export function useCharges(params: api.ChargesParams = {}) {
   return useQuery({
     queryKey: finanzasKeys.charges(params),
     queryFn: () => api.fetchCharges(params),

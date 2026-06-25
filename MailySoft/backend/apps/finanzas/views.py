@@ -24,13 +24,14 @@ from rest_framework.response import Response
 
 from apps.core.permissions import (
     CfdiPermission,
+    ChargeListPermission,
     FinanceChargePermission,
     FinanceConceptPermission,
     FinanceConfigPermission,
     FinanceDashboardPermission,
     FinancePaymentPermission,
     FinanceQuotePermission,
-    FinanceStatementPermission,
+    PatientStatementPermission,
 )
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
@@ -371,9 +372,18 @@ class QuoteAcceptApi(TenantAPIView):
 class ChargeListCreateApi(TenantAPIView):
     """GET  /api/v1/finanzas/cargos/ — lista de cargos.
     POST /api/v1/finanzas/cargos/ — crea un cargo (owner/admin/finance).
+
+    Permisos:
+        GET  → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs (D-2).
+        POST → FINANCE_CORE_ROLES (owner/admin/finance).
+
+    Filtros GET soportados:
+        ?patient_id=<uuid>    — cargos de un paciente.
+        ?status=<str>         — pending | partial | paid | cancelled.
+        ?appointment=<uuid>   — cargos ligados a una cita concreta (para el libro).
     """
 
-    permission_classes = [IsAuthenticated, FinanceChargePermission]
+    permission_classes = [IsAuthenticated, ChargeListPermission]
 
     class InputSerializer(serializers.Serializer):
         patient_id = serializers.UUIDField()
@@ -383,9 +393,20 @@ class ChargeListCreateApi(TenantAPIView):
         appointment_id = serializers.UUIDField(required=False, allow_null=True)
 
     def get(self, request: Request) -> Response:
+        raw_appointment = request.query_params.get("appointment") or None
+        appointment_id: Optional[uuid.UUID] = None
+        if raw_appointment:
+            try:
+                appointment_id = uuid.UUID(raw_appointment)
+            except ValueError:
+                return Response(
+                    {"detail": "El parámetro 'appointment' debe ser un UUID válido."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         qs = selectors.charge_list(
             patient_id=request.query_params.get("patient_id") or None,
             status=request.query_params.get("status"),
+            appointment_id=appointment_id,
         )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
@@ -643,9 +664,13 @@ class CfdiCancelApi(TenantAPIView):
 
 
 class AccountStatementApi(TenantAPIView):
-    """GET /api/v1/finanzas/estado-cuenta/<patient_id>/ — estado de cuenta del paciente."""
+    """GET /api/v1/finanzas/estado-cuenta/<patient_id>/ — estado de cuenta del paciente.
 
-    permission_classes = [IsAuthenticated, FinanceStatementPermission]
+    Permisos:
+        GET → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs (D-2).
+    """
+
+    permission_classes = [IsAuthenticated, PatientStatementPermission]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         try:

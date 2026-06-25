@@ -157,6 +157,7 @@ def clinic_settings_upsert(
     letterhead_full_spaces: Optional[int] = None,
     letterhead_half_spaces: Optional[int] = None,
     commercial_name: str = "",
+    doctors_see_costs: Optional[bool] = None,
     # Soporte partial update: solo actualiza los campos explícitamente pasados.
     _partial_fields: Optional[frozenset[str]] = None,
 ) -> ClinicSettings:
@@ -187,6 +188,7 @@ def clinic_settings_upsert(
         letterhead_full_spaces:  Espacios después del membrete completo.
         letterhead_half_spaces:  Espacios después del membrete de media hoja.
         commercial_name:      Nombre comercial de la clínica para el membrete (COFEPRIS F2).
+        doctors_see_costs:    Flag D-2: si True, los médicos ven el estado de cuenta del paciente.
         _partial_fields:      Si se provee, solo se actualizan esos campos.
 
     Returns:
@@ -224,6 +226,8 @@ def clinic_settings_upsert(
         field_map["letterhead_full_spaces"] = letterhead_full_spaces
     if letterhead_half_spaces is not None:
         field_map["letterhead_half_spaces"] = letterhead_half_spaces
+    if doctors_see_costs is not None:
+        field_map["doctors_see_costs"] = doctors_see_costs
 
     # Filtrar campos según _partial_fields (partial update).
     if _partial_fields is not None:

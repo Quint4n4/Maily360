@@ -28,9 +28,15 @@ interface HistorialExpedienteProps {
   paciente: PatientOut
   /** Si el rol tiene acceso clínico (muestra el libro clínico). */
   verClinico: boolean
+  /** Si el rol ve costos: el libro muestra el estado de cuenta por visita. */
+  verEstadoCuenta?: boolean
 }
 
-export default function HistorialExpediente({ paciente, verClinico }: HistorialExpedienteProps) {
+export default function HistorialExpediente({
+  paciente,
+  verClinico,
+  verEstadoCuenta = false,
+}: HistorialExpedienteProps) {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2">
@@ -48,7 +54,7 @@ export default function HistorialExpediente({ paciente, verClinico }: HistorialE
             <BookOpen className="w-4 h-4" style={{ color: '#C9A227' }} />
             <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700/80">Libro clínico</h4>
           </div>
-          <LibroClinico paciente={paciente} />
+          <LibroClinico paciente={paciente} verEstadoCuenta={verEstadoCuenta} />
         </div>
       )}
     </div>

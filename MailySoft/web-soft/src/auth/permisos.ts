@@ -177,3 +177,27 @@ export const puedeEmitirReceta = (role: ClinicRole): boolean =>
 /** Anular una receta → owner/admin/doctor (el backend exige ser emisor o owner/admin). */
 export const puedeAnularReceta = (role: ClinicRole): boolean =>
   role === 'owner' || role === 'admin' || role === 'doctor'
+
+/* ─── Estado de cuenta del paciente (apps/finanzas) ─────────────────────────
+   Solo UX: ocultan el saldo / la pestaña de estado de cuenta. El backend es la
+   autoridad y devuelve 403. Reflejan EXACTO PatientStatementPermission del
+   backend + el flag por clínica `doctors_see_costs` (D-2 del plan). */
+
+/**
+ * ¿Puede ver el estado de cuenta / saldo del paciente?
+ * Roles administrativos (owner/admin/finance/reception/readonly) — los mismos que
+ * cubre `can(role, 'viewStatement')` — SIEMPRE pueden. El médico solo si la clínica
+ * activó el flag `doctors_see_costs`. Enfermería nunca.
+ */
+export const puedeVerEstadoCuenta = (
+  role: ClinicRole | null | undefined,
+  doctorsSeeCosts: boolean,
+): boolean => {
+  if (!role) return false
+  if (can(role, 'viewStatement')) return true
+  return role === 'doctor' && doctorsSeeCosts
+}
+
+/** ¿Puede cobrar / registrar pagos (caja)? → owner/admin/finance/reception. */
+export const puedeCobrar = (role: ClinicRole | null | undefined): boolean =>
+  role === 'owner' || role === 'admin' || role === 'finance' || role === 'reception'

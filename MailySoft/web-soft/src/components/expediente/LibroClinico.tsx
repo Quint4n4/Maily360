@@ -40,6 +40,7 @@ import { useOpenPrescriptionPdfWithFormat } from '../../hooks/recetas'
 import { formatFechaHora, formatFechaCorta } from '../../lib/fecha'
 import { edad } from '../../lib/paciente'
 import { SISTEMA_LABEL } from './ui'
+import EstadoCuentaVisita from './EstadoCuentaVisita'
 
 // ── Constantes de marca / SOAP ────────────────────────────────────────────────
 
@@ -56,12 +57,19 @@ const SOAP = {
 
 interface LibroClinicoProps {
   paciente: PatientOut
+  /**
+   * Si el rol puede ver el estado de cuenta (costos) del paciente — refleja
+   * puedeVerEstadoCuenta(role, doctors_see_costs). Cuando es true, cada capítulo
+   * muestra el bloque "Estado de cuenta de la visita". Default false (médico sin
+   * flag / enfermería NO ven costos).
+   */
+  verEstadoCuenta?: boolean
 }
 
 /** Página activa del visor: portada, historia clínica o un capítulo (por índice). */
 type Pagina = 'portada' | 'historia' | { capituloIdx: number }
 
-export default function LibroClinico({ paciente }: LibroClinicoProps) {
+export default function LibroClinico({ paciente, verEstadoCuenta = false }: LibroClinicoProps) {
   const [page, setPage] = useState(1)
   const { data, isLoading, isError, error, isFetching } = usePatientBook(paciente.id, page)
   const [pagina, setPagina] = useState<Pagina>('portada')
@@ -141,6 +149,8 @@ export default function LibroClinico({ paciente }: LibroClinicoProps) {
           // numeración sea estable aunque falten páginas por traer.
           numero={data.capitulos_count - pagina.capituloIdx}
           total={data.capitulos_count}
+          patientId={paciente.id}
+          verEstadoCuenta={verEstadoCuenta}
         />
       )}
 
@@ -669,11 +679,14 @@ function SoapBloque({
 }
 
 function CapituloPage({
-  capitulo, numero, total,
+  capitulo, numero, total, patientId, verEstadoCuenta,
 }: {
   capitulo: BookCapitulo
   numero: number
   total: number
+  patientId: string
+  /** Si el rol puede ver costos: muestra el bloque "Estado de cuenta de la visita". */
+  verEstadoCuenta: boolean
 }) {
   const [ampliada, setAmpliada] = useState<EvolutionImage | null>(null)
 
@@ -803,6 +816,11 @@ function CapituloPage({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Estado de cuenta de la visita (solo si el rol ve costos) */}
+      {verEstadoCuenta && (
+        <EstadoCuentaVisita patientId={patientId} fechaCapitulo={capitulo.fecha} />
       )}
 
       {/* Firma / pie */}

@@ -41,7 +41,7 @@ Uso en vistas:
         permission_classes = [IsAuthenticated, PatientPermission]
 """
 
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
@@ -378,6 +378,136 @@ class FinanceStatementPermission(HasClinicRole):
     policy: dict[str, frozenset[str]] = {
         "GET": FINANCE_VIEW_ROLES,
     }
+
+
+def _tenant_doctors_see_costs(request: Request) -> bool:
+    """Lee el flag doctors_see_costs del ClinicSettings del tenant activo.
+
+    Cachea el resultado en request._doctors_see_costs para que sólo se
+    realice UNA query por request (evita N+1 si el permiso se verifica varias veces).
+
+    Args:
+        request: DRF request con tenant activo (resuelto por TenantAPIView).
+
+    Returns:
+        True si la clínica permite que los médicos vean costos; False en cualquier
+        otro caso (tenant no encontrado, ClinicSettings no existe, flag apagado).
+    """
+    cached: Optional[bool] = getattr(request, "_doctors_see_costs", None)
+    if cached is not None:
+        return cached
+
+    # Importación tardía para evitar circular imports (core ← clinica).
+    from apps.clinica.models import ClinicSettings  # noqa: PLC0415
+
+    tenant = getattr(request, "tenant", None)
+    if tenant is None:
+        # Fallback: intentar vía tenant_context (usado en algunos tests).
+        from apps.core.tenant_context import get_current_tenant  # noqa: PLC0415
+
+        tenant = get_current_tenant()
+
+    if tenant is None:
+        request._doctors_see_costs = False  # type: ignore[attr-defined]
+        return False
+
+    result: bool = (
+        ClinicSettings.objects
+        .filter(tenant_id=tenant.id, deleted_at__isnull=True)
+        .values_list("doctors_see_costs", flat=True)
+        .first()
+        or False
+    )
+    request._doctors_see_costs = result  # type: ignore[attr-defined]
+    return result
+
+
+class PatientStatementPermission(BasePermission):
+    """Permiso para el estado de cuenta del paciente (AccountStatementApi — solo GET).
+
+    Implementa la Decisión D-2 del plan de Fase 1:
+        - FINANCE_VIEW_ROLES (owner/admin/finance/reception/readonly) → SIEMPRE.
+        - doctor → SOLO cuando ClinicSettings.doctors_see_costs == True.
+        - Cualquier otro rol → 403.
+
+    El flag se lee UNA sola vez por request (cacheado en request._doctors_see_costs).
+
+    Uso:
+        Aplicar en AccountStatementApi (reemplaza FinanceStatementPermission).
+    """
+
+    message: str = "Tu rol no tiene permiso para ver el estado de cuenta del paciente."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        """Evalúa si el rol activo puede ver el estado de cuenta.
+
+        Args:
+            request: DRF request con active_role adjunto por TenantAPIView.
+            view:    vista DRF invocante (no usada directamente).
+
+        Returns:
+            True si el rol tiene acceso; False en caso contrario.
+        """
+        if request.method == "OPTIONS":
+            return True
+
+        role: Optional[str] = getattr(request, "active_role", None)
+        if role is None:
+            return False
+
+        # Roles con acceso financiero siempre tienen acceso.
+        if role in FINANCE_VIEW_ROLES:
+            return True
+
+        # Médico: solo si la clínica habilitó doctors_see_costs (D-2).
+        if role == Role.DOCTOR:
+            return _tenant_doctors_see_costs(request)
+
+        return False
+
+
+class ChargeListPermission(BasePermission):
+    """Permiso combinado para ChargeListCreateApi (GET y escrituras).
+
+    Implementa la Decisión D-2 del plan de Fase 1 solo para GET:
+        GET  → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs.
+        POST → FINANCE_CORE_ROLES (owner/admin/finance — igual que FinanceChargePermission).
+        PATCH/DELETE → FINANCE_CORE_ROLES.
+
+    El flag solo afecta al GET: este permiso NO amplía escrituras al médico.
+    """
+
+    message: str = "Tu rol no tiene permiso para acceder a los cargos."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        """Evalúa permisos de cargos con visibilidad condicional para médicos.
+
+        Args:
+            request: DRF request con active_role adjunto por TenantAPIView.
+            view:    vista DRF invocante.
+
+        Returns:
+            True si el rol tiene acceso para el método solicitado.
+        """
+        if request.method == "OPTIONS":
+            return True
+
+        request_method: str = "GET" if request.method == "HEAD" else (request.method or "")
+
+        role: Optional[str] = getattr(request, "active_role", None)
+        if role is None:
+            return False
+
+        if request_method == "GET":
+            # GET: igual que PatientStatementPermission.
+            if role in FINANCE_VIEW_ROLES:
+                return True
+            if role == Role.DOCTOR:
+                return _tenant_doctors_see_costs(request)
+            return False
+
+        # POST / PATCH / DELETE: solo roles financieros duros (sin recepción).
+        return role in FINANCE_CORE_ROLES
 
 
 class CfdiPermission(HasClinicRole):

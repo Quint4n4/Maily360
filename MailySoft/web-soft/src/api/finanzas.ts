@@ -206,9 +206,14 @@ export interface ChargeInput {
   concept_id?: string | null
 }
 
-export function fetchCharges(params: { patient_id?: string; status?: string } = {}): Promise<
-  Paginated<Charge>
-> {
+export interface ChargesParams {
+  patient_id?: string
+  status?: string
+  /** UUID de la cita: filtra los cargos de UNA visita (estado de cuenta de la visita). */
+  appointment?: string
+}
+
+export function fetchCharges(params: ChargesParams = {}): Promise<Paginated<Charge>> {
   return http.get<Paginated<Charge>>('/finanzas/cargos/', params)
 }
 

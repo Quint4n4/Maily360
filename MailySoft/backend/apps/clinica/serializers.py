@@ -185,6 +185,10 @@ class ClinicSettingsInputSerializer(serializers.Serializer):
     letterhead_half = SecureImageField(required=False, allow_null=True)
     letterhead_full_spaces = serializers.IntegerField(min_value=0, max_value=100, required=False)
     letterhead_half_spaces = serializers.IntegerField(min_value=0, max_value=100, required=False)
+    doctors_see_costs = serializers.BooleanField(
+        required=False,
+        help_text="Si True, los médicos pueden ver el estado de cuenta del paciente (D-2).",
+    )
 
     # --- M3: phone / mobile ---
 
@@ -246,6 +250,7 @@ class ClinicSettingsOutputSerializer(serializers.ModelSerializer["ClinicSettings
             "letterhead_half",
             "letterhead_full_spaces",
             "letterhead_half_spaces",
+            "doctors_see_costs",
             "created_at",
             "updated_at",
         ]

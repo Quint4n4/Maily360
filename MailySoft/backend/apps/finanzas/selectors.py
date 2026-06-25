@@ -32,7 +32,6 @@ from django.utils import timezone
 from apps.finanzas.models import (
     CfdiDocument,
     Charge,
-    ClinicFiscalConfig,
     Payment,
     Quote,
     ServiceConcept,
@@ -126,28 +125,24 @@ def charge_list(
     *,
     patient_id: Optional[uuid.UUID] = None,
     status: Optional[str] = None,
+    appointment_id: Optional[uuid.UUID] = None,
 ) -> QuerySet[Charge]:
-    """Lista cargos del tenant actual, con filtros opcionales."""
+    """Lista cargos del tenant actual, con filtros opcionales.
+
+    Args:
+        patient_id:     si se provee, filtra por paciente.
+        status:         si se provee, filtra por estado (pending/partial/paid/cancelled).
+        appointment_id: si se provee, filtra por la cita a la que está ligado el cargo.
+                        Útil para el bloque «estado de cuenta de la visita» del libro.
+    """
     qs: QuerySet[Charge] = Charge.objects.all()
     if patient_id is not None:
         qs = qs.filter(patient_id=patient_id)
     if status:
         qs = qs.filter(status=status)
+    if appointment_id is not None:
+        qs = qs.filter(appointment_id=appointment_id)
     return qs.order_by("-issued_at")
-
-
-def charges_outstanding(*, patient_id: uuid.UUID) -> QuerySet[Charge]:
-    """Cargos con saldo pendiente de un paciente (pending o partial).
-
-    Útil para que payment_register sepa qué liquidar por antigüedad.
-    """
-    return (
-        Charge.objects.filter(
-            patient_id=patient_id,
-            status__in=[Charge.Status.PENDING, Charge.Status.PARTIAL],
-        )
-        .order_by("issued_at")
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -204,16 +199,6 @@ def cfdi_list(
     if status:
         qs = qs.filter(status=status)
     return qs.order_by("-created_at")
-
-
-# ---------------------------------------------------------------------------
-# Config fiscal
-# ---------------------------------------------------------------------------
-
-
-def fiscal_config_get_or_none() -> Optional[ClinicFiscalConfig]:
-    """Retorna la configuración fiscal del tenant actual, o None si no existe."""
-    return ClinicFiscalConfig.objects.first()
 
 
 # ---------------------------------------------------------------------------

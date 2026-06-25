@@ -37,6 +37,12 @@ export interface ClinicSettingsOut {
   letterhead_half: string | null
   letterhead_full_spaces: number
   letterhead_half_spaces: number
+  /**
+   * Flag por clínica (D-2 del plan finanzas-pacientes): ¿los MÉDICOS ven los
+   * costos / estado de cuenta del paciente? Por defecto false. Solo es UX; el
+   * backend (PatientStatementPermission) es la autoridad.
+   */
+  doctors_see_costs: boolean
   created_at: string
   updated_at: string
 }

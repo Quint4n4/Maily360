@@ -216,6 +216,16 @@ class ClinicSettings(TenantAwareModel):
         ),
     )
 
+    # --- Visibilidad de costos para médicos (D-2) ---
+    doctors_see_costs = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "Si está activo, los médicos ven el estado de cuenta del paciente "
+            "dentro del expediente/libro. Por defecto desactivado (D-2)."
+        ),
+    )
+
     class Meta:
         db_table = "clinica_settings"
         ordering = ["-created_at"]

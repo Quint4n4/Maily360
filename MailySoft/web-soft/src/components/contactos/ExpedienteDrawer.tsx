@@ -26,15 +26,20 @@
  * el backend es la autoridad y devuelve 403).
  */
 
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, CalendarPlus, UserX, Loader2, AlertTriangle, CalendarClock } from 'lucide-react'
+import { X, CalendarPlus, UserX, Loader2, AlertTriangle, CalendarClock, Wallet } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { initialsOf } from '../../lib/paciente'
 import { useUploadPatientAvatar } from '../../hooks/pacientes'
+import { useStatement } from '../../hooks/finanzas'
+import { useClinicSettings } from '../../hooks/clinica'
+import { formatMoney } from '../../lib/format'
 import { ApiError } from '../../lib/http'
 import { useRole } from '../../auth/RoleContext'
 import {
   puedeVerExpedienteClinico, puedeEditarClinico, puedeCapturarSignos, puedeEmitirReceta,
+  puedeVerEstadoCuenta, puedeCobrar,
 } from '../../auth/permisos'
 import AvatarUploader from '../common/AvatarUploader'
 import { useAviso } from '../common/DialogProvider'
@@ -42,6 +47,7 @@ import FichaPaciente from '../expediente/FichaPaciente'
 import VisitaDeHoy from '../expediente/VisitaDeHoy'
 import HistorialExpediente from '../expediente/HistorialExpediente'
 import CitasSection from '../expediente/CitasSection'
+import EstadoCuentaExpediente from '../expediente/EstadoCuentaExpediente'
 
 interface ExpedienteDrawerProps {
   paciente: PatientOut | null
@@ -64,6 +70,20 @@ export default function ExpedienteDrawer({
   const editarClinico = puedeEditarClinico(role)
   const capturarSignos = puedeCapturarSignos(role)
   const emitirReceta = puedeEmitirReceta(role)
+
+  // Estado de cuenta (Fase 1 finanzas-pacientes): visibilidad gobernada por el rol
+  // + el flag por clínica `doctors_see_costs`. El backend es la autoridad (403).
+  const clinicSettings = useClinicSettings()
+  const doctorsSeeCosts = clinicSettings.data?.doctors_see_costs ?? false
+  const verEstadoCuenta = puedeVerEstadoCuenta(role, doctorsSeeCosts)
+  const cobrar = puedeCobrar(role)
+
+  // Pestaña activa del panel derecho: el expediente o el estado de cuenta.
+  const [tab, setTab] = useState<'expediente' | 'cuenta'>('expediente')
+
+  // Saldo para el badge del encabezado. Solo se consulta si el rol puede verlo.
+  const statement = useStatement(verEstadoCuenta && paciente ? paciente.id : null)
+  const balance = statement.data?.balance ?? null
 
   const subirAvatar = useUploadPatientAvatar()
   const aviso = useAviso()
@@ -125,12 +145,13 @@ export default function ExpedienteDrawer({
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-700/70">Expediente del paciente</p>
                   <h2 className="text-2xl font-bold text-gray-900 leading-tight break-words">{paciente.full_name}</h2>
                   <p className="text-sm text-gray-500 mt-0.5">{paciente.record_number}</p>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center flex-wrap gap-2 mt-2">
                     <span className={`badge ${paciente.is_active ? 'badge-success' : 'badge-neutral'}`}>
                       {paciente.is_active ? 'Activo' : 'Inactivo'}
                     </span>
                     {paciente.is_vip && <span className="badge" style={{ background: '#FBF1D9', color: '#9A7B1E' }}>VIP</span>}
                     {paciente.is_deceased && <span className="badge badge-neutral">Finado</span>}
+                    {verEstadoCuenta && balance !== null && <SaldoBadge balance={balance} />}
                   </div>
                 </div>
 
@@ -180,9 +201,32 @@ export default function ExpedienteDrawer({
                 />
               </aside>
 
-              {/* Columna central/derecha: visita de hoy + historial */}
+              {/* Columna central/derecha: pestañas Expediente / Estado de cuenta */}
               <section className="flex-1 min-w-0 lg:h-full lg:overflow-y-auto lg:pr-1 space-y-6">
-                {accesoClinico ? (
+                {/* Selector de pestañas (solo si hay más de una disponible) */}
+                {verEstadoCuenta && (
+                  <div className="flex gap-2">
+                    <TabButton
+                      activo={tab === 'expediente'}
+                      onClick={() => setTab('expediente')}
+                      icon={<CalendarClock className="w-4 h-4" />}
+                    >
+                      Expediente
+                    </TabButton>
+                    <TabButton
+                      activo={tab === 'cuenta'}
+                      onClick={() => setTab('cuenta')}
+                      icon={<Wallet className="w-4 h-4" />}
+                    >
+                      Estado de cuenta
+                    </TabButton>
+                  </div>
+                )}
+
+                {/* Pestaña: estado de cuenta */}
+                {verEstadoCuenta && tab === 'cuenta' ? (
+                  <EstadoCuentaExpediente paciente={paciente} puedeCobrar={cobrar} />
+                ) : accesoClinico ? (
                   <>
                     <VisitaDeHoy
                       paciente={paciente}
@@ -190,7 +234,11 @@ export default function ExpedienteDrawer({
                       puedeEditarClinico={editarClinico}
                       puedeEmitirReceta={emitirReceta}
                     />
-                    <HistorialExpediente paciente={paciente} verClinico={accesoClinico} />
+                    <HistorialExpediente
+                      paciente={paciente}
+                      verClinico={accesoClinico}
+                      verEstadoCuenta={verEstadoCuenta}
+                    />
                   </>
                 ) : (
                   // Roles sin acceso clínico (recepción/finanzas): solo citas.
@@ -208,5 +256,62 @@ export default function ExpedienteDrawer({
         </motion.div>
       )}
     </AnimatePresence>
+  )
+}
+
+/**
+ * Badge de saldo del paciente en el encabezado.
+ *   > 0 → "Saldo: $X por cobrar" (ámbar/rojo).
+ *   = 0 → "Sin adeudo" (verde).
+ *   < 0 → "$X a favor" (verde, saldo a favor del paciente).
+ */
+function SaldoBadge({ balance }: { balance: number }) {
+  if (balance > 0) {
+    const fuerte = balance >= 1000
+    return (
+      <span
+        className="badge"
+        style={{
+          background: fuerte ? '#FDE8E8' : '#FBF1D9',
+          color: fuerte ? '#C0392B' : '#9A7B1E',
+        }}
+      >
+        Saldo: {formatMoney(balance)} por cobrar
+      </span>
+    )
+  }
+  if (balance < 0) {
+    return (
+      <span className="badge badge-success">
+        {formatMoney(Math.abs(balance))} a favor
+      </span>
+    )
+  }
+  return <span className="badge badge-success">Sin adeudo</span>
+}
+
+/** Botón de pestaña del panel derecho (activo en dorado). */
+function TabButton({
+  activo, onClick, icon, children,
+}: {
+  activo: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+      style={{
+        background: activo ? '#C9A227' : 'rgba(255,255,255,0.7)',
+        color: activo ? '#fff' : '#854F0B',
+        border: activo ? '1px solid #C9A227' : '1px solid rgba(201,162,39,0.3)',
+        boxShadow: activo ? '0 4px 14px rgba(201,162,39,0.35)' : 'none',
+      }}
+    >
+      {icon} {children}
+    </button>
   )
 }
