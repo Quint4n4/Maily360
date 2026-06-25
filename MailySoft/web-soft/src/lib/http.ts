@@ -216,3 +216,53 @@ export async function requestBlob(path: string, options: RequestOptions = {}): P
 
   return response.blob()
 }
+
+/**
+ * Parámetros de query string para `http.get`. Los valores undefined/null/'' se omiten.
+ *
+ * Se acepta cualquier objeto cuyos valores sean primitivos serializables (string,
+ * number, boolean, null, undefined). Es estructural a propósito para que interfaces
+ * concretas (DateRangeParams, etc.) se puedan pasar sin un index signature explícito.
+ */
+export type QueryValue = string | number | boolean | null | undefined
+export type QueryParams = Record<string, QueryValue>
+
+function withQuery(path: string, params?: Record<string, unknown>): string {
+  if (!params) return path
+  const qs = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      qs.set(key, String(value))
+    }
+  }
+  const suffix = qs.toString()
+  if (!suffix) return path
+  return path.includes('?') ? `${path}&${suffix}` : `${path}?${suffix}`
+}
+
+/**
+ * Cliente HTTP de conveniencia (verbos REST) construido sobre `request`.
+ *
+ * Comparte exactamente el mismo pipeline central (Bearer + CSRF + refresh
+ * automático ante 401). `get` serializa el segundo argumento como query string;
+ * `post`/`patch`/`put` lo envían como cuerpo JSON.
+ */
+export const http = {
+  get<T>(path: string, params?: Record<string, QueryValue> | object): Promise<T> {
+    return request<T>(withQuery(path, params as Record<string, unknown> | undefined), {
+      method: 'GET',
+    })
+  },
+  post<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>(path, { method: 'POST', body })
+  },
+  patch<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>(path, { method: 'PATCH', body })
+  },
+  put<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>(path, { method: 'PUT', body })
+  },
+  delete<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>(path, { method: 'DELETE', body })
+  },
+}

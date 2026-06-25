@@ -66,6 +66,8 @@ LOCAL_APPS: list[str] = [
     "apps.pacientes",
     "apps.personal",
     "apps.agenda",
+    # Dominio finanzas (cotizaciones, cargos, pagos, CFDI 4.0)
+    "apps.finanzas",
     # Bitácora de auditoría NOM-024 (Paso 4)
     "apps.audit",
     # Notas y Tareas (Fase 1)
@@ -215,7 +217,8 @@ SIMPLE_JWT: dict = {
     # FIX-10: clave de firma JWT propia para que rotar SECRET_KEY no invalide tokens.
     # En dev funciona con el default (SECRET_KEY). En prod configurar JWT_SIGNING_KEY
     # con un secreto independiente y de alta entropía (mínimo 50 caracteres aleatorios).
-    "SIGNING_KEY": env("JWT_SIGNING_KEY", default=SECRET_KEY),
+    # Si JWT_SIGNING_KEY está definida pero vacía en .env, usar SECRET_KEY (dev).
+    "SIGNING_KEY": env("JWT_SIGNING_KEY", default="") or SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",

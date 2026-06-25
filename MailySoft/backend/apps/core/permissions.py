@@ -260,6 +260,152 @@ class AgendaConfigPermission(HasClinicRole):
     }
 
 
+# ---------------------------------------------------------------------------
+# Finanzas — matriz reconciliada (ver documentacion/arquitectura_maily.html y
+# MailySoft/docs/design/plan-paneles-roles.md). Reglas:
+#   - finance es el rol financiero por excelencia (ve y opera todo el módulo).
+#   - reception cobra y cotiza (atiende la caja) pero NO emite/cancela CFDI ni
+#     toca la configuración fiscal.
+#   - readonly ve todo el módulo sin poder crear/editar (solo-ver).
+#   - doctor y nurse NO acceden a finanzas.
+#   - finance NO ve la agenda (ya garantizado por AppointmentPermission).
+# ---------------------------------------------------------------------------
+
+# Roles que pueden VER el módulo de finanzas (incluye readonly como solo-ver).
+FINANCE_VIEW_ROLES: frozenset[str] = frozenset(
+    {Role.OWNER, Role.ADMIN, Role.FINANCE, Role.RECEPTION, Role.READONLY}
+)
+
+# Roles que pueden OPERAR caja (cotizar, registrar pagos): incluye recepción.
+FINANCE_DESK_ROLES: frozenset[str] = frozenset(
+    {Role.OWNER, Role.ADMIN, Role.FINANCE, Role.RECEPTION}
+)
+
+# Roles financieros "duros" (cargos, CFDI): owner/admin/finance, sin recepción.
+FINANCE_CORE_ROLES: frozenset[str] = frozenset(
+    {Role.OWNER, Role.ADMIN, Role.FINANCE}
+)
+
+
+class FinanceDashboardPermission(HasClinicRole):
+    """Permisos para GET /finanzas/dashboard/ (métricas y series para gráficas).
+
+    Matriz:
+        GET → owner, admin, finance (operan) + readonly (solo-ver).
+        (reception NO ve el panel analítico; opera caja pero no reportes globales.)
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.FINANCE, Role.READONLY}),
+    }
+
+
+class FinanceConceptPermission(HasClinicRole):
+    """Permisos para el catálogo de conceptos cobrables.
+
+    Matriz:
+        GET    → roles que ven finanzas (recepción/finance los necesitan para cotizar).
+        POST   → solo owner y admin (mantener el catálogo es administrativo).
+        PATCH  → solo owner y admin.
+        DELETE → solo owner y admin (desactivación del concepto).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": FINANCE_VIEW_ROLES,
+        "POST": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+        "DELETE": MANAGE_ROLES,
+    }
+
+
+class FinanceQuotePermission(HasClinicRole):
+    """Permisos para cotizaciones (list/create/detail/patch/acciones de estado).
+
+    Matriz:
+        GET    → roles que ven finanzas (incluye readonly).
+        POST   → caja: owner, admin, finance, reception.
+        PATCH  → caja: owner, admin, finance, reception (editar/cambiar estado).
+        DELETE → caja: owner, admin, finance, reception (descartar borrador).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": FINANCE_VIEW_ROLES,
+        "POST": FINANCE_DESK_ROLES,
+        "PATCH": FINANCE_DESK_ROLES,
+        "DELETE": FINANCE_DESK_ROLES,
+    }
+
+
+class FinanceChargePermission(HasClinicRole):
+    """Permisos para cargos / cuentas por cobrar.
+
+    Matriz:
+        GET    → roles que ven finanzas (incluye readonly).
+        POST   → owner, admin, finance (crear un adeudo es acción financiera).
+        PATCH  → owner, admin, finance.
+        DELETE → owner, admin, finance (cancelar el cargo).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": FINANCE_VIEW_ROLES,
+        "POST": FINANCE_CORE_ROLES,
+        "PATCH": FINANCE_CORE_ROLES,
+        "DELETE": FINANCE_CORE_ROLES,
+    }
+
+
+class FinancePaymentPermission(HasClinicRole):
+    """Permisos para cobros / pagos.
+
+    Matriz:
+        GET  → roles que ven finanzas (incluye readonly).
+        POST → caja: owner, admin, finance, reception (recepción cobra).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": FINANCE_VIEW_ROLES,
+        "POST": FINANCE_DESK_ROLES,
+    }
+
+
+class FinanceStatementPermission(HasClinicRole):
+    """Permisos para el estado de cuenta del paciente (datos para vista/exportación).
+
+    Matriz:
+        GET → roles que ven finanzas (incluye readonly y recepción).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": FINANCE_VIEW_ROLES,
+    }
+
+
+class CfdiPermission(HasClinicRole):
+    """Permisos para CFDI 4.0 (emitir / consultar / cancelar).
+
+    Matriz:
+        GET  → owner, admin, finance + readonly (solo-ver).
+        POST → owner, admin, finance (emitir/cancelar). Recepción NO factura.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.FINANCE, Role.READONLY}),
+        "POST": FINANCE_CORE_ROLES,
+    }
+
+
+class FinanceConfigPermission(HasClinicRole):
+    """Permisos para GET/PATCH /finanzas/config/ (datos fiscales del emisor).
+
+    La configuración fiscal es administrativa: solo owner y admin.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+    }
+
+
 class AgendaItemNotePermission(HasClinicRole):
     """Permisos para el hilo de notas colaborativas de la agenda.
 

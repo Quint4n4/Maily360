@@ -73,6 +73,20 @@ class ActionType(models.TextChoices):
     # Configuración
     CONFIG_UPDATE = "CONFIG_UPDATE", "Actualizar configuración de agenda"
 
+    # Finanzas
+    CONCEPT_CREATE = "CONCEPT_CREATE", "Crear concepto cobrable"
+    CONCEPT_UPDATE = "CONCEPT_UPDATE", "Actualizar concepto cobrable"
+    CONCEPT_DEACTIVATE = "CONCEPT_DEACTIVATE", "Desactivar concepto cobrable"
+    QUOTE_CREATE = "QUOTE_CREATE", "Crear cotización"
+    QUOTE_UPDATE = "QUOTE_UPDATE", "Actualizar cotización"
+    QUOTE_STATUS = "QUOTE_STATUS", "Cambiar estado de cotización"
+    CHARGE_CREATE = "CHARGE_CREATE", "Crear cargo"
+    CHARGE_CANCEL = "CHARGE_CANCEL", "Cancelar cargo"
+    PAYMENT_REGISTER = "PAYMENT_REGISTER", "Registrar pago"
+    CFDI_ISSUE = "CFDI_ISSUE", "Emitir CFDI"
+    CFDI_CANCEL = "CFDI_CANCEL", "Cancelar CFDI"
+    FISCAL_CONFIG_UPDATE = "FISCAL_CONFIG_UPDATE", "Actualizar configuración fiscal"
+
     # Miembros de la clínica
     MEMBER_CREATE = "MEMBER_CREATE", "Alta de miembro"
     MEMBER_UPDATE = "MEMBER_UPDATE", "Actualizar miembro (nombre/rol)"

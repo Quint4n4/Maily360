@@ -7,6 +7,7 @@ e importarse aquí si son ampliamente reutilizadas.
 """
 
 import datetime
+from decimal import Decimal
 
 import factory
 from django.utils import timezone
@@ -33,6 +34,15 @@ from apps.expediente.models import (
     EvolutionNote,
     MedicalHistory,
     VitalSignsRecord,
+)
+from apps.finanzas.models import (
+    CfdiDocument,
+    Charge,
+    ClinicFiscalConfig,
+    Payment,
+    Quote,
+    QuoteItem,
+    ServiceConcept,
 )
 from apps.notas.models import Note, NoteScope
 from apps.recetas.models import (
@@ -809,3 +819,134 @@ class DoctorCredentialFactory(DjangoModelFactory):
     # Por defecto validada (visible en la receta). Pasar validation_status="pendiente"
     # explícitamente para probar el flujo de validación.
     validation_status = "validada"
+
+
+# ---------------------------------------------------------------------------
+# Finanzas (ServiceConcept, Quote, Charge, Payment, ClinicFiscalConfig, CFDI)
+# ---------------------------------------------------------------------------
+
+
+class ServiceConceptFactory(DjangoModelFactory):
+    """Concepto cobrable del catálogo de un tenant."""
+
+    class Meta:
+        model = ServiceConcept
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Consulta {n}")
+    description = ""
+    base_price = factory.LazyFunction(lambda: Decimal("500.00"))
+    sat_product_key = "85121600"
+    sat_unit_key = "E48"
+    is_active = True
+
+
+class ClinicFiscalConfigFactory(DjangoModelFactory):
+    """Configuración fiscal del emisor (uno por tenant)."""
+
+    class Meta:
+        model = ClinicFiscalConfig
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = None
+    rfc = "XAXX010101000"
+    legal_name = "Clínica Demo SA de CV"
+    tax_regime = "601"
+    postal_code = "06000"
+    series = "A"
+    next_folio = 1
+
+
+class QuoteFactory(DjangoModelFactory):
+    """Cotización (en borrador por defecto). El paciente comparte tenant."""
+
+    class Meta:
+        model = Quote
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.LazyAttribute(lambda obj: None)
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    status = Quote.Status.DRAFT
+    valid_until = None
+    notes = ""
+    subtotal = factory.LazyFunction(lambda: Decimal("0.00"))
+    discount_total = factory.LazyFunction(lambda: Decimal("0.00"))
+    total = factory.LazyFunction(lambda: Decimal("0.00"))
+
+
+class QuoteItemFactory(DjangoModelFactory):
+    """Línea de cotización. Hereda tenant de la cotización."""
+
+    class Meta:
+        model = QuoteItem
+
+    quote = factory.SubFactory(QuoteFactory)
+    tenant = factory.LazyAttribute(lambda obj: obj.quote.tenant)
+    created_by = None
+    concept = None
+    description = factory.Sequence(lambda n: f"Servicio {n}")
+    quantity = factory.LazyFunction(lambda: Decimal("1.00"))
+    unit_price = factory.LazyFunction(lambda: Decimal("500.00"))
+    discount = factory.LazyFunction(lambda: Decimal("0.00"))
+    line_total = factory.LazyFunction(lambda: Decimal("500.00"))
+
+
+class ChargeFactory(DjangoModelFactory):
+    """Cargo / cuenta por cobrar. El paciente comparte tenant."""
+
+    class Meta:
+        model = Charge
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = None
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    concept = None
+    description = factory.Sequence(lambda n: f"Cargo {n}")
+    appointment = None
+    quote = None
+    amount = factory.LazyFunction(lambda: Decimal("500.00"))
+    amount_paid = factory.LazyFunction(lambda: Decimal("0.00"))
+    status = Charge.Status.PENDING
+    issued_at = factory.LazyFunction(timezone.now)
+
+
+class PaymentFactory(DjangoModelFactory):
+    """Pago recibido de un paciente. El paciente comparte tenant."""
+
+    class Meta:
+        model = Payment
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = None
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    amount = factory.LazyFunction(lambda: Decimal("500.00"))
+    method = Payment.Method.CASH
+    reference = ""
+    received_at = factory.LazyFunction(timezone.now)
+    notes = ""
+
+
+class CfdiDocumentFactory(DjangoModelFactory):
+    """Comprobante CFDI (en borrador por defecto). El paciente comparte tenant."""
+
+    class Meta:
+        model = CfdiDocument
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = None
+    payment = None
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
+    status = CfdiDocument.Status.DRAFT
+    series = "A"
+    folio = 1
+    uuid_sat = ""
+    receptor_rfc = "XAXX010101000"
+    receptor_name = "Público en general"
+    receptor_tax_regime = "616"
+    receptor_postal_code = "06000"
+    cfdi_use = "G03"
+    payment_form = "01"
+    payment_method = "PUE"
+    subtotal = factory.LazyFunction(lambda: Decimal("500.00"))
+    total = factory.LazyFunction(lambda: Decimal("500.00"))

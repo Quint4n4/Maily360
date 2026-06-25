@@ -34,6 +34,24 @@ export interface ListPatientsParams {
   category?: string
 }
 
+/**
+ * Vista mínima de paciente para los selectores del módulo finanzas
+ * (PatientPicker, estado de cuenta, cobros, CFDI). La gestión completa
+ * vive en el módulo Contactos vía PatientOut.
+ */
+export interface PatientLite {
+  id: string
+  full_name: string
+  record_number: string
+  phone: string
+}
+
+/** GET /pacientes/?search= — búsqueda ligera para los selectores de finanzas. */
+export async function searchPatients(search: string): Promise<Paginated<PatientLite>> {
+  const suffix = search ? `?${new URLSearchParams({ search }).toString()}` : ''
+  return request<Paginated<PatientLite>>(`/pacientes/${suffix}`)
+}
+
 /** GET /pacientes/ — lista paginada de pacientes activos del tenant. */
 export async function listPatients(params: ListPatientsParams = {}): Promise<Paginated<PatientOut>> {
   const qs = new URLSearchParams()

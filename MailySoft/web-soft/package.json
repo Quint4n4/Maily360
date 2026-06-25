@@ -12,11 +12,14 @@
   "dependencies": {
     "@tanstack/react-query": "^5.101.0",
     "framer-motion": "^11.3.0",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.400.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.25.1",
-    "recharts": "^3.8.1"
+    "recharts": "^2.12.7",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

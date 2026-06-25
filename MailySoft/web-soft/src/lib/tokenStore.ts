@@ -34,3 +34,19 @@ export function onAccessTokenChange(listener: (token: string | null) => void): (
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
+
+/**
+ * Rol activo de la sesión (derivado de /me/), guardado SOLO en memoria igual que
+ * el access token. Es una pista de UX para el gating del frontend; el backend
+ * sigue siendo la autoridad real de permisos. Se pierde al recargar y se vuelve
+ * a poblar tras el login / restauración de sesión.
+ */
+let activeRole: string | null = null
+
+export function getActiveRole(): string | null {
+  return activeRole
+}
+
+export function setActiveRole(role: string | null): void {
+  activeRole = role
+}

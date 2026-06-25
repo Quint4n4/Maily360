@@ -14,7 +14,7 @@
  */
 
 import { request } from '../lib/http'
-import { setAccessToken } from '../lib/tokenStore'
+import { clearAccessToken, getAccessToken, setAccessToken } from '../lib/tokenStore'
 import type { LoginResponse, Me, RefreshResponse } from '../types/api'
 
 export interface LoginInput {
@@ -47,4 +47,30 @@ export async function me(): Promise<Me> {
 /** POST /auth/logout/ — invalida el refresh y borra la cookie. 205 sin cuerpo. */
 export async function logout(): Promise<void> {
   await request<void>('/auth/logout/', { method: 'POST' })
+}
+
+/**
+ * Intenta restaurar la sesión al arrancar la app (fire-and-forget desde main.tsx).
+ *
+ * Si ya hay access en memoria, valida con /me/. Si no, intenta renovar con la
+ * cookie httpOnly de refresh y luego trae el perfil. Devuelve el perfil o null
+ * si no hay sesión viva. No lanza: cualquier fallo limpia el token y resuelve null.
+ */
+export async function tryRestoreSession(): Promise<Me | null> {
+  if (getAccessToken()) {
+    try {
+      return await me()
+    } catch {
+      clearAccessToken()
+    }
+  }
+
+  try {
+    const data = await refresh()
+    if (!data?.access) return null
+    return await me()
+  } catch {
+    clearAccessToken()
+    return null
+  }
 }
