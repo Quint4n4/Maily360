@@ -279,7 +279,7 @@
         {% for row in by_method %}
         <tr>
           <td>{{ row.label }}</td>
-          <td class="right">${{ row.amount }}</td>
+          <td class="right">{{ row.amount_display }}</td>
           <td class="right">{{ row.count }}</td>
         </tr>
         {% empty %}
@@ -288,7 +288,7 @@
         {% if by_method %}
         <tr class="total-row">
           <td>Total cobranza</td>
-          <td class="right">${{ collection }}</td>
+          <td class="right">{{ collection }}</td>
           <td class="right">{{ total_payments_count }}</td>
         </tr>
         {% endif %}
@@ -310,7 +310,7 @@
         {% for row in by_service %}
         <tr>
           <td>{{ row.name }}</td>
-          <td class="right">${{ row.amount }}</td>
+          <td class="right">{{ row.amount_display }}</td>
           <td class="right">{{ row.count }}</td>
         </tr>
         {% empty %}
@@ -325,7 +325,7 @@
 <!-- ============================================================ A/R AGING (SVG barras horizontales) -->
 <div class="section-title">A/R Aging — Cuentas por cobrar pendientes</div>
 <div class="aging-chart-wrap">
-  {{ aging_svg }}
+  {{ aging_svg|safe }}
   <div class="aging-note">
     Las barras representan el saldo pendiente (amount - amount_paid) de los cargos con estado PENDING o PARTIAL,
     agrupados por antigüedad desde su fecha de emisión. La escala es relativa al saldo mayor.
@@ -348,7 +348,7 @@
     {% for row in by_doctor %}
     <tr>
       <td>{{ row.name }}</td>
-      <td class="right">${{ row.amount }}</td>
+      <td class="right">{{ row.amount_display }}</td>
       <td class="right">{{ row.count }}</td>
       <td class="right">{{ row.pct|floatformat:1 }}%</td>
     </tr>

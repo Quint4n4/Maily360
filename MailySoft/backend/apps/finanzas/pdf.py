@@ -192,6 +192,12 @@ def finance_report_pdf_build(*, report: dict[str, Any], clinic_name: str) -> byt
 
     by_method = report.get("by_method", [])
     total_payments_count = sum(row["count"] for row in by_method)
+    for row in by_method:
+        row["amount_display"] = _fmt_money(row["amount"])
+
+    by_service = report.get("by_service", [])
+    for row in by_service:
+        row["amount_display"] = _fmt_money(row["amount"])
 
     # Calcular % de producción por doctor.
     by_doctor = report.get("by_doctor", [])
@@ -199,6 +205,7 @@ def finance_report_pdf_build(*, report: dict[str, Any], clinic_name: str) -> byt
         row["pct"] = round(
             float(row["amount"] / production * 100) if production > ZERO else 0.0, 1
         )
+        row["amount_display"] = _fmt_money(row["amount"])
 
     context: dict[str, Any] = {
         "clinic_name": clinic_name,
@@ -225,7 +232,7 @@ def finance_report_pdf_build(*, report: dict[str, Any], clinic_name: str) -> byt
         "delta_col_sign": _sign(delta_collection_pct),
         # Desglose
         "by_method": by_method,
-        "by_service": report.get("by_service", []),
+        "by_service": by_service,
         "by_doctor": by_doctor,
         "total_payments_count": total_payments_count,
         # SVG aging
