@@ -2,19 +2,21 @@
  * EstadoCuentaExpediente — pestaña "Estado de cuenta" DENTRO del expediente
  * del paciente (Fase 1 del plan finanzas-pacientes-unificacion).
  *
- * Muestra el ledger completo del paciente (movimientos con saldo corrido) +
- * totales (cobrado / pagado / saldo). Incluye el botón "Registrar pago" (solo si
- * puedeCobrar) que abre PagoModal para asignar el pago a los cargos pendientes.
+ * Dos vistas:
+ *  - "Por cargo" (default): cada servicio con cobrado / pagado / saldo y su
+ *    estado (Pagado/Parcial/Pendiente). Responde "¿qué debe de qué?".
+ *  - "Movimientos": el ledger cronológico con saldo corrido (como estado de banco).
+ * Arriba: totales (cobrado / pagado / saldo) + botón "Registrar pago" (si puedeCobrar).
  *
- * Reutiliza la lógica de EstadoCuentaTab (panel de finanzas) adaptada al layout
- * del drawer. El gating de visibilidad lo decide el llamador (ExpedienteDrawer)
- * con puedeVerEstadoCuenta; aquí solo controlamos el botón de cobro.
+ * El gating de visibilidad lo decide el llamador (ExpedienteDrawer) con
+ * puedeVerEstadoCuenta; aquí solo controlamos el botón de cobro.
  */
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Loader2, CreditCard, AlertTriangle } from 'lucide-react'
 
 import type { PatientOut } from '../../types/paciente'
+import type { ChargeStatus } from '../../api/finanzas'
 import { useStatement, useCharges } from '../../hooks/finanzas'
 import { formatMoney, formatDate } from '../../lib/format'
 import { ApiError } from '../../lib/http'
@@ -22,17 +24,28 @@ import PagoModal from './PagoModal'
 
 const ORO = '#C9A227'
 
+/** Color e intención visual por estado del cargo. */
+const ESTADO_COLOR: Record<ChargeStatus, string> = {
+  paid: '#0F766E', // verde — pagado
+  partial: '#B45309', // ámbar — abonó pero falta
+  pending: '#B91C1C', // rojo — sin pagar
+  cancelled: '#9A958C', // gris — cancelado
+}
+
 interface Props {
   paciente: PatientOut
   /** Si el rol puede cobrar (caja): muestra el botón "Registrar pago". */
   puedeCobrar: boolean
 }
 
+type Vista = 'cargos' | 'movimientos'
+
 export default function EstadoCuentaExpediente({ paciente, puedeCobrar }: Props) {
   const statement = useStatement(paciente.id)
-  // Cargos del paciente: necesarios para que PagoModal ofrezca la asignación.
-  const charges = useCharges(puedeCobrar ? { patient_id: paciente.id } : {})
+  // Cargos del paciente: alimentan la vista "Por cargo" y la asignación del PagoModal.
+  const charges = useCharges({ patient_id: paciente.id })
   const [pagoAbierto, setPagoAbierto] = useState(false)
+  const [vista, setVista] = useState<Vista>('cargos')
 
   if (statement.isLoading) {
     return (
@@ -65,6 +78,7 @@ export default function EstadoCuentaExpediente({ paciente, puedeCobrar }: Props)
   }
 
   const data = statement.data
+  const cargos = charges.data?.results ?? []
 
   return (
     <div className="space-y-4">
@@ -96,57 +110,147 @@ export default function EstadoCuentaExpediente({ paciente, puedeCobrar }: Props)
         <SummaryCard label="Saldo" value={formatMoney(data.balance)} tint={ORO} />
       </div>
 
-      {/* Tabla de movimientos (ledger con saldo corrido) */}
-      <div
-        className="rounded-2xl p-4 overflow-auto"
-        style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(201,162,39,0.18)' }}
-      >
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-left" style={{ color: '#9A958C' }}>
-              <th className="py-2 font-medium">Fecha</th>
-              <th className="py-2 font-medium">Concepto</th>
-              <th className="py-2 font-medium text-right">Cargo</th>
-              <th className="py-2 font-medium text-right">Pago</th>
-              <th className="py-2 font-medium text-right">Saldo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.movements.map(m => (
-              <tr key={m.id} className="border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }}>
-                <td className="py-2" style={{ color: '#7A756C' }}>{formatDate(m.date)}</td>
-                <td className="py-2" style={{ color: '#2A241B' }}>{m.description}</td>
-                <td className="py-2 text-right" style={{ color: '#7C3AED' }}>
-                  {m.charge ? formatMoney(m.charge) : ''}
-                </td>
-                <td className="py-2 text-right" style={{ color: '#0F766E' }}>
-                  {m.payment ? formatMoney(m.payment) : ''}
-                </td>
-                <td className="py-2 text-right font-medium" style={{ color: '#2A241B' }}>
-                  {formatMoney(m.balance)}
-                </td>
-              </tr>
-            ))}
-            {data.movements.length === 0 && (
-              <tr>
-                <td colSpan={5} className="py-8 text-center" style={{ color: '#9A958C' }}>
-                  Este paciente no tiene movimientos.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      {/* Selector de vista */}
+      <div className="inline-flex rounded-xl p-1 gap-1" style={{ background: 'rgba(0,0,0,0.04)' }}>
+        <VistaBtn activa={vista === 'cargos'} onClick={() => setVista('cargos')}>Por cargo</VistaBtn>
+        <VistaBtn activa={vista === 'movimientos'} onClick={() => setVista('movimientos')}>Movimientos</VistaBtn>
       </div>
+
+      {vista === 'cargos' ? (
+        /* ---- Vista POR CARGO: qué se debe de qué ---- */
+        <div
+          className="rounded-2xl p-4 overflow-auto"
+          style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(201,162,39,0.18)' }}
+        >
+          {charges.isLoading ? (
+            <div className="flex items-center justify-center py-8" style={{ color: '#9A958C' }}>
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left" style={{ color: '#9A958C' }}>
+                  <th className="py-2 font-medium">Servicio</th>
+                  <th className="py-2 font-medium">Fecha</th>
+                  <th className="py-2 font-medium text-right">Cobrado</th>
+                  <th className="py-2 font-medium text-right">Pagado</th>
+                  <th className="py-2 font-medium text-right">Saldo</th>
+                  <th className="py-2 font-medium text-center">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cargos.map(c => (
+                  <tr key={c.id} className="border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }}>
+                    <td className="py-2" style={{ color: '#2A241B' }}>{c.description}</td>
+                    <td className="py-2" style={{ color: '#7A756C' }}>{formatDate(c.issued_at)}</td>
+                    <td className="py-2 text-right" style={{ color: '#2A241B' }}>{formatMoney(c.amount)}</td>
+                    <td className="py-2 text-right" style={{ color: '#0F766E' }}>{formatMoney(c.amount_paid)}</td>
+                    <td className="py-2 text-right font-medium" style={{ color: '#2A241B' }}>{formatMoney(c.balance)}</td>
+                    <td className="py-2 text-center">
+                      <EstadoBadge status={c.status} label={c.status_display} />
+                    </td>
+                  </tr>
+                ))}
+                {cargos.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center" style={{ color: '#9A958C' }}>
+                      Este paciente no tiene cargos.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : (
+        /* ---- Vista MOVIMIENTOS: ledger cronológico con saldo corrido ---- */
+        <div
+          className="rounded-2xl p-4 overflow-auto"
+          style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(201,162,39,0.18)' }}
+        >
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left" style={{ color: '#9A958C' }}>
+                <th className="py-2 font-medium">Fecha</th>
+                <th className="py-2 font-medium">Concepto</th>
+                <th className="py-2 font-medium text-right">Cargo</th>
+                <th className="py-2 font-medium text-right">Pago</th>
+                <th className="py-2 font-medium text-right">Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.movements.map(m => (
+                <tr key={m.id} className="border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }}>
+                  <td className="py-2" style={{ color: '#7A756C' }}>{formatDate(m.date)}</td>
+                  <td className="py-2" style={{ color: '#2A241B' }}>{m.description}</td>
+                  <td className="py-2 text-right" style={{ color: '#7C3AED' }}>
+                    {m.charge ? formatMoney(m.charge) : ''}
+                  </td>
+                  <td className="py-2 text-right" style={{ color: '#0F766E' }}>
+                    {m.payment ? formatMoney(m.payment) : ''}
+                  </td>
+                  <td className="py-2 text-right font-medium" style={{ color: '#2A241B' }}>
+                    {formatMoney(m.balance)}
+                  </td>
+                </tr>
+              ))}
+              {data.movements.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center" style={{ color: '#9A958C' }}>
+                    Este paciente no tiene movimientos.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {pagoAbierto && (
         <PagoModal
           patientId={paciente.id}
           patientName={data.patient.full_name}
-          cargos={charges.data?.results ?? []}
+          cargos={cargos}
           onClose={() => setPagoAbierto(false)}
         />
       )}
     </div>
+  )
+}
+
+function VistaBtn({
+  activa,
+  onClick,
+  children,
+}: {
+  activa: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+      style={
+        activa
+          ? { background: '#fff', color: '#2A241B', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
+          : { background: 'transparent', color: '#7A756C' }
+      }
+    >
+      {children}
+    </button>
+  )
+}
+
+function EstadoBadge({ status, label }: { status: ChargeStatus; label: string }) {
+  const color = ESTADO_COLOR[status] ?? '#9A958C'
+  return (
+    <span
+      className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold"
+      style={{ background: `${color}1A`, color }}
+    >
+      {label}
+    </span>
   )
 }
 
