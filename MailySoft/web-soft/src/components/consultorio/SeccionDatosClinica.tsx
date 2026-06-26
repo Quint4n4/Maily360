@@ -16,17 +16,6 @@ interface Props {
 /** Tipo de validación de formato (solo UX) aplicada a un campo. */
 type Validacion = 'telefono' | 'email' | 'social'
 
-/** Color de marca por defecto (igual al default del backend ClinicSettings). */
-const BRAND_COLOR_DEFAULT = '#9A7B1E'
-
-/** Color de marca: hex exacto `#RRGGBB` (solo UX; el backend revalida). */
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
-
-/** ¿El color de marca tiene formato hex `#RRGGBB`? */
-function esColorHexValido(valor: string): boolean {
-  return HEX_COLOR_RE.test(valor.trim())
-}
-
 /**
  * Valida el FORMATO de un campo de la clínica. Devuelve el mensaje de error o
  * `null` (válido / vacío). Replica los regex del backend (la autoridad).
@@ -72,7 +61,6 @@ export default function SeccionDatosClinica({ editable }: Props) {
   const settingsQ = useClinicSettings()
   const guardar = useUpdateClinicSettings()
   const [form, setForm] = useState<FormState>(FORM_VACIO)
-  const [brandColor, setBrandColor] = useState<string>(BRAND_COLOR_DEFAULT)
   const [errores, setErrores] = useState<string[]>([])
   const [ok, setOk] = useState(false)
   const [subiendoLogo, setSubiendoLogo] = useState(false)
@@ -93,7 +81,6 @@ export default function SeccionDatosClinica({ editable }: Props) {
         instagram: settings.instagram,
         youtube: settings.youtube,
       })
-      setBrandColor(settings.brand_color || BRAND_COLOR_DEFAULT)
     }
   }, [settings])
 
@@ -107,11 +94,7 @@ export default function SeccionDatosClinica({ editable }: Props) {
     const msg = errorClinica(form[c.key], validacion)
     if (msg) erroresCampo[c.key] = msg
   }
-  // Error de formato del color de marca (solo UX). El backend revalida.
-  const errorColor = esColorHexValido(brandColor)
-    ? null
-    : 'Color inválido (usa formato #RRGGBB, p. ej. #9A7B1E)'
-  const formatoInvalido = Object.keys(erroresCampo).length > 0 || errorColor !== null
+  const formatoInvalido = Object.keys(erroresCampo).length > 0
 
   const onGuardar = async () => {
     setErrores([])
@@ -121,7 +104,7 @@ export default function SeccionDatosClinica({ editable }: Props) {
       return
     }
     try {
-      await guardar.mutateAsync({ ...form, brand_color: brandColor.trim() })
+      await guardar.mutateAsync({ ...form })
       setOk(true)
     } catch (err) {
       setErrores(erroresDe(err))
@@ -198,42 +181,13 @@ export default function SeccionDatosClinica({ editable }: Props) {
         })}
       </div>
 
-      {/* Color de marca */}
+      {/* El color de los documentos se toma del Formato de receta (fuente única) */}
       <div>
-        <p className="label">Color de marca</p>
-        {editable ? (
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              aria-label="Selector de color de marca"
-              className="h-10 w-12 cursor-pointer rounded-lg border border-gray-300 bg-white p-1"
-              value={esColorHexValido(brandColor) ? brandColor : BRAND_COLOR_DEFAULT}
-              onChange={(e) => setBrandColor(e.target.value.toUpperCase())}
-            />
-            <input
-              type="text"
-              inputMode="text"
-              aria-label="Color de marca en formato hexadecimal"
-              className={`input max-w-[10rem] font-mono${errorColor ? ' input-error' : ''}`}
-              value={brandColor}
-              onChange={(e) => setBrandColor(e.target.value)}
-              placeholder="#9A7B1E"
-              maxLength={7}
-            />
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <span
-              className="h-10 w-12 rounded-lg border border-gray-300"
-              style={{ backgroundColor: esColorHexValido(brandColor) ? brandColor : BRAND_COLOR_DEFAULT }}
-              aria-hidden="true"
-            />
-            <span className="font-mono text-sm text-gray-700">{brandColor}</span>
-          </div>
-        )}
-        {errorColor && <p className="mt-1 text-xs text-red-600">{errorColor}</p>}
+        <p className="label">Color de marca de tus documentos</p>
         <Nota>
-          Se usa en el encabezado de tus PDFs (recetas, reportes, cotizaciones, expediente).
+          El color de tus PDFs (recetas, reportes, cotizaciones y expediente) se toma del
+          color de acento de tu <strong>Formato de receta</strong>. Para cambiarlo, ve a
+          «Configuración de recetas».
         </Nota>
       </div>
 

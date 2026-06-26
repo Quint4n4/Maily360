@@ -20,6 +20,10 @@ Contexto devuelto (llaves garantizadas):
     email          str   — email de contacto.
     website        str   — URL del sitio web.
     brand_color    str   — color de marca en #RRGGBB (default "#9A7B1E").
+                           Orden de prioridad:
+                             1. accent_color del PrescriptionFormat is_default=True del tenant.
+                             2. ClinicSettings.brand_color si existe y es válido.
+                             3. "#9A7B1E" (dorado Maily por defecto).
     brand_color_svg str  — mismo color con '#' como '%23' para usar en data: URI SVG.
     watermark_b64  str   — logo marca-de-agua (PNG RGBA ~8 % opacidad) o "".
 """
@@ -33,6 +37,50 @@ logger = logging.getLogger("apps.core.pdf.branding")
 
 # Color de marca por defecto (dorado Maily).
 _DEFAULT_BRAND_COLOR = "#9A7B1E"
+
+
+def _resolve_brand_color_from_prescription_format(tenant: Any) -> str | None:
+    """Resuelve el accent_color del PrescriptionFormat is_default=True del tenant.
+
+    Usa import tardío para evitar dependencia circular core → recetas.
+    Devuelve el color si existe y tiene formato #RRGGBB válido; None en cualquier
+    otro caso (no hay formato, color vacío, formato inválido, excepción de BD).
+
+    Args:
+        tenant: Instancia de Clinic (tenant) o None.
+
+    Returns:
+        Color en formato ``#RRGGBB`` o ``None`` si no se puede resolver.
+    """
+    if tenant is None:
+        return None
+    try:
+        from apps.recetas.models import PrescriptionFormat  # import tardío — evita circular
+
+        fmt = (
+            PrescriptionFormat.all_objects.filter(
+                tenant=tenant,
+                is_default=True,
+                is_active=True,
+                deleted_at__isnull=True,
+            )
+            .only("accent_color")
+            .first()
+        )
+        if fmt is None:
+            return None
+        color: str = (fmt.accent_color or "").strip()
+        if color.startswith("#") and len(color) == 7:
+            return color
+        return None
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "core.pdf.branding._resolve_brand_color_from_prescription_format: "
+            "error al consultar PrescriptionFormat para tenant id=%s. "
+            "Se usará el color de ClinicSettings como fallback.",
+            getattr(tenant, "id", "<desconocido>"),
+        )
+        return None
 
 
 def build_brand_context(
@@ -52,9 +100,12 @@ def build_brand_context(
     devuelve un contexto vacío con valores por defecto seguros, para que
     los templates no fallen.
 
-    La clave ``brand_color`` se toma de ``ClinicSettings.brand_color``
-    (campo agregado en la migración de esta fase). Si no existe o está
-    vacío, usa el dorado por defecto ``#9A7B1E``.
+    Resolución de ``brand_color`` (en orden de prioridad):
+      1. ``accent_color`` del ``PrescriptionFormat`` con ``is_default=True`` del
+         tenant.  El cliente configura su color en el formato de receta y ese color
+         se propaga a TODOS los PDFs de la plataforma.
+      2. ``ClinicSettings.brand_color`` si existe y tiene formato ``#RRGGBB`` válido.
+      3. ``"#9A7B1E"`` (dorado Maily, constante ``_DEFAULT_BRAND_COLOR``).
 
     La clave ``clinic_name`` prioriza ``commercial_name``; si está vacío,
     cae a ``clinic_settings.tenant.name``; si tampoco existe, queda "".
@@ -96,25 +147,33 @@ def build_brand_context(
     # --- Nombre de la clínica ---
     commercial_name: str = getattr(clinic_settings, "commercial_name", "") or ""
     tenant_name: str = ""
+    tenant: Any = None
     try:
-        tenant_name = clinic_settings.tenant.name or ""
+        tenant = clinic_settings.tenant
+        tenant_name = (tenant.name or "") if tenant is not None else ""
     except Exception:  # noqa: BLE001
         pass
     clinic_name: str = commercial_name or tenant_name
 
-    # --- Color de marca ---
-    brand_color: str = (
-        getattr(clinic_settings, "brand_color", "") or _DEFAULT_BRAND_COLOR
-    )
-    # Fallback defensivo: si por algún motivo el valor almacenado no es hex válido,
-    # lo corregimos silenciosamente aquí (la validación real está en el serializer).
-    if not brand_color.startswith("#") or len(brand_color) != 7:
-        logger.warning(
-            "core.pdf.branding.build_brand_context: brand_color inválido '%s' "
-            "para ClinicSettings id=%s. Se usa el color por defecto.",
-            brand_color,
-            getattr(clinic_settings, "id", "<desconocido>"),
-        )
+    # --- Color de marca (3 niveles de prioridad) ---
+    # 1. accent_color del PrescriptionFormat default del tenant
+    brand_color: str | None = _resolve_brand_color_from_prescription_format(tenant)
+
+    # 2. ClinicSettings.brand_color
+    if brand_color is None:
+        raw_color: str = getattr(clinic_settings, "brand_color", "") or ""
+        if raw_color.startswith("#") and len(raw_color) == 7:
+            brand_color = raw_color
+        elif raw_color:
+            logger.warning(
+                "core.pdf.branding.build_brand_context: brand_color inválido '%s' "
+                "para ClinicSettings id=%s. Se usa el color por defecto.",
+                raw_color,
+                getattr(clinic_settings, "id", "<desconocido>"),
+            )
+
+    # 3. Dorado Maily por defecto
+    if brand_color is None:
         brand_color = _DEFAULT_BRAND_COLOR
 
     return {

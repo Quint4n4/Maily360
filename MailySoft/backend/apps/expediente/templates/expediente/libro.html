@@ -37,9 +37,13 @@
     }
 
     /* ---- Fondo decorativo (ondas + marca de agua) ---- */
+    /* Cubre la hoja física letter (21.6cm × 27.9cm) compensando los márgenes
+       @page (top:2cm left:1.8cm) con posición negativa, igual que recetas/digital.html.
+       top/left negativos anclan el SVG al borde físico de la hoja, no al área de contenido. */
     .page-bg {
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
+      top: -2cm; left: -1.8cm;
+      width: 21.6cm; height: 27.9cm;
       z-index: -1;
     }
 
