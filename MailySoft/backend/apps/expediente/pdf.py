@@ -22,6 +22,13 @@ Imágenes (D-LIB-2):
 
 Bitácora (D-LIB-4 / NOM-024):
   La bitácora la registra la VISTA; este módulo solo genera el PDF.
+
+Fase 2 — unificación de diseño:
+  _build_libro_context usa build_brand_context (apps.core.pdf.branding)
+  en lugar de _image_box de recetas. El contexto incluye brand_color y
+  watermark_b64 para que el template libro.html aplique el color de marca
+  dinámico de la clínica en portada, títulos de sección y encabezados de
+  capítulo. Los colores SOAP (S/O/A/P) se conservan intactos.
 """
 
 import base64
@@ -33,6 +40,8 @@ from typing import Any, Literal, Optional
 from django.template.loader import render_to_string
 from django.utils import timezone
 from PIL import Image
+
+from apps.core.pdf.branding import build_brand_context
 
 logger = logging.getLogger("apps.expediente.pdf")
 
@@ -169,30 +178,28 @@ def _build_libro_context(
     Returns:
         Diccionario de contexto para render_to_string.
     """
-    from apps.recetas.pdf import _image_box  # noqa: PLC0415
-
-    # --- Logo de la clínica ---
-    logo_box: dict[str, Any] = {"b64": "", "mime": "", "w": 0, "h": 0}
-    if clinic_settings is not None and clinic_settings.logo:
-        logo_box = _image_box(clinic_settings.logo, max_w_pt=160, max_h_pt=80)
+    # --- Contexto de marca (logo, color, datos de contacto) via base común ---
+    brand: dict[str, Any] = build_brand_context(
+        clinic_settings=clinic_settings,
+        logo_max_w_pt=160,
+        logo_max_h_pt=80,
+    )
+    logo_box: dict[str, Any] = {
+        "b64": brand["logo_b64"],
+        "mime": brand["logo_mime"],
+        "w": brand["logo_w"],
+        "h": brand["logo_h"],
+    }
+    brand_color: str = brand["brand_color"]
+    watermark_b64: str = brand["watermark_b64"]
 
     # --- Datos de la clínica ---
-    clinica_nombre: str = ""
-    clinica_direccion: str = ""
-    clinica_telefono: str = ""
-    if clinic_settings is not None:
-        clinica_nombre = (
-            getattr(clinic_settings, "commercial_name", "") or ""
-        ) or getattr(clinic_settings, "name", "") or ""
-        clinica_direccion = getattr(clinic_settings, "address", "") or ""
-        clinica_telefono = (
-            getattr(clinic_settings, "phone", "")
-            or getattr(clinic_settings, "mobile", "")
-            or ""
-        )
+    clinica_nombre: str = brand["clinic_name"]
+    clinica_direccion: str = brand["address"]
+    clinica_telefono: str = brand["phone"] or brand["mobile"]
 
     if not clinica_nombre:
-        # Fallback: nombre del tenant.
+        # Fallback: nombre del tenant (no siempre está en ClinicSettings).
         clinica_nombre = getattr(patient, "tenant", None)
         clinica_nombre = getattr(clinica_nombre, "name", "") if clinica_nombre else ""
 
@@ -425,6 +432,9 @@ def _build_libro_context(
         "logo_mime": logo_box["mime"],
         "logo_w": logo_box["w"],
         "logo_h": logo_box["h"],
+        # Marca: color dinámico y marca de agua (Fase 2)
+        "brand_color": brand_color,
+        "watermark_b64": watermark_b64,
         # Portada: clínica
         "clinica_nombre": clinica_nombre,
         "clinica_direccion": clinica_direccion,

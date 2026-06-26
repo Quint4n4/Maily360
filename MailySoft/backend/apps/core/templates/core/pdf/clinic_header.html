@@ -1,0 +1,87 @@
+{% comment %}
+Encabezado de clínica compartido para todos los PDFs de Maily Platform.
+
+Variables de contexto esperadas (todas provistas por build_brand_context):
+    logo_b64        str  — base64 del logo o "" para ocultar.
+    logo_mime       str  — subtipo MIME del logo ("png", "jpeg", ...).
+    logo_w          int  — ancho del logo en pt (0 = sin logo).
+    logo_h          int  — alto del logo en pt (0 = sin logo).
+    clinic_name     str  — nombre comercial o nombre del tenant.
+    brand_color     str  — color de acento #RRGGBB.
+
+Variables opcionales (contexto específico del PDF):
+    doctor_name     str  — nombre del médico (omitir si no aplica).
+    doctor_specialty str — especialidad del médico (omitir si no aplica).
+    qr_b64          str  — base64 del QR de verificación (omitir si no aplica).
+    qr_mime         str  — subtipo MIME del QR.
+    sections        dict — flags de secciones (sections.qr para mostrar/ocultar QR).
+    credential_blocks list — lista de credenciales del médico.
+    cedula_profesional str — cédula profesional del médico (fallback sin DoctorCredential).
+    cedulas_adicionales str — cédulas adicionales (texto libre, legado).
+
+Uso:
+    {% include "core/pdf/clinic_header.html" %}
+
+El partial emite solo el HTML interior del encabezado, sin <html>, <head> ni <style>.
+Los estilos dependen de clases CSS definidas en el template padre (hdr, h-logo,
+h-center, h-clinic, h-doctor, h-spec, h-qr, creds, cred-logo, cred-t, cred-n,
+h-rule). El template padre debe definir estas clases usando brand_color.
+
+Diseño: replica el encabezado de recetas/formats/digital.html para servir
+como base unificada de todos los PDFs.
+{% endcomment %}
+<table class="hdr">
+  <tr>
+    <td class="h-logo">
+      {% if logo_b64 %}
+        <img src="data:image/{{ logo_mime }};base64,{{ logo_b64 }}"
+             alt="Logo clínica"
+             {% if logo_w %}style="max-width:{{ logo_w }}pt; max-height:{{ logo_h }}pt;"{% endif %} />
+      {% endif %}
+    </td>
+    <td class="h-center">
+      {% if clinic_name %}<div class="h-clinic">{{ clinic_name }}</div>{% endif %}
+      {% if doctor_name %}<div class="h-doctor">{{ doctor_name }}</div>{% endif %}
+      {% if doctor_specialty %}<div class="h-spec">{{ doctor_specialty }}</div>{% endif %}
+    </td>
+    <td class="h-qr">
+      {% if sections.qr and qr_b64 %}
+        <img src="data:image/{{ qr_mime }};base64,{{ qr_b64 }}" alt="QR verificación" />
+        <div class="ql">Verificar</div>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+{% if credential_blocks %}
+<table class="creds">
+  <tr>
+    {% for c in credential_blocks %}
+    <td>
+      {% if c.logo_b64 %}
+        <img class="cred-logo"
+             src="data:image/{{ c.logo_mime }};base64,{{ c.logo_b64 }}"
+             alt="" /><br/>
+      {% endif %}
+      <div class="cred-t">{{ c.title|default:c.kind_display }}</div>
+      <div class="cred-n">
+        {% if c.credential_number %}Céd. {{ c.credential_number }}{% endif %}
+        {% if c.institution %}{% if c.credential_number %} · {% endif %}{{ c.institution }}{% endif %}
+      </div>
+    </td>
+    {% endfor %}
+  </tr>
+</table>
+{% elif cedula_profesional %}
+<table class="creds">
+  <tr>
+    <td>
+      <div class="cred-t">Cédula profesional</div>
+      <div class="cred-n">
+        Céd. {{ cedula_profesional }}
+        {% if cedulas_adicionales %} · {{ cedulas_adicionales }}{% endif %}
+      </div>
+    </td>
+  </tr>
+</table>
+{% endif %}
+<div class="h-rule"></div>

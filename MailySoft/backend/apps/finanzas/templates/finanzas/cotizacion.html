@@ -8,6 +8,7 @@
       Generado con WeasyPrint. Sin JavaScript.
       Todos los montos llegan ya formateados desde Python (_fmt_money).
       El template NO agrega signo de moneda: los valores ya lo incluyen.
+      Fase 2: usa brand_color para el acento de la clínica.
     */
     @page {
       size: letter;
@@ -22,21 +23,45 @@
       padding: 0;
     }
 
-    /* ---- Encabezado ---- */
-    .header {
+    /* ---- Fondo decorativo (ondas + marca de agua) — posición fixed ---- */
+    .page-bg {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: -1;
+    }
+
+    /* ---- Clases requeridas por clinic_header.html ---- */
+    .hdr {
       width: 100%;
       border-collapse: collapse;
       margin-bottom: 16pt;
-      border-bottom: 2pt solid #1e6ab0;
+      border-bottom: 2pt solid {{ brand_color }};
       padding-bottom: 10pt;
     }
-    .header td { vertical-align: top; }
-    .clinic-name {
+    .hdr td { vertical-align: top; }
+    .h-logo img { max-width: {{ logo_w }}pt; max-height: {{ logo_h }}pt; display: block; }
+    .h-logo { width: {{ logo_w }}pt; padding-right: 12pt; }
+    .h-center { vertical-align: middle; }
+    .h-clinic {
       font-size: 15pt;
       font-weight: bold;
-      color: #1e6ab0;
+      color: {{ brand_color }};
       letter-spacing: 0.3pt;
     }
+    .h-doctor {
+      font-size: 9pt;
+      color: #333;
+      margin-top: 2pt;
+    }
+    .h-spec {
+      font-size: 8pt;
+      color: #555;
+    }
+    .h-qr { width: 50pt; text-align: right; vertical-align: top; }
+    .creds { width: 100%; margin-top: 4pt; }
+    .h-rule { display: none; } /* hdr ya tiene border-bottom */
+
+    /* ---- Título del documento (columna derecha del encabezado) ---- */
     .doc-title {
       font-size: 11pt;
       font-weight: bold;
@@ -81,7 +106,7 @@
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 0.5pt;
-      color: #1e6ab0;
+      color: {{ brand_color }};
       border-bottom: 0.5pt solid #c5d8f0;
       padding-bottom: 2pt;
       margin-bottom: 4pt;
@@ -107,7 +132,7 @@
       font-size: 8.5pt;
     }
     .items-table thead th {
-      background: #1e6ab0;
+      background: {{ brand_color }};
       color: #fff;
       font-weight: bold;
       font-size: 7.5pt;
@@ -135,17 +160,21 @@
     .items-table tfoot tr.total td {
       font-weight: bold;
       font-size: 10pt;
-      color: #1e6ab0;
-      border-top: 1.5pt solid #1e6ab0;
+      color: {{ brand_color }};
+      border-top: 1.5pt solid {{ brand_color }};
     }
     .items-table tfoot td.right { text-align: right; }
+
+    /* ---- Total destacado en la info-row ---- */
+    .total-label { font-weight: bold; color: {{ brand_color }}; }
+    .total-value { font-size: 12pt; font-weight: bold; color: {{ brand_color }}; }
 
     /* ---- Notas ---- */
     .notes-section {
       margin-top: 16pt;
       padding: 8pt 10pt;
       background: #f7f9fd;
-      border-left: 3pt solid #1e6ab0;
+      border-left: 3pt solid {{ brand_color }};
       border-radius: 2pt;
     }
     .notes-section .section-title {
@@ -174,18 +203,33 @@
 </head>
 <body>
 
+<!-- Fondo decorativo -->
+<div class="page-bg">
+  {% include "core/pdf/brand_background.html" %}
+</div>
+
 <!-- Pie de página fijo -->
 <div class="footer">
   Generado el {{ generated_at }} — Maily Platform — Documento solo para referencia interna.
 </div>
 
-<!-- ===== Encabezado ===== -->
-<table class="header">
+<!-- ===== Encabezado: logo + clínica (columna izquierda) + título cotización (columna derecha) ===== -->
+<table class="hdr" style="margin-bottom:16pt; border-bottom:2pt solid {{ brand_color }}; padding-bottom:10pt;">
   <tr>
-    <td style="width:55%;">
-      <div class="clinic-name">{{ clinic_name }}</div>
+    <!-- Logo -->
+    <td class="h-logo">
+      {% if logo_b64 %}
+        <img src="data:image/{{ logo_mime }};base64,{{ logo_b64 }}"
+             alt="Logo clínica"
+             {% if logo_w %}style="max-width:{{ logo_w }}pt; max-height:{{ logo_h }}pt;"{% endif %} />
+      {% endif %}
     </td>
-    <td style="width:45%;">
+    <!-- Nombre clínica -->
+    <td class="h-center">
+      {% if clinic_name %}<div class="h-clinic">{{ clinic_name }}</div>{% endif %}
+    </td>
+    <!-- Título del documento (derecha) -->
+    <td style="text-align:right; vertical-align:top; width:40%;">
       <div class="doc-title">COTIZACIÓN</div>
       <div class="doc-meta">
         Folio: <strong>COT-{{ folio }}</strong><br>
@@ -224,8 +268,8 @@
         <div class="info-value">-{{ discount_total }}</div>
       </div>
       <div class="info-row-item">
-        <div class="info-label" style="font-weight:bold;color:#1e6ab0;">Total</div>
-        <div class="info-value" style="font-size:12pt;font-weight:bold;color:#1e6ab0;">{{ total }}</div>
+        <div class="info-label total-label">Total</div>
+        <div class="info-value total-value">{{ total }}</div>
       </div>
     </td>
   </tr>

@@ -458,12 +458,16 @@ class QuotePdfApi(TenantAPIView):
             )
 
         tenant = get_current_tenant()
-        clinic_name: str = getattr(tenant, "name", "Clínica") if tenant else "Clínica"
 
+        from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
         from apps.finanzas.pdf import quote_pdf_build  # noqa: PLC0415
 
+        clinic_settings = (
+            clinic_settings_get(tenant_id=tenant.id) if tenant is not None else None
+        )
+
         try:
-            pdf_bytes = quote_pdf_build(quote=quote, clinic_name=clinic_name)
+            pdf_bytes = quote_pdf_build(quote=quote, clinic_settings=clinic_settings)
         except RuntimeError as exc:
             logger.error(
                 "QuotePdfApi: error al generar PDF de cotización %s — %s",
@@ -919,7 +923,13 @@ class PeriodReportPdfApi(TenantAPIView):
             group = "day"
 
         tenant = get_current_tenant()
-        clinic_name: str = getattr(tenant, "name", "Clínica") if tenant else "Clínica"
+
+        from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
+        from apps.finanzas.pdf import finance_report_pdf_build  # noqa: PLC0415
+
+        clinic_settings = (
+            clinic_settings_get(tenant_id=tenant.id) if tenant is not None else None
+        )
 
         report = selectors.finance_period_report(
             date_from=date_from,
@@ -927,10 +937,8 @@ class PeriodReportPdfApi(TenantAPIView):
             group=group,
         )
 
-        from apps.finanzas.pdf import finance_report_pdf_build  # noqa: PLC0415
-
         try:
-            pdf_bytes = finance_report_pdf_build(report=report, clinic_name=clinic_name)
+            pdf_bytes = finance_report_pdf_build(report=report, clinic_settings=clinic_settings)
         except RuntimeError as exc:
             logger.error(
                 "PeriodReportPdfApi: error al generar PDF — %s",

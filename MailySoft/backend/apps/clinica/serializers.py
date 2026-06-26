@@ -25,7 +25,15 @@ from typing import Any
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from apps.clinica.models import ClinicSettings, ClinicTemplate, CredentialKind, DoctorCredential, DoctorUniversity, PatientCategory
+from apps.clinica.models import (
+    ClinicSettings,
+    ClinicTemplate,
+    CredentialKind,
+    DoctorCredential,
+    DoctorUniversity,
+    PatientCategory,
+    _HEX_COLOR_RE,
+)
 from apps.core.files import validate_image
 
 # ---------------------------------------------------------------------------
@@ -189,6 +197,15 @@ class ClinicSettingsInputSerializer(serializers.Serializer):
         required=False,
         help_text="Si True, los médicos pueden ver el estado de cuenta del paciente (D-2).",
     )
+    brand_color = serializers.CharField(
+        max_length=7,
+        required=False,
+        allow_blank=True,
+        help_text=(
+            "Color de marca en formato #RRGGBB (p. ej. '#3A7BD5'). "
+            "Se usa como acento en PDFs. Default: dorado Maily #9A7B1E."
+        ),
+    )
 
     # --- M3: phone / mobile ---
 
@@ -215,6 +232,18 @@ class ClinicSettingsInputSerializer(serializers.Serializer):
         return _validate_social_field(value)
 
     # --- Validaciones existentes ---
+
+    def validate_brand_color(self, value: str) -> str:
+        """Valida que brand_color sea un color en formato #RRGGBB. Permite vacío."""
+        if not value:
+            return value
+        if not _HEX_COLOR_RE.match(value):
+            raise serializers.ValidationError(
+                "El color de marca debe estar en formato #RRGGBB "
+                "(p. ej. '#3A7BD5'). Valor recibido: '%(value)s'."
+                % {"value": value}
+            )
+        return value
 
     def validate_website(self, value: str) -> str:
         """Permite string vacío aunque URLField normalmente lo rechaza."""
@@ -250,6 +279,7 @@ class ClinicSettingsOutputSerializer(serializers.ModelSerializer["ClinicSettings
             "letterhead_half",
             "letterhead_full_spaces",
             "letterhead_half_spaces",
+            "brand_color",
             "doctors_see_costs",
             "created_at",
             "updated_at",
@@ -413,6 +443,18 @@ class DoctorProfileImageInputSerializer(serializers.Serializer):
         help_text="Cédulas adicionales separadas por coma.",
     )
 
+    def validate_cedulas_adicionales(self, value: str) -> str:
+        """Valida que cada cédula adicional (separada por coma) sea solo dígitos."""
+        if not value.strip():
+            return value
+        tokens = [t.strip() for t in value.split(",") if t.strip()]
+        for token in tokens:
+            if not token.isdigit():
+                raise serializers.ValidationError(
+                    "Cada cédula adicional solo puede contener dígitos (0-9)."
+                )
+        return value
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """M2: rechaza campos desconocidos (D-EC-7)."""
         _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
@@ -497,12 +539,17 @@ class DoctorCredentialInputSerializer(serializers.Serializer):
         return stripped
 
     def validate_credential_number(self, value: str) -> str:
-        """Rechaza etiquetas HTML (puede estar vacío)."""
+        """Rechaza etiquetas HTML; si no está vacío, exige solo dígitos (0-9)."""
         if _HTML_TAG_RE.search(value):
             raise serializers.ValidationError(
                 "El número de cédula no puede contener etiquetas HTML."
             )
-        return value.strip()
+        stripped = value.strip()
+        if stripped and not stripped.isdigit():
+            raise serializers.ValidationError(
+                "El número de cédula solo puede contener dígitos (0-9)."
+            )
+        return stripped
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """M2: rechaza campos desconocidos (D-EC-7)."""

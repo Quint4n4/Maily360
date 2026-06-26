@@ -157,6 +157,7 @@ def clinic_settings_upsert(
     letterhead_full_spaces: Optional[int] = None,
     letterhead_half_spaces: Optional[int] = None,
     commercial_name: str = "",
+    brand_color: str = "",
     doctors_see_costs: Optional[bool] = None,
     # Soporte partial update: solo actualiza los campos explícitamente pasados.
     _partial_fields: Optional[frozenset[str]] = None,
@@ -188,6 +189,8 @@ def clinic_settings_upsert(
         letterhead_full_spaces:  Espacios después del membrete completo.
         letterhead_half_spaces:  Espacios después del membrete de media hoja.
         commercial_name:      Nombre comercial de la clínica para el membrete (COFEPRIS F2).
+        brand_color:          Color de marca en formato #RRGGBB (PDF unificado — Fase 1).
+                              Default vacío → se conserva el valor previo o el default del campo.
         doctors_see_costs:    Flag D-2: si True, los médicos ven el estado de cuenta del paciente.
         _partial_fields:      Si se provee, solo se actualizan esos campos.
 
@@ -215,6 +218,7 @@ def clinic_settings_upsert(
         "instagram": instagram,
         "youtube": youtube,
         "commercial_name": commercial_name,
+        "brand_color": brand_color,
     }
     if logo is not None:
         field_map["logo"] = logo

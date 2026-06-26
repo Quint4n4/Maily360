@@ -14,6 +14,8 @@ Imágenes:
     - Formatos permitidos: JPEG, PNG, WEBP.
 """
 
+import re
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator
 from django.db import models
@@ -21,6 +23,26 @@ from django.db.models import Q
 
 from apps.core.files import validate_image, _random_name
 from apps.core.models import TenantAwareModel
+
+# Expresión regular para validar colores en formato #RRGGBB.
+_HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def validate_hex_color(value: str) -> None:
+    """Valida que el valor sea un color CSS en formato #RRGGBB.
+
+    Args:
+        value: Cadena a validar.
+
+    Raises:
+        ValidationError: si el formato no es #RRGGBB (exactamente 7 chars).
+    """
+    if value and not _HEX_COLOR_RE.match(value):
+        raise ValidationError(
+            "El color de marca debe estar en formato #RRGGBB "
+            "(p. ej. '#3A7BD5'). Valor recibido: '%(value)s'.",
+            params={"value": value},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +235,19 @@ class ClinicSettings(TenantAwareModel):
             "Nombre comercial de la clínica para el membrete de la receta. "
             "Puede diferir de Tenant.name (p. ej. 'Clínica Camsa' vs 'CAMSA S.A. de C.V.'). "
             "COFEPRIS F2."
+        ),
+    )
+
+    # --- Color de marca (PDF unificado — Fase 1) ---
+    brand_color = models.CharField(
+        max_length=7,
+        blank=True,
+        default="#9A7B1E",
+        validators=[validate_hex_color],
+        help_text=(
+            "Color de marca de la clínica en formato #RRGGBB (p. ej. '#3A7BD5'). "
+            "Se usa como color de acento en encabezados y fondos de PDF. "
+            "Valor por defecto: dorado Maily #9A7B1E."
         ),
     )
 

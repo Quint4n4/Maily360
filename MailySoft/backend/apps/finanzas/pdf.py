@@ -11,6 +11,13 @@ SVG inline para la barra de A/R aging:
   - Se construye en Python y se inyecta en el template como string SVG.
   - Sin JavaScript: WeasyPrint no lo ejecuta de todas formas.
   - Sin imágenes externas: solo formas y texto SVG puros.
+
+Fase 2 — unificación de diseño:
+  - finance_report_pdf_build y quote_pdf_build ahora reciben `clinic_settings`
+    (instancia de ClinicSettings o None) en lugar del string `clinic_name`.
+  - Se usa build_brand_context (apps.core.pdf.branding) para construir el
+    contexto de marca compartido: logo, colores, datos de contacto.
+  - Los templates incluyen los parciales clinic_header.html y brand_background.html.
 """
 
 import logging
@@ -19,6 +26,8 @@ from typing import Any
 
 from django.template.loader import render_to_string
 from django.utils import timezone
+
+from apps.core.pdf.branding import build_brand_context
 
 logger = logging.getLogger("apps.finanzas.pdf")
 
@@ -143,12 +152,16 @@ def _build_aging_svg(aging: list[dict[str, Any]], *, width: int = 480, bar_heigh
     return "\n".join(lines)
 
 
-def finance_report_pdf_build(*, report: dict[str, Any], clinic_name: str) -> bytes:
+def finance_report_pdf_build(
+    *,
+    report: dict[str, Any],
+    clinic_settings: Any,
+) -> bytes:
     """Genera el PDF del reporte financiero de periodo con WeasyPrint.
 
     Recibe el dict devuelto por `finance_period_report` (ya calculado por el selector)
-    y el nombre de la clínica para el encabezado. Construye el contexto para el template
-    HTML, renderiza el HTML y lo convierte a PDF.
+    y el objeto ClinicSettings del tenant para el encabezado de marca. Construye el
+    contexto para el template HTML, renderiza el HTML y lo convierte a PDF.
 
     Seguridad:
         - Usa _secure_fetcher para bloquear LFI/SSRF.
@@ -156,8 +169,8 @@ def finance_report_pdf_build(*, report: dict[str, Any], clinic_name: str) -> byt
         - El PDF no se cachea en memoria ni en BD: se genera en tiempo real.
 
     Args:
-        report:      Dict devuelto por finance_period_report().
-        clinic_name: Nombre de la clínica para el encabezado.
+        report:          Dict devuelto por finance_period_report().
+        clinic_settings: Instancia de ClinicSettings o None (clínica sin configurar).
 
     Returns:
         bytes: contenido del PDF.
@@ -207,8 +220,11 @@ def finance_report_pdf_build(*, report: dict[str, Any], clinic_name: str) -> byt
         )
         row["amount_display"] = _fmt_money(row["amount"])
 
+    # Contexto de marca compartido (logo, color, datos de contacto).
+    brand: dict[str, Any] = build_brand_context(clinic_settings=clinic_settings)
+
     context: dict[str, Any] = {
-        "clinic_name": clinic_name,
+        **brand,
         "date_from": report["range"]["date_from"],
         "date_to": report["range"]["date_to"],
         "prev_date_from": report["prev_range"]["date_from"],
@@ -271,12 +287,12 @@ def _fmt_qty(value: "Decimal") -> str:
     return f"{normalized:f}"
 
 
-def quote_pdf_build(*, quote: "Any", clinic_name: str) -> bytes:
+def quote_pdf_build(*, quote: "Any", clinic_settings: Any) -> bytes:
     """Genera el PDF de una cotización con WeasyPrint.
 
-    Recibe la instancia Quote (con items prefetchados) y el nombre de la clínica.
-    Todos los montos se formatean en Python (_fmt_money) y se pasan ya con el
-    signo de moneda. El template HTML NO añade '$' por ningún lado.
+    Recibe la instancia Quote (con items prefetchados) y el objeto ClinicSettings
+    del tenant. Todos los montos se formatean en Python (_fmt_money) y se pasan
+    ya con el signo de moneda. El template HTML NO añade '$' por ningún lado.
 
     Seguridad:
         - Usa _secure_fetcher: bloquea LFI/SSRF (solo data URIs).
@@ -284,8 +300,8 @@ def quote_pdf_build(*, quote: "Any", clinic_name: str) -> bytes:
         - El PDF se genera a petición, nunca se cachea en BD.
 
     Args:
-        quote:       Instancia de Quote con items prefetchados (prefetch_related("items")).
-        clinic_name: Nombre de la clínica para el encabezado.
+        quote:           Instancia de Quote con items prefetchados (prefetch_related("items")).
+        clinic_settings: Instancia de ClinicSettings o None (clínica sin configurar).
 
     Returns:
         bytes: contenido del PDF.
@@ -313,8 +329,11 @@ def quote_pdf_build(*, quote: "Any", clinic_name: str) -> bytes:
     # Folio corto: primeros 8 caracteres del UUID (legible para el paciente).
     folio_short = str(quote.id).replace("-", "")[:8].upper()
 
+    # Contexto de marca compartido (logo, color, datos de contacto).
+    brand: dict[str, Any] = build_brand_context(clinic_settings=clinic_settings)
+
     context: dict[str, Any] = {
-        "clinic_name": clinic_name,
+        **brand,
         "folio": folio_short,
         "fecha_emision": quote.created_at.strftime("%d/%m/%Y"),
         "generated_at": tz.now().strftime("%Y-%m-%d %H:%M UTC"),

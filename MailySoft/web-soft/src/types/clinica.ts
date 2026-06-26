@@ -38,6 +38,11 @@ export interface ClinicSettingsOut {
   letterhead_full_spaces: number
   letterhead_half_spaces: number
   /**
+   * Color de marca (hex `#RRGGBB`, default `#9A7B1E`). Se usa en el encabezado
+   * de todos los PDFs (recetas, reportes, cotizaciones, expediente).
+   */
+  brand_color: string
+  /**
    * Flag por clínica (D-2 del plan finanzas-pacientes): ¿los MÉDICOS ven los
    * costos / estado de cuenta del paciente? Por defecto false. Solo es UX; el
    * backend (PatientStatementPermission) es la autoridad.
@@ -66,6 +71,8 @@ export interface ClinicSettingsFields {
   youtube?: string
   letterhead_full_spaces?: number
   letterhead_half_spaces?: number
+  /** Color de marca (hex `#RRGGBB`). Se usa en el encabezado de los PDFs. */
+  brand_color?: string
 }
 
 /** Imágenes opcionales para el PUT de configuración. */

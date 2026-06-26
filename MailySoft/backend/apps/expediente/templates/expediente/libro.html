@@ -7,6 +7,7 @@
        Libro Clínico del Paciente — Maily Platform
        WeasyPrint: todas las imágenes son data-URI base64 (sin file:// ni http://)
        Colores SOAP: S azul #185FA5, O teal #0F6E56, A morado #534AB7, P verde #3B6D11
+       Fase 2: el acento de portada/títulos usa {{ brand_color }} (dinámico por clínica).
     ================================================================ */
 
     @page {
@@ -35,6 +36,13 @@
       line-height: 1.4;
     }
 
+    /* ---- Fondo decorativo (ondas + marca de agua) ---- */
+    .page-bg {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: -1;
+    }
+
     /* ----------------------------------------------------------------
        Portada
     ---------------------------------------------------------------- */
@@ -57,7 +65,7 @@
     .portada-clinica {
       font-size: 18pt;
       font-weight: bold;
-      color: #9A7B1E;
+      color: {{ brand_color }};
       text-align: center;
       letter-spacing: 0.5pt;
       text-transform: uppercase;
@@ -76,8 +84,8 @@
       font-weight: bold;
       color: #1a1a1a;
       text-align: center;
-      border-top: 2pt solid #9A7B1E;
-      border-bottom: 2pt solid #9A7B1E;
+      border-top: 2pt solid {{ brand_color }};
+      border-bottom: 2pt solid {{ brand_color }};
       padding: 10pt 0;
       margin-bottom: 1.2cm;
       width: 100%;
@@ -117,7 +125,7 @@
       font-size: 13pt;
       font-weight: bold;
       color: #fff;
-      background-color: #9A7B1E;
+      background-color: {{ brand_color }};
       padding: 5pt 10pt;
       margin-bottom: 10pt;
       letter-spacing: 0.3pt;
@@ -129,8 +137,8 @@
     .hc-bloque-titulo {
       font-size: 9pt;
       font-weight: bold;
-      color: #9A7B1E;
-      border-bottom: 0.6pt solid #9A7B1E;
+      color: {{ brand_color }};
+      border-bottom: 0.6pt solid {{ brand_color }};
       padding-bottom: 2pt;
       margin-bottom: 5pt;
       text-transform: uppercase;
@@ -170,7 +178,7 @@
       width: 100%;
       border-collapse: collapse;
       margin-bottom: 8pt;
-      border-bottom: 1.5pt solid #9A7B1E;
+      border-bottom: 1.5pt solid {{ brand_color }};
       padding-bottom: 5pt;
     }
     .capitulo-encabezado td {
@@ -179,14 +187,14 @@
     .cap-num {
       font-size: 22pt;
       font-weight: bold;
-      color: #9A7B1E;
+      color: {{ brand_color }};
       width: 60pt;
       text-align: center;
       padding-right: 10pt;
     }
     .cap-num-label {
       font-size: 7pt;
-      color: #9A7B1E;
+      color: {{ brand_color }};
       text-align: center;
       display: block;
       margin-top: -4pt;
@@ -213,7 +221,7 @@
     /* ---- Signos de enfermería ---- */
     .signos-box {
       background: #FCF8EE;
-      border: 0.6pt solid #9A7B1E66;
+      border: 0.6pt solid {{ brand_color }}66;
       border-radius: 3pt;
       padding: 6pt 10pt;
       margin-bottom: 10pt;
@@ -221,7 +229,7 @@
     .signos-titulo {
       font-size: 7.5pt;
       font-weight: bold;
-      color: #9A7B1E;
+      color: {{ brand_color }};
       text-transform: uppercase;
       margin-bottom: 4pt;
       letter-spacing: 0.3pt;
@@ -241,7 +249,7 @@
       width: 25%;
     }
 
-    /* ---- SOAP ---- */
+    /* ---- SOAP — colores fijos por legibilidad clínica (NO usar brand_color) ---- */
     .soap-seccion {
       margin-bottom: 10pt;
       border-left: 3pt solid;
@@ -313,7 +321,7 @@
       margin-top: 2pt;
     }
 
-    /* ---- Diagnósticos ---- */
+    /* ---- Diagnósticos (usa el color morado de "A" del SOAP, no brand_color) ---- */
     .diagnosticos-lista {
       margin: 0 0 10pt 0;
       padding: 0;
@@ -329,13 +337,13 @@
     .dx-cie { color: #666; font-size: 7.5pt; }
     .dx-resuelto { color: #888; text-decoration: line-through; }
 
-    /* ---- Recetas (resumen) ---- */
+    /* ---- Recetas (resumen) — usa brand_color para el acento del folio ---- */
     .recetas-resumen {
       margin-bottom: 10pt;
     }
     .receta-item {
       background: #f7f4ee;
-      border: 0.5pt solid #9A7B1E44;
+      border: 0.5pt solid {{ brand_color }}44;
       border-radius: 2pt;
       padding: 5pt 8pt;
       margin-bottom: 5pt;
@@ -343,7 +351,7 @@
     }
     .receta-folio {
       font-weight: bold;
-      color: #9A7B1E;
+      color: {{ brand_color }};
       font-size: 8.5pt;
     }
     .receta-medicamentos {
@@ -351,10 +359,10 @@
       margin-top: 2pt;
     }
 
-    /* ---- Addenda ---- */
+    /* ---- Addenda — usa brand_color para el borde izquierdo ---- */
     .addendum-item {
       background: #fffdf5;
-      border-left: 3pt solid #9A7B1E;
+      border-left: 3pt solid {{ brand_color }};
       padding: 5pt 8pt;
       margin-bottom: 6pt;
       font-size: 8pt;
@@ -380,6 +388,13 @@
   </style>
 </head>
 <body>
+
+<!-- ================================================================
+     FONDO DECORATIVO (ondas + marca de agua, detrás del contenido)
+================================================================ -->
+<div class="page-bg">
+  {% include "core/pdf/brand_background.html" %}
+</div>
 
 <!-- ================================================================
      PORTADA

@@ -1,0 +1,57 @@
+{% comment %}
+Fondo decorativo compartido para todos los PDFs de Maily Platform.
+
+Replica el tema "ondas" de recetas/formats/_theme_bg.html como partial
+reutilizable. Pensado para colocarse dentro de un contenedor con position
+fixed/absolute que cubra la hoja, detrás del contenido principal (z-index: -1).
+
+Variables de contexto esperadas (todas provistas por build_brand_context):
+    brand_color     str  — color de acento #RRGGBB.
+    watermark_b64   str  — data URI PNG del logo marca-de-agua (puede ser "").
+
+Variables opcionales (contexto específico del PDF):
+    pdf_layout      str  — "digital" (carta vertical, default) o "compact"
+                           (media carta horizontal). Controla el tamaño de las ondas.
+    cancelled       bool — si True, superpone el sello "ANULADA" (rojo, rotado).
+
+El partial emite solo los elementos SVG/div que forman el fondo.
+No incluye el contenedor .page-bg; el template padre lo define así que puede
+ajustar top/left/width/height según el tamaño de página de cada PDF.
+
+Estilos de posición (position:absolute/fixed) van inline para que funcionen
+igual en compact y digital sin requerir CSS extra en el template padre.
+
+Nota de seguridad: brand_color viene de build_brand_context que ya validó
+el formato #RRGGBB; se usa directamente en atributos SVG fill.
+{% endcomment %}
+{% if pdf_layout == 'compact' %}
+  {# Media carta horizontal: ondas más pequeñas #}
+  <svg style="position:absolute; top:0; right:0;" width="250" height="150" viewBox="0 0 250 150">
+    <path d="M250,0 L250,150 Q185,112 132,70 Q78,28 0,0 Z" fill="{{ brand_color }}" fill-opacity="0.09"/>
+    <path d="M250,0 L250,150 Q208,118 172,80 Q118,28 55,0 Z" fill="{{ brand_color }}" fill-opacity="0.18"/>
+  </svg>
+  <svg style="position:absolute; bottom:0; left:0; width:21.6cm;" height="70" viewBox="0 0 612 70" preserveAspectRatio="none">
+    <path d="M0,70 L612,70 L612,36 Q500,10 380,30 Q250,54 130,26 Q60,12 0,34 Z" fill="{{ brand_color }}" fill-opacity="0.09"/>
+    <path d="M0,70 L612,70 L612,52 Q500,34 380,48 Q250,66 130,42 Q60,30 0,50 Z" fill="{{ brand_color }}" fill-opacity="0.18"/>
+  </svg>
+{% else %}
+  {# Hoja carta vertical (digital): ondas más grandes para que se aprecien con cualquier color #}
+  <svg style="position:absolute; top:0; right:0;" width="9.8cm" height="6.2cm" viewBox="0 0 250 150" preserveAspectRatio="none">
+    <path d="M250,0 L250,150 Q185,112 132,70 Q78,28 0,0 Z" fill="{{ brand_color }}" fill-opacity="0.11"/>
+    <path d="M250,0 L250,150 Q208,118 172,80 Q118,28 55,0 Z" fill="{{ brand_color }}" fill-opacity="0.20"/>
+  </svg>
+  <svg style="position:absolute; bottom:0; left:0; width:21.6cm;" height="3.4cm" viewBox="0 0 612 70" preserveAspectRatio="none">
+    <path d="M0,70 L612,70 L612,36 Q500,10 380,30 Q250,54 130,26 Q60,12 0,34 Z" fill="{{ brand_color }}" fill-opacity="0.11"/>
+    <path d="M0,70 L612,70 L612,52 Q500,34 380,48 Q250,66 130,42 Q60,30 0,50 Z" fill="{{ brand_color }}" fill-opacity="0.20"/>
+  </svg>
+{% endif %}
+{% if watermark_b64 %}
+  <div style="position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center;">
+    <img src="{{ watermark_b64 }}" alt="" style="max-width:8cm; max-height:8cm; width:auto; height:auto;" />
+  </div>
+{% endif %}
+{% if cancelled %}
+  <div style="position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center;">
+    <span style="font-size:70pt; font-weight:bold; color:rgba(200,0,0,0.10); transform:rotate(-26deg); letter-spacing:5pt;">ANULADA</span>
+  </div>
+{% endif %}

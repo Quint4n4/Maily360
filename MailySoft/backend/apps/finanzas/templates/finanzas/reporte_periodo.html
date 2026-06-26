@@ -7,6 +7,7 @@
       Reporte Financiero de Periodo — Maily Platform
       Generado con WeasyPrint. Sin JavaScript.
       SVG inline para el gráfico de A/R aging.
+      Fase 2: usa brand_color para el acento de la clínica.
     */
     @page {
       size: letter;
@@ -19,35 +20,64 @@
       color: #1a1a1a;
       margin: 0;
       padding: 0;
+      position: relative;
+    }
+
+    /* ---- Fondo decorativo (ondas + marca de agua) — posición absolute ---- */
+    .page-bg {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: -1;
     }
 
     /* ---- Encabezado ---- */
-    .header {
+    .hdr {
       width: 100%;
       border-collapse: collapse;
       margin-bottom: 14pt;
-      border-bottom: 1.5pt solid #1e6ab0;
+      border-bottom: 1.5pt solid {{ brand_color }};
       padding-bottom: 8pt;
     }
-    .header td { vertical-align: middle; }
-    .header .clinic-name {
+    .hdr td { vertical-align: middle; }
+    .h-logo img { max-width: {{ logo_w }}pt; max-height: {{ logo_h }}pt; display: block; }
+    .h-logo { width: {{ logo_w }}pt; padding-right: 10pt; }
+    .h-center { vertical-align: middle; }
+    .h-clinic {
       font-size: 14pt;
       font-weight: bold;
-      color: #1e6ab0;
+      color: {{ brand_color }};
       letter-spacing: 0.3pt;
     }
-    .header .report-title {
+    .h-doctor {
+      font-size: 9pt;
+      color: #333;
+      margin-top: 2pt;
+    }
+    .h-spec {
+      font-size: 8pt;
+      color: #555;
+    }
+    .h-qr { width: 50pt; text-align: right; }
+    .creds { width: 100%; margin-top: 4pt; }
+    .h-rule {
+      border-top: 1.5pt solid {{ brand_color }};
+      margin-bottom: 8pt;
+      display: none; /* hdr ya tiene border-bottom — oculto para evitar doble línea */
+    }
+
+    .header-report-meta { vertical-align: top; }
+    .report-title {
       font-size: 10pt;
       font-weight: bold;
       color: #333;
       margin-top: 2pt;
     }
-    .header .period-info {
+    .period-info {
       font-size: 7.5pt;
       color: #666;
       margin-top: 3pt;
     }
-    .header .gen-date {
+    .gen-date {
       font-size: 6.5pt;
       color: #aaa;
       text-align: right;
@@ -77,7 +107,7 @@
     .kpi-value {
       font-size: 13pt;
       font-weight: bold;
-      color: #1e6ab0;
+      color: {{ brand_color }};
       margin: 3pt 0 2pt;
       white-space: nowrap;
     }
@@ -93,8 +123,8 @@
     .section-title {
       font-size: 9pt;
       font-weight: bold;
-      color: #1e6ab0;
-      border-bottom: 0.8pt solid #1e6ab0;
+      color: {{ brand_color }};
+      border-bottom: 0.8pt solid {{ brand_color }};
       margin: 12pt 0 6pt;
       padding-bottom: 2pt;
       text-transform: uppercase;
@@ -109,7 +139,7 @@
       margin-bottom: 10pt;
     }
     .data-table th {
-      background: #1e6ab0;
+      background: {{ brand_color }};
       color: #fff;
       padding: 4pt 6pt;
       text-align: left;
@@ -171,6 +201,11 @@
 </head>
 <body>
 
+<!-- ============================================================ FONDO DECORATIVO -->
+<div class="page-bg">
+  {% include "core/pdf/brand_background.html" %}
+</div>
+
 <!-- ============================================================ PIE FIJO -->
 <div class="footer">
   <span>Maily Platform — Reporte Financiero Confidencial</span>
@@ -181,10 +216,10 @@
 </div>
 
 <!-- ============================================================ ENCABEZADO -->
-<table class="header">
+{% include "core/pdf/clinic_header.html" %}
+<table style="width:100%; border-collapse:collapse; margin-bottom:8pt;">
   <tr>
     <td>
-      <div class="clinic-name">{{ clinic_name }}</div>
       <div class="report-title">Reporte Financiero de Periodo</div>
       <div class="period-info">
         Periodo: <strong>{{ date_from }}</strong> al <strong>{{ date_to }}</strong>
