@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react'
 import { Loader2, FileDown, FileSpreadsheet } from 'lucide-react'
 
 import type { ReportGroup } from '../../api/finanzas'
-import { useReporte, useDescargarReportePdf } from '../../hooks/finanzas'
+import { fetchReportPdfBlob } from '../../api/finanzas'
+import { useReporte } from '../../hooks/finanzas'
 import type { Role } from '../../auth/permisos'
 import { can } from '../../auth/permisos'
 import { toIsoDate } from '../../lib/format'
 import { exportReportExcel } from '../../lib/exportReporte'
+import VisorPdf from '../VisorPdf'
 import ReporteKpiCards from './ReporteKpiCards'
 import SerieTemporalChart from './charts/SerieTemporalChart'
 import AgingApiladoChart from './charts/AgingApiladoChart'
@@ -54,7 +56,7 @@ export default function ReporteTab({ role }: Props) {
   }, [preset.days, group])
 
   const { data: report, isLoading, isError, error } = useReporte(params)
-  const descargarPdf = useDescargarReportePdf()
+  const [verPdf, setVerPdf] = useState(false)
   const [excelBusy, setExcelBusy] = useState(false)
 
   // Gating de exportación: misma capacidad que ver el dashboard/reporte.
@@ -123,14 +125,10 @@ export default function ReporteTab({ role }: Props) {
           <div className="flex items-center gap-2">
             <button
               className="btn-secondary"
-              disabled={!report || descargarPdf.isPending}
-              onClick={() => descargarPdf.mutate(params)}
+              disabled={!report}
+              onClick={() => setVerPdf(true)}
             >
-              {descargarPdf.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FileDown className="w-4 h-4" />
-              )}
+              <FileDown className="w-4 h-4" />
               Exportar PDF
             </button>
             <button
@@ -148,12 +146,6 @@ export default function ReporteTab({ role }: Props) {
           </div>
         )}
       </div>
-
-      {descargarPdf.isError && (
-        <div className="glass-card rounded-2xl p-3 text-xs" style={{ color: '#B91C1C' }}>
-          No se pudo generar el PDF. {(descargarPdf.error as Error)?.message ?? ''}
-        </div>
-      )}
 
       {isLoading && (
         <div className="flex items-center justify-center py-20" style={{ color: '#9A958C' }}>
@@ -201,6 +193,15 @@ export default function ReporteTab({ role }: Props) {
             </p>
           )}
         </>
+      )}
+
+      {verPdf && (
+        <VisorPdf
+          titulo={`Reporte ${params.date_from} — ${params.date_to}`}
+          nombreArchivo={`reporte-${params.date_from}-${params.date_to}.pdf`}
+          cargar={() => fetchReportPdfBlob(params)}
+          onClose={() => setVerPdf(false)}
+        />
       )}
     </div>
   )

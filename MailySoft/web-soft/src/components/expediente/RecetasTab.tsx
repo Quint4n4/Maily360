@@ -42,10 +42,10 @@ import {
   useCancelPrescription,
   useCreatePrescription,
   useMedicationSearch,
-  useOpenPrescriptionPdfWithFormat,
   usePrescriptions,
 } from '../../hooks/recetas'
-import { getPrescription } from '../../api/recetas'
+import { getPrescription, getPrescriptionPdfWithFormat } from '../../api/recetas'
+import VisorPdf from '../VisorPdf'
 import { useAviso } from '../common/DialogProvider'
 import { useVitalSigns } from '../../hooks/expediente'
 import { useTemplates } from '../../hooks/clinica'
@@ -247,24 +247,15 @@ function RecetaCard({
   puedeAnular: boolean
   onCopiar: (detalle: PrescriptionDetail) => void
 }) {
-  const abrirPdf = useOpenPrescriptionPdfWithFormat()
   const anular = useCancelPrescription(patientId)
   const aviso = useAviso()
   const [confirmAnular, setConfirmAnular] = useState(false)
   const [copiando, setCopiando] = useState(false)
   const [error, setError] = useState('')
+  /** Formato cuyo PDF se previsualiza en el visor (null = cerrado). */
+  const [pdfFormato, setPdfFormato] = useState<'compact' | 'digital' | null>(null)
 
   const anulada = receta.status === 'cancelled'
-
-  /** Abre el PDF en el layout indicado: 'compact' = Farmacia, 'digital' = Paciente. */
-  const verPdf = async (formato: 'compact' | 'digital') => {
-    setError('')
-    try {
-      await abrirPdf.mutateAsync({ prescriptionId: receta.id, formato })
-    } catch (err) {
-      setError(erroresDe(err).join(' '))
-    }
-  }
 
   const copiar = async () => {
     setError('')
@@ -352,16 +343,16 @@ function RecetaCard({
         {/* Acciones */}
         <div className="flex flex-wrap gap-2 pt-1">
           <button
-            type="button" onClick={() => verPdf('compact')} disabled={abrirPdf.isPending}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-60 rounded-lg px-3 py-1.5"
+            type="button" onClick={() => setPdfFormato('compact')}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 rounded-lg px-3 py-1.5"
             style={{ background: 'rgba(201,162,39,0.10)' }}
             title="Receta para llevar a la farmacia (media carta)"
           >
             <FileText className="w-3.5 h-3.5" /> Farmacia
           </button>
           <button
-            type="button" onClick={() => verPdf('digital')} disabled={abrirPdf.isPending}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-60 rounded-lg px-3 py-1.5"
+            type="button" onClick={() => setPdfFormato('digital')}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 rounded-lg px-3 py-1.5"
             style={{ background: 'rgba(201,162,39,0.10)' }}
             title="Receta del paciente (hoja completa, con recomendaciones)"
           >
@@ -414,6 +405,15 @@ function RecetaCard({
               setConfirmAnular(false)
             }
           }}
+        />
+      )}
+
+      {pdfFormato && (
+        <VisorPdf
+          titulo={`Receta · Folio ${receta.folio} · ${pdfFormato === 'compact' ? 'Farmacia' : 'Paciente'}`}
+          nombreArchivo={`receta-${receta.folio}-${pdfFormato === 'compact' ? 'farmacia' : 'paciente'}.pdf`}
+          cargar={() => getPrescriptionPdfWithFormat(receta.id, { formato: pdfFormato })}
+          onClose={() => setPdfFormato(null)}
         />
       )}
     </Card>
@@ -570,7 +570,8 @@ export function NuevaReceta({
   onClose: () => void
 }) {
   const crear = useCreatePrescription(paciente.id)
-  const abrirPdf = useOpenPrescriptionPdfWithFormat()
+  /** Formato cuyo PDF se previsualiza tras emitir (null = cerrado). */
+  const [pdfFormato, setPdfFormato] = useState<'compact' | 'digital' | null>(null)
   const { data: signosData } = useVitalSigns(paciente.id)
 
   // Renglones: prellenados si "copiar de previa", o uno vacío de arranque.
@@ -767,18 +768,16 @@ export function NuevaReceta({
           <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
-              onClick={() => abrirPdf.mutate({ prescriptionId: creada.id, formato: 'compact' })}
-              disabled={abrirPdf.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-60"
+              onClick={() => setPdfFormato('compact')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-amber-700 hover:text-amber-800"
               style={{ background: 'rgba(201,162,39,0.10)' }}
             >
               <FileText className="w-4 h-4" /> Farmacia
             </button>
             <button
               type="button"
-              onClick={() => abrirPdf.mutate({ prescriptionId: creada.id, formato: 'digital' })}
-              disabled={abrirPdf.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-60"
+              onClick={() => setPdfFormato('digital')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-amber-700 hover:text-amber-800"
               style={{ background: 'rgba(201,162,39,0.10)' }}
             >
               <FileText className="w-4 h-4" /> Paciente (digital)
@@ -792,6 +791,15 @@ export function NuevaReceta({
             </button>
           </div>
         </div>
+
+        {pdfFormato && (
+          <VisorPdf
+            titulo={`Receta · Folio ${creada.folio} · ${pdfFormato === 'compact' ? 'Farmacia' : 'Paciente'}`}
+            nombreArchivo={`receta-${creada.folio}-${pdfFormato === 'compact' ? 'farmacia' : 'paciente'}.pdf`}
+            cargar={() => getPrescriptionPdfWithFormat(creada.id, { formato: pdfFormato })}
+            onClose={() => setPdfFormato(null)}
+          />
+        )}
       </Card>
     )
   }

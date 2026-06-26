@@ -13,13 +13,19 @@ import {
 import type { PatientLite } from '../../api/pacientes'
 import { useStatement } from '../../hooks/finanzas'
 import { formatMoney, formatDate } from '../../lib/format'
-import { exportStatementPdf, exportStatementExcel } from '../../lib/exportEstadoCuenta'
+import {
+  exportStatementExcel,
+  buildStatementPdfBlob,
+  statementPdfFilename,
+} from '../../lib/exportEstadoCuenta'
 import PatientPicker from './PatientPicker'
+import VisorPdf from '../VisorPdf'
 
 const GOLD = '#C9A227'
 
 export default function EstadoCuentaTab() {
   const [patient, setPatient] = useState<PatientLite | null>(null)
+  const [verPdf, setVerPdf] = useState(false)
   const statement = useStatement(patient?.id ?? null)
 
   return (
@@ -46,7 +52,7 @@ export default function EstadoCuentaTab() {
               </p>
             </div>
             <div className="flex gap-2">
-              <button className="btn-secondary" onClick={() => exportStatementPdf(statement.data!)}>
+              <button className="btn-secondary" onClick={() => setVerPdf(true)}>
                 <FileDown className="w-4 h-4" /> PDF
               </button>
               <button className="btn-secondary" onClick={() => void exportStatementExcel(statement.data!)}>
@@ -131,6 +137,15 @@ export default function EstadoCuentaTab() {
             </table>
           </div>
         </div>
+      )}
+
+      {verPdf && statement.data && (
+        <VisorPdf
+          titulo={`Estado de cuenta · ${statement.data.patient.full_name}`}
+          nombreArchivo={statementPdfFilename(statement.data)}
+          cargar={() => Promise.resolve(buildStatementPdfBlob(statement.data!))}
+          onClose={() => setVerPdf(false)}
+        />
       )}
     </div>
   )

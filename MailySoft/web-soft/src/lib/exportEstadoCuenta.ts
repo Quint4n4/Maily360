@@ -37,8 +37,8 @@ function triggerDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
-/** Genera y descarga el estado de cuenta como PDF. */
-export function exportStatementPdf(statement: AccountStatement): void {
+/** Arma el documento jsPDF del estado de cuenta (sin descargarlo). */
+function buildStatementDoc(statement: AccountStatement): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
 
   doc.setFontSize(16)
@@ -74,7 +74,26 @@ export function exportStatementPdf(statement: AccountStatement): void {
     footStyles: { fillColor: [240, 232, 207], textColor: 20, fontStyle: 'bold' },
   })
 
-  doc.save(`${fileBase(statement)}.pdf`)
+  return doc
+}
+
+/**
+ * Genera el estado de cuenta como Blob de PDF (para la vista previa inline).
+ * Es generación cliente con jsPDF (no hay endpoint de PDF para el estado de
+ * cuenta); el VisorPdf lo consume igual que cualquier otro Blob.
+ */
+export function buildStatementPdfBlob(statement: AccountStatement): Blob {
+  return buildStatementDoc(statement).output('blob')
+}
+
+/** Nombre de archivo del PDF del estado de cuenta. */
+export function statementPdfFilename(statement: AccountStatement): string {
+  return `${fileBase(statement)}.pdf`
+}
+
+/** Genera y descarga el estado de cuenta como PDF. */
+export function exportStatementPdf(statement: AccountStatement): void {
+  buildStatementDoc(statement).save(statementPdfFilename(statement))
 }
 
 /** Genera y descarga el estado de cuenta como hoja de cálculo (.xlsx) con ExcelJS. */

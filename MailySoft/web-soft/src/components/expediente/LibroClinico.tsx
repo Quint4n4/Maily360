@@ -34,13 +34,15 @@ import type {
   VitalSignsRecord,
 } from '../../types/expediente'
 import { ApiError } from '../../lib/http'
-import { usePatientBook, useOpenPatientBookPdf } from '../../hooks/expediente'
+import { usePatientBook } from '../../hooks/expediente'
 import type { LibroModo } from '../../api/expediente'
+import { getPatientBookPdf } from '../../api/expediente'
 import { useOpenPrescriptionPdfWithFormat } from '../../hooks/recetas'
 import { formatFechaHora, formatFechaCorta } from '../../lib/fecha'
 import { edad } from '../../lib/paciente'
 import { SISTEMA_LABEL } from './ui'
 import EstadoCuentaVisita from './EstadoCuentaVisita'
+import VisorPdf from '../VisorPdf'
 
 // ── Constantes de marca / SOAP ────────────────────────────────────────────────
 
@@ -211,11 +213,18 @@ function BotonImprimir({
   )
 }
 
+/** Etiqueta legible de cada modo del libro (para el título del visor). */
+const MODO_LABEL: Record<LibroModo, string> = {
+  completo: 'Libro completo',
+  hc: 'Historia clínica',
+  ultimo: 'Último capítulo',
+}
+
 function BarraSuperior({ libro, paciente }: { libro: PatientBook; paciente: PatientOut }) {
-  const abrirPdf = useOpenPatientBookPdf()
   const [incluirImagenes, setIncluirImagenes] = useState(true)
-  const imprimir = (modo: LibroModo) =>
-    abrirPdf.mutate({ patientId: paciente.id, modo, incluirImagenes })
+  /** Modo cuyo PDF se previsualiza en el visor (null = cerrado). */
+  const [pdfModo, setPdfModo] = useState<LibroModo | null>(null)
+  const imprimir = (modo: LibroModo) => setPdfModo(modo)
   return (
     <div
       className="rounded-2xl p-4 sm:p-5"
@@ -251,19 +260,16 @@ function BarraSuperior({ libro, paciente }: { libro: PatientBook; paciente: Pati
               label="Imprimir libro"
               icon={<Printer className="w-3.5 h-3.5" />}
               onClick={() => imprimir('completo')}
-              loading={abrirPdf.isPending}
             />
             <BotonImprimir
               label="Solo historia clínica"
               icon={<FileText className="w-3.5 h-3.5" />}
               onClick={() => imprimir('hc')}
-              loading={abrirPdf.isPending}
             />
             <BotonImprimir
               label="Solo último capítulo"
               icon={<Layers className="w-3.5 h-3.5" />}
               onClick={() => imprimir('ultimo')}
-              loading={abrirPdf.isPending}
             />
           </div>
           <label className="flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer select-none">
@@ -277,6 +283,15 @@ function BarraSuperior({ libro, paciente }: { libro: PatientBook; paciente: Pati
           </label>
         </div>
       </div>
+
+      {pdfModo && (
+        <VisorPdf
+          titulo={`${MODO_LABEL[pdfModo]} · ${paciente.full_name}`}
+          nombreArchivo={`libro-clinico-${pdfModo}.pdf`}
+          cargar={() => getPatientBookPdf(paciente.id, pdfModo, incluirImagenes)}
+          onClose={() => setPdfModo(null)}
+        />
+      )}
     </div>
   )
 }

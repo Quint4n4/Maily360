@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock, Video, FolderOpen, ScrollText, FileDown } from 'lucide-react'
 import NotasHilo from './NotasHilo'
-import { useDownloadQuotePdf } from '../../hooks/finanzas'
+import { fetchQuotePdfBlob } from '../../api/finanzas'
 import { formatMoney } from '../../lib/format'
+import VisorPdf from '../VisorPdf'
 
 export type EstadoCita =
   | 'agendada' | 'confirmada' | 'llego' | 'en_consulta' | 'atendida' | 'cancelada' | 'no_asistio'
@@ -120,7 +121,8 @@ function Dato({ icon: Icon, label, value, dot }: { icon: typeof User; label: str
 export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = false, puedeCancelar = false, puedeAgendar = false, onCambiarEstado, cambiando = false, onReactivar, reactivando = false, onReagendar }: Props) {
   const navigate = useNavigate()
   const [estado, setEstado] = useState<EstadoCita>('agendada')
-  const downloadPdf = useDownloadQuotePdf()
+  /** Cotización cuyo PDF se previsualiza en el visor (null = cerrado). */
+  const [pdfQuoteId, setPdfQuoteId] = useState<string | null>(null)
   useEffect(() => { if (cita) setEstado(cita.estadoInicial) }, [cita])
 
   if (!cita) return <AnimatePresence />
@@ -251,13 +253,12 @@ export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = f
                       </div>
                     </div>
                     <button
-                      onClick={() => cita.cotizacion && downloadPdf.mutate(cita.cotizacion.id)}
-                      disabled={downloadPdf.isPending}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:brightness-95 disabled:opacity-60 shrink-0"
+                      onClick={() => cita.cotizacion && setPdfQuoteId(cita.cotizacion.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:brightness-95 shrink-0"
                       style={{ color: '#9A7B1E', background: 'rgba(201,162,39,0.16)' }}
-                      title="Descargar PDF de la cotización"
+                      title="Ver PDF de la cotización"
                     >
-                      {downloadPdf.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                      <FileDown className="w-3.5 h-3.5" />
                       PDF
                     </button>
                   </div>
@@ -367,6 +368,15 @@ export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = f
             </div>
           </motion.div>
         </motion.div>
+      )}
+
+      {pdfQuoteId && (
+        <VisorPdf
+          titulo="Cotización"
+          nombreArchivo={`cotizacion-${pdfQuoteId}.pdf`}
+          cargar={() => fetchQuotePdfBlob(pdfQuoteId)}
+          onClose={() => setPdfQuoteId(null)}
+        />
       )}
     </AnimatePresence>
   )

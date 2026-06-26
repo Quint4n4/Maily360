@@ -3,10 +3,10 @@ import { Plus, Loader2, Send, Check, Trash2, FileDown, Info } from 'lucide-react
 
 import type { PatientLite } from '../../api/pacientes'
 import type { QuoteItemInput, ServiceConcept } from '../../api/finanzas'
+import { fetchQuotePdfBlob } from '../../api/finanzas'
 import {
   useAcceptQuote,
   useCreateQuote,
-  useDownloadQuotePdf,
   useQuotes,
   useSendQuote,
   useConcepts,
@@ -14,6 +14,7 @@ import {
 import { can, type Role } from '../../auth/permisos'
 import { formatMoney, formatDate } from '../../lib/format'
 import PatientPicker from './PatientPicker'
+import VisorPdf from '../VisorPdf'
 
 interface Props {
   role: Role
@@ -56,13 +57,14 @@ export default function CotizacionesTab({ role }: Props) {
   const [patient, setPatient] = useState<PatientLite | null>(null)
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<DraftItem[]>([emptyItem()])
+  /** Cotización cuyo PDF se previsualiza en el visor (null = visor cerrado). */
+  const [pdfQuoteId, setPdfQuoteId] = useState<string | null>(null)
 
   const quotes = useQuotes(patient ? { patient_id: patient.id } : {})
   const conceptsQuery = useConcepts()
   const createQuote = useCreateQuote()
   const sendQuote = useSendQuote()
   const acceptQuote = useAcceptQuote()
-  const downloadPdf = useDownloadQuotePdf()
   const canCreate = can(role, 'createQuote')
 
   const concepts: ServiceConcept[] = conceptsQuery.data?.results ?? []
@@ -274,15 +276,10 @@ export default function CotizacionesTab({ role }: Props) {
                       <td className="py-1.5 text-right whitespace-nowrap">
                         <button
                           className="btn-ghost px-2 py-1"
-                          onClick={() => downloadPdf.mutate(q.id)}
-                          disabled={downloadPdf.isPending}
-                          title="Descargar PDF"
+                          onClick={() => setPdfQuoteId(q.id)}
+                          title="Ver PDF"
                         >
-                          {downloadPdf.isPending && downloadPdf.variables === q.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <FileDown className="w-3.5 h-3.5" />
-                          )}
+                          <FileDown className="w-3.5 h-3.5" />
                         </button>
                         {canCreate && q.status === 'draft' && (
                           <button
@@ -319,6 +316,15 @@ export default function CotizacionesTab({ role }: Props) {
             </div>
           )}
         </div>
+      )}
+
+      {pdfQuoteId && (
+        <VisorPdf
+          titulo="Cotización"
+          nombreArchivo={`cotizacion-${pdfQuoteId}.pdf`}
+          cargar={() => fetchQuotePdfBlob(pdfQuoteId)}
+          onClose={() => setPdfQuoteId(null)}
+        />
       )}
     </div>
   )
