@@ -343,8 +343,13 @@ export interface ServiceConcept {
   created_at: string
 }
 
-export function fetchConcepts(): Promise<Paginated<ServiceConcept>> {
-  return http.get<Paginated<ServiceConcept>>('/finanzas/conceptos/')
+export function fetchConcepts(
+  opts: { includeInactive?: boolean } = {},
+): Promise<Paginated<ServiceConcept>> {
+  return http.get<Paginated<ServiceConcept>>(
+    '/finanzas/conceptos/',
+    opts.includeInactive ? { only_active: 'false' } : {},
+  )
 }
 
 export interface ConceptInput {
@@ -353,10 +358,20 @@ export interface ConceptInput {
   description?: string
   sat_product_key?: string
   sat_unit_key?: string
+  /** Solo en PATCH: reactivar un concepto previamente desactivado. */
+  is_active?: boolean
 }
 
 export function createConcept(input: ConceptInput): Promise<ServiceConcept> {
   return http.post<ServiceConcept>('/finanzas/conceptos/', input)
+}
+
+export function updateConcept(id: string, input: Partial<ConceptInput>): Promise<ServiceConcept> {
+  return http.patch<ServiceConcept>(`/finanzas/conceptos/${id}/`, input)
+}
+
+export function deactivateConcept(id: string): Promise<void> {
+  return http.delete<void>(`/finanzas/conceptos/${id}/`)
 }
 
 // ---------------------------------------------------------------------------

@@ -188,6 +188,8 @@ class ConceptDetailApi(TenantAPIView):
         )
         sat_product_key = serializers.CharField(max_length=10, required=False, allow_blank=True)
         sat_unit_key = serializers.CharField(max_length=10, required=False, allow_blank=True)
+        # Toggle de estado: se maneja por separado (reactivar/desactivar), no como campo editable.
+        is_active = serializers.BooleanField(required=False)
 
     def _get_or_404(self, concept_id: uuid.UUID) -> "tuple[ServiceConcept | None, Response | None]":
         try:
@@ -214,10 +216,20 @@ class ConceptDetailApi(TenantAPIView):
                 {"detail": "No se proporcionaron campos para actualizar."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        data = dict(s.validated_data)
+        is_active = data.pop("is_active", None)
         try:
-            concept = services.concept_update(
-                concept=concept, user=request.user, **s.validated_data
-            )
+            # El toggle de estado va por su propio service (no por concept_update,
+            # que trata is_active como inmutable).
+            if is_active is not None:
+                if is_active:
+                    concept = services.concept_reactivate(concept=concept, user=request.user)
+                else:
+                    concept = services.concept_deactivate(concept=concept, user=request.user)
+            if data:
+                concept = services.concept_update(
+                    concept=concept, user=request.user, **data
+                )
         except DjangoValidationError as exc:
             return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ServiceConceptOutputSerializer(concept).data)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BadgeCheck, Building2, FileText, GraduationCap, LayoutTemplate, ListChecks, Tag } from 'lucide-react'
+import { BadgeCheck, Building2, DollarSign, FileText, GraduationCap, LayoutTemplate, ListChecks, Tag } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
@@ -11,13 +11,14 @@ import {
 import SeccionDatosClinica from '../components/consultorio/SeccionDatosClinica'
 import SeccionPlantillas from '../components/consultorio/SeccionPlantillas'
 import SeccionCategorias from '../components/consultorio/SeccionCategorias'
+import SeccionServicios from '../components/consultorio/SeccionServicios'
 import SeccionPerfilMedico from '../components/consultorio/SeccionPerfilMedico'
 import SeccionFormatos from '../components/consultorio/SeccionFormatos'
 import SeccionCredencialesValidar from '../components/consultorio/SeccionCredencialesValidar'
 import SeccionHistoriaClinica from '../components/consultorio/SeccionHistoriaClinica'
 
 type SeccionKey =
-  | 'datos' | 'formatos' | 'plantillas' | 'categorias'
+  | 'datos' | 'formatos' | 'plantillas' | 'categorias' | 'servicios'
   | 'historia-clinica' | 'validar-credenciales' | 'perfil'
 
 interface SeccionDef {
@@ -31,6 +32,7 @@ const SECCIONES: SeccionDef[] = [
   { key: 'formatos', label: 'Configuración de recetas', icon: LayoutTemplate },
   { key: 'plantillas', label: 'Plantillas', icon: FileText },
   { key: 'categorias', label: 'Categorías de pacientes', icon: Tag },
+  { key: 'servicios', label: 'Servicios y precios', icon: DollarSign },
   { key: 'historia-clinica', label: 'Preguntas de historia clínica', icon: ListChecks },
   { key: 'validar-credenciales', label: 'Credenciales por validar', icon: BadgeCheck },
   { key: 'perfil', label: 'Mi perfil médico', icon: GraduationCap },
@@ -57,6 +59,8 @@ export default function MiConsultorioPage() {
         return <SeccionPlantillas editable={editaPlantillas} />
       case 'categorias':
         return <SeccionCategorias editable={gestionable} />
+      case 'servicios':
+        return <SeccionServicios editable={gestionable} />
       case 'historia-clinica':
         return <SeccionHistoriaClinica editable={gestionable} />
       case 'validar-credenciales':

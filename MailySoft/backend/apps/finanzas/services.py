@@ -171,6 +171,22 @@ def concept_deactivate(*, concept: ServiceConcept, user: Any) -> ServiceConcept:
     return concept
 
 
+def concept_reactivate(*, concept: ServiceConcept, user: Any) -> ServiceConcept:
+    """Reactiva un concepto previamente desactivado (vuelve a aparecer en el catálogo)."""
+    concept.is_active = True
+    concept.save(update_fields=["is_active", "updated_at"])
+    audit_record(
+        action=ActionType.CONCEPT_UPDATE,
+        resource_type="ServiceConcept",
+        actor=user,
+        tenant=concept.tenant,
+        resource_id=concept.id,
+        resource_repr=concept.name,
+        metadata={"reactivated": True},
+    )
+    return concept
+
+
 # ---------------------------------------------------------------------------
 # Configuración fiscal
 # ---------------------------------------------------------------------------

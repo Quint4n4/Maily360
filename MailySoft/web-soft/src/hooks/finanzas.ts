@@ -93,10 +93,10 @@ export function useRetencion() {
 // Conceptos
 // ---------------------------------------------------------------------------
 
-export function useConcepts() {
+export function useConcepts(opts: { includeInactive?: boolean } = {}) {
   return useQuery({
-    queryKey: finanzasKeys.concepts(),
-    queryFn: () => api.fetchConcepts(),
+    queryKey: [...finanzasKeys.concepts(), opts.includeInactive ?? false],
+    queryFn: () => api.fetchConcepts(opts),
   })
 }
 
@@ -104,6 +104,23 @@ export function useCreateConcept() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: api.ConceptInput) => api.createConcept(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: finanzasKeys.concepts() }),
+  })
+}
+
+export function useUpdateConcept() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<api.ConceptInput> }) =>
+      api.updateConcept(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: finanzasKeys.concepts() }),
+  })
+}
+
+export function useDeactivateConcept() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.deactivateConcept(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: finanzasKeys.concepts() }),
   })
 }
