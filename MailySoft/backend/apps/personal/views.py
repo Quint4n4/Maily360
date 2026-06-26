@@ -90,6 +90,14 @@ class DoctorListCreateApi(TenantAPIView):
             allow_blank=True,
         )
 
+        def validate_cedula_profesional(self, value: str) -> str:
+            """Valida que la cédula profesional solo contenga dígitos (si no está vacía)."""
+            if value and not value.isdigit():
+                raise serializers.ValidationError(
+                    "La cédula profesional solo puede contener dígitos (0-9)."
+                )
+            return value
+
     def get(self, request: Request) -> Response:
         """Lista paginada de doctores activos del tenant actual."""
         search: str = request.query_params.get("search", "")
@@ -189,6 +197,15 @@ class DoctorDetailApi(TenantAPIView):
             required=False,
             allow_blank=True,
         )
+
+        def validate_cedula_profesional(self, value: str) -> str:
+            """Valida que la cédula profesional solo contenga dígitos (si no está vacía)."""
+            if value and not value.isdigit():
+                raise serializers.ValidationError(
+                    "La cédula profesional solo puede contener dígitos (0-9)."
+                )
+            return value
+
         # FIX-F1: is_active se eliminó de este serializer.
         # La (des)activación solo ocurre vía DELETE → doctor_deactivate.
         # Cualquier intento de cambiar is_active vía PATCH es rechazado

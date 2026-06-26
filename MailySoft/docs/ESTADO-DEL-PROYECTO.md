@@ -14,7 +14,7 @@
 |---|---|
 | **Stack backend** | Django 5 + DRF · PostgreSQL 16 · Redis · Celery · Docker |
 | **Stack frontend** | React 18 + Vite + TypeScript + Tailwind + TanStack Query (carpeta `web-soft/`) |
-| **Apps Django** | 12 (core, tenancy, authn, pacientes, personal, agenda, audit, notas, notificaciones, **clinica**, **recetas**, **finanzas**) |
+| **Apps Django** | 14 (core, tenancy, authn, pacientes, personal, agenda, audit, notas, notificaciones, clinica, **expediente**, recetas, finanzas, **plataforma**) |
 | **Tests backend** | Suite en verde — ver `pytest -q` para cifra actualizada (las cifras de hitos anteriores son históricas) |
 | **Repo** | github.com/Quint4n4/Maily360 · rama `main` |
 | **Cumplimiento** | NOM-024 / LFPDPPP (bitácora, minimización de PII, Argon2) |
@@ -53,8 +53,10 @@
 | **notas** | Notas y tareas: personales (privadas, con recordatorio), globales a un rol o a todos, y tareas (hecho/pendiente). Notas colaborativas (hilo con autor) viven en `agenda` (AgendaItemNote). |
 | **notificaciones** | Avisos in-app por fan-out on write. Modelo `Notification` con RLS. Tipos: `meeting`, `team_note`, `role_note`, `broadcast`, **`credential_review`**, **`credential_result`** (2026-06-23). Services: `notification_fanout`, `notification_mark_read`, `notification_mark_all_read`. |
 | **clinica** | Configuración de Mi Consultorio. `ClinicSettings` (logo, membrete, config de receta). `DoctorCredential` con **validación híbrida** (pendiente/validada/rechazada): el doctor captura, el admin valida, solo las validadas salen en la receta. `PatientCategory` con `kind` (custom/favorite/vip): catálogo de etiquetas de pacientes. Plantillas de texto (`ClinicTemplate`). |
+| **expediente** | **Expediente clínico / libro clínico (SOAP).** Alergias (con severidad), historia clínica (configurable por clínica vía preguntas extra), signos vitales (append-only, con series para gráficas), notas de evolución **inmutables** + addenda, diagnósticos (con estado/tipo), indicaciones de enfermería, imágenes de evolución, y **Libro Clínico** (vista JSON + PDF). 8 modelos `TenantAwareModel` con RLS e inmutabilidad para cumplir NOM-004. |
 | **recetas** | Recetas médicas inmutables (crear, anular con motivo, historial, PDF, copia de previa). Catálogo de medicamentos (global + custom por clínica). PDF con **WeasyPrint**: 2 formatos base (`compact` Farmacia / `digital` Paciente), 4 estilos de fondo (`ondas`/`minimal`/`barra`/`geometrico`), personalización de color, tipografía y secciones. Al emitir se generan **ambas versiones**. Módulo de medicamentos controlados (grupo COFEPRIS, folio, vigencia). |
 | **finanzas** | Facturación y cobranza (integrado 2026-06-25). Catálogo de **conceptos** cobrables con claves SAT, **configuración fiscal** del emisor (RFC, razón social, régimen, serie/folio), **cotizaciones** (con enviar/aceptar), **cargos** (cuentas por cobrar), **pagos** con asignación a cargos (`PaymentAllocation`), **estado de cuenta** por paciente, **CFDI 4.0** (emitir/consultar/cancelar) y **dashboard** de métricas. Arquitectura por capas + RLS, como el resto. |
+| **plataforma** | Panel interno de Maily (super-admin) **cross-tenant**: usa `all_objects` (bypass deliberado del `TenantManager`) para operar sobre todas las clínicas. Métricas globales, listado/detalle de clínicas, **alta de clínica** (tenant + dueño + contraseña temporal) y suspender/reactivar. Permisos por **rol de plataforma** (`super_admin`/`sales`/`engineering`). Sin modelos propios (opera sobre los de las demás apps). |
 
 ---
 
@@ -71,9 +73,10 @@
 | **Notificaciones — Luz recordatorios** | ✅ Real | `LuzRecordatorios.tsx` en `App.tsx`: luz amarilla parpadeante cuando hay recordatorios de hoy vencidos. Snooze de 4 h persiste en localStorage. |
 | **Mi Consultorio — Recetas** | ✅ Real | Configuración del formato de receta: 2 bases (`compact`/`digital`), 4 estilos de fondo, color de acento, tipografía, secciones, modo membrete. Vista previa en vivo. |
 | **Mi Consultorio — Credenciales** | ✅ Real | El médico captura credenciales académicas; el admin las valida/rechaza con motivo. Badge de estado. Solo las validadas salen en la receta impresa. |
+| **Expediente clínico** | ✅ Real | Libro clínico del paciente: alergias, historia clínica (configurable), signos vitales con gráficas, notas de evolución **SOAP** + addenda, diagnósticos, indicaciones de enfermería e imágenes. Componentes `LibroClinico.tsx` / `HistorialExpediente.tsx` / `ExpedienteDrawer.tsx` con su vertical `api/`+`hooks/`+`types/` conectado a `apps/expediente`. |
 | **Expediente — Recetas** | ✅ Real | Crear receta (buscador de medicamentos, renglones, recomendaciones, signos vitales, copia de previa). Historial. Botones **"Farmacia"** (media carta) y **"Paciente"** (carta completa). Anular con motivo. |
 | **Finanzas** | ✅ Real | `FinanzasPage` con 5 pestañas conectadas al backend: **Dashboard** (métricas + gráficas con `recharts`, rango 7/30/90 días), **Cobros y pagos**, **Cotizaciones**, **CFDI** y **Estado de cuenta** (exportable a **PDF**/**Excel** con `jspdf`/`xlsx`). Las pestañas visibles se filtran por rol (UX; el backend es la autoridad). |
-| **Panel de plataforma** (dueño SaaS) | 🔴 Mock | Sin backend (Fase 4 — pendiente de construir). |
+| **Panel de plataforma** (super-admin Maily) | 🟡 Backend listo · frontend mock | El **backend existe y funciona** (`apps/plataforma`: métricas globales, listado/detalle/alta/suspensión de clínicas, cross-tenant, con tests). Falta **conectar el frontend** (hoy con datos mock). |
 
 ---
 
@@ -124,6 +127,7 @@
   - **Eventos: reuniones y bloqueos** — sin paciente, con alcance (toda la clínica / uno o varios consultorios / uno o varios doctores), todo el día o por horas. **Bloqueo REAL**: impide agendar citas encima.
   - **Card unificado**: al hacer clic en una casilla, eliges Cita / Bloqueo / Reunión en el mismo modal.
 - **Expediente ↔ Agenda**: el expediente del paciente muestra su **próxima cita** y su **historial** reales; al cambiar el estado en la agenda, se refleja en el expediente.
+- **Expediente clínico (libro clínico)**: alergias, historia clínica configurable por clínica, signos vitales (append-only con series para gráficas), notas de evolución **SOAP inmutables** + addenda, diagnósticos, indicaciones de enfermería e imágenes de evolución; **Libro Clínico** exportable a PDF. Inmutabilidad y bitácora pensadas para NOM-004.
 - **Gestión de miembros (Equipo)**: alta de miembro con **contraseña robusta**, cambiar nombre/rol, **bloquear/reactivar** cuenta, **restablecer contraseña**, **perfil médico** (cédula/especialidad). Navegación: roles → usuarios → ficha.
 - **Avatares**: subir foto de pacientes y personal (validación segura de imágenes), mostradas en tarjetas, fichas y Topbar.
 - **Notificaciones in-app** (fan-out on write, polling 30 s):
@@ -212,12 +216,13 @@ El proxy de Vite reenvía `/api` y `/media` al backend. Entra con un usuario de 
 - **Especialidad/cédula al alta del médico** (quick win): hoy se capturan en la ficha, no en el form de "Nuevo miembro".
 - **Catálogo configurable de especialidades** (D-12): después del expediente clínico.
 - **Finanzas** (✅ integrado 2026-06-25): conectado al backend (conceptos, cotizaciones, cargos, pagos, estado de cuenta, CFDI 4.0, dashboard). Pendiente menor: la lib `xlsx` (export a Excel) tiene CVE sin parche oficial → evaluar reemplazo (p. ej. `exceljs`); validar el flujo de CFDI contra el PAC real.
-- **Panel de plataforma** (dueño SaaS): construir backend + conectar.
+- **Panel de plataforma** (super-admin Maily): el **backend ya está construido** (`apps/plataforma`, cross-tenant); falta **conectar el frontend** (hoy con datos mock).
 - **Recetas — pendientes normativos (COFEPRIS)**: campo estructurado de dosis/frecuencia/vía/duración; diagnóstico obligatorio/recomendado en la receta; validación de formato de cédula. Ver `recetas-formatos-plan.md §13`.
 - **Recetas — fuentes de marca**: hoy solo Helvetica/Times (fuentes seguras para WeasyPrint). Embeber TTF de marca requiere fase adicional.
 - **Etiquetas de paciente — UX secundaria**: asignar/quitar etiquetas desde el Expediente (hoy solo desde el formulario de edición). Filtro combinado (segmento + etiqueta).
 - **Endurecimiento prod**: IP real de auditoría vía proxy confiable (XFF), CSP, revisar `/verify/`.
-- **Dependencias con CVE (seguridad — prioridad alta)**: actualizar **Django 5.2.14 → 5.2.15** y **Pillow 10.4.0 → 12.2.0**.
+- **Brecha de RLS (defensa en profundidad — seguridad)**: 4 tablas `TenantAwareModel` no tienen política RLS en PostgreSQL (`notas_notes`, `agenda_item_notes`, `agenda_blocks`, `agenda_appointment_types`) — solo las protege el `TenantManager` (1 barrera, no 2). Crear sus migraciones `enable_rls` antes de producción con datos reales de varias clínicas. Contradice [ADR-0003](adr/0003-aislamiento-multi-tenant-shared-rls.md) y la afirmación de "doble barrera en todas las tablas".
+- **Dependencias con CVE (seguridad — prioridad alta)**: actualizar **Pillow 10.4.0 → 12.2.0** (Django ya está en 5.2.15 en `poetry.lock`). Quitar `xhtml2pdf` de `pyproject.toml` (ya reemplazada por WeasyPrint, pero sigue declarada e instalada) y corregir el docstring viejo en `recetas/views.py`.
 - **Limpieza de tooling backend**: ruff/black/mypy no forman parte del flujo de CI actual; alinear configuración y agregar a `Makefile`. En `web-soft/`: migrar ESLint a configuración flat v9.
 - **PII en títulos de notificación**: el título de una `team_note` incluye el nombre del paciente. Decidir si se mantiene (UX) o se anonimiza (LFPDPPP) y documentarlo en un ADR.
 
@@ -230,3 +235,4 @@ El proxy de Vite reenvía `/api` y `/media` al backend. Entra con un usuario de 
 - **Decisiones formales**: `docs/adr/` + [`DECISIONES-CLAVE.md`](DECISIONES-CLAVE.md).
 - **Diseño/planes**: `docs/design/`.
 - **Reportes por fase**: `docs/reports/`.
+- **Protocolo de auditoría de seguridad** (las 3 fases, repetible): [`docs/reports/PROTOCOLO-AUDITORIA-SEGURIDAD.md`](reports/PROTOCOLO-AUDITORIA-SEGURIDAD.md).

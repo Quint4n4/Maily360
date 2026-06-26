@@ -802,3 +802,141 @@ def test_doctor_output_serializer_cedulas_content() -> None:
     data = DoctorOutputSerializer(doctor_refreshed).data
 
     assert data["cedulas_adicionales"] == "11111111,22222222"
+
+
+# ===========================================================================
+# Validación: cedula_profesional solo acepta dígitos (POST y PATCH)
+# ===========================================================================
+
+
+class TestCedulaProfesionalValidation:
+    """Valida que la cédula profesional solo acepte dígitos (POST y PATCH).
+
+    Cubre el validator validate_cedula_profesional agregado a:
+    - DoctorListCreateApi.InputSerializer (POST /personal/doctores/)
+    - DoctorDetailApi.InputSerializer    (PATCH /personal/doctores/<id>/)
+
+    Regla: si value no está vacío y no es solo dígitos → 400.
+           Si está vacío o es solo dígitos → pasa.
+    """
+
+    # -----------------------------------------------------------------------
+    # POST /api/v1/personal/doctores/ — DoctorListCreateApi.InputSerializer
+    # -----------------------------------------------------------------------
+
+    def test_create_doctor_cedula_solo_digitos_acepta(self, db: None) -> None:
+        """POST con cedula_profesional="1234567" (solo dígitos) devuelve 201."""
+        # Arrange
+        tenant = TenantFactory()
+        membership = TenantMembershipFactory(tenant=tenant, role="doctor")
+        client = _make_member_client(tenant, role="admin")
+        payload = {
+            "membership_id": str(membership.id),
+            "specialty": "Cardiología",
+            "cedula_profesional": "1234567",
+        }
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.post(DOCTORES_LIST_URL, data=payload, format="json")
+
+        # Assert — el validator acepta la cadena numérica
+        assert response.status_code == 201
+
+    def test_create_doctor_cedula_con_letras_rechaza(self, db: None) -> None:
+        """POST con cedula_profesional="ABC123" (letras + dígitos) devuelve 400 con mensaje de dígitos."""
+        # Arrange
+        tenant = TenantFactory()
+        membership = TenantMembershipFactory(tenant=tenant, role="doctor")
+        client = _make_member_client(tenant, role="admin")
+        payload = {
+            "membership_id": str(membership.id),
+            "cedula_profesional": "ABC123",
+        }
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.post(DOCTORES_LIST_URL, data=payload, format="json")
+
+        # Assert — el validator rechaza la cadena mixta
+        assert response.status_code == 400
+        response_text = str(response.json())
+        assert "dígitos" in response_text
+
+    def test_create_doctor_cedula_vacia_acepta(self, db: None) -> None:
+        """POST con cedula_profesional="" (vacía) devuelve 201 — el campo es opcional."""
+        # Arrange
+        tenant = TenantFactory()
+        membership = TenantMembershipFactory(tenant=tenant, role="doctor")
+        client = _make_member_client(tenant, role="admin")
+        payload = {
+            "membership_id": str(membership.id),
+            "cedula_profesional": "",
+        }
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.post(DOCTORES_LIST_URL, data=payload, format="json")
+
+        # Assert — cédula vacía es válida (campo allow_blank=True)
+        assert response.status_code == 201
+
+    # -----------------------------------------------------------------------
+    # PATCH /api/v1/personal/doctores/<id>/ — DoctorDetailApi.InputSerializer
+    # -----------------------------------------------------------------------
+
+    def test_patch_doctor_cedula_solo_digitos_acepta(self, db: None) -> None:
+        """PATCH con cedula_profesional="9876543" (solo dígitos) devuelve 200."""
+        # Arrange
+        tenant = TenantFactory()
+        doctor = DoctorFactory(tenant=tenant, cedula_profesional="")
+        client = _make_member_client(tenant, role="admin")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                _doctor_detail_url(doctor.id),
+                data={"cedula_profesional": "9876543"},
+                format="json",
+            )
+
+        # Assert — actualización válida con solo dígitos
+        assert response.status_code == 200
+        assert response.json()["cedula_profesional"] == "9876543"
+
+    def test_patch_doctor_cedula_con_letras_rechaza(self, db: None) -> None:
+        """PATCH con cedula_profesional="MED1234" (letras + dígitos) devuelve 400."""
+        # Arrange
+        tenant = TenantFactory()
+        doctor = DoctorFactory(tenant=tenant, cedula_profesional="")
+        client = _make_member_client(tenant, role="admin")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                _doctor_detail_url(doctor.id),
+                data={"cedula_profesional": "MED1234"},
+                format="json",
+            )
+
+        # Assert — el validator rechaza la cadena con letras
+        assert response.status_code == 400
+
+    def test_patch_doctor_cedula_vacia_acepta(self, db: None) -> None:
+        """PATCH con cedula_profesional="" (vacía) devuelve 200 — permite borrar la cédula."""
+        # Arrange
+        tenant = TenantFactory()
+        doctor = DoctorFactory(tenant=tenant, cedula_profesional="1111111")
+        client = _make_member_client(tenant, role="admin")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                _doctor_detail_url(doctor.id),
+                data={"cedula_profesional": ""},
+                format="json",
+            )
+
+        # Assert — cédula vacía es un borrado válido
+        assert response.status_code == 200
+        assert response.json()["cedula_profesional"] == ""

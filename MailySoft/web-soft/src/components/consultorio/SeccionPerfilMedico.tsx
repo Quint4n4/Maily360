@@ -118,9 +118,10 @@ export default function SeccionPerfilMedico() {
         <input
           id="cedulas"
           className="input max-w-xl"
+          inputMode="numeric"
           placeholder="1234567, 7654321"
           value={cedulas}
-          onChange={(e) => setCedulas(e.target.value)}
+          onChange={(e) => setCedulas(e.target.value.replace(/[^\d,\s]/g, ''))}
         />
         <Nota>Sepáralas con coma. La cédula profesional principal se edita en Personal.</Nota>
         <div className="mt-3">
@@ -395,9 +396,12 @@ function SeccionCredenciales({ doctorId }: { doctorId: string }) {
               <input
                 id="cred-num"
                 className="input"
+                inputMode="numeric"
                 placeholder="Ej. 1234567"
                 value={form.credential_number}
-                onChange={set('credential_number')}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, credential_number: e.target.value.replace(/\D/g, '') }))
+                }
               />
             </div>
             <div>

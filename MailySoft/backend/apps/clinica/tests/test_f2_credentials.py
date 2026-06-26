@@ -954,3 +954,185 @@ def test_credential_validation_notifica_al_medico() -> None:
     assert Notification.objects.filter(
         recipient=doctor_user, kind=NotificationKind.CREDENTIAL_RESULT
     ).exists()
+
+
+# ---------------------------------------------------------------------------
+# Validación: credential_number solo acepta dígitos (DoctorCredentialInputSerializer)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestCredentialNumberDigitValidation:
+    """Valida que credential_number en DoctorCredentialInputSerializer solo acepte dígitos.
+
+    Cubre el refuerzo de validate_credential_number en apps/clinica/serializers.py:
+    - Si strip no está vacío y no es solo dígitos → 400.
+    - Cero anti-HTML previo al check de dígitos (rama ya cubierta por otros tests).
+    """
+
+    def test_credential_number_solo_digitos_acepta(self) -> None:
+        """POST con credential_number="12345678" (solo dígitos) devuelve 201."""
+        # Arrange
+        tenant = TenantFactory()
+        user = _member(tenant, role="owner")
+        doctor = DoctorFactory(tenant=tenant)
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        url = URL_CRED_LIST.format(doctor_id=str(doctor.id))
+        payload = {
+            "title": "Médico Cirujano",
+            "institution": "UNAM",
+            "kind": "profesional",
+            "credential_number": "12345678",
+        }
+
+        # Act
+        ctx_patches = _api_tenant_ctx(tenant)
+        with ctx_patches[0], ctx_patches[1], ctx_patches[2]:
+            resp = client.post(url, payload, format="json")
+
+        # Assert — número de cédula solo con dígitos es aceptado
+        assert resp.status_code == 201
+        assert resp.data["credential_number"] == "12345678"
+
+    def test_credential_number_con_letras_rechaza(self) -> None:
+        """POST con credential_number="ABC123" (letras + dígitos) devuelve 400 con mensaje de dígitos."""
+        # Arrange
+        tenant = TenantFactory()
+        user = _member(tenant, role="owner")
+        doctor = DoctorFactory(tenant=tenant)
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        url = URL_CRED_LIST.format(doctor_id=str(doctor.id))
+        payload = {
+            "title": "Médico Cirujano",
+            "institution": "UNAM",
+            "kind": "profesional",
+            "credential_number": "ABC123",
+        }
+
+        # Act
+        ctx_patches = _api_tenant_ctx(tenant)
+        with ctx_patches[0], ctx_patches[1], ctx_patches[2]:
+            resp = client.post(url, payload, format="json")
+
+        # Assert — el validator rechaza cadena con letras
+        assert resp.status_code == 400
+        assert "dígitos" in str(resp.data)
+
+    def test_credential_number_vacio_acepta(self) -> None:
+        """POST con credential_number="" (vacío) devuelve 201 — el campo es opcional."""
+        # Arrange
+        tenant = TenantFactory()
+        user = _member(tenant, role="owner")
+        doctor = DoctorFactory(tenant=tenant)
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        url = URL_CRED_LIST.format(doctor_id=str(doctor.id))
+        payload = {
+            "title": "Médico Cirujano",
+            "institution": "UNAM",
+            "kind": "profesional",
+            "credential_number": "",
+        }
+
+        # Act
+        ctx_patches = _api_tenant_ctx(tenant)
+        with ctx_patches[0], ctx_patches[1], ctx_patches[2]:
+            resp = client.post(url, payload, format="json")
+
+        # Assert — cédula vacía es válida (campo opcional/allow_blank)
+        assert resp.status_code == 201
+        assert resp.data["credential_number"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Validación: cedulas_adicionales (DoctorProfileImageInputSerializer — nivel serializer)
+# ---------------------------------------------------------------------------
+
+
+class TestCedulasAdicionalesValidation:
+    """Prueba directa del serializer DoctorProfileImageInputSerializer.cedulas_adicionales.
+
+    Se prueba el serializer de forma aislada (sin HTTP) para cubrir exactamente la
+    lógica de validate_cedulas_adicionales: split por coma, strip, isdigit por token.
+
+    Casos cubiertos:
+    - Todos los tokens son dígitos → válido.
+    - Al menos un token contiene letras → ValidationError con mensaje "dígitos".
+    - Valor vacío → válido (campo opcional).
+    - Solo espacios/comas → válido (filtra tokens vacíos antes de validar).
+    """
+
+    def test_cedulas_adicionales_solo_digitos_acepta(self) -> None:
+        """value="1234,5678,9012" — todos los tokens son dígitos → is_valid() True."""
+        # Arrange
+        from apps.clinica.serializers import DoctorProfileImageInputSerializer
+
+        # Act
+        s = DoctorProfileImageInputSerializer(data={"cedulas_adicionales": "1234,5678,9012"})
+
+        # Assert
+        assert s.is_valid(), s.errors
+
+    def test_cedulas_adicionales_con_letras_rechaza(self) -> None:
+        """value="1234,ABC,5678" — token "ABC" contiene letras → ValidationError."""
+        # Arrange
+        from apps.clinica.serializers import DoctorProfileImageInputSerializer
+
+        # Act
+        s = DoctorProfileImageInputSerializer(data={"cedulas_adicionales": "1234,ABC,5678"})
+
+        # Assert
+        assert not s.is_valid()
+        assert "cedulas_adicionales" in s.errors
+        error_text = str(s.errors["cedulas_adicionales"])
+        assert "dígitos" in error_text
+
+    def test_cedulas_adicionales_vacia_acepta(self) -> None:
+        """value="" — campo vacío es válido (allow_blank=True y strip queda vacío)."""
+        # Arrange
+        from apps.clinica.serializers import DoctorProfileImageInputSerializer
+
+        # Act
+        s = DoctorProfileImageInputSerializer(data={"cedulas_adicionales": ""})
+
+        # Assert
+        assert s.is_valid(), s.errors
+
+    def test_cedulas_adicionales_solo_espacios_acepta(self) -> None:
+        """value="  " — solo espacios; strip queda vacío → pasa sin validar tokens."""
+        # Arrange
+        from apps.clinica.serializers import DoctorProfileImageInputSerializer
+
+        # Act
+        s = DoctorProfileImageInputSerializer(data={"cedulas_adicionales": "  "})
+
+        # Assert — strip vacío sale del if antes de iterar tokens
+        assert s.is_valid(), s.errors
+
+    def test_cedulas_adicionales_token_mixto_rechaza(self) -> None:
+        """value="12345,MED67" — segundo token mezcla letras y dígitos → ValidationError."""
+        # Arrange
+        from apps.clinica.serializers import DoctorProfileImageInputSerializer
+
+        # Act
+        s = DoctorProfileImageInputSerializer(data={"cedulas_adicionales": "12345,MED67"})
+
+        # Assert
+        assert not s.is_valid()
+        assert "cedulas_adicionales" in s.errors
+
+    def test_cedulas_adicionales_un_solo_token_valido_acepta(self) -> None:
+        """value="9999999" — un solo token numérico → is_valid() True."""
+        # Arrange
+        from apps.clinica.serializers import DoctorProfileImageInputSerializer
+
+        # Act
+        s = DoctorProfileImageInputSerializer(data={"cedulas_adicionales": "9999999"})
+
+        # Assert
+        assert s.is_valid(), s.errors

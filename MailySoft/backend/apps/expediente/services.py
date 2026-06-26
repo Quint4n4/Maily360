@@ -807,7 +807,8 @@ def evolution_note_create(
     # Best-effort: notificar a enfermería si hay indicaciones.
     # El try/except garantiza que un fallo en el fanout NO tumba la creación
     # de la evolución (disponibilidad clínica > entrega garantizada de avisos).
-    # Log sin PII: solo UUIDs.
+    # Notificación sin PII: el título y cuerpo son genéricos; la navegación
+    # usa target_type=PATIENT + target_id (UUID del paciente).
     if indicaciones_enfermeria.strip():
         try:
             nurses = users_with_role(tenant=tenant, role=Role.NURSE)
@@ -815,8 +816,8 @@ def evolution_note_create(
                 tenant=tenant,
                 recipients=nurses,
                 kind=NotificationKind.NURSING_INSTRUCTION,
-                title=f"Indicaciones de enfermería · {patient.full_name}",
-                body=indicaciones_enfermeria[:200],
+                title="Indicaciones de enfermería pendientes",
+                body="Hay nuevas indicaciones en el expediente del paciente.",
                 actor=user,
                 target_type=NotificationTarget.PATIENT,
                 target_id=patient.id,
@@ -1155,14 +1156,12 @@ def evolution_image_add(
             "La nota de evolución no pertenece a esta clínica."
         )
 
-    # MEDIO-2 — Límite de imágenes activas por nota.
-    # Contamos solo las imágenes sin baja lógica (deleted_at IS NULL).
-    # Usamos all_objects para evitar que el TenantManager interfiera con el
-    # filtro explícito de evolución (defensa en profundidad: mismo tenant ya
-    # validado arriba).
-    active_count = EvolutionImage.all_objects.filter(
+    # Límite de imágenes activas por nota.
+    # Usamos el manager por defecto (objects) que ya excluye soft-deleted y
+    # filtra por tenant (validado arriba). No es necesario all_objects ni
+    # filtrar deleted_at manualmente.
+    active_count = EvolutionImage.objects.filter(
         evolution=evolution,
-        deleted_at__isnull=True,
     ).count()
     if active_count >= MAX_IMAGES_PER_EVOLUTION:
         raise ValidationError(

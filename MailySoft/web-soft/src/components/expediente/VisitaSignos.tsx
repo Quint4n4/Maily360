@@ -18,6 +18,8 @@ import type { VitalSignsInput, VitalSignsRecord } from '../../types/expediente'
 import { useCreateVitalSigns, useVitalSigns } from '../../hooks/expediente'
 import { formatFechaHora } from '../../lib/fecha'
 import { erroresDe } from '../../lib/apiErrors'
+import type { VitalKey } from '../../lib/validacion'
+import { VITAL_RANGES, errorDeSignoVital } from '../../lib/validacion'
 import { ErroresAlerta } from './ui'
 
 /** Campos del formulario de la toma de hoy (string en el input → number al enviar). */
@@ -46,7 +48,7 @@ function num(v: string): number | undefined {
 }
 
 /** Campos del formulario en orden, con etiqueta y unidad. */
-const CAMPOS: { key: keyof SignosForm; label: string; unidad: string; placeholder: string }[] = [
+const CAMPOS: { key: VitalKey; label: string; unidad: string; placeholder: string }[] = [
   { key: 'systolic', label: 'PA sistólica', unidad: 'mmHg', placeholder: 'Ej. 120' },
   { key: 'diastolic', label: 'PA diastólica', unidad: 'mmHg', placeholder: 'Ej. 80' },
   { key: 'temperature_c', label: 'Temperatura', unidad: '°C', placeholder: 'Ej. 36.5' },
@@ -96,6 +98,13 @@ export default function VisitaSignos({ paciente, puedeCapturar }: VisitaSignosPr
       setErrores(['Captura al menos un signo vital para guardar la toma.'])
       return
     }
+    // Validar rangos de signos en vivo (el backend es la autoridad).
+    const errSignos: string[] = []
+    for (const c of CAMPOS) {
+      const msg = errorDeSignoVital(c.key, form[c.key])
+      if (msg) errSignos.push(`${c.label}: ${msg}.`)
+    }
+    if (errSignos.length > 0) { setErrores(errSignos); return }
     try {
       await crear.mutateAsync(input)
       setForm(FORM_VACIO)
@@ -152,20 +161,27 @@ export default function VisitaSignos({ paciente, puedeCapturar }: VisitaSignosPr
             <div className="space-y-3 rounded-xl p-3.5" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(14,124,123,0.2)' }}>
               <ErroresAlerta errores={errores} />
               <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
-                {CAMPOS.map(c => (
-                  <div key={c.key}>
-                    <label className="label">
-                      {c.label} <span className="text-gray-400 font-normal">({c.unidad})</span>
-                    </label>
-                    <input
-                      className="input"
-                      type="number" step="any" inputMode="decimal"
-                      placeholder={c.placeholder}
-                      value={form[c.key]}
-                      onChange={set(c.key)}
-                    />
-                  </div>
-                ))}
+                {CAMPOS.map(c => {
+                  const error = errorDeSignoVital(c.key, form[c.key])
+                  const [min, max] = VITAL_RANGES[c.key]
+                  return (
+                    <div key={c.key}>
+                      <label className="label">
+                        {c.label} <span className="text-gray-400 font-normal">({c.unidad})</span>
+                      </label>
+                      <input
+                        className={`input${error ? ' input-error' : ''}`}
+                        type="number" step="any" inputMode="decimal"
+                        min={min} max={max}
+                        placeholder={c.placeholder}
+                        value={form[c.key]}
+                        onChange={set(c.key)}
+                        aria-invalid={error ? true : undefined}
+                      />
+                      {error && <p className="text-[11px] text-red-600 mt-0.5">{error}</p>}
+                    </div>
+                  )
+                })}
               </div>
               <div className="flex justify-end gap-2">
                 <button

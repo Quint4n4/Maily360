@@ -13,6 +13,8 @@ import type { ExtraParamKey, SeriesKey, VitalSignsInput, VitalSignsRecord } from
 import { useCreateVitalSigns, useVitalSigns, useVitalSignsSeries } from '../../hooks/expediente'
 import { formatFechaHora } from '../../lib/fecha'
 import { erroresDe } from '../../lib/apiErrors'
+import type { VitalKey } from '../../lib/validacion'
+import { VITAL_RANGES, errorDeSignoVital } from '../../lib/validacion'
 import { Card, Cargando, ErroresAlerta, Vacio } from './ui'
 import TendenciaChart from './TendenciaChart'
 
@@ -43,6 +45,19 @@ const FORM_VACIO: SignosForm = {
 }
 
 const EXTRA_KEYS: ExtraParamKey[] = ['colesterol', 'trigliceridos', 'urea', 'creatinina', 'hemoglobina']
+
+/** Signos vitales con rango fisiológico validable en vivo (VITAL_RANGES). */
+const VITALES_VALIDABLES: { key: VitalKey; label: string }[] = [
+  { key: 'weight_kg', label: 'Peso' },
+  { key: 'height_m', label: 'Estatura' },
+  { key: 'heart_rate', label: 'Frecuencia Cardiaca' },
+  { key: 'resp_rate', label: 'Frecuencia Respiratoria' },
+  { key: 'systolic', label: 'Presión Sistólica' },
+  { key: 'diastolic', label: 'Presión Diastólica' },
+  { key: 'temperature_c', label: 'Temperatura' },
+  { key: 'oxygen_saturation', label: 'Saturación de Oxígeno' },
+  { key: 'glucose', label: 'Glucosa' },
+]
 
 /** num | undefined desde un string del input. */
 function num(v: string): number | undefined {
@@ -85,6 +100,13 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
 
   const guardar = async () => {
     setErrores([])
+    // Validar rangos de los signos vitales en vivo (el backend es la autoridad).
+    const errSignos: string[] = []
+    for (const c of VITALES_VALIDABLES) {
+      const msg = errorDeSignoVital(c.key, form[c.key])
+      if (msg) errSignos.push(`${c.label}: ${msg}.`)
+    }
+    if (errSignos.length > 0) { setErrores(errSignos); return }
     const extra_params: VitalSignsInput['extra_params'] = {}
     for (const k of EXTRA_KEYS) {
       const v = num(form[k])
@@ -134,15 +156,15 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
               <ErroresAlerta errores={errores} />
               <Campo label="Fecha/hora de la toma" type="datetime-local" value={form.measured_at} onChange={set('measured_at')} />
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-                <Campo label="Peso" value={form.weight_kg} onChange={set('weight_kg')} icon={Scale} iconColor="#16a34a" placeholder="Ej. 70.5 kg" />
-                <Campo label="Estatura" value={form.height_m} onChange={set('height_m')} icon={Ruler} iconColor="#2563eb" placeholder="Ej. 1.65 m" />
-                <Campo label="Frecuencia Cardiaca" value={form.heart_rate} onChange={set('heart_rate')} icon={Heart} iconColor="#dc2626" placeholder="Ej. 72 lpm" />
-                <Campo label="Frecuencia Respiratoria" value={form.resp_rate} onChange={set('resp_rate')} icon={Wind} iconColor="#7c3aed" placeholder="Ej. 16 rpm" />
-                <Campo label="Presión Sistólica" value={form.systolic} onChange={set('systolic')} icon={Gauge} iconColor="#ea580c" placeholder="Ej. 120 mmHg" />
-                <Campo label="Presión Diastólica" value={form.diastolic} onChange={set('diastolic')} icon={Gauge} iconColor="#ea580c" placeholder="Ej. 80 mmHg" />
-                <Campo label="Temperatura" value={form.temperature_c} onChange={set('temperature_c')} icon={Thermometer} iconColor="#0d9488" placeholder="Ej. 36.5 °C" />
-                <Campo label="Saturación de Oxígeno" value={form.oxygen_saturation} onChange={set('oxygen_saturation')} icon={Activity} iconColor="#ca8a04" placeholder="Ej. 98 %" />
-                <Campo label="Glucosa" value={form.glucose} onChange={set('glucose')} icon={Droplet} iconColor="#0284c7" placeholder="Ej. 90 mg/dL" />
+                <Campo label="Peso" value={form.weight_kg} onChange={set('weight_kg')} icon={Scale} iconColor="#16a34a" placeholder="Ej. 70.5 kg" vitalKey="weight_kg" />
+                <Campo label="Estatura" value={form.height_m} onChange={set('height_m')} icon={Ruler} iconColor="#2563eb" placeholder="Ej. 1.65 m" vitalKey="height_m" />
+                <Campo label="Frecuencia Cardiaca" value={form.heart_rate} onChange={set('heart_rate')} icon={Heart} iconColor="#dc2626" placeholder="Ej. 72 lpm" vitalKey="heart_rate" />
+                <Campo label="Frecuencia Respiratoria" value={form.resp_rate} onChange={set('resp_rate')} icon={Wind} iconColor="#7c3aed" placeholder="Ej. 16 rpm" vitalKey="resp_rate" />
+                <Campo label="Presión Sistólica" value={form.systolic} onChange={set('systolic')} icon={Gauge} iconColor="#ea580c" placeholder="Ej. 120 mmHg" vitalKey="systolic" />
+                <Campo label="Presión Diastólica" value={form.diastolic} onChange={set('diastolic')} icon={Gauge} iconColor="#ea580c" placeholder="Ej. 80 mmHg" vitalKey="diastolic" />
+                <Campo label="Temperatura" value={form.temperature_c} onChange={set('temperature_c')} icon={Thermometer} iconColor="#0d9488" placeholder="Ej. 36.5 °C" vitalKey="temperature_c" />
+                <Campo label="Saturación de Oxígeno" value={form.oxygen_saturation} onChange={set('oxygen_saturation')} icon={Activity} iconColor="#ca8a04" placeholder="Ej. 98 %" vitalKey="oxygen_saturation" />
+                <Campo label="Glucosa" value={form.glucose} onChange={set('glucose')} icon={Droplet} iconColor="#0284c7" placeholder="Ej. 90 mg/dL" vitalKey="glucose" />
               </div>
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 pt-2">Laboratorio (opcional)</p>
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
@@ -255,7 +277,7 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
 }
 
 function Campo({
-  label, value, onChange, type = 'number', icon: Icon, iconColor = '#9A7B1E', placeholder,
+  label, value, onChange, type = 'number', icon: Icon, iconColor = '#9A7B1E', placeholder, vitalKey,
 }: {
   label: string
   value: string
@@ -264,7 +286,11 @@ function Campo({
   icon?: typeof Activity
   iconColor?: string
   placeholder?: string
+  /** Si es un signo vital validable, su clave para validar rango en vivo (VITAL_RANGES). */
+  vitalKey?: VitalKey
 }) {
+  const error = vitalKey ? errorDeSignoVital(vitalKey, value) : null
+  const rango = vitalKey ? VITAL_RANGES[vitalKey] : null
   return (
     <div>
       <label className="label">{label}</label>
@@ -277,8 +303,17 @@ function Campo({
             <Icon className="w-4 h-4" style={{ color: iconColor }} />
           </span>
         )}
-        <input className="input flex-1" type={type} step="any" value={value} onChange={onChange} placeholder={placeholder} />
+        <input
+          className={`input flex-1${error ? ' input-error' : ''}`}
+          type={type} step="any"
+          inputMode={type === 'number' ? 'decimal' : undefined}
+          min={rango ? rango[0] : undefined}
+          max={rango ? rango[1] : undefined}
+          value={value} onChange={onChange} placeholder={placeholder}
+          aria-invalid={error ? true : undefined}
+        />
       </div>
+      {error && <p className="text-[11px] text-red-600 mt-0.5">{error}</p>}
     </div>
   )
 }

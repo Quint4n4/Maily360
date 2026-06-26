@@ -330,7 +330,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                     <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                       <div>
                         <label className="label">Cédula profesional</label>
-                        <input className="input" value={cedula} onChange={e => setCedula(e.target.value)} placeholder="Ej. 1234567" />
+                        <input className="input" inputMode="numeric" value={cedula} onChange={e => setCedula(e.target.value.replace(/\D/g, ''))} placeholder="Ej. 1234567" />
                       </div>
                       <div>
                         <label className="label">Especialidad</label>
