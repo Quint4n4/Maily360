@@ -94,6 +94,12 @@ class TestDashboardMetrics:
         tenant = TenantFactory()
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
+        # Arrange: cargo de 300 para cubrir los dos pagos sucesivos (100 cash +
+        # 200 card). El primero abona 100 (PARTIAL), el segundo salda el resto.
+        charge_create(
+            tenant=tenant, user=user, patient=patient,
+            amount=Decimal("300.00"), description="Consulta",
+        )
         payment_register(tenant=tenant, user=user, patient=patient, amount=Decimal("100.00"), method="cash")
         payment_register(tenant=tenant, user=user, patient=patient, amount=Decimal("200.00"), method="card")
 
@@ -137,6 +143,16 @@ class TestDashboardMetrics:
         user = UserFactory()
         pa = PatientFactory(tenant=tenant_a)
         pb = PatientFactory(tenant=tenant_b)
+        # Arrange: cada paciente necesita deuda pendiente que cubra su pago
+        # correspondiente (la regla impide saldos a favor).
+        charge_create(
+            tenant=tenant_a, user=user, patient=pa,
+            amount=Decimal("100.00"), description="Consulta A",
+        )
+        charge_create(
+            tenant=tenant_b, user=user, patient=pb,
+            amount=Decimal("999.00"), description="Consulta B",
+        )
         payment_register(tenant=tenant_a, user=user, patient=pa, amount=Decimal("100.00"))
         payment_register(tenant=tenant_b, user=user, patient=pb, amount=Decimal("999.00"))
 

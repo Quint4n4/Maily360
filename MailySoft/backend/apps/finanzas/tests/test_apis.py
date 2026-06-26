@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from rest_framework.test import APIClient
 
+from apps.finanzas.services import charge_create
 from tests.factories import (
     ChargeFactory,
     PatientFactory,
@@ -169,6 +170,14 @@ class TestPaymentPermissions:
         tenant = TenantFactory()
         patient = PatientFactory(tenant=tenant)
         client = _member_client(tenant, "reception")
+        # Arrange: crear un cargo previo que cubra el pago (regla: no saldos a favor).
+        # Se usa un UserFactory auxiliar; el cargo se crea directamente vía servicio,
+        # fuera del _tenant_context porque charge_create no necesita contexto activo.
+        aux_user = UserFactory()
+        charge_create(
+            tenant=tenant, user=aux_user, patient=patient,
+            amount=Decimal("300.00"), description="Consulta",
+        )
         with _tenant_context(tenant):
             resp = client.post(
                 PAYMENTS_URL,

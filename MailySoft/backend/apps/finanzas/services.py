@@ -555,6 +555,24 @@ def payment_register(
     allocations = allocations or []
     amount = _q2(amount)
 
+    # No se permiten saldos a favor: el pago no puede exceder la deuda pendiente
+    # total del paciente (suma de saldos de sus cargos pendientes/parciales).
+    deuda_pendiente = sum(
+        (
+            c.balance
+            for c in Charge.objects.filter(
+                patient=patient,
+                status__in=[Charge.Status.PENDING, Charge.Status.PARTIAL],
+            )
+        ),
+        ZERO,
+    )
+    if amount > deuda_pendiente:
+        raise ValidationError(
+            f"El pago ({amount}) excede el saldo pendiente del paciente "
+            f"({deuda_pendiente}). No se permiten pagos a favor."
+        )
+
     with transaction.atomic():
         payment = Payment.objects.create(
             tenant=tenant,

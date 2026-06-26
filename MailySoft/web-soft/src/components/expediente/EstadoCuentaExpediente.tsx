@@ -79,6 +79,8 @@ export default function EstadoCuentaExpediente({ paciente, puedeCobrar }: Props)
 
   const data = statement.data
   const cargos = charges.data?.results ?? []
+  // Solo importa cuánto debe: el backend ya no permite saldos a favor.
+  const deuda = Math.max(0, data.balance)
 
   return (
     <div className="space-y-4">
@@ -103,19 +105,17 @@ export default function EstadoCuentaExpediente({ paciente, puedeCobrar }: Props)
         )}
       </div>
 
-      {/* Resumen de totales */}
-      <div className="grid grid-cols-3 gap-3">
-        <SummaryCard label="Total cargos" value={formatMoney(data.total_charged)} tint="#7C3AED" />
-        <SummaryCard label="Total pagos" value={formatMoney(data.total_paid)} tint="#0F766E" />
-        <SummaryCard
-          label={data.balance < 0 ? 'Saldo a favor' : 'Saldo por cobrar'}
-          value={
-            data.balance < 0
-              ? `${formatMoney(Math.abs(data.balance))} a favor`
-              : formatMoney(data.balance)
-          }
-          tint={data.balance < 0 ? '#0F766E' : ORO}
-        />
+      {/* Métrica única: cuánto debe */}
+      <div
+        className="inline-flex items-baseline gap-3 rounded-xl px-5 py-3"
+        style={{ background: `${ORO}10`, border: `1px solid ${ORO}22` }}
+      >
+        <span className="text-[11px] uppercase tracking-wide" style={{ color: '#7A756C' }}>
+          Saldo por cobrar
+        </span>
+        <span className="text-2xl font-bold" style={{ color: deuda > 0 ? ORO : '#0F766E' }}>
+          {deuda > 0 ? formatMoney(deuda) : 'Al corriente'}
+        </span>
       </div>
 
       {/* Selector de vista */}
@@ -259,14 +259,5 @@ function EstadoBadge({ status, label }: { status: ChargeStatus; label: string })
     >
       {label}
     </span>
-  )
-}
-
-function SummaryCard({ label, value, tint }: { label: string; value: string; tint: string }) {
-  return (
-    <div className="rounded-xl p-3" style={{ background: `${tint}10`, border: `1px solid ${tint}22` }}>
-      <div className="text-[11px]" style={{ color: '#7A756C' }}>{label}</div>
-      <div className="text-lg font-bold" style={{ color: tint }}>{value}</div>
-    </div>
   )
 }

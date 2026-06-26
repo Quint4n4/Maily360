@@ -262,8 +262,7 @@ export default function ExpedienteDrawer({
 /**
  * Badge de saldo del paciente en el encabezado.
  *   > 0 → "Saldo: $X por cobrar" (ámbar/rojo).
- *   = 0 → "Sin adeudo" (verde).
- *   < 0 → "$X a favor" (verde, saldo a favor del paciente).
+ *   ≤ 0 → "Sin adeudo" (verde). No existen saldos a favor (el backend los impide).
  */
 function SaldoBadge({ balance }: { balance: number }) {
   if (balance > 0) {
@@ -277,13 +276,6 @@ function SaldoBadge({ balance }: { balance: number }) {
         }}
       >
         Saldo: {formatMoney(balance)} por cobrar
-      </span>
-    )
-  }
-  if (balance < 0) {
-    return (
-      <span className="badge badge-success">
-        {formatMoney(Math.abs(balance))} a favor
       </span>
     )
   }

@@ -326,6 +326,12 @@ class TestCfdiServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         ClinicFiscalConfigFactory(tenant=tenant)
+        # Arrange: crear un cargo pendiente que cubra el monto del pago (regla:
+        # pago no puede exceder la deuda pendiente del paciente).
+        charge_create(
+            tenant=tenant, user=user, patient=patient,
+            amount=Decimal("500.00"), description="Consulta general",
+        )
         payment = payment_register(
             tenant=tenant, user=user, patient=patient, amount=Decimal("500.00"),
         )
@@ -344,6 +350,13 @@ class TestCfdiServices:
         tenant = TenantFactory()
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
+        # Arrange: crear cargo previo para que payment_register no rechace por
+        # falta de deuda pendiente (la regla de no-saldo-a-favor es anterior a la
+        # validación de config fiscal que este test pretende ejercitar).
+        charge_create(
+            tenant=tenant, user=user, patient=patient,
+            amount=Decimal("500.00"), description="Consulta general",
+        )
         payment = payment_register(
             tenant=tenant, user=user, patient=patient, amount=Decimal("500.00"),
         )
@@ -359,6 +372,11 @@ class TestCfdiServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         ClinicFiscalConfigFactory(tenant=tenant)
+        # Arrange: crear cargo previo para cubrir la deuda del paciente.
+        charge_create(
+            tenant=tenant, user=user, patient=patient,
+            amount=Decimal("500.00"), description="Consulta general",
+        )
         payment = payment_register(
             tenant=tenant, user=user, patient=patient, amount=Decimal("500.00"),
         )
@@ -377,6 +395,14 @@ class TestCfdiServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         ClinicFiscalConfigFactory(tenant=tenant)
+        # Arrange: un cargo de 300 cubre los dos pagos sucesivos (100 + 200).
+        # El primer pago deja 200 pendientes en el cargo (PARTIAL), el segundo
+        # lo salda por completo. Así ambos payment_register pasan la validación
+        # de deuda pendiente y el test puede ejercitar el folio consecutivo.
+        charge_create(
+            tenant=tenant, user=user, patient=patient,
+            amount=Decimal("300.00"), description="Tratamiento",
+        )
         p1 = payment_register(tenant=tenant, user=user, patient=patient, amount=Decimal("100.00"))
         p2 = payment_register(tenant=tenant, user=user, patient=patient, amount=Decimal("200.00"))
 
