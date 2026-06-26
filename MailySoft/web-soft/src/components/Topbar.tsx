@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ChevronDown, LogOut, User, Building2, Briefcase } from 'lucide-react'
+import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ScrollText, ChevronDown, LogOut, User, Building2, Briefcase } from 'lucide-react'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
 import { Modulo, accesoModulo, puedeAccederConsultorio, ROLE_LABEL } from '../auth/permisos'
@@ -12,11 +12,12 @@ interface TopbarProps {
 }
 
 const NAV: { key: Modulo; label: string; icon: typeof BarChart3 }[] = [
-  { key: 'finanzas',  label: 'Finanzas',  icon: BarChart3 },
-  { key: 'agenda',    label: 'Agenda',    icon: CalendarDays },
-  { key: 'contactos', label: 'Pacientes', icon: Users },
-  { key: 'personal',  label: 'Personal',  icon: Stethoscope },
-  { key: 'notas',     label: 'Notas',     icon: StickyNote },
+  { key: 'finanzas',     label: 'Finanzas',     icon: BarChart3 },
+  { key: 'cotizaciones', label: 'Cotizaciones', icon: ScrollText },
+  { key: 'agenda',       label: 'Agenda',       icon: CalendarDays },
+  { key: 'contactos',    label: 'Pacientes',    icon: Users },
+  { key: 'personal',     label: 'Personal',     icon: Stethoscope },
+  { key: 'notas',        label: 'Notas',        icon: StickyNote },
 ]
 
 export default function Topbar({ active = 'agenda' }: TopbarProps) {

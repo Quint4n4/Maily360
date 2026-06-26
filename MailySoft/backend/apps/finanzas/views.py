@@ -42,6 +42,7 @@ from apps.core.permissions import (
     FinanceQuotePermission,
     HasClinicRole,
     PatientStatementPermission,
+    QuotePermission,
     RetentionPermission,
 )
 from apps.core.tenant_context import get_current_tenant
@@ -296,7 +297,7 @@ class QuoteListCreateApi(TenantAPIView):
     POST /api/v1/finanzas/cotizaciones/ — crea una cotización (borrador).
     """
 
-    permission_classes = [IsAuthenticated, FinanceQuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission]
 
     class ItemSerializer(serializers.Serializer):
         concept_id = serializers.UUIDField(required=False, allow_null=True)
@@ -354,7 +355,7 @@ class QuoteDetailApi(TenantAPIView):
     PATCH /api/v1/finanzas/cotizaciones/<uuid>/  — rechazar/vencer (status).
     """
 
-    permission_classes = [IsAuthenticated, FinanceQuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission]
 
     class InputSerializer(serializers.Serializer):
         status = serializers.ChoiceField(
@@ -393,7 +394,7 @@ class QuoteDetailApi(TenantAPIView):
 class QuoteSendApi(TenantAPIView):
     """POST /api/v1/finanzas/cotizaciones/<uuid>/enviar/ — marca como enviada."""
 
-    permission_classes = [IsAuthenticated, FinanceQuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission]
 
     def post(self, request: Request, quote_id: uuid.UUID) -> Response:
         try:
@@ -412,7 +413,7 @@ class QuoteSendApi(TenantAPIView):
 class QuoteAcceptApi(TenantAPIView):
     """POST /api/v1/finanzas/cotizaciones/<uuid>/aceptar/ — acepta y genera cargos."""
 
-    permission_classes = [IsAuthenticated, FinanceQuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission]
 
     def post(self, request: Request, quote_id: uuid.UUID) -> Response:
         try:
@@ -426,6 +427,62 @@ class QuoteAcceptApi(TenantAPIView):
         except DjangoValidationError as exc:
             return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
         return Response(QuoteOutputSerializer(quote).data)
+
+
+class QuotePdfApi(TenantAPIView):
+    """GET /api/v1/finanzas/cotizaciones/<uuid>/pdf/ — PDF de la cotización.
+
+    Devuelve el PDF con Content-Disposition: inline para abrir en el navegador.
+    Requiere Accept: application/pdf; sin ese header DRF responde 406.
+
+    Permiso: QuotePermission (mismos roles que el resto de endpoints de cotización).
+    Auth: Bearer token (el endpoint NO es público — contiene datos del paciente).
+
+    Seguridad:
+        - WeasyPrint usa _secure_fetcher: bloquea LFI/SSRF (solo data URIs).
+        - X-Frame-Options: DENY, X-Content-Type-Options: nosniff.
+        - Si la generación falla, devuelve 500 con mensaje genérico (sin stack trace).
+    """
+
+    permission_classes = [IsAuthenticated, QuotePermission]
+    renderer_classes = [_PdfRenderer]
+
+    def get(self, request: Request, quote_id: uuid.UUID) -> HttpResponse:
+        try:
+            quote = selectors.quote_get(quote_id=quote_id)
+        except Quote.DoesNotExist:
+            return HttpResponse(
+                content=b"Cotizaci\xf3n no encontrada.",
+                status=404,
+                content_type="text/plain; charset=utf-8",
+            )
+
+        tenant = get_current_tenant()
+        clinic_name: str = getattr(tenant, "name", "Clínica") if tenant else "Clínica"
+
+        from apps.finanzas.pdf import quote_pdf_build  # noqa: PLC0415
+
+        try:
+            pdf_bytes = quote_pdf_build(quote=quote, clinic_name=clinic_name)
+        except RuntimeError as exc:
+            logger.error(
+                "QuotePdfApi: error al generar PDF de cotización %s — %s",
+                quote_id,
+                exc,
+            )
+            return HttpResponse(
+                content=b"Error al generar el PDF. Intente nuevamente.",
+                status=500,
+                content_type="text/plain",
+            )
+
+        folio_short = str(quote.id).replace("-", "")[:8].upper()
+        filename = f"cotizacion-{folio_short}.pdf"
+        response = HttpResponse(content=pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        response["X-Frame-Options"] = "DENY"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
 
 
 # ===========================================================================

@@ -25,6 +25,7 @@ from apps.finanzas.views import (
     QuoteAcceptApi,
     QuoteDetailApi,
     QuoteListCreateApi,
+    QuotePdfApi,
     QuoteSendApi,
     RetentionPanelApi,
 )
@@ -40,6 +41,7 @@ urlpatterns = [
     path("finanzas/cotizaciones/<uuid:quote_id>/", QuoteDetailApi.as_view(), name="finanzas-quote-detail"),
     path("finanzas/cotizaciones/<uuid:quote_id>/enviar/", QuoteSendApi.as_view(), name="finanzas-quote-send"),
     path("finanzas/cotizaciones/<uuid:quote_id>/aceptar/", QuoteAcceptApi.as_view(), name="finanzas-quote-accept"),
+    path("finanzas/cotizaciones/<uuid:quote_id>/pdf/", QuotePdfApi.as_view(), name="finanzas-quote-pdf"),
     # Cargos
     path("finanzas/cargos/", ChargeListCreateApi.as_view(), name="finanzas-charge-list"),
     path("finanzas/cargos/<uuid:charge_id>/", ChargeDetailApi.as_view(), name="finanzas-charge-detail"),

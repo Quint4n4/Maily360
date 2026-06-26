@@ -34,6 +34,9 @@ const CORE_ROLES: Role[] = ['owner', 'admin', 'finance']
 const MANAGE_ROLES: Role[] = ['owner', 'admin']
 const DASHBOARD_ROLES: Role[] = ['owner', 'admin', 'finance', 'readonly']
 const CFDI_VIEW_ROLES: Role[] = ['owner', 'admin', 'finance', 'readonly']
+// Cotizaciones: el backend permite owner/admin/doctor/reception (finance y nurse NO).
+// El médico cotiza; finanzas cobra. Refleja CotizacionPermission del backend.
+const QUOTE_ROLES: Role[] = ['owner', 'admin', 'doctor', 'reception']
 
 const MATRIX: Record<FinanceCapability, Role[]> = {
   viewModule: VIEW_ROLES,
@@ -42,7 +45,7 @@ const MATRIX: Record<FinanceCapability, Role[]> = {
   viewCfdi: CFDI_VIEW_ROLES,
   manageConcepts: MANAGE_ROLES,
   manageFiscalConfig: MANAGE_ROLES,
-  createQuote: DESK_ROLES,
+  createQuote: QUOTE_ROLES,
   createCharge: CORE_ROLES,
   registerPayment: DESK_ROLES,
   issueCfdi: CORE_ROLES,
@@ -65,7 +68,7 @@ export function canAccessFinance(role: Role | null | undefined): boolean {
    ──────────────────────────────────────────────────────────────────────── */
 
 export type ClinicRole = 'owner' | 'admin' | 'doctor' | 'nurse' | 'reception' | 'finance' | 'readonly'
-export type Modulo = 'finanzas' | 'agenda' | 'contactos' | 'personal' | 'notas'
+export type Modulo = 'finanzas' | 'cotizaciones' | 'agenda' | 'contactos' | 'personal' | 'notas'
 export type Acceso = 'edit' | 'view'
 
 export const ROLES: { key: ClinicRole; label: string }[] = [
@@ -85,6 +88,8 @@ export const ROLE_LABEL: Record<ClinicRole, string> = {
 
 interface Permisos {
   finanzas?: Acceso
+  /** Módulo Cotizaciones (top-level): owner/admin/doctor/reception editan; finance/readonly NO. */
+  cotizaciones?: Acceso
   agenda?: Acceso
   contactos?: Acceso
   personal?: Acceso
@@ -97,11 +102,11 @@ interface Permisos {
    notas: todos los roles pueden usar el módulo (notas personales). El backend
    restringe internamente quién difunde notas globales (solo Dueño). */
 export const PERMISOS: Record<ClinicRole, Permisos> = {
-  owner:     { agenda: 'edit', contactos: 'edit', personal: 'edit', finanzas: 'edit', notas: 'edit', expedienteClinico: true },
-  admin:     { agenda: 'edit', contactos: 'edit', personal: 'edit', finanzas: 'edit', notas: 'edit', expedienteClinico: true },
-  doctor:    { agenda: 'edit', contactos: 'edit', notas: 'edit', expedienteClinico: true },
+  owner:     { agenda: 'edit', contactos: 'edit', personal: 'edit', finanzas: 'edit', cotizaciones: 'edit', notas: 'edit', expedienteClinico: true },
+  admin:     { agenda: 'edit', contactos: 'edit', personal: 'edit', finanzas: 'edit', cotizaciones: 'edit', notas: 'edit', expedienteClinico: true },
+  doctor:    { agenda: 'edit', contactos: 'edit', cotizaciones: 'edit', notas: 'edit', expedienteClinico: true },
   nurse:     { agenda: 'edit', contactos: 'view', notas: 'edit', expedienteClinico: true },
-  reception: { agenda: 'edit', contactos: 'edit', notas: 'edit', expedienteClinico: false },
+  reception: { agenda: 'edit', contactos: 'edit', cotizaciones: 'edit', notas: 'edit', expedienteClinico: false },
   finance:   { agenda: 'view', contactos: 'view', finanzas: 'edit', notas: 'edit', expedienteClinico: false },
   readonly:  { agenda: 'view', contactos: 'view', personal: 'view', finanzas: 'view', notas: 'edit', expedienteClinico: true },
 }

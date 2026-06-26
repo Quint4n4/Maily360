@@ -120,6 +120,8 @@ class AppointmentListCreateApi(TenantAPIView):
         reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
         specialty = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
         notes = serializers.CharField(required=False, allow_blank=True, default="")
+        # C-3: cotización vinculada. Debe estar ACCEPTED y ser del mismo paciente.
+        quote_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
         def validate(self, attrs: dict) -> dict:
             tiene_id = bool(attrs.get("patient_id"))

@@ -278,6 +278,7 @@ def appointment_create(
     specialty: str = "",
     notes: str = "",
     series_id: Optional[uuid.UUID] = None,
+    quote_id: Optional[uuid.UUID] = None,
 ) -> Appointment:
     """Crea una cita médica validando disponibilidad (anti-empalme doble).
 
@@ -301,13 +302,16 @@ def appointment_create(
         reason:         Motivo de la cita (requerido).
         specialty:      Especialidad (texto libre, opcional).
         notes:          Notas internas (opcional).
+        quote_id:       UUID de la cotización a vincular (C-3, opcional). Si se provee,
+                        la Quote debe pertenecer al mismo paciente y estar en estado ACCEPTED.
 
     Returns:
         Instancia Appointment recién creada con status=SCHEDULED.
 
     Raises:
         ValidationError: si el paciente/doctor/consultorio no son del tenant,
-                         si ends_at <= starts_at, o si hay solapamiento.
+                         si ends_at <= starts_at, si hay solapamiento, o si la
+                         cotización no es del paciente o no está aceptada (C-3).
     """
     # -- 1. Resolver FKs (selectors filtran por tenant activo vía TenantManager)
     try:
@@ -399,6 +403,34 @@ def appointment_create(
         if appointment_type.tenant_id != tenant.id:
             raise ValidationError("El tipo de cita no pertenece a esta clínica.")
 
+    # -- 2g. Validar cotización vinculada (C-3 — opcional)
+    quote = None
+    if quote_id is not None:
+        # Importación tardía para evitar circular imports (agenda ← finanzas).
+        from apps.finanzas.models import Quote  # noqa: PLC0415
+
+        try:
+            quote = Quote.objects.get(id=quote_id)
+        except Quote.DoesNotExist:
+            raise ValidationError("Cotización no encontrada en esta clínica.")
+
+        # Defensa multi-tenant: la cotización debe ser del mismo tenant.
+        if quote.tenant_id != tenant.id:
+            raise ValidationError("La cotización no pertenece a esta clínica.")
+
+        # La cotización debe pertenecer al mismo paciente de la cita.
+        if quote.patient_id != patient.id:
+            raise ValidationError(
+                "La cotización no corresponde al paciente de esta cita."
+            )
+
+        # Solo se puede vincular una cotización aceptada.
+        if quote.status != Quote.Status.ACCEPTED:
+            raise ValidationError(
+                "Solo se puede vincular una cotización aceptada. "
+                f"El estado actual es '{quote.get_status_display()}'."
+            )
+
     # -- 3. Calcular ends_at si no se provee
     config = agenda_config_get(tenant=tenant)
     ends_at = _resolve_ends_at(
@@ -456,6 +488,7 @@ def appointment_create(
                 specialty=specialty,
                 notes=notes,
                 series_id=series_id,
+                quote=quote,
             )
 
     except IntegrityError as exc:

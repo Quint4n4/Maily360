@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock, Video, FolderOpen } from 'lucide-react'
+import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock, Video, FolderOpen, ScrollText, FileDown } from 'lucide-react'
 import NotasHilo from './NotasHilo'
+import { useDownloadQuotePdf } from '../../hooks/finanzas'
+import { formatMoney } from '../../lib/format'
 
 export type EstadoCita =
   | 'agendada' | 'confirmada' | 'llego' | 'en_consulta' | 'atendida' | 'cancelada' | 'no_asistio'
@@ -11,6 +13,13 @@ export interface RecordatorioVista {
   texto: string
   fecha: string
   estado: string
+}
+
+/** Cotización vinculada a la cita (resumen para mostrar + descargar PDF). */
+export interface CotizacionVista {
+  id: string
+  total: number | string
+  statusDisplay: string
 }
 
 export interface CitaDetalle {
@@ -29,6 +38,8 @@ export interface CitaDetalle {
   notas: string
   estadoInicial: EstadoCita
   recordatorios?: RecordatorioVista[]
+  /** Cotización vinculada (o null si la cita no tiene cotización). */
+  cotizacion?: CotizacionVista | null
 }
 
 interface Props {
@@ -109,6 +120,7 @@ function Dato({ icon: Icon, label, value, dot }: { icon: typeof User; label: str
 export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = false, puedeCancelar = false, puedeAgendar = false, onCambiarEstado, cambiando = false, onReactivar, reactivando = false, onReagendar }: Props) {
   const navigate = useNavigate()
   const [estado, setEstado] = useState<EstadoCita>('agendada')
+  const downloadPdf = useDownloadQuotePdf()
   useEffect(() => { if (cita) setEstado(cita.estadoInicial) }, [cita])
 
   if (!cita) return <AnimatePresence />
@@ -222,6 +234,34 @@ export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = f
                 <Dato icon={FileText}    label="Motivo"       value={cita.motivo} />
                 <Dato icon={Stethoscope} label="Especialidad" value={cita.especialidad} />
                 {cita.notas && <Dato icon={FileText} label="Notas" value={cita.notas} />}
+
+                {/* Cotización vinculada — solo si la cita tiene una. */}
+                {cita.cotizacion && (
+                  <div className="mt-3 rounded-xl p-3 flex items-center justify-between gap-3"
+                    style={{ background: 'rgba(201,162,39,0.08)', border: '1px solid rgba(201,162,39,0.3)' }}>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(201,162,39,0.16)' }}>
+                        <ScrollText className="w-4 h-4" style={{ color: '#C9A227' }} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-gray-400">Cotización</p>
+                        <p className="text-sm font-semibold text-gray-800">
+                          {formatMoney(cita.cotizacion.total)} · {cita.cotizacion.statusDisplay}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => cita.cotizacion && downloadPdf.mutate(cita.cotizacion.id)}
+                      disabled={downloadPdf.isPending}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:brightness-95 disabled:opacity-60 shrink-0"
+                      style={{ color: '#9A7B1E', background: 'rgba(201,162,39,0.16)' }}
+                      title="Descargar PDF de la cotización"
+                    >
+                      {downloadPdf.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                      PDF
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Recordatorios (reales) */}

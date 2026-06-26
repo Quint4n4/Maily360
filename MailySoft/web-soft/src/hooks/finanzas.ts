@@ -163,6 +163,16 @@ export function useAcceptQuote() {
   })
 }
 
+/**
+ * Dispara la descarga del PDF de una cotización. Mutación (efecto secundario:
+ * abre/descarga un archivo); no cachea. La UI muestra isPending mientras genera.
+ */
+export function useDownloadQuotePdf() {
+  return useMutation({
+    mutationFn: (quoteId: string) => api.downloadQuotePdf(quoteId),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Cargos
 // ---------------------------------------------------------------------------

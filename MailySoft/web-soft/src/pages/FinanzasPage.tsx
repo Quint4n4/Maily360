@@ -4,7 +4,6 @@ import {
   Wallet,
   FileText,
   Receipt,
-  ScrollText,
   Lock,
   LineChart,
   CalendarClock,
@@ -16,7 +15,6 @@ import DashboardTab from '../components/finanzas/DashboardTab'
 import ReporteTab from '../components/finanzas/ReporteTab'
 import CierreDiarioTab from '../components/finanzas/CierreDiarioTab'
 import CobrosPagosTab from '../components/finanzas/CobrosPagosTab'
-import CotizacionesTab from '../components/finanzas/CotizacionesTab'
 import CfdiTab from '../components/finanzas/CfdiTab'
 import EstadoCuentaTab from '../components/finanzas/EstadoCuentaTab'
 import RetencionTab from '../components/finanzas/RetencionTab'
@@ -29,7 +27,6 @@ type TabKey =
   | 'reportes'
   | 'cierre'
   | 'cobros'
-  | 'cotizaciones'
   | 'cfdi'
   | 'estado'
   | 'retencion'
@@ -47,7 +44,6 @@ const TABS: TabDef[] = [
   // Cierre diario = caja: misma matriz que registerPayment (owner/admin/finance/reception).
   { key: 'cierre', label: 'Cierre diario', icon: CalendarClock, capability: 'registerPayment' },
   { key: 'cobros', label: 'Cobros y pagos', icon: Wallet, capability: 'viewModule' },
-  { key: 'cotizaciones', label: 'Cotizaciones', icon: ScrollText, capability: 'viewModule' },
   { key: 'cfdi', label: 'CFDI', icon: FileText, capability: 'viewCfdi' },
   { key: 'estado', label: 'Estado de cuenta', icon: Receipt, capability: 'viewStatement' },
   // Retención (RFM, Fase 3): misma matriz que el dashboard (owner/admin/finance/readonly).
@@ -164,7 +160,6 @@ export default function FinanzasPage() {
             {current?.key === 'reportes' && <ReporteTab role={role} />}
             {current?.key === 'cierre' && <CierreDiarioTab role={role} />}
             {current?.key === 'cobros' && <CobrosPagosTab role={role} />}
-            {current?.key === 'cotizaciones' && <CotizacionesTab role={role} />}
             {current?.key === 'cfdi' && <CfdiTab role={role} />}
             {current?.key === 'estado' && <EstadoCuentaTab />}
             {current?.key === 'retencion' && <RetencionTab role={role} />}

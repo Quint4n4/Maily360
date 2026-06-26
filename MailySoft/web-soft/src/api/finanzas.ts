@@ -437,6 +437,32 @@ export function acceptQuote(quoteId: string): Promise<Quote> {
   return http.post<Quote>(`/finanzas/cotizaciones/${quoteId}/aceptar/`)
 }
 
+/**
+ * GET /finanzas/cotizaciones/<id>/pdf/ — descarga el PDF de la cotización (Bearer
+ * vía requestBlob). El endpoint solo negocia application/pdf; sin este Accept, DRF
+ * responde 406. El token nunca va en la URL: viaja en el header Authorization del
+ * cliente central. Mismo patrón blob + object URL que downloadReportPdf /
+ * getPatientBookPdf: intenta abrir en pestaña nueva; si el navegador la bloquea,
+ * cae a descarga directa.
+ */
+export async function downloadQuotePdf(quoteId: string): Promise<void> {
+  const blob = await requestBlob(`/finanzas/cotizaciones/${quoteId}/pdf/`, {
+    headers: { Accept: 'application/pdf' },
+  })
+  const url = URL.createObjectURL(blob)
+  const filename = `cotizacion-${quoteId}.pdf`
+  const win = window.open(url, '_blank', 'noopener,noreferrer')
+  if (!win) {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
 // ---------------------------------------------------------------------------
 // Cargos
 // ---------------------------------------------------------------------------

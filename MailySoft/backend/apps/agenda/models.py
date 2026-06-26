@@ -370,6 +370,21 @@ class Appointment(TenantAwareModel):
         help_text="Cuántas veces se ha reagendado esta cita.",
     )
 
+    # ---- Vínculo con cotización (C-3) ----
+
+    quote = models.ForeignKey(
+        "finanzas.Quote",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="appointments",
+        help_text=(
+            "Cotización aceptada que originó esta cita (opcional). "
+            "Solo se puede vincular una Quote en estado ACCEPTED. "
+            "Si la cotización se elimina, la FK queda en null (SET_NULL)."
+        ),
+    )
+
     # ---- Gancho v2 series ----
 
     series_id = models.UUIDField(

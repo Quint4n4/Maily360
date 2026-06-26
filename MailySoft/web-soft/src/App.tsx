@@ -12,6 +12,7 @@ import AgendaPage from './pages/AgendaPage'
 import ContactosPage from './pages/ContactosPage'
 import PersonalPage from './pages/PersonalPage'
 import FinanzasPage from './pages/FinanzasPage'
+import CotizacionesPage from './pages/CotizacionesPage'
 import NotasPage from './pages/NotasPage'
 import MiConsultorioPage from './pages/MiConsultorioPage'
 import AlertaCitas from './components/agenda/AlertaCitas'
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="/personal"  element={<ClinicRoute modulo="personal"><PersonalPage /></ClinicRoute>} />
             <Route path="/notas"     element={<ClinicRoute modulo="notas"><NotasPage /></ClinicRoute>} />
             <Route path="/finanzas"  element={<ClinicRoute modulo="finanzas"><FinanzasPage /></ClinicRoute>} />
+            <Route path="/cotizaciones" element={<ClinicRoute modulo="cotizaciones"><CotizacionesPage /></ClinicRoute>} />
             <Route path="/mi-consultorio" element={<ConsultorioRoute><MiConsultorioPage /></ConsultorioRoute>} />
 
             {/* ── Panel interno de Maily (datos reales: dashboard/clínicas/usuarios) ── */}

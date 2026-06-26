@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    /*
+      Cotización — Maily Platform
+      Generado con WeasyPrint. Sin JavaScript.
+      Todos los montos llegan ya formateados desde Python (_fmt_money).
+      El template NO agrega signo de moneda: los valores ya lo incluyen.
+    */
+    @page {
+      size: letter;
+      margin: 2cm 1.8cm 2.2cm 1.8cm;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 9pt;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* ---- Encabezado ---- */
+    .header {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16pt;
+      border-bottom: 2pt solid #1e6ab0;
+      padding-bottom: 10pt;
+    }
+    .header td { vertical-align: top; }
+    .clinic-name {
+      font-size: 15pt;
+      font-weight: bold;
+      color: #1e6ab0;
+      letter-spacing: 0.3pt;
+    }
+    .doc-title {
+      font-size: 11pt;
+      font-weight: bold;
+      color: #333;
+      text-align: right;
+    }
+    .doc-meta {
+      font-size: 7.5pt;
+      color: #555;
+      text-align: right;
+      margin-top: 3pt;
+      line-height: 1.5;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2pt 6pt;
+      border-radius: 3pt;
+      font-size: 7pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.4pt;
+    }
+    .status-draft    { background: #f0f4ff; color: #3b5bdb; }
+    .status-sent     { background: #fff8e1; color: #e67700; }
+    .status-accepted { background: #ebfbee; color: #2f9e44; }
+    .status-rejected { background: #fff5f5; color: #c92a2a; }
+    .status-expired  { background: #f8f9fa; color: #868e96; }
+
+    /* ---- Sección paciente + vigencia ---- */
+    .info-row {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14pt;
+    }
+    .info-cell {
+      width: 50%;
+      vertical-align: top;
+      padding-right: 8pt;
+    }
+    .section-title {
+      font-size: 7pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5pt;
+      color: #1e6ab0;
+      border-bottom: 0.5pt solid #c5d8f0;
+      padding-bottom: 2pt;
+      margin-bottom: 4pt;
+    }
+    .info-label {
+      font-size: 7pt;
+      color: #888;
+    }
+    .info-value {
+      font-size: 8.5pt;
+      color: #1a1a1a;
+      font-weight: 500;
+    }
+    .info-row-item {
+      margin-bottom: 4pt;
+    }
+
+    /* ---- Tabla de renglones ---- */
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10pt;
+      font-size: 8.5pt;
+    }
+    .items-table thead th {
+      background: #1e6ab0;
+      color: #fff;
+      font-weight: bold;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.3pt;
+      padding: 5pt 6pt;
+      text-align: left;
+    }
+    .items-table thead th.right { text-align: right; }
+    .items-table thead th.center { text-align: center; }
+    .items-table tbody tr:nth-child(odd)  { background: #f7f9fd; }
+    .items-table tbody tr:nth-child(even) { background: #ffffff; }
+    .items-table tbody td {
+      padding: 5pt 6pt;
+      border-bottom: 0.5pt solid #e5eaf3;
+      vertical-align: top;
+    }
+    .items-table tbody td.right  { text-align: right; }
+    .items-table tbody td.center { text-align: center; }
+    .items-table tfoot td {
+      padding: 4pt 6pt;
+      font-size: 8.5pt;
+      border-top: 1pt solid #c5d8f0;
+    }
+    .items-table tfoot tr.total td {
+      font-weight: bold;
+      font-size: 10pt;
+      color: #1e6ab0;
+      border-top: 1.5pt solid #1e6ab0;
+    }
+    .items-table tfoot td.right { text-align: right; }
+
+    /* ---- Notas ---- */
+    .notes-section {
+      margin-top: 16pt;
+      padding: 8pt 10pt;
+      background: #f7f9fd;
+      border-left: 3pt solid #1e6ab0;
+      border-radius: 2pt;
+    }
+    .notes-section .section-title {
+      margin-bottom: 4pt;
+    }
+    .notes-text {
+      font-size: 8pt;
+      color: #333;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    /* ---- Pie de página ---- */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      font-size: 6.5pt;
+      color: #aaa;
+      text-align: center;
+      padding: 4pt 0;
+      border-top: 0.5pt solid #e0e0e0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Pie de página fijo -->
+<div class="footer">
+  Generado el {{ generated_at }} — Maily Platform — Documento solo para referencia interna.
+</div>
+
+<!-- ===== Encabezado ===== -->
+<table class="header">
+  <tr>
+    <td style="width:55%;">
+      <div class="clinic-name">{{ clinic_name }}</div>
+    </td>
+    <td style="width:45%;">
+      <div class="doc-title">COTIZACIÓN</div>
+      <div class="doc-meta">
+        Folio: <strong>COT-{{ folio }}</strong><br>
+        Fecha: {{ fecha_emision }}<br>
+        Estado: <span class="status-badge status-{{ status }}">{{ status_display }}</span>
+        {% if valid_until %}<br>Vigencia hasta: <strong>{{ valid_until }}</strong>{% endif %}
+      </div>
+    </td>
+  </tr>
+</table>
+
+<!-- ===== Datos del paciente ===== -->
+<table class="info-row">
+  <tr>
+    <td class="info-cell">
+      <div class="section-title">Datos del Paciente</div>
+      <div class="info-row-item">
+        <div class="info-label">Nombre completo</div>
+        <div class="info-value">{{ patient_name }}</div>
+      </div>
+      {% if patient_record %}
+      <div class="info-row-item">
+        <div class="info-label">No. Expediente</div>
+        <div class="info-value">{{ patient_record }}</div>
+      </div>
+      {% endif %}
+    </td>
+    <td class="info-cell" style="padding-left:8pt; padding-right:0;">
+      <div class="section-title">Resumen</div>
+      <div class="info-row-item">
+        <div class="info-label">Subtotal</div>
+        <div class="info-value">{{ subtotal }}</div>
+      </div>
+      <div class="info-row-item">
+        <div class="info-label">Descuentos</div>
+        <div class="info-value">-{{ discount_total }}</div>
+      </div>
+      <div class="info-row-item">
+        <div class="info-label" style="font-weight:bold;color:#1e6ab0;">Total</div>
+        <div class="info-value" style="font-size:12pt;font-weight:bold;color:#1e6ab0;">{{ total }}</div>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<!-- ===== Tabla de renglones ===== -->
+<table class="items-table">
+  <thead>
+    <tr>
+      <th style="width:40%;">Servicio / Descripción</th>
+      <th class="center" style="width:10%;">Cant.</th>
+      <th class="right"  style="width:17%;">Precio Unit.</th>
+      <th class="right"  style="width:15%;">Descuento</th>
+      <th class="right"  style="width:18%;">Importe</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.description }}</td>
+      <td class="center">{{ item.quantity }}</td>
+      <td class="right">{{ item.unit_price }}</td>
+      <td class="right">{% if item.discount != "0.00" %}-{{ item.discount }}{% else %}—{% endif %}</td>
+      <td class="right"><strong>{{ item.line_total }}</strong></td>
+    </tr>
+    {% empty %}
+    <tr>
+      <td colspan="5" style="text-align:center;color:#aaa;font-style:italic;">
+        Sin renglones en esta cotización.
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="4" class="right" style="color:#555;">Subtotal</td>
+      <td class="right">{{ subtotal }}</td>
+    </tr>
+    {% if has_discounts %}
+    <tr>
+      <td colspan="4" class="right" style="color:#c92a2a;">Descuentos</td>
+      <td class="right" style="color:#c92a2a;">-{{ discount_total }}</td>
+    </tr>
+    {% endif %}
+    <tr class="total">
+      <td colspan="4" class="right">TOTAL</td>
+      <td class="right">{{ total }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- ===== Notas / Condiciones ===== -->
+{% if notes %}
+<div class="notes-section">
+  <div class="section-title">Notas y Condiciones</div>
+  <div class="notes-text">{{ notes }}</div>
+</div>
+{% endif %}
+
+</body>
+</html>

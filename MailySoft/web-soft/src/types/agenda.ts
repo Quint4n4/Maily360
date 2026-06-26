@@ -106,6 +106,18 @@ export interface AppointmentReminder {
   status_display: string
 }
 
+/**
+ * Cotización vinculada a la cita (resumen). El serializer de la cita devuelve este
+ * objeto o `null`. `status` es el QuoteStatus del backend; `status_display` ya viene
+ * traducido. El `total` puede llegar como string decimal o number desde DRF.
+ */
+export interface AppointmentQuoteRef {
+  id: string
+  total: number | string
+  status: string
+  status_display: string
+}
+
 export interface Appointment {
   id: string
   patient: AppointmentRef
@@ -122,6 +134,8 @@ export interface Appointment {
   specialty: string
   notes: string
   reminders: AppointmentReminder[]
+  /** Cotización vinculada (aceptada) o null si la cita no tiene cotización. */
+  quote: AppointmentQuoteRef | null
   created_at: string
 }
 
@@ -148,6 +162,8 @@ export interface CreateAppointmentInput {
   reason?: string
   specialty?: string
   notes?: string
+  /** Cotización ACEPTADA a vincular (opcional). El backend valida mismo paciente + estado accepted. */
+  quote_id?: string | null
 }
 
 /** Frecuencia de una serie de citas recurrentes. */

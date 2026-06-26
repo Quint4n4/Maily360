@@ -85,6 +85,7 @@ def appointment_get(*, appointment_id: uuid.UUID) -> Appointment:
             "consultorio",
             "cancelled_by",
             "no_show_registered_by",
+            "quote",  # C-3: resumen de cotización vinculada (sin N+1)
         )
         .prefetch_related("reminders")
         .get(id=appointment_id)
@@ -126,6 +127,7 @@ def appointment_list(
             "patient",
             "doctor__membership__user",
             "consultorio",
+            "quote",  # C-3: resumen de cotización vinculada (sin N+1)
         )
         .prefetch_related("reminders")
     )

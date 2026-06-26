@@ -180,6 +180,9 @@ export default function AgendaPage() {
         fecha: formatFechaHora(r.scheduled_at),
         estado: r.status_display,
       })),
+      cotizacion: a.quote
+        ? { id: a.quote.id, total: a.quote.total, statusDisplay: a.quote.status_display }
+        : null,
     }
   }
 

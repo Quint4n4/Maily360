@@ -257,3 +257,94 @@ def finance_report_pdf_build(*, report: dict[str, Any], clinic_name: str) -> byt
         raise RuntimeError(f"Error al generar PDF del reporte financiero: {exc}") from exc
 
     return pdf_bytes
+
+
+# ---------------------------------------------------------------------------
+# PDF de cotización (C-2)
+# ---------------------------------------------------------------------------
+
+
+def _fmt_qty(value: "Decimal") -> str:
+    """Formatea una cantidad decimal quitando ceros finales (1.00 → '1', 2.50 → '2.5')."""
+    normalized = value.normalize()
+    # Si el exponente es negativo (hay decimales), mostrar solo los necesarios.
+    return f"{normalized:f}"
+
+
+def quote_pdf_build(*, quote: "Any", clinic_name: str) -> bytes:
+    """Genera el PDF de una cotización con WeasyPrint.
+
+    Recibe la instancia Quote (con items prefetchados) y el nombre de la clínica.
+    Todos los montos se formatean en Python (_fmt_money) y se pasan ya con el
+    signo de moneda. El template HTML NO añade '$' por ningún lado.
+
+    Seguridad:
+        - Usa _secure_fetcher: bloquea LFI/SSRF (solo data URIs).
+        - No escribe archivos a disco: devuelve bytes.
+        - El PDF se genera a petición, nunca se cachea en BD.
+
+    Args:
+        quote:       Instancia de Quote con items prefetchados (prefetch_related("items")).
+        clinic_name: Nombre de la clínica para el encabezado.
+
+    Returns:
+        bytes: contenido del PDF.
+
+    Raises:
+        RuntimeError: si WeasyPrint falla al renderizar.
+    """
+    import weasyprint  # noqa: PLC0415 — importación tardía para no penalizar startup
+
+    from django.utils import timezone as tz  # noqa: PLC0415
+
+    # Formatear items — todos los montos incluyen '$' (formato _fmt_money).
+    items_ctx: list[dict[str, Any]] = []
+    for item in quote.items.all():
+        items_ctx.append(
+            {
+                "description": item.description,
+                "quantity": _fmt_qty(item.quantity),
+                "unit_price": _fmt_money(item.unit_price),
+                "discount": _fmt_money(item.discount) if item.discount > ZERO else "0.00",
+                "line_total": _fmt_money(item.line_total),
+            }
+        )
+
+    # Folio corto: primeros 8 caracteres del UUID (legible para el paciente).
+    folio_short = str(quote.id).replace("-", "")[:8].upper()
+
+    context: dict[str, Any] = {
+        "clinic_name": clinic_name,
+        "folio": folio_short,
+        "fecha_emision": quote.created_at.strftime("%d/%m/%Y"),
+        "generated_at": tz.now().strftime("%Y-%m-%d %H:%M UTC"),
+        "status": quote.status,
+        "status_display": quote.get_status_display(),
+        "valid_until": quote.valid_until.strftime("%d/%m/%Y") if quote.valid_until else None,
+        "patient_name": getattr(quote.patient, "full_name", ""),
+        "patient_record": getattr(quote.patient, "record_number", ""),
+        # Montos — ya formateados con '$'; el template NO agrega signo.
+        "subtotal": _fmt_money(quote.subtotal),
+        "discount_total": _fmt_money(quote.discount_total),
+        "total": _fmt_money(quote.total),
+        "has_discounts": quote.discount_total > ZERO,
+        "notes": quote.notes,
+        "items": items_ctx,
+    }
+
+    html_string = render_to_string("finanzas/cotizacion.html", context)
+
+    try:
+        pdf_bytes: bytes = weasyprint.HTML(
+            string=html_string,
+            url_fetcher=_secure_fetcher,
+            base_url=None,
+        ).write_pdf()
+    except Exception as exc:
+        logger.error(
+            "quote_pdf_build: WeasyPrint falló — %s",
+            exc,
+        )
+        raise RuntimeError(f"Error al generar PDF de cotización: {exc}") from exc
+
+    return pdf_bytes

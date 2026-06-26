@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check, Building2, Phone, Video, MapPin, ChevronLeft, ChevronRight, Repeat, Plus } from 'lucide-react'
+import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check, Building2, Phone, Video, MapPin, ChevronLeft, ChevronRight, Repeat, Plus, ScrollText } from 'lucide-react'
 import { usePatients } from '../../hooks/pacientes'
 import { useDoctors, useConsultorios, useCreateAppointment, useCreateAppointmentSeries, useAppointmentTypes, useCreateAgendaBlock, useAgendaDisponibilidad } from '../../hooks/agenda'
+import { useQuotes } from '../../hooks/finanzas'
 import { combineToISO, to12h, formatFechaHora, fromDayKey, toDayKey, addDays, seriesDates } from '../../lib/fecha'
+import { formatMoney } from '../../lib/format'
 import MiniCalendario from './MiniCalendario'
 import { ApiError } from '../../lib/http'
 import { useAuth } from '../../auth/AuthContext'
@@ -99,6 +101,7 @@ export default function CrearEventoModal({
   const [duracion, setDuracion] = useState(30)
   const [tipoId, setTipoId] = useState('')
   const [notas, setNotas] = useState('') // "¿A qué viene?" → se manda como reason
+  const [quoteId, setQuoteId] = useState('') // cotización aceptada vinculada (opcional)
 
   // ── Repetición (multi-cita) ──
   const [repetir, setRepetir] = useState(false)
@@ -130,6 +133,14 @@ export default function CrearEventoModal({
   const crearSerie = useCreateAppointmentSeries()
   const crearEvento = useCreateAgendaBlock()
 
+  // Cotizaciones ACEPTADAS del paciente existente seleccionado (para vincular a la cita).
+  // Solo aplica con paciente existente: un paciente nuevo (inline) aún no tiene cotizaciones.
+  const cotizarPacienteId = modoPaciente === 'existente' ? pacienteId : ''
+  const { data: cotsData, isLoading: loadingCots } = useQuotes(
+    cotizarPacienteId ? { patient_id: cotizarPacienteId, status: 'accepted' } : {},
+  )
+  const cotizaciones = cotizarPacienteId ? cotsData?.results ?? [] : []
+
   const { user } = useAuth()
   const soyDoctor = !!user?.doctor_id
   const pacientes = pacData?.results ?? []
@@ -152,7 +163,7 @@ export default function CrearEventoModal({
     // cita
     setSearch(''); setDebounced(''); setModoPaciente('existente'); setPacienteId('')
     setNpNombre(''); setNpPaterno(''); setNpMaterno(''); setNpTel('')
-    setDoctorId(user?.doctor_id ?? ''); setConsId(consultorioId ?? ''); setModalidad(initialModality); setDuracion(30); setTipoId(''); setNotas('')
+    setDoctorId(user?.doctor_id ?? ''); setConsId(consultorioId ?? ''); setModalidad(initialModality); setDuracion(30); setTipoId(''); setNotas(''); setQuoteId('')
     // repetición
     setRepetir(false); setFrecuencia('weekly'); setTopeTipo('count'); setTopeCount(4); setTopeUntil(''); setOcurrencias([]); setResultado(null)
     // evento (prefill desde el slot clicado)
@@ -169,6 +180,9 @@ export default function CrearEventoModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctorId])
+
+  // La cotización pertenece a UN paciente: si cambia el paciente (o el modo), se deselecciona.
+  useEffect(() => { setQuoteId('') }, [pacienteId, modoPaciente])
 
   // ── Repetición: una sola lista de ocurrencias editables (con disponibilidad) ──
   // Consultorio que usaría la cita (null en telemedicina/fuera).
@@ -281,6 +295,7 @@ export default function CrearEventoModal({
         reason: notas.trim(), // "¿a qué viene?" → reason (se ve en la tarjeta)
       }
       if (repetir) {
+        // La serie NO vincula cotización: una cotización aceptada es de una sola visita.
         const explicit = ocurrencias.map(o => combineToISO(o.date, o.time))
         const res = await crearSerie.mutateAsync({
           ...base,
@@ -290,7 +305,7 @@ export default function CrearEventoModal({
         })
         setResultado(res) // muestra el resumen; no cierra el modal
       } else {
-        await crearCita.mutateAsync(base)
+        await crearCita.mutateAsync({ ...base, quote_id: quoteId || null })
         onClose()
       }
     } catch (err) { setErrores(erroresDe(err)) }
@@ -543,9 +558,33 @@ export default function CrearEventoModal({
                   </div>
 
                   <div>
-                    <label className={LABEL}>¿A qué viene el paciente? <span className="text-gray-400 font-normal">(opcional)</span></label>
+                    <label className={LABEL}>¿A qué viene el paciente? <span className="text-amber-600 font-semibold">(recomendado)</span></label>
                     <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={2} maxLength={255} className={`${INPUT} resize-none`} placeholder="Motivo de la consulta…" />
                   </div>
+
+                  {/* ── Cotización aceptada del paciente (opcional, no para series) ── */}
+                  {cotizarPacienteId && !repetir && (
+                    <div>
+                      <label className={`${LABEL} inline-flex items-center gap-1.5`}>
+                        <ScrollText className="w-3.5 h-3.5" style={{ color: '#C9A227' }} />
+                        Cotización <span className="text-gray-400 font-normal">(opcional)</span>
+                      </label>
+                      {loadingCots ? (
+                        <p className="text-xs text-gray-400 inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Buscando cotizaciones…</p>
+                      ) : cotizaciones.length === 0 ? (
+                        <p className="text-xs text-gray-400">Este paciente no tiene cotizaciones aceptadas para vincular.</p>
+                      ) : (
+                        <select value={quoteId} onChange={e => setQuoteId(e.target.value)} className={INPUT}>
+                          <option value="">Sin cotización</option>
+                          {cotizaciones.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {formatMoney(c.total)} · {c.status_display}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
 
                   {/* ── Repetir esta cita (multi-cita) ── */}
                   <div className="rounded-xl p-3" style={{ background: repetir ? 'rgba(201,162,39,0.07)' : 'transparent', border: repetir ? '1px solid rgba(201,162,39,0.25)' : '1px solid rgba(0,0,0,0.06)' }}>

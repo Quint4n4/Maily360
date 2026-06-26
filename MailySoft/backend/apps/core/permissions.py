@@ -326,6 +326,9 @@ class FinanceQuotePermission(HasClinicRole):
         POST   → caja: owner, admin, finance, reception.
         PATCH  → caja: owner, admin, finance, reception (editar/cambiar estado).
         DELETE → caja: owner, admin, finance, reception (descartar borrador).
+
+    DEPRECADO: usar QuotePermission en su lugar (incluye doctor).
+    Se mantiene para no romper endpoints que todavía no se migraron.
     """
 
     policy: dict[str, frozenset[str]] = {
@@ -333,6 +336,40 @@ class FinanceQuotePermission(HasClinicRole):
         "POST": FINANCE_DESK_ROLES,
         "PATCH": FINANCE_DESK_ROLES,
         "DELETE": FINANCE_DESK_ROLES,
+    }
+
+
+# Conjunto para los endpoints de cotizaciones (decisión C-1 del cliente):
+# SOLO owner, admin, doctor y reception. El doctor entra porque puede crear,
+# ver, enviar y aceptar cotizaciones en consulta (cierra venta en el acto).
+# Finanzas y enfermería quedan FUERA del módulo por decisión del cliente.
+_QUOTE_ROLES: frozenset[str] = frozenset(
+    {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.RECEPTION}
+)
+
+
+class QuotePermission(HasClinicRole):
+    """Permisos para el módulo de Cotizaciones (C-1).
+
+    El médico (DOCTOR) puede crear, ver, enviar y aceptar cotizaciones porque
+    es el flujo natural de «cierre en consulta»: el doctor cotiza y el paciente
+    acepta en el mismo acto. Recepción también opera la caja de cotizaciones.
+    Finanzas y enfermería quedan fuera del módulo (decisión del cliente).
+
+    READONLY puede ver (GET) pero no crear ni modificar.
+
+    Matriz:
+        GET    → _QUOTE_ROLES + readonly (solo lectura).
+        POST   → _QUOTE_ROLES (owner, admin, doctor, reception).
+        PATCH  → _QUOTE_ROLES.
+        DELETE → _QUOTE_ROLES.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": _QUOTE_ROLES | frozenset({Role.READONLY}),
+        "POST": _QUOTE_ROLES,
+        "PATCH": _QUOTE_ROLES,
+        "DELETE": _QUOTE_ROLES,
     }
 
 
