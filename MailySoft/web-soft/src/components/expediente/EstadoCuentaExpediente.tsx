@@ -81,6 +81,8 @@ export default function EstadoCuentaExpediente({ paciente, puedeCobrar }: Props)
   const cargos = charges.data?.results ?? []
   // Solo importa cuánto debe: el backend ya no permite saldos a favor.
   const deuda = Math.max(0, data.balance)
+  // Rojo si hay deuda, verde si está al corriente.
+  const saldoColor = deuda > 0 ? '#C0392B' : '#0F766E'
 
   return (
     <div className="space-y-4">
@@ -105,15 +107,15 @@ export default function EstadoCuentaExpediente({ paciente, puedeCobrar }: Props)
         )}
       </div>
 
-      {/* Métrica única: cuánto debe */}
+      {/* Métrica única: cuánto debe (rojo si hay deuda, verde si está al corriente) */}
       <div
         className="inline-flex items-baseline gap-3 rounded-xl px-5 py-3"
-        style={{ background: `${ORO}10`, border: `1px solid ${ORO}22` }}
+        style={{ background: `${saldoColor}12`, border: `1px solid ${saldoColor}33` }}
       >
         <span className="text-[11px] uppercase tracking-wide" style={{ color: '#7A756C' }}>
           Saldo por cobrar
         </span>
-        <span className="text-2xl font-bold" style={{ color: deuda > 0 ? ORO : '#0F766E' }}>
+        <span className="text-2xl font-bold" style={{ color: saldoColor }}>
           {deuda > 0 ? formatMoney(deuda) : 'Al corriente'}
         </span>
       </div>
