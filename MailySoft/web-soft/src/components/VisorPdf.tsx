@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Download, Loader2, AlertCircle } from 'lucide-react'
 
@@ -93,10 +94,10 @@ export default function VisorPdf({ titulo, nombreArchivo, cargar, onClose }: Vis
     a.remove()
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8"
         style={{ background: 'rgba(40,28,8,0.4)', backdropFilter: 'blur(6px)' }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -168,6 +169,7 @@ export default function VisorPdf({ titulo, nombreArchivo, cargar, onClose }: Vis
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }
