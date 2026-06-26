@@ -1229,6 +1229,7 @@ class TestVitalSignsReadAuditLog:
             client.get(_signos_url(patient.id))
 
         log = AuditLog.all_objects.filter(
+            tenant=tenant,
             action=ActionType.VITALSIGNS_READ,
             resource_type="VitalSignsRecord",
         ).order_by("-created_at").first()
@@ -1270,6 +1271,7 @@ class TestVitalSignsReadAuditLog:
             client.get(_series_url(patient.id))
 
         log = AuditLog.all_objects.filter(
+            tenant=tenant,
             action=ActionType.VITALSIGNS_READ,
         ).order_by("-created_at").first()
 
