@@ -169,7 +169,7 @@ export default function PagoModal({
           {pendientes.length > 0 && (
             <div className="rounded-xl p-3 space-y-2" style={{ background: 'rgba(0,0,0,0.03)' }}>
               <p className="text-xs font-medium" style={{ color: '#7A756C' }}>
-                Aplicar a cargos pendientes (opcional):
+                El pago se aplica solo a los cargos más antiguos. Opcional: repártelo a mano.
               </p>
               {pendientes.map(c => (
                 <div key={c.id} className="flex items-center gap-2">

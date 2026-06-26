@@ -86,8 +86,8 @@ class TestDashboardMetrics:
 
         assert metrics["kpis"]["total_income"] == Decimal("600.00")
         assert metrics["kpis"]["total_charged"] == Decimal("1000.00")
-        # Saldo pendiente global = 1000 (sin pagos aplicados al cargo).
-        assert metrics["kpis"]["outstanding"] == Decimal("1000.00")
+        # El pago de 600 se auto-asigna en cascada al cargo -> saldo pendiente = 400.
+        assert metrics["kpis"]["outstanding"] == Decimal("400.00")
         assert metrics["kpis"]["payments_count"] == 1
 
     def test_income_by_method_groups(self, db: None) -> None:

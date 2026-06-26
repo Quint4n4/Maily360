@@ -264,6 +264,31 @@ class TestPaymentServices:
         assert charge.balance == Decimal("300.00")
         assert PaymentAllocation.all_objects.filter(charge=charge).count() == 1
 
+    def test_payment_auto_asigna_en_cascada(self, db: None) -> None:
+        """Un pago SIN allocations se aplica solo a los cargos pendientes más antiguos."""
+        tenant = TenantFactory()
+        user = UserFactory()
+        patient = PatientFactory(tenant=tenant)
+        c1 = charge_create(
+            tenant=tenant, user=user, patient=patient,
+            amount=Decimal("800.00"), description="Consulta general",
+        )
+        c2 = charge_create(
+            tenant=tenant, user=user, patient=patient,
+            amount=Decimal("100.00"), description="Consulta dolor de muela",
+        )
+
+        # Pago de 850 SIN allocations -> cubre c1 (800) y abona 50 a c2.
+        payment_register(
+            tenant=tenant, user=user, patient=patient, amount=Decimal("850.00"),
+        )
+
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        assert c1.status == Charge.Status.PAID
+        assert c2.status == Charge.Status.PARTIAL
+        assert c2.balance == Decimal("50.00")
+
     def test_payment_allocation_cannot_exceed_balance(self, db: None) -> None:
         tenant = TenantFactory()
         user = UserFactory()

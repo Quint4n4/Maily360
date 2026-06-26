@@ -607,6 +607,40 @@ def payment_register(
                 "La suma de las aplicaciones excede el monto del pago."
             )
 
+        # Auto-asignación en cascada: el remanente que no se asignó manualmente
+        # se aplica a los cargos pendientes/parciales más antiguos del paciente,
+        # para que el pago SIEMPRE baje la deuda sin depender de captura manual.
+        # Lo que sobre (si pagó de más) queda como saldo a favor del paciente.
+        remaining = amount - allocated_total
+        if remaining > ZERO:
+            ya_aplicados = [a.get("charge_id") for a in allocations if a.get("charge_id")]
+            pendientes = (
+                Charge.objects.select_for_update()
+                .filter(
+                    patient=patient,
+                    status__in=[Charge.Status.PENDING, Charge.Status.PARTIAL],
+                )
+                .exclude(id__in=ya_aplicados)
+                .order_by("issued_at", "created_at")
+            )
+            for charge in pendientes:
+                if remaining <= ZERO:
+                    break
+                aplicar = min(remaining, charge.balance)
+                if aplicar <= ZERO:
+                    continue
+                PaymentAllocation.objects.create(
+                    tenant=tenant,
+                    created_by=user,
+                    payment=payment,
+                    charge=charge,
+                    amount=aplicar,
+                )
+                charge.amount_paid = _q2(charge.amount_paid + aplicar)
+                _apply_charge_status(charge=charge)
+                allocated_total += aplicar
+                remaining -= aplicar
+
     audit_record(
         action=ActionType.PAYMENT_REGISTER,
         resource_type="Payment",

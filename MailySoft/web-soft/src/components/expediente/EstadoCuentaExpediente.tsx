@@ -107,7 +107,15 @@ export default function EstadoCuentaExpediente({ paciente, puedeCobrar }: Props)
       <div className="grid grid-cols-3 gap-3">
         <SummaryCard label="Total cargos" value={formatMoney(data.total_charged)} tint="#7C3AED" />
         <SummaryCard label="Total pagos" value={formatMoney(data.total_paid)} tint="#0F766E" />
-        <SummaryCard label="Saldo" value={formatMoney(data.balance)} tint={ORO} />
+        <SummaryCard
+          label={data.balance < 0 ? 'Saldo a favor' : 'Saldo por cobrar'}
+          value={
+            data.balance < 0
+              ? `${formatMoney(Math.abs(data.balance))} a favor`
+              : formatMoney(data.balance)
+          }
+          tint={data.balance < 0 ? '#0F766E' : ORO}
+        />
       </div>
 
       {/* Selector de vista */}
