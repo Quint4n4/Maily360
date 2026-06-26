@@ -13,6 +13,8 @@ import EmbudoChart from './charts/EmbudoChart'
 
 interface Props {
   range: DateRangeParams
+  /** Navega a otra pestaña de Finanzas (para el drill-down de las tarjetas KPI). */
+  onNavigate?: (tab: string) => void
 }
 
 function bucketAgeDays(bucket: string, isoDate: string): boolean {
@@ -23,7 +25,7 @@ function bucketAgeDays(bucket: string, isoDate: string): boolean {
   return days > 90
 }
 
-export default function DashboardTab({ range }: Props) {
+export default function DashboardTab({ range, onNavigate }: Props) {
   const { data, isLoading, isError, error } = useDashboard(range)
 
   // Drill-down compartido entre las gráficas y la tabla de movimientos.
@@ -104,7 +106,7 @@ export default function DashboardTab({ range }: Props) {
 
   return (
     <div className="space-y-4">
-      <KpiCards kpis={data.kpis} />
+      <KpiCards kpis={data.kpis} onNavigate={onNavigate} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2">

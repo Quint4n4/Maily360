@@ -158,7 +158,9 @@ export default function FinanzasPage() {
             </div>
 
             {/* Contenido */}
-            {current?.key === 'dashboard' && <DashboardTab range={range} />}
+            {current?.key === 'dashboard' && (
+              <DashboardTab range={range} onNavigate={(t) => setActiveTab(t as TabKey)} />
+            )}
             {current?.key === 'reportes' && <ReporteTab role={role} />}
             {current?.key === 'cierre' && <CierreDiarioTab role={role} />}
             {current?.key === 'cobros' && <CobrosPagosTab role={role} />}
