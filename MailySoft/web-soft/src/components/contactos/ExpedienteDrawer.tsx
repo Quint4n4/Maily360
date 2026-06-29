@@ -39,13 +39,14 @@ import { ApiError } from '../../lib/http'
 import { useRole } from '../../auth/RoleContext'
 import {
   puedeVerExpedienteClinico, puedeEditarClinico, puedeCapturarSignos, puedeEmitirReceta,
-  puedeVerEstadoCuenta, puedeCobrar,
+  puedeAnularReceta, puedeVerEstadoCuenta, puedeCobrar,
 } from '../../auth/permisos'
 import AvatarUploader from '../common/AvatarUploader'
 import { useAviso } from '../common/DialogProvider'
 import FichaPaciente from '../expediente/FichaPaciente'
 import VisitaDeHoy from '../expediente/VisitaDeHoy'
 import HistorialExpediente from '../expediente/HistorialExpediente'
+import RecetasTab from '../expediente/RecetasTab'
 import CitasSection from '../expediente/CitasSection'
 import EstadoCuentaExpediente from '../expediente/EstadoCuentaExpediente'
 
@@ -238,6 +239,12 @@ export default function ExpedienteDrawer({
                       paciente={paciente}
                       verClinico={accesoClinico}
                       verEstadoCuenta={verEstadoCuenta}
+                    />
+                    {/* Historial de recetas emitidas (ver PDF / copiar a nueva / anular). */}
+                    <RecetasTab
+                      paciente={paciente}
+                      puedeEmitir={emitirReceta}
+                      puedeAnular={puedeAnularReceta(role)}
                     />
                   </>
                 ) : (
