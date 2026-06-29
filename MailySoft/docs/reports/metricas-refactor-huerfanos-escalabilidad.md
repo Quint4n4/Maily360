@@ -150,7 +150,7 @@
 
 | # | Riesgo | Dónde | Recomendación |
 |---|---|---|---|
-| 1 | **PDF (WeasyPrint) síncrono bloquea workers.** Con solo 8 threads de gunicorn, varias descargas de libro clínico/recetas congelan la API entera. | `apps/expediente/views.py:1408`, `apps/recetas/views.py:436`, `pdf.py:506/689` | Generar en **Celery** (cola dedicada `pdf`), responder 202 + polling o link firmado. |
+| 1 | ✅ **RESUELTO (2026-06-29).** PDF síncrono que bloqueaba workers. | recetas + libro + cotización + reporte | Movido a **Celery** vía infra genérica `apps.pdfs` (encolar 202 → polling → descarga). Cola default (la dedicada `pdf` queda como optimización). |
 | 2 | **Búsqueda de pacientes sin índice de texto.** `icontains` sobre 5 campos → table scan O(n). Con 50k+ pacientes/clínica, cada tecla del buscador escanea la tabla. | `apps/pacientes/selectors.py:99-108` (el propio código tiene un `TODO(perf)` en la línea 100) | Índice **GIN `pg_trgm`** sobre nombre/apellidos/teléfono (con `tenant_id`). |
 | 3 | **Sin pgbouncer + workers fijos.** `CONN_MAX_AGE=60` reusa conexiones pero al escalar replicas se puede agotar `max_connections` de Postgres. | `Dockerfile:102`, `base.py:139` | pgbouncer. **Ojo:** el modo *transaction* puede chocar con el GUC `app.current_tenant_id` (nivel sesión) → habría que migrar a `SET LOCAL` o usar *session-mode*. Decisión estructural que toca el núcleo de RLS. |
 
@@ -160,7 +160,7 @@
 |---|---|---|---|
 | 4 | **N+1 en el libro clínico:** `obj.credentials.filter()` por médico. | `apps/expediente/serializers.py:1089` | `prefetch_related("doctor__credentials")` en `book_build`. Quick-win. |
 | 5 | **Cero caché de aplicación** pese a tener Redis listo. El dashboard de finanzas y catálogos se recalculan en cada request. | `base.py:150` (configurado, nunca usado) | Cachear dashboard + catálogos con invalidación por tenant. |
-| 6 | **Frontend sin code-splitting.** Todas las páginas se importan estáticamente; libs pesadas (`jspdf`, `xlsx`, `recharts`, `framer-motion`) van al bundle inicial. | `web-soft/src/App.tsx:10-23`, `vite.config.ts` (sin `manualChunks`) | `React.lazy()` por ruta + `manualChunks`. Bajaría mucho el chunk inicial. |
+| 6 | ✅ **HECHO.** Code-splitting aplicado: `React.lazy()` por ruta (13 rutas) + `manualChunks` en Vite. | `web-soft/src/App.tsx`, `vite.config.ts` | — |
 | 7 | **Recordatorios con `eta` lejana retenidos en Redis con `allkeys-lru`** → pueden ser **descartados** silenciosamente bajo presión de memoria (recordatorios perdidos). | `apps/agenda/services.py:1251`, `docker-compose.yml:35` | Redis del broker en `noeviction` (separado del cache), o patrón **beat** que escanee recordatorios PENDING por ventana. |
 
 #### 🟡 P2 — A vigilar
@@ -184,10 +184,10 @@
 4. ✅ **HECHO (2026-06-25).** Índice `pg_trgm` para búsqueda de pacientes: migración `0012` (extensión + 5 índices GIN trgm). EXPLAIN confirma `BitmapOr` sobre los 5 índices. 219 tests de pacientes en verde.
 
 **Esfuerzo medio (medio día c/u):**
-5. ✅ **erroresDe HECHO (2026-06-25).** Consolidadas **10** copias de `erroresDe()` (las 9 + `erroresDePaciente` que el análisis había contado mal como wrapper) en `lib/apiErrors.ts` con parámetro `fallback`. −118 LOC, `tsc` en verde. Pendiente: extraer `<Field>`/`INPUT`/`LABEL` compartido.
-6. Mover generación de PDF a Celery (cola dedicada).
-7. Activar caché de Redis para dashboard de finanzas y catálogos.
-8. `React.lazy()` por ruta + `manualChunks` en Vite.
+5. ✅ **erroresDe HECHO (2026-06-25).** Consolidadas **10** copias de `erroresDe()` en `lib/apiErrors.ts`. −118 LOC. ⏳ **Pendiente:** extraer `<Field>`/`INPUT`/`LABEL` compartido.
+6. ✅ **HECHO (2026-06-29).** PDF a Celery para **TODOS** los PDFs vía infra genérica `apps.pdfs`. Ver `docs/design/pdf-async-celery-plan.md`.
+7. ⏳ **PENDIENTE.** Activar caché de Redis para dashboard de finanzas y catálogos.
+8. ✅ **HECHO.** `React.lazy()` por ruta + `manualChunks` en Vite.
 
 **Estructural (planear como tarea propia):**
 9. ✅ **HECHO (2026-06-25).** Dividido `agenda/services.py` (1761→1157, 5 módulos), `expediente/views.py` (1616→84, 7 módulos `views_*`) y `recetas/services.py` (`prescription_create` 425→290, 3 helpers extraídos).
