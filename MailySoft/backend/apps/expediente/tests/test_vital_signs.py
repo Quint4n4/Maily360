@@ -924,8 +924,9 @@ class TestVitalSignsAuditLog:
         assert log.tenant_id == tenant.id
         assert log.actor_id == user.id
         # ALTO-1: resource_repr es el UUID del registro, NUNCA valores clínicos.
+        # El assert de igualdad ya lo garantiza; no se chequea `"72" not in` porque
+        # un UUID puede contener ese par de dígitos por azar (volvía el test flaky).
         assert log.resource_repr == str(record.id)
-        assert "72" not in log.resource_repr  # no debe contener la FC
 
     def test_resource_repr_es_uuid_no_valores_clinicos(self, db: Any) -> None:
         """resource_repr del AuditLog es el UUID, no contiene datos clínicos."""
@@ -1236,8 +1237,10 @@ class TestVitalSignsReadAuditLog:
 
         assert log is not None
         assert log.resource_repr == str(patient.id)
+        # El assert anterior ya garantiza que resource_repr es EXACTAMENTE el UUID
+        # del paciente (sin PII). No se chequea `"99" not in resource_repr` porque
+        # un UUID puede contener ese par de dígitos por azar (volvía el test flaky).
         assert "datos sensibles" not in log.resource_repr
-        assert "99" not in log.resource_repr
         assert str(patient.id) == log.metadata.get("patient_id")
 
     def test_get_series_genera_vitalsigns_read(self, db: Any) -> None:
