@@ -171,7 +171,7 @@
 - **2 round-trips SQL extra por request** (set/clear del GUC de tenant). Costo fijo aceptable.
 - **WebSockets scaffolded sin uso** (`config/asgi.py` con `URLRouter([])` vacío). Sin impacto hasta que se implemente.
 
-> **Pendientes de seguridad ya anotados en `ESTADO-DEL-PROYECTO.md`:** actualizar Django 5.2.14→5.2.15 y Pillow 10.4.0→12.2.0; reemplazar `xlsx` (CVE sin parche) por `exceljs`.
+> **Seguridad — ✅ RESUELTO (2026-06-29):** Django ya está en **5.2.15** (última de la rama 5.2); **Pillow** actualizado **10.4.0 → 12.2.0** (1244 tests de las apps con imágenes/PDF en verde). El punto de **`xlsx`** quedó **N/A**: no es dependencia de `web-soft` (ni directa, ni transitiva, ni instalada).
 
 ---
 
