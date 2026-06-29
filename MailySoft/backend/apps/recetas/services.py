@@ -1229,10 +1229,14 @@ def prescription_pdf_job_enqueue(
         },
     )
 
-    needs_enqueue = created or job.status == PrescriptionPdfJob.Status.FAILED
+    # Re-encolar SIEMPRE que el PDF no esté listo (robustez): si un job quedó
+    # PENDING/PROCESSING pero su mensaje se perdió (worker caído, reinicio, etc.),
+    # un re-pedido lo vuelve a encolar. La tarea es idempotente (si ya está DONE,
+    # no regenera), así que re-encolar es seguro. Solo un job DONE se reusa (caché).
+    needs_enqueue = job.status != PrescriptionPdfJob.Status.DONE
 
     if not created and job.status == PrescriptionPdfJob.Status.FAILED:
-        # Reintentar un job fallido: limpiar estado y volver a encolar.
+        # Reintentar un job fallido: limpiar estado antes de re-encolar.
         job.status = PrescriptionPdfJob.Status.PENDING
         job.error = ""
         job.file = None

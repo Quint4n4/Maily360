@@ -112,6 +112,25 @@ class TestPrescriptionPdfJobEnqueue:
                     job = prescription_pdf_job_enqueue(prescription=rx, user=user)
         mock_delay.assert_called_once_with(str(job.id))
 
+    def test_reencola_job_pending_atascado(
+        self, db: Any, django_capture_on_commit_callbacks: Any
+    ) -> None:
+        """Un job PENDING cuyo mensaje se perdió (worker caído/reiniciado) se
+        re-encola en el siguiente pedido, sin crear un job nuevo (robustez)."""
+        tenant = TenantFactory()
+        user, rx = _make_prescription(tenant)
+        with tenant_ctx(tenant):
+            job1 = prescription_pdf_job_enqueue(prescription=rx, user=user)
+        # Segundo pedido: el job sigue PENDING (la tarea nunca corrió).
+        with patch("apps.recetas.tasks.generate_prescription_pdf.delay") as mock_delay:
+            with django_capture_on_commit_callbacks(execute=True):
+                with tenant_ctx(tenant):
+                    job2 = prescription_pdf_job_enqueue(prescription=rx, user=user)
+            total = PrescriptionPdfJob.objects.filter(prescription=rx).count()
+        assert job2.id == job1.id  # mismo job, no se duplica
+        assert total == 1
+        mock_delay.assert_called_once_with(str(job1.id))  # se re-encoló
+
 
 class TestGeneratePrescriptionPdfTask:
     def test_genera_y_marca_done(self, db: Any) -> None:
