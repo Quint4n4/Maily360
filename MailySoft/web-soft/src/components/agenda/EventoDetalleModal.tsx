@@ -5,6 +5,7 @@ import { useUpdateAgendaBlock, useDeleteAgendaBlock } from '../../hooks/agenda'
 import NotasHilo from './NotasHilo'
 import { toDayKey, localHHMM, combineToISO } from '../../lib/fecha'
 import { erroresDe } from '../../lib/apiErrors'
+import { INPUT, LABEL } from '../../lib/estilosForm'
 import type { AgendaBlock } from '../../types/agenda'
 
 interface Props {
@@ -12,9 +13,6 @@ interface Props {
   onClose: () => void
   soloLectura?: boolean
 }
-
-const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-base sm:text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
-const LABEL = 'block text-xs font-medium text-gray-500 mb-1'
 
 export default function EventoDetalleModal({ evento, onClose, soloLectura = false }: Props) {
   const [titulo, setTitulo] = useState('')

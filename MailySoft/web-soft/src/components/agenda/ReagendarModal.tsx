@@ -4,6 +4,7 @@ import { X, AlertCircle, Loader2, CalendarClock, User } from 'lucide-react'
 import { useRescheduleAppointment } from '../../hooks/agenda'
 import { toDayKey, localHHMM, combineToISO, durationMin } from '../../lib/fecha'
 import { erroresDe } from '../../lib/apiErrors'
+import { INPUT, LABEL } from '../../lib/estilosForm'
 import type { Appointment } from '../../types/agenda'
 
 interface Props {
@@ -11,8 +12,6 @@ interface Props {
   onClose: () => void
 }
 
-const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-base sm:text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
-const LABEL = 'block text-xs font-medium text-gray-500 mb-1'
 const DURACIONES = [30, 45, 60, 90]
 
 export default function ReagendarModal({ cita, onClose }: Props) {
