@@ -100,25 +100,57 @@ export async function cancelPrescription(
   })
 }
 
-// ── B1.3 — PDF (descarga vía blob con Bearer) ──────────────────────────────────
+// ── B1.3 — PDF asíncrono (Celery): encolar → polling → descargar como Blob ──────
+
+const _sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/** Referencia a un trabajo de PDF que devuelve el backend. */
+interface PdfJobRef {
+  job_id: string
+  status: 'pending' | 'processing' | 'done' | 'failed'
+}
 
 /**
- * GET recetas/<prescription_id>/pdf/ — descarga el PDF como Blob.
- * El endpoint exige Authorization Bearer (token en memoria), por eso NO se puede
- * usar un <a href> directo: se obtiene el blob por el cliente central y el caller
- * crea un object URL temporal para abrirlo/descargarlo.
+ * Flujo asíncrono del PDF de receta. Transparente para el caller: devuelve un
+ * Promise<Blob> (como antes), pero por dentro:
+ *   1. GET /recetas/<id>/pdf/<qs>  → encola (o reusa caché): { job_id, status }.
+ *   2. Polling de GET /recetas/pdf-job/<job_id>/ cada 2 s hasta status="done".
+ *   3. GET /recetas/pdf-job/<job_id>/file/ → descarga el PDF (Bearer).
+ * El PDF se genera en Celery, así que la API no se bloquea (riesgo P0).
  */
-export async function getPrescriptionPdf(prescriptionId: string): Promise<Blob> {
-  return requestBlob(`/recetas/${prescriptionId}/pdf/`, {
+async function _prescriptionPdfBlob(prescriptionId: string, qs: string): Promise<Blob> {
+  const job = await request<PdfJobRef>(`/recetas/${prescriptionId}/pdf/${qs}`)
+
+  let status = job.status
+  const MAX_TRIES = 30 // ~60 s de espera máxima
+  for (let i = 0; status !== 'done' && i < MAX_TRIES; i++) {
+    if (status === 'failed') throw new Error('No se pudo generar el PDF. Intenta de nuevo.')
+    await _sleep(2000)
+    const s = await request<PdfJobRef>(`/recetas/pdf-job/${job.job_id}/`)
+    status = s.status
+  }
+  if (status !== 'done') {
+    throw new Error('La generación del PDF está tardando demasiado. Intenta de nuevo.')
+  }
+
+  return requestBlob(`/recetas/pdf-job/${job.job_id}/file/`, {
     headers: { Accept: 'application/pdf' },
   })
 }
 
 /**
- * GET recetas/<id>/pdf/?formato=|?format_id= — PDF con override de formato.
- * Se usa en la galería para la vista previa de un formato sobre una receta de
- * ejemplo. `formato` fuerza el layout por nombre (standard/compact/digital);
- * `formatId` aplica un PrescriptionFormat persistido por UUID.
+ * Descarga el PDF de una receta como Blob (flujo asíncrono interno).
+ * El endpoint exige Authorization Bearer (token en memoria), por eso NO se puede
+ * usar un <a href> directo: el caller crea un object URL temporal para abrirlo.
+ */
+export async function getPrescriptionPdf(prescriptionId: string): Promise<Blob> {
+  return _prescriptionPdfBlob(prescriptionId, '')
+}
+
+/**
+ * PDF con override de formato (galería / vista previa). `formato` fuerza el layout
+ * por nombre (standard/compact/digital); `formatId` aplica un PrescriptionFormat
+ * persistido por UUID.
  */
 export async function getPrescriptionPdfWithFormat(
   prescriptionId: string,
@@ -128,9 +160,7 @@ export async function getPrescriptionPdfWithFormat(
   if (override.formatId) qs.set('format_id', override.formatId)
   else if (override.formato) qs.set('formato', override.formato)
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
-  return requestBlob(`/recetas/${prescriptionId}/pdf/${suffix}`, {
-    headers: { Accept: 'application/pdf' },
-  })
+  return _prescriptionPdfBlob(prescriptionId, suffix)
 }
 
 // ── F3 — PrescriptionFormat (galería de formatos) ──────────────────────────────

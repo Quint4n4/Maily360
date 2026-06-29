@@ -1,7 +1,13 @@
 # Plan — Generación de PDFs en segundo plano (Celery)
 
-> Borrador para discusión · 2026-06-29 · Resuelve el riesgo **P0** del reporte de
-> métricas: *"PDF (WeasyPrint) síncrono bloquea workers"*.
+> 2026-06-29 · Resuelve el riesgo **P0** del reporte de métricas:
+> *"PDF (WeasyPrint) síncrono bloquea workers"*.
+>
+> ✅ **IMPLEMENTADO para RECETAS (2026-06-29):** modelo `PrescriptionPdfJob` + RLS,
+> servicio (encolar + caché), tarea Celery (`generate_prescription_pdf`), 3 endpoints
+> (GET encolar → status → file) y frontend (`VisorPdf` vía encolar+polling+descargar).
+> Tarea en la **cola default** (la cola `pdf` dedicada queda como optimización de prod).
+> **Pendiente:** aplicar el mismo patrón al **libro clínico** (`expediente`).
 
 ## 1. El problema (en una línea)
 
