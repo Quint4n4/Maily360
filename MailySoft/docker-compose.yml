@@ -27,12 +27,20 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
-  # Redis (broker Celery + cache + Channels)
+  # Redis (broker Celery DB0 + cache DB1 + Channels DB2)
+  #
+  # POLÍTICA noeviction (no allkeys-lru): la política de evicción es de TODA la
+  # instancia, no por DB. Con allkeys-lru, bajo presión de memoria Redis podía
+  # descartar tareas del BROKER (recordatorios con eta lejana en DB0) → recordatorios
+  # PERDIDOS en silencio. Con noeviction, al llenarse Redis rechaza escrituras (falla
+  # ruidosa, nunca pierde tareas); el caché (DB1) se autolimita por TTL e
+  # `IGNORE_EXCEPTIONS` tolera fallos de escritura. appendonly=yes persiste las tareas
+  # ante reinicios. (En producción de alta escala: broker en instancia dedicada.)
   # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     volumes:
       - redis_data:/data
     ports:
