@@ -91,8 +91,8 @@
 
 | Archivo | LOC | Problema principal |
 |---|---|---|
-| `apps/agenda/services.py` | 1.728 | Mezcla 6 responsabilidades. Dividir en `series.py`, `reminders.py`, `blocks.py`, `notes.py`. |
-| `apps/expediente/views.py` | 1.616 | **Vista gorda más seria.** Lógica de negocio (validación de cita↔paciente) en la view en vez del service. Dividir por recurso. |
+| `apps/agenda/services.py` | ~~1.728~~ → **1.157** | ✅ **HECHO (2026-06-25).** Dividido en `appointment_types.py`, `notes.py`, `series.py`, `reminders.py`, `blocks.py` (re-export desde services; importadores intactos). |
+| `apps/expediente/views.py` | ~~1.616~~ → **84** | ✅ **HECHO (2026-06-25).** Dividido por recurso en 7 módulos `views_*` (facade de re-exports; urls.py y tests intactos). Pendiente menor: mover la validación cita↔paciente de la view al service. |
 | `apps/expediente/services.py` | 1.537 | `medical_history_upsert` (230 líneas), `evolution_note_create` (222). |
 | `apps/recetas/services.py` | 1.141 | **`prescription_create` = 425 líneas** (la función más grande del proyecto). |
 | `apps/agenda/views.py` | 1.067 | |
@@ -190,7 +190,7 @@
 8. `React.lazy()` por ruta + `manualChunks` en Vite.
 
 **Estructural (planear como tarea propia):**
-9. Dividir `agenda/services.py`, `expediente/views.py`, `recetas/services.py` (`prescription_create`).
+9. ✅ **HECHO (2026-06-25).** Dividido `agenda/services.py` (1761→1157, 5 módulos) y `expediente/views.py` (1616→84, 7 módulos `views_*`). **Pendiente:** `recetas/services.py` (`prescription_create`, 425 líneas).
 10. Refactor de `CrearEventoModal` (34 `useState` → reducer/hook).
 11. Decidir pgbouncer + compatibilidad con el GUC de RLS.
 12. Resolver la config de mypy/DRF para reducir los 191 `# type: ignore`.
