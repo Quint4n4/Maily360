@@ -90,6 +90,23 @@ def _auth_client(user: Any) -> APIClient:
     return client
 
 
+def _get_pdf_via_async(
+    client: APIClient, patient_id: Any, tenant: Any, **params: Any
+) -> Any:
+    """Flujo async del PDF del libro: GET encola (202) -> corre la tarea -> GET file."""
+    from apps.pdfs.tasks import generate_pdf
+
+    with api_tenant_ctx(tenant):
+        req = client.get(_pdf_url(patient_id, **params))
+    assert req.status_code == 202, req.content
+    job_id = req.json()["job_id"]
+    generate_pdf(job_id)
+    with api_tenant_ctx(tenant):
+        return client.get(
+            f"/api/v1/pdfs/job/{job_id}/file/", HTTP_ACCEPT="application/pdf"
+        )
+
+
 # ---------------------------------------------------------------------------
 # 1. book_build_all — selector
 # ---------------------------------------------------------------------------
@@ -422,92 +439,86 @@ class TestLibroPdfBuild:
 
 
 class TestPatientBookPdfApi:
-    """Tests del endpoint GET /api/v1/expediente/<patient_id>/libro/pdf/."""
+    """Tests del endpoint GET /api/v1/expediente/<patient_id>/libro/pdf/ (async).
 
-    # ---- Camino feliz ----
+    El endpoint ahora ENCOLA (202 {job_id, status}); el PDF se genera en Celery y
+    se descarga por el endpoint compartido /pdfs/job/<id>/file/. Los tests de
+    permiso/IDOR/validación se quedan sobre el ENCOLAR; los de camino feliz corren
+    la tarea y descargan el archivo via _get_pdf_via_async.
+    """
+
+    # ---- Camino feliz (encola -> tarea -> descarga) ----
 
     def test_200_modo_completo_devuelve_pdf(self, db: Any) -> None:
-        """Un doctor obtiene PDF válido en modo completo."""
-        # La EvolutionNoteFactory crea su propio tenant (vía DoctorFactory).
-        # Usamos nota.tenant como el tenant real del test.
         nota = EvolutionNoteFactory()
         tenant = nota.tenant
         patient = nota.patient
-        user = _member(tenant, TenantMembership.Role.DOCTOR)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.DOCTOR))
 
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(patient.id, modo="completo", imagenes="0"))
+        resp = _get_pdf_via_async(
+            client, patient.id, tenant, modo="completo", imagenes="0"
+        )
 
         assert resp.status_code == 200
         assert resp["Content-Type"] == "application/pdf"
         assert resp.content[:4] == b"%PDF"
 
     def test_200_modo_hc(self, db: Any) -> None:
-        """PDF en modo hc es válido."""
-        # Para modo hc no necesitamos evoluciones; basta un paciente.
         from tests.factories import DoctorFactory
+
         doctor = DoctorFactory()
         tenant = doctor.tenant
         patient = PatientFactory(tenant=tenant)
-        user = _member(tenant, TenantMembership.Role.DOCTOR)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.DOCTOR))
 
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(patient.id, modo="hc", imagenes="0"))
+        resp = _get_pdf_via_async(client, patient.id, tenant, modo="hc", imagenes="0")
 
         assert resp.status_code == 200
         assert resp.content[:4] == b"%PDF"
 
     def test_200_modo_ultimo(self, db: Any) -> None:
-        """PDF en modo ultimo es válido."""
         nota = EvolutionNoteFactory()
         tenant = nota.tenant
         patient = nota.patient
-        user = _member(tenant, TenantMembership.Role.DOCTOR)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.DOCTOR))
 
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(patient.id, modo="ultimo", imagenes="0"))
+        resp = _get_pdf_via_async(
+            client, patient.id, tenant, modo="ultimo", imagenes="0"
+        )
 
         assert resp.status_code == 200
         assert resp.content[:4] == b"%PDF"
 
     def test_200_sin_imagenes(self, db: Any) -> None:
-        """imagenes=0 genera PDF válido (más ligero, D-LIB-2)."""
         nota = EvolutionNoteFactory()
         tenant = nota.tenant
         patient = nota.patient
-        user = _member(tenant, TenantMembership.Role.DOCTOR)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.DOCTOR))
 
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(patient.id, imagenes="0"))
+        resp = _get_pdf_via_async(client, patient.id, tenant, imagenes="0")
 
         assert resp.status_code == 200
         assert resp.content[:4] == b"%PDF"
 
-    def test_content_disposition_attachment(self, db: Any) -> None:
-        """El PDF se descarga como attachment (no inline), D-LIB-6."""
+    def test_content_disposition_inline(self, db: Any) -> None:
+        """El PDF servido por el endpoint compartido va inline (el front lo muestra)."""
         from tests.factories import DoctorFactory
+
         doctor = DoctorFactory()
         tenant = doctor.tenant
         patient = PatientFactory(tenant=tenant)
-        user = _member(tenant, TenantMembership.Role.DOCTOR)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.DOCTOR))
 
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(patient.id, modo="hc", imagenes="0"))
+        resp = _get_pdf_via_async(client, patient.id, tenant, modo="hc", imagenes="0")
 
         assert resp.status_code == 200
-        disposition = resp.get("Content-Disposition", "")
-        assert "attachment" in disposition
+        assert "inline" in resp.get("Content-Disposition", "")
 
-    # ---- Permisos (D-LIB-6) ----
+    # ---- Permisos (D-LIB-6) — sobre el endpoint de ENCOLAR ----
 
     def test_401_sin_autenticacion(self, db: Any) -> None:
-        """Sin Bearer → 401."""
         from tests.factories import DoctorFactory
+
         doctor = DoctorFactory()
         tenant = doctor.tenant
         patient = PatientFactory(tenant=tenant)
@@ -519,12 +530,10 @@ class TestPatientBookPdfApi:
         assert resp.status_code == 401
 
     def test_403_recepcion_no_puede_acceder(self, db: Any) -> None:
-        """Recepción → 403 (D-LIB-6: solo roles clínicos)."""
         nota = EvolutionNoteFactory()
         tenant = nota.tenant
         patient = nota.patient
-        user = _member(tenant, TenantMembership.Role.RECEPTION)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.RECEPTION))
 
         with api_tenant_ctx(tenant):
             resp = client.get(_pdf_url(patient.id, imagenes="0"))
@@ -532,47 +541,41 @@ class TestPatientBookPdfApi:
         assert resp.status_code == 403
 
     def test_403_finanzas_no_puede_acceder(self, db: Any) -> None:
-        """Finanzas → 403 (D-LIB-6)."""
         nota = EvolutionNoteFactory()
         tenant = nota.tenant
         patient = nota.patient
-        user = _member(tenant, TenantMembership.Role.FINANCE)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.FINANCE))
 
         with api_tenant_ctx(tenant):
             resp = client.get(_pdf_url(patient.id, imagenes="0"))
 
         assert resp.status_code == 403
 
-    def test_200_owner_puede_acceder(self, db: Any) -> None:
-        """owner/admin puede acceder al PDF."""
+    def test_202_owner_puede_acceder(self, db: Any) -> None:
+        """owner puede encolar el PDF (202)."""
         from tests.factories import DoctorFactory
+
         doctor = DoctorFactory()
         tenant = doctor.tenant
         patient = PatientFactory(tenant=tenant)
-        user = _member(tenant, TenantMembership.Role.OWNER)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.OWNER))
 
         with api_tenant_ctx(tenant):
             resp = client.get(_pdf_url(patient.id, modo="hc", imagenes="0"))
 
-        assert resp.status_code == 200
+        assert resp.status_code == 202
 
     # ---- Anti-IDOR (multi-tenant) ----
 
     def test_404_idor_paciente_otro_tenant(self, db: Any) -> None:
-        """patient_id de otro tenant → 404 (anti-IDOR, mismo mensaje)."""
         from tests.factories import DoctorFactory
+
         doctor1 = DoctorFactory()
         tenant1 = doctor1.tenant
-
         doctor2 = DoctorFactory()
         tenant2 = doctor2.tenant
-
-        # Paciente en tenant2; doctor autenticado en tenant1.
         patient2 = PatientFactory(tenant=tenant2)
-        user1 = _member(tenant1, TenantMembership.Role.DOCTOR)
-        client = _auth_client(user1)
+        client = _auth_client(_member(tenant1, TenantMembership.Role.DOCTOR))
 
         with api_tenant_ctx(tenant1):
             resp = client.get(_pdf_url(patient2.id, modo="hc", imagenes="0"))
@@ -582,24 +585,23 @@ class TestPatientBookPdfApi:
     # ---- Validación de parámetros ----
 
     def test_400_modo_invalido(self, db: Any) -> None:
-        """modo=inventado → 400 con mensaje descriptivo."""
         from tests.factories import DoctorFactory
+
         doctor = DoctorFactory()
         tenant = doctor.tenant
         patient = PatientFactory(tenant=tenant)
-        user = _member(tenant, TenantMembership.Role.DOCTOR)
-        client = _auth_client(user)
+        client = _auth_client(_member(tenant, TenantMembership.Role.DOCTOR))
 
         with api_tenant_ctx(tenant):
             resp = client.get(_pdf_url(patient.id, modo="inventado", imagenes="0"))
 
         assert resp.status_code == 400
 
-    # ---- Bitácora NOM-024 (D-LIB-4) ----
+    # ---- Bitacora NOM-024 (D-LIB-4) — al ENCOLAR ----
 
     def test_bitacora_patient_book_pdf_registrada(self, db: Any) -> None:
-        """PATIENT_BOOK_PDF se registra en AuditLog al generar el PDF."""
         from tests.factories import DoctorFactory
+
         doctor = DoctorFactory()
         tenant = doctor.tenant
         patient = PatientFactory(tenant=tenant)
@@ -609,7 +611,7 @@ class TestPatientBookPdfApi:
         with api_tenant_ctx(tenant):
             resp = client.get(_pdf_url(patient.id, modo="hc", imagenes="0"))
 
-        assert resp.status_code == 200
+        assert resp.status_code == 202
 
         log = AuditLog.all_objects.filter(
             action=ActionType.PATIENT_BOOK_PDF,
@@ -621,7 +623,6 @@ class TestPatientBookPdfApi:
         assert log.resource_repr == patient.record_number
 
     def test_bitacora_incluye_modo_en_metadata(self, db: Any) -> None:
-        """El campo metadata de la bitácora incluye el modo solicitado."""
         nota = EvolutionNoteFactory()
         tenant = nota.tenant
         patient = nota.patient
@@ -631,9 +632,13 @@ class TestPatientBookPdfApi:
         with api_tenant_ctx(tenant):
             client.get(_pdf_url(patient.id, modo="ultimo", imagenes="0"))
 
-        log = AuditLog.all_objects.filter(
-            action=ActionType.PATIENT_BOOK_PDF,
-            actor=user,
-        ).order_by("-created_at").first()
+        log = (
+            AuditLog.all_objects.filter(
+                action=ActionType.PATIENT_BOOK_PDF,
+                actor=user,
+            )
+            .order_by("-created_at")
+            .first()
+        )
         assert log is not None
         assert log.metadata.get("modo") == "ultimo"

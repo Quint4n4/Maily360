@@ -26,7 +26,8 @@
  *     POST   /expediente/diagnosticos/<id>/resolver/
  */
 
-import { request, requestBlob } from '../lib/http'
+import { request } from '../lib/http'
+import { pdfJobBlob } from './pdfs'
 import type { Paginated } from '../types/paciente'
 import type {
   Addendum,
@@ -280,7 +281,10 @@ export type LibroModo = 'completo' | 'hc' | 'ultimo'
 
 /**
  * GET /expediente/<patient_id>/libro/pdf/?modo=&imagenes= — PDF del libro (Blob).
- * Descarga autenticada (Bearer vía requestBlob); el token nunca va en la URL.
+ *
+ * Flujo asíncrono (Celery): el endpoint ENCOLA y `pdfJobBlob` hace el polling y la
+ * descarga por dentro, devolviendo un Blob. El libro es mutable → siempre fresco
+ * (sin caché). Descarga autenticada (Bearer); el token nunca va en la URL.
  */
 export async function getPatientBookPdf(
   patientId: string,
@@ -288,8 +292,5 @@ export async function getPatientBookPdf(
   incluirImagenes: boolean,
 ): Promise<Blob> {
   const qs = new URLSearchParams({ modo, imagenes: incluirImagenes ? '1' : '0' })
-  // El endpoint solo negocia application/pdf; sin este Accept, DRF responde 406.
-  return requestBlob(`/expediente/${patientId}/libro/pdf/?${qs.toString()}`, {
-    headers: { Accept: 'application/pdf' },
-  })
+  return pdfJobBlob(`/expediente/${patientId}/libro/pdf/?${qs.toString()}`)
 }

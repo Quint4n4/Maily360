@@ -8,10 +8,8 @@ Extraído de expediente/views.py. Vistas delgadas: resuelven el paciente
 import logging
 import uuid
 
-from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.renderers import BaseRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -20,10 +18,11 @@ from apps.audit.services import audit_record
 from apps.core.permissions import EvolutionPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
-from apps.expediente.selectors import book_build, book_build_all
+from apps.expediente.selectors import book_build
 from apps.expediente.serializers import PatientBookSerializer
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
+from apps.pdfs.services import pdf_job_enqueue
 
 logger = logging.getLogger("apps.expediente.views_libro")
 
@@ -123,82 +122,48 @@ class PatientBookApi(TenantAPIView):
 # ---------------------------------------------------------------------------
 
 
-class _PdfRenderer(BaseRenderer):
-    """Renderer que permite a DRF negociar `application/pdf`.
-
-    La vista devuelve un HttpResponse directo; DRF igual ejecuta la
-    negociación de contenido al entrar. Sin este renderer, un cliente
-    que mande `Accept: application/pdf` recibiría 406. Mismo patrón
-    que apps/recetas/views.PdfRenderer.
-    """
-
-    media_type = "application/pdf"
-    format = "pdf"
-    charset = None
-
-    def render(self, data: object, accepted_media_type: object = None, renderer_context: object = None) -> object:
-        return data
-
-
 class PatientBookPdfApi(TenantAPIView):
-    """GET /api/v1/expediente/<patient_id>/libro/pdf/
+    """GET /api/v1/expediente/<patient_id>/libro/pdf/ — encola el PDF del libro.
 
-    Genera el PDF del libro clínico del paciente con WeasyPrint y lo
-    devuelve como descarga autenticada (Bearer, no URL pública — D-LIB-6).
+    El PDF se genera en SEGUNDO PLANO (Celery, infra apps.pdfs) para no bloquear
+    los workers de la API (riesgo P0). Devuelve 202 {job_id, status}; el frontend
+    hace polling de GET /pdfs/job/<job_id>/ y descarga con .../file/ al estar "done".
+
+    El libro clínico es MUTABLE (los datos cambian con cada consulta), así que NO se
+    cachea: cada pedido genera un PDF fresco (cache_key="").
 
     Parámetros de query:
         modo      — "completo" | "hc" | "ultimo" (default "completo").
-                    completo: portada + HC + TODOS los capítulos.
-                    hc:       portada + HC + alergias (para 1ª consulta).
-                    ultimo:   portada + ÚLTIMO capítulo + sus recetas.
         imagenes  — "1" (default) | "0". Incluir/omitir imágenes (D-LIB-2).
 
-    Permiso:
-        Mismo que PatientBookApi y EvolutionNoteListCreateApi: solo roles clínicos
-        (EvolutionPermission). Recepción y finanzas → 403 (D-LIB-6).
-
-    Anti-IDOR:
-        patient_id se resuelve vía patient_get (TenantManager) → 404 si es de
-        otro tenant. NUNCA 403 para recursos ajenos.
-
-    Bitácora (NOM-024 / D-LIB-4):
-        Registra PATIENT_BOOK_PDF con resource_repr=patient.record_number (no-PII)
-        y metadata={modo, imagenes}. Si audit_record falla → logger.critical pero
-        el PDF se sigue generando (disponibilidad clínica > registro estricto).
-
-    Descarga:
-        Content-Disposition: attachment; filename="libro-<record_number>-<modo>.pdf"
-        Cabeceras de seguridad: X-Frame-Options: DENY, X-Content-Type-Options: nosniff.
-
-    Errores:
-        404 — paciente no encontrado / de otro tenant.
-        400 — parámetro modo inválido (fuera de {completo, hc, ultimo}).
-        500 — WeasyPrint falló (RuntimeError); se registra en logger.error.
+    Permiso EvolutionPermission (solo roles clínicos). Anti-IDOR por tenant (404).
+    Bitácora PATIENT_BOOK_PDF al SOLICITAR (NOM-024 / D-LIB-4).
     """
 
     permission_classes = [IsAuthenticated, EvolutionPermission]
-    renderer_classes = [_PdfRenderer]
 
-    def get(self, request: Request, patient_id: uuid.UUID) -> HttpResponse:
-        """Genera y devuelve el PDF del libro clínico."""
-        from apps.expediente.pdf import VALID_BOOK_MODES, libro_pdf_build  # noqa: PLC0415
+    def get(self, request: Request, patient_id: uuid.UUID) -> Response:
+        """Encola la generación del PDF del libro clínico."""
+        from apps.expediente.pdf import VALID_BOOK_MODES  # noqa: PLC0415
 
         # --- Resolver paciente (anti-IDOR) ---
         try:
             patient = patient_get(patient_id=patient_id)
         except Patient.DoesNotExist:
-            return HttpResponse(
-                content=b"Paciente no encontrado.",
-                status=404,
+            return Response(
+                {"detail": "Paciente no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         # --- Parsear parámetros de query ---
         modo: str = request.query_params.get("modo", "completo").lower().strip()
         if modo not in VALID_BOOK_MODES:
-            return HttpResponse(
-                content=f"Parámetro 'modo' inválido: '{modo}'. "
-                f"Valores válidos: completo, hc, ultimo.".encode(),
-                status=400,
+            return Response(
+                {
+                    "detail": f"Parámetro 'modo' inválido: '{modo}'. "
+                    "Valores válidos: completo, hc, ultimo."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         imagenes_param: str = request.query_params.get("imagenes", "1").strip()
@@ -206,7 +171,7 @@ class PatientBookPdfApi(TenantAPIView):
 
         tenant = get_current_tenant()
 
-        # --- Bitácora NOM-024 (D-LIB-4) ---
+        # --- Bitácora NOM-024 (D-LIB-4) — al SOLICITAR el PDF ---
         audit_result = audit_record(
             action=ActionType.PATIENT_BOOK_PDF,
             resource_type="PatientBook",
@@ -232,37 +197,20 @@ class PatientBookPdfApi(TenantAPIView):
                 modo,
             )
 
-        # --- Armar el libro completo (sin paginación) ---
-        book = book_build_all(patient=patient, modo=modo)
-
-        # --- Generar PDF ---
-        try:
-            pdf_bytes = libro_pdf_build(
-                patient=book.patient,
-                clinic_settings=book.clinic_settings,
-                medical_history=book.medical_history,
-                allergies=book.allergies,
-                capitulos=book.capitulos,
-                capitulos_count=book.capitulos_count,
-                modo=modo,
-                incluir_imagenes=incluir_imagenes,
-            )
-        except RuntimeError as exc:
-            logger.error(
-                "PatientBookPdfApi: error al generar PDF — patient_id=%s modo=%s — %s",
-                patient_id,
-                modo,
-                exc,
-            )
-            return HttpResponse(
-                content=b"Error al generar el PDF del libro. Intente nuevamente.",
-                status=500,
-            )
-
-        filename = f"libro-{patient.record_number}-{modo}.pdf"
-        response = HttpResponse(content=pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        # Cabeceras de seguridad (mismo patrón que PrescriptionPdfApi).
-        response["X-Frame-Options"] = "DENY"
-        response["X-Content-Type-Options"] = "nosniff"
-        return response
+        # --- Encolar la generación (libro mutable → sin caché) ---
+        job = pdf_job_enqueue(
+            tenant=tenant,
+            kind="book",
+            params={
+                "patient_id": str(patient.id),
+                "modo": modo,
+                "incluir_imagenes": incluir_imagenes,
+            },
+            user=request.user,
+            cache_key="",
+            filename=f"libro-{patient.record_number}-{modo}.pdf",
+        )
+        return Response(
+            {"job_id": str(job.id), "status": job.status},
+            status=status.HTTP_202_ACCEPTED,
+        )
