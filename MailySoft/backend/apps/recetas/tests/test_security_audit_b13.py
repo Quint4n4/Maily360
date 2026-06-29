@@ -64,6 +64,19 @@ def _pdf_url(prescription_id: Any) -> str:
     return f"/api/v1/recetas/{prescription_id}/pdf/"
 
 
+def _get_pdf_via_async(client: Any, rx: Any, tenant: Any) -> Any:
+    """Flujo async del PDF: POST encola, corre la tarea (WeasyPrint) y GET descarga el archivo."""
+    from apps.recetas.tasks import generate_prescription_pdf
+
+    with api_tenant_ctx(tenant):
+        post = client.get(_pdf_url(rx.id))
+    assert post.status_code == 202, post.content
+    job_id = post.json()["job_id"]
+    generate_prescription_pdf(job_id)
+    with api_tenant_ctx(tenant):
+        return client.get(f"/api/v1/recetas/pdf-job/{job_id}/file/")
+
+
 def _make_nurse_user(tenant: Any) -> Any:
     user = UserFactory()
     TenantMembershipFactory(user=user, tenant=tenant, role=TenantMembership.Role.NURSE)
@@ -330,8 +343,7 @@ class TestMedio4SecurityHeaders:
         user = _make_nurse_user(tenant)
         client = APIClient()
         client.force_authenticate(user=user)
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(rx.id))
+        resp = _get_pdf_via_async(client, rx, tenant)
 
         assert resp.status_code == 200
         assert resp["X-Frame-Options"] == "DENY"
@@ -348,8 +360,7 @@ class TestMedio4SecurityHeaders:
         user = _make_nurse_user(tenant)
         client = APIClient()
         client.force_authenticate(user=user)
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(rx.id))
+        resp = _get_pdf_via_async(client, rx, tenant)
 
         assert resp.status_code == 200
         assert resp["X-Content-Type-Options"] == "nosniff"
@@ -366,8 +377,7 @@ class TestMedio4SecurityHeaders:
         user = _make_nurse_user(tenant)
         client = APIClient()
         client.force_authenticate(user=user)
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(rx.id))
+        resp = _get_pdf_via_async(client, rx, tenant)
 
         assert resp.status_code == 200
         disposition = resp.get("Content-Disposition", "")
@@ -386,8 +396,7 @@ class TestMedio4SecurityHeaders:
         user = _make_nurse_user(tenant)
         client = APIClient()
         client.force_authenticate(user=user)
-        with api_tenant_ctx(tenant):
-            resp = client.get(_pdf_url(rx.id))
+        resp = _get_pdf_via_async(client, rx, tenant)
 
         assert resp.status_code == 200
         assert "application/pdf" in resp["Content-Type"]

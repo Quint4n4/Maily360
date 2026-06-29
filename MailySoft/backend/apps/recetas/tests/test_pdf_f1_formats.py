@@ -51,6 +51,20 @@ def _pdf_url(prescription_id: Any, formato: str = "digital") -> str:
     return f"{base}?formato={formato}"
 
 
+def _get_pdf_via_async(client: Any, rx: Any, tenant: Any, formato: str = "digital", accept: Any = None) -> Any:
+    """Flujo async del PDF: GET encola (?formato=), corre la tarea y GET descarga el archivo."""
+    from apps.recetas.tasks import generate_prescription_pdf
+
+    with api_tenant_ctx(tenant):
+        req = client.get(_pdf_url(rx.id, formato=formato))
+    assert req.status_code == 202, req.content
+    job_id = req.json()["job_id"]
+    generate_prescription_pdf(job_id)
+    kwargs = {"HTTP_ACCEPT": accept} if accept else {}
+    with api_tenant_ctx(tenant):
+        return client.get(f"/api/v1/recetas/pdf-job/{job_id}/file/", **kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Fixtures auxiliares
 # ---------------------------------------------------------------------------
@@ -117,8 +131,7 @@ def test_pdf_all_formats_return_200_and_pdf_bytes(formato: str) -> None:
 
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato=formato))
+    resp = _get_pdf_via_async(client, rx, tenant, formato=formato)
 
     assert resp.status_code == 200, f"formato={formato} → status {resp.status_code}"
     assert resp["Content-Type"] == "application/pdf"
@@ -134,8 +147,7 @@ def test_pdf_invalid_formato_falls_back_to_digital() -> None:
 
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="inexistente"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="inexistente")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -151,8 +163,7 @@ def test_pdf_accept_application_pdf_with_formato(formato: str) -> None:
 
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato=formato), HTTP_ACCEPT="application/pdf")
+    resp = _get_pdf_via_async(client, rx, tenant, formato=formato, accept="application/pdf")
 
     assert resp.status_code == 200
     assert "application/pdf" in resp["Content-Type"]
@@ -192,8 +203,7 @@ def test_pdf_with_structured_fields(formato: str) -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato=formato))
+    resp = _get_pdf_via_async(client, rx, tenant, formato=formato)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -246,8 +256,7 @@ def test_pdf_with_sueros_terapias_diagnosis(formato: str) -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato=formato))
+    resp = _get_pdf_via_async(client, rx, tenant, formato=formato)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -275,8 +284,7 @@ def test_pdf_cancelled_all_formats(formato: str) -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato=formato))
+    resp = _get_pdf_via_async(client, rx, tenant, formato=formato)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -301,8 +309,7 @@ def test_pdf_no_logo_no_sello(formato: str) -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato=formato))
+    resp = _get_pdf_via_async(client, rx, tenant, formato=formato)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -362,8 +369,7 @@ def test_pdf_compact_many_items_no_error() -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="compact"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="compact")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -414,8 +420,7 @@ def test_pdf_compact_12_meds_multi_page() -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="compact"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="compact")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -457,8 +462,7 @@ def test_pdf_compact_1_med_single_page() -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="compact"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="compact")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -509,8 +513,7 @@ def test_pdf_compact_camsa_style_with_signos_diagnostico_controlado() -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="compact"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="compact")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -536,8 +539,7 @@ def test_pdf_compact_cancelled_watermark() -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="compact"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="compact")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -564,8 +566,7 @@ def test_pdf_compact_2_meds_single_page() -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="compact"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="compact")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -899,8 +900,7 @@ def test_pdf_compact_with_logo_generates_valid_pdf() -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="compact"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="compact")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF", "El PDF con logo debe iniciar con %PDF"
@@ -953,8 +953,7 @@ def test_pdf_compact_12_meds_multipage_with_watermark() -> None:
     user = _make_nurse(tenant)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id, formato="compact"))
+    resp = _get_pdf_via_async(client, rx, tenant, formato="compact")
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"

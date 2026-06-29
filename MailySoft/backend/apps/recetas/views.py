@@ -51,6 +51,7 @@ from apps.recetas.selectors import (
     prescription_format_list,
     prescription_get,
     prescription_list,
+    prescription_pdf_job_get,
 )
 from apps.recetas.serializers import (
     MedicationCreateInputSerializer,
@@ -71,6 +72,7 @@ from apps.recetas.services import (
     prescription_format_create,
     prescription_format_delete,
     prescription_format_update,
+    prescription_pdf_job_enqueue,
 )
 
 logger = logging.getLogger("apps.recetas.views")
@@ -356,44 +358,34 @@ class PdfRenderer(BaseRenderer):
         return data
 
 
-class PrescriptionPdfApi(TenantAPIView):
-    """GET /api/v1/recetas/<prescription_id>/pdf/ — PDF de la receta con membrete.
+class PrescriptionPdfRequestApi(TenantAPIView):
+    """GET /api/v1/recetas/<prescription_id>/pdf/ — encola (o reusa) la generación del PDF.
 
-    Genera el PDF de la receta en tiempo real usando xhtml2pdf y lo devuelve
-    como respuesta con Content-Type application/pdf.
+    El PDF se genera en SEGUNDO PLANO (Celery) para no bloquear los workers de la
+    API (riesgo P0). Devuelve {job_id, status}. El frontend hace polling de
+    GET /recetas/pdf-job/<job_id>/ y descarga con .../file/ cuando status="done".
 
-    Diseño:
-        - Permiso: CLINICAL_READ (mismo que leer el detalle). Recepción y finanzas
-          NO tienen acceso al PDF de la receta (DR-6). El PDF es un documento
-          clínico completo y tiene el mismo nivel de sensibilidad que el detalle.
-        - Devuelve `inline; filename="receta-<folio>.pdf"` para abrirse en el
-          navegador sin forzar descarga (el frontend decide si descargar o previsualizar).
-        - Bitácora: PRESCRIPTION_PDF con resource_repr = folio (sin PII).
-        - Anti-IDOR: prescription_get usa TenantManager; receta de otro tenant → 404.
-        - Si la generación del PDF falla (RuntimeError de xhtml2pdf), devuelve 500
-          con un mensaje genérico y registra el error en el logger.
+    Caché: si la receta (inmutable) ya tiene su PDF, status llega "done" de una vez.
+    Permiso CLINICAL_READ (mismo que el detalle). Anti-IDOR por tenant. Bitácora
+    PRESCRIPTION_PDF (sin PII, solo folio) al solicitar.
     """
 
     permission_classes = [IsAuthenticated, PrescriptionPermission]
-    # Permite negociar Accept: application/pdf (el frontend lo pide así) → evita 406.
-    renderer_classes = [PdfRenderer]
 
-    def get(self, request: Request, prescription_id: uuid.UUID) -> HttpResponse:
-        """Genera y devuelve el PDF de la receta."""
+    def get(self, request: Request, prescription_id: uuid.UUID) -> Response:
+        """Encola (o reusa del caché) la generación del PDF de la receta."""
         from apps.recetas.models import Prescription
-        from apps.recetas.pdf import prescription_pdf_build
+        from apps.recetas.pdf import VALID_LAYOUTS
 
         try:
             prescription = prescription_get(prescription_id=prescription_id)
         except Prescription.DoesNotExist:
-            return HttpResponse(
-                content=b"Receta no encontrada.",
-                status=404,
+            return Response(
+                {"detail": "Receta no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         tenant = get_current_tenant()
-
-        # Bitácora NOM-024: PRESCRIPTION_PDF — sin PII, solo folio.
         audit_record(
             action=ActionType.PRESCRIPTION_PDF,
             resource_type="Prescription",
@@ -404,56 +396,78 @@ class PrescriptionPdfApi(TenantAPIView):
             metadata={"folio": prescription.folio},
         )
 
-        # ?formato= permite seleccionar el layout por nombre (vista previa rápida).
-        # ?format_id= permite seleccionar un PrescriptionFormat persistido por UUID.
-        # Si ninguno se pasa, se resuelve el formato automáticamente (F3).
-        from apps.recetas.pdf import VALID_LAYOUTS
-        from apps.recetas.selectors import prescription_format_resolve
+        # Mismo contrato de parámetros que antes: ?formato= (layout) / ?format_id=.
+        layout = (request.query_params.get("formato", "") or "").lower().strip()
+        if layout and layout not in VALID_LAYOUTS:
+            layout = ""
+        format_id = (request.query_params.get("format_id", "") or "").strip()
 
-        format_id_param: str | None = request.query_params.get("format_id")
-        formato_param: str | None = request.query_params.get("formato", "").lower().strip() or None
-
-        import uuid as _uuid
-
-        format_override_id: _uuid.UUID | None = None
-        if format_id_param:
-            try:
-                format_override_id = _uuid.UUID(format_id_param)
-            except ValueError:
-                format_override_id = None
-
-        # Resolver el formato para el PDF.
-        if formato_param and formato_param not in VALID_LAYOUTS:
-            formato_param = None
-
-        resolved_fmt = prescription_format_resolve(
+        job = prescription_pdf_job_enqueue(
             prescription=prescription,
-            format_override_id=format_override_id,
-            layout_override=formato_param,
+            user=request.user,
+            layout=layout,
+            format_id=format_id,
+        )
+        return Response(
+            {"job_id": str(job.id), "status": job.status},
+            status=status.HTTP_202_ACCEPTED,
         )
 
+
+class PrescriptionPdfJobStatusApi(TenantAPIView):
+    """GET /api/v1/recetas/pdf-job/<job_id>/ — estado del trabajo de PDF.
+
+    Devuelve {status} (pending/processing/done/failed). El frontend lo consulta
+    cada ~2 s hasta done (o failed). Anti-IDOR por tenant.
+    """
+
+    permission_classes = [IsAuthenticated, PrescriptionPermission]
+
+    def get(self, request: Request, job_id: uuid.UUID) -> Response:
+        """Retorna el estado del trabajo de PDF."""
+        from apps.recetas.models import PrescriptionPdfJob
+
         try:
-            pdf_bytes = prescription_pdf_build(
-                prescription=prescription,
-                format_override=resolved_fmt,
-            )
-        except RuntimeError as exc:
-            logger.error(
-                "PrescriptionPdfApi: error al generar PDF — prescription_id=%s — %s",
-                prescription_id,
-                exc,
-            )
-            return HttpResponse(
-                content=b"Error al generar el PDF. Intente nuevamente.",
-                status=500,
+            job = prescription_pdf_job_get(job_id=job_id)
+        except PrescriptionPdfJob.DoesNotExist:
+            return Response(
+                {"detail": "Trabajo de PDF no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        filename = f"receta-{prescription.folio}.pdf"
+        body: dict[str, object] = {"status": job.status}
+        if job.status == PrescriptionPdfJob.Status.FAILED:
+            body["detail"] = "No se pudo generar el PDF. Intenta de nuevo."
+        return Response(body)
+
+
+class PrescriptionPdfJobFileApi(TenantAPIView):
+    """GET /api/v1/recetas/pdf-job/<job_id>/file/ — descarga el PDF generado.
+
+    Sirve el PDF (autenticado con Bearer) solo cuando el trabajo está "done"; si
+    aún no → 409. Mismos headers de seguridad que el endpoint síncrono anterior
+    (X-Frame-Options DENY, X-Content-Type-Options nosniff, Content-Disposition inline).
+    """
+
+    permission_classes = [IsAuthenticated, PrescriptionPermission]
+    renderer_classes = [PdfRenderer]
+
+    def get(self, request: Request, job_id: uuid.UUID) -> HttpResponse:
+        """Devuelve el PDF del trabajo si está listo."""
+        from apps.recetas.models import PrescriptionPdfJob
+
+        try:
+            job = prescription_pdf_job_get(job_id=job_id)
+        except PrescriptionPdfJob.DoesNotExist:
+            return HttpResponse(content=b"Trabajo de PDF no encontrado.", status=404)
+
+        if job.status != PrescriptionPdfJob.Status.DONE or not job.file:
+            return HttpResponse(content=b"El PDF aun no esta listo.", status=409)
+
+        pdf_bytes = job.file.read()
+        filename = f"receta-{job.prescription.folio}.pdf"
         response = HttpResponse(content=pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
-        # Headers de seguridad (MEDIO-4): el SecurityMiddleware de Django no los
-        # añade a HttpResponse directo (solo a respuestas que pasan por el stack
-        # completo de middleware). Se añaden explícitamente aquí.
         response["X-Frame-Options"] = "DENY"
         response["X-Content-Type-Options"] = "nosniff"
         return response

@@ -67,6 +67,20 @@ def _pdf_url(prescription_id: Any) -> str:
     return PDF_URL.format(prescription_id=str(prescription_id))
 
 
+def _get_pdf_via_async(client: Any, rx: Any, tenant: Any, accept: Any = None) -> Any:
+    """Flujo async del PDF: POST encola, corre la tarea (WeasyPrint real) y GET descarga el archivo."""
+    from apps.recetas.tasks import generate_prescription_pdf
+
+    with api_tenant_ctx(tenant):
+        post = client.get(_pdf_url(rx.id))
+    assert post.status_code == 202, post.content
+    job_id = post.json()["job_id"]
+    generate_prescription_pdf(job_id)
+    kwargs = {"HTTP_ACCEPT": accept} if accept else {}
+    with api_tenant_ctx(tenant):
+        return client.get(f"/api/v1/recetas/pdf-job/{job_id}/file/", **kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Fixtures auxiliares
 # ---------------------------------------------------------------------------
@@ -160,8 +174,7 @@ def test_pdf_nurse_role_returns_200() -> None:
 
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert resp["Content-Type"] == "application/pdf"
@@ -180,8 +193,7 @@ def test_pdf_doctor_role_returns_200() -> None:
 
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -203,8 +215,7 @@ def test_pdf_accept_application_pdf_header_returns_200() -> None:
 
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id), HTTP_ACCEPT="application/pdf")
+    resp = _get_pdf_via_async(client, rx, tenant, accept="application/pdf")
 
     assert resp.status_code == 200
     assert "application/pdf" in resp["Content-Type"]
@@ -269,8 +280,7 @@ def test_pdf_active_prescription_no_letterhead() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.NURSE)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert "application/pdf" in resp["Content-Type"]
@@ -296,8 +306,7 @@ def test_pdf_with_clinic_settings_no_image() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.DOCTOR)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -321,8 +330,7 @@ def test_pdf_cancelled_prescription_returns_200() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.NURSE)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -357,8 +365,7 @@ def test_pdf_with_vitals_snapshot() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.DOCTOR)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -381,8 +388,7 @@ def test_pdf_without_vitals_snapshot() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.READONLY)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -402,8 +408,7 @@ def test_pdf_multiple_items() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.NURSE)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -426,8 +431,7 @@ def test_pdf_with_recommendations() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.NURSE)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     assert resp.content[:4] == b"%PDF"
@@ -450,8 +454,7 @@ def test_pdf_content_disposition_inline() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.NURSE)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
     disposition = resp.get("Content-Disposition", "")
@@ -476,8 +479,7 @@ def test_pdf_generates_audit_log() -> None:
     user = _make_user_with_role(tenant, TenantMembership.Role.NURSE)
     client = APIClient()
     client.force_authenticate(user=user)
-    with api_tenant_ctx(tenant):
-        resp = client.get(_pdf_url(rx.id))
+    resp = _get_pdf_via_async(client, rx, tenant)
 
     assert resp.status_code == 200
 

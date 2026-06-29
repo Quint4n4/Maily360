@@ -34,7 +34,9 @@ from apps.recetas.views import (
     PrescriptionFormatDetailApi,
     PrescriptionFormatListCreateApi,
     PrescriptionListCreateApi,
-    PrescriptionPdfApi,
+    PrescriptionPdfJobFileApi,
+    PrescriptionPdfJobStatusApi,
+    PrescriptionPdfRequestApi,
 )
 from apps.recetas.views_public import PrescriptionVerifyApi
 
@@ -58,11 +60,22 @@ urlpatterns = [
         PrescriptionListCreateApi.as_view(),
         name="prescription-list-create",
     ),
-    # B1.3 — PDF de la receta (va ANTES del detalle para evitar colisión con el suffix /pdf/)
+    # B1.3 — PDF de la receta (ASÍNCRONO con Celery). Las rutas de job van ANTES
+    # del detalle/anular para evitar colisión con recetas/<uuid>/.
+    path(
+        "recetas/pdf-job/<uuid:job_id>/file/",
+        PrescriptionPdfJobFileApi.as_view(),
+        name="prescription-pdf-job-file",
+    ),
+    path(
+        "recetas/pdf-job/<uuid:job_id>/",
+        PrescriptionPdfJobStatusApi.as_view(),
+        name="prescription-pdf-job-status",
+    ),
     path(
         "recetas/<uuid:prescription_id>/pdf/",
-        PrescriptionPdfApi.as_view(),
-        name="prescription-pdf",
+        PrescriptionPdfRequestApi.as_view(),
+        name="prescription-pdf-request",
     ),
     # Acción de anulación va ANTES del detalle para evitar conflicto de URL
     path(
