@@ -7,7 +7,7 @@ import { useQuotes } from '../../hooks/finanzas'
 import { combineToISO, to12h, formatFechaHora, fromDayKey, toDayKey, addDays, seriesDates } from '../../lib/fecha'
 import { formatMoney } from '../../lib/format'
 import MiniCalendario from './MiniCalendario'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 import { useAuth } from '../../auth/AuthContext'
 import type { AppointmentModality, AppointmentSeriesResult, SeriesFrequency } from '../../types/agenda'
 
@@ -39,19 +39,6 @@ interface CrearEventoModalProps {
 const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-base sm:text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
 const LABEL = 'block text-xs font-medium text-gray-500 mb-1'
 const DURACIONES = [30, 45, 60, 90]
-
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
-}
 
 function partirNombre(texto: string): { nombre: string; paterno: string; materno: string } {
   const w = texto.trim().split(/\s+/).filter(Boolean)
@@ -308,7 +295,7 @@ export default function CrearEventoModal({
         await crearCita.mutateAsync({ ...base, quote_id: quoteId || null })
         onClose()
       }
-    } catch (err) { setErrores(erroresDe(err)) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar.')) }
   }
 
   const guardarEvento = async () => {
@@ -332,7 +319,7 @@ export default function CrearEventoModal({
     try {
       await Promise.all(objetivos.map(o => crearEvento.mutateAsync({ ...base, ...o })))
       onClose()
-    } catch (err) { setErrores(erroresDe(err)) } finally { setEnviando(false) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar.')) } finally { setEnviando(false) }
   }
 
   const guardar = () => (modo === 'cita' ? guardarCita() : guardarEvento())

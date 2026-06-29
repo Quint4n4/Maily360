@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Info, AlertCircle, Loader2 } from 'lucide-react'
 import { useCreatePatient } from '../../hooks/pacientes'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 import type { Sex } from '../../types/paciente'
 import {
   MSG, errorDeCampo, esCurpValido, esEmailValido, esTelefonoValido,
@@ -18,20 +18,6 @@ const SECCION = 'text-xs font-semibold uppercase tracking-wide text-amber-700/80
 const FORM_VACIO = {
   first_name: '', paternal_surname: '', maternal_surname: '',
   date_of_birth: '', sex: '' as '' | Sex, phone: '', email: '', curp: '', notes: '',
-}
-
-/** Extrae mensajes de error legibles de un ApiError de DRF. */
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar el paciente.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
 }
 
 export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDrawerProps) {
@@ -83,7 +69,7 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
       })
       cerrar()
     } catch (err) {
-      setErrores(erroresDe(err))
+      setErrores(erroresDe(err, 'No se pudo guardar el paciente.'))
     }
   }
 

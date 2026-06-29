@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { useCreateAppointmentType, useUpdateAppointmentType } from '../../hooks/agenda'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 
 export interface TipoCitaEdit {
   id: string
@@ -17,19 +17,6 @@ interface Props {
 }
 
 const COLORES = ['#2E7D5B', '#3A6EA5', '#C0392B', '#C9A227', '#7E57C2', '#E8924E', '#0E9594', '#9A958C']
-
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar el tipo de cita.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
-}
 
 export default function NuevoTipoCitaDrawer({ open, onClose, editing }: Props) {
   const [nombre, setNombre] = useState('')
@@ -57,7 +44,7 @@ export default function NuevoTipoCitaDrawer({ open, onClose, editing }: Props) {
       if (editing) await actualizar.mutateAsync({ id: editing.id, input: payload })
       else await crear.mutateAsync(payload)
       onClose()
-    } catch (err) { setErrores(erroresDe(err)) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar el tipo de cita.')) }
   }
 
   return (

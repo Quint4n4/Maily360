@@ -5,7 +5,7 @@ import { useCreateNote, useUpdateNote } from '../../hooks/notas'
 import { useRole } from '../../auth/RoleContext'
 import { ROLES } from '../../auth/permisos'
 import { combineToISO, toDayKey, localHHMM } from '../../lib/fecha'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 import type { Note, NoteScope } from '../../types/nota'
 
 interface Props {
@@ -16,19 +16,6 @@ interface Props {
 
 const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-base sm:text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
 const LABEL = 'block text-xs font-medium text-gray-500 mb-1'
-
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar la nota.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
-}
 
 const Toggle = ({ on, onClick, icon: Icon, label }: { on: boolean; onClick: () => void; icon: typeof Bell; label: string }) => (
   <button type="button" onClick={onClick}
@@ -91,7 +78,7 @@ export default function NuevaNotaModal({ open, onClose, editing }: Props) {
       if (editing) await actualizar.mutateAsync({ id: editing.id, input })
       else await crear.mutateAsync(input)
       onClose()
-    } catch (err) { setErrores(erroresDe(err)) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar la nota.')) }
   }
 
   return (

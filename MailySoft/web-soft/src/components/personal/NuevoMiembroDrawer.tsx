@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useCreateMember } from '../../hooks/miembros'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 import { ROLES } from '../../auth/permisos'
 import type { ClinicRole } from '../../auth/permisos'
 
@@ -13,19 +13,6 @@ interface Props {
 
 const FORM_VACIO = {
   first_name: '', last_name: '', email: '', password: '', role: '' as '' | ClinicRole,
-}
-
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo crear el miembro.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' || campo === 'password' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
 }
 
 export default function NuevoMiembroDrawer({ open, onClose }: Props) {
@@ -61,7 +48,7 @@ export default function NuevoMiembroDrawer({ open, onClose }: Props) {
       })
       onClose()
     } catch (err) {
-      setErrores(erroresDe(err))
+      setErrores(erroresDe(err, 'No se pudo crear el miembro.'))
     }
   }
 

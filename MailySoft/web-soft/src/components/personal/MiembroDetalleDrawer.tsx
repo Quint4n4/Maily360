@@ -9,7 +9,7 @@ import { useDoctorsManage, useCreateDoctor, useUpdateDoctor, useConsultoriosMana
 import { useAuth } from '../../auth/AuthContext'
 import AvatarUploader from '../common/AvatarUploader'
 import { useConfirm } from '../common/DialogProvider'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 import { ROLES } from '../../auth/permisos'
 import type { ClinicRole } from '../../auth/permisos'
 import type { Member } from '../../types/personal'
@@ -25,19 +25,6 @@ interface Props {
 function iniciales(nombre: string): string {
   const w = nombre.trim().split(/\s+/).filter(Boolean)
   return ((w[0]?.[0] ?? '') + (w[1]?.[0] ?? '')).toUpperCase() || '?'
-}
-
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' || campo === 'password' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
 }
 
 /* Tarjeta de sección estilo ficha. */
@@ -118,7 +105,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
     try {
       await actualizar.mutateAsync({ id: miembro.id, input: { first_name: firstName.trim(), last_name: lastName.trim(), role: rol } })
       onClose()
-    } catch (err) { setErrores(erroresDe(err)) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar.')) }
   }
 
   const restablecer = async () => {
@@ -127,7 +114,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
     try {
       await actualizar.mutateAsync({ id: miembro.id, input: { password: newPass } })
       setNewPass(''); setOkMsg('Contraseña actualizada. Compártela con el miembro.')
-    } catch (err) { setErrores(erroresDe(err)) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar.')) }
   }
 
   const toggleBloqueo = async () => {
@@ -141,7 +128,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
     try {
       await actualizar.mutateAsync({ id: miembro.id, input: { blocked: !miembro.is_blocked } })
       onClose()
-    } catch (err) { setErrores(erroresDe(err)) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar.')) }
   }
 
   const guardandoDoctor = crearDoctor.isPending || actualizarDoctor.isPending
@@ -162,7 +149,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
         await crearDoctor.mutateAsync({ membership_id: miembro.id, ...payload })
       }
       setOkMsg(doctorPerfil ? 'Datos profesionales guardados.' : 'Perfil médico creado.')
-    } catch (err) { setErrores(erroresDe(err)) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar.')) }
   }
 
   return (
@@ -201,7 +188,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                     uploading={subirAvatar.isPending}
                     onFile={f => subirAvatar.mutate({ id: miembro.id, file: f }, {
                       onSuccess: () => { if (esYoMismo) void reloadMe().catch(() => {}) },
-                      onError: e => setErrores(erroresDe(e)),
+                      onError: e => setErrores(erroresDe(e, 'No se pudo guardar.')),
                     })}
                   />
                 </div>

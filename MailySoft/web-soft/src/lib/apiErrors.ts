@@ -11,17 +11,28 @@
 
 import { ApiError } from './http'
 
-/** Lista plana de mensajes de error para mostrar en una alerta. */
-export function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['Ocurrió un error inesperado.']
+/**
+ * Lista plana de mensajes de error para mostrar en una alerta.
+ *
+ * @param fallback Mensaje para errores que NO son ApiError (red caída, error
+ *   de JS, etc.). Cada pantalla pasa el suyo, p. ej. 'No se pudo guardar el
+ *   paciente.'. Por defecto, un mensaje genérico.
+ */
+export function erroresDe(
+  err: unknown,
+  fallback = 'Ocurrió un error inesperado.',
+): string[] {
+  if (!(err instanceof ApiError)) return [fallback]
   if (err.isNetwork) return ['No se pudo conectar con el servidor.']
   if (err.status === 403) return ['No tienes permiso para esta acción.']
   const body = err.body
   if (!body) return [`Error ${err.status}.`]
   const msgs: string[] = []
   for (const [campo, valor] of Object.entries(body)) {
+    if (valor === undefined) continue
     const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
+    // `password` se muestra sin prefijo de campo (UX de alta/edición de miembro).
+    msgs.push(campo === 'detail' || campo === 'password' ? txt : `${campo}: ${txt}`)
   }
   return msgs.length ? msgs : [`Error ${err.status}.`]
 }

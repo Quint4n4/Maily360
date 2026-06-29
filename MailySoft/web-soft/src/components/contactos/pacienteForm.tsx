@@ -12,7 +12,7 @@
 import { useState, useEffect } from 'react'
 import type { ChangeEvent } from 'react'
 import { Check } from 'lucide-react'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 import type {
   BloodType, Education, MaritalStatus, PatientOut, PatientUpdateInput, Sex,
 } from '../../types/paciente'
@@ -183,20 +183,9 @@ export function usePacienteForm(paciente: PatientOut | null): UsePacienteFormRes
   return { form, setForm, set, validar, construirInput, reset }
 }
 
-/** Extrae mensajes de error legibles de un ApiError de DRF (400 mapeado a campos). */
+/** Mensajes de error legibles para los formularios de paciente (usa la canónica). */
 export function erroresDePaciente(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  if (err.status === 403) return ['No tienes permiso para esta acción.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    if (valor === undefined) continue
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
+  return erroresDe(err, 'No se pudo guardar.')
 }
 
 /**

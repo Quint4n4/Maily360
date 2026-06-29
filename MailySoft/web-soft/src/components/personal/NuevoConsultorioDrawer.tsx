@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { useCreateConsultorio, useUpdateConsultorio } from '../../hooks/personal'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 
 export interface ConsultorioEdit {
   id: string
@@ -19,19 +19,6 @@ interface Props {
 }
 
 const COLORES = ['#C9A227', '#3A6EA5', '#2E7D5B', '#B23A48', '#7E57C2', '#E8924E', '#0E9594', '#8A6A14']
-
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo guardar el consultorio.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
-}
 
 export default function NuevoConsultorioDrawer({ open, onClose, editing }: Props) {
   const [nombre, setNombre]  = useState('')
@@ -71,7 +58,7 @@ export default function NuevoConsultorioDrawer({ open, onClose, editing }: Props
       }
       onClose()
     } catch (err) {
-      setErrores(erroresDe(err))
+      setErrores(erroresDe(err, 'No se pudo guardar el consultorio.'))
     }
   }
 

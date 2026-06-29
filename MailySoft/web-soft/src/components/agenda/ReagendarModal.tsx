@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2, CalendarClock, User } from 'lucide-react'
 import { useRescheduleAppointment } from '../../hooks/agenda'
 import { toDayKey, localHHMM, combineToISO, durationMin } from '../../lib/fecha'
-import { ApiError } from '../../lib/http'
+import { erroresDe } from '../../lib/apiErrors'
 import type { Appointment } from '../../types/agenda'
 
 interface Props {
@@ -14,19 +14,6 @@ interface Props {
 const INPUT = 'w-full rounded-xl border border-white/60 bg-white/70 px-4 py-2.5 text-base sm:text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
 const LABEL = 'block text-xs font-medium text-gray-500 mb-1'
 const DURACIONES = [30, 45, 60, 90]
-
-function erroresDe(err: unknown): string[] {
-  if (!(err instanceof ApiError)) return ['No se pudo reagendar la cita.']
-  if (err.isNetwork) return ['No se pudo conectar con el servidor.']
-  const body = err.body
-  if (!body) return [`Error ${err.status}.`]
-  const msgs: string[] = []
-  for (const [campo, valor] of Object.entries(body)) {
-    const txt = Array.isArray(valor) ? valor.join(' ') : String(valor)
-    msgs.push(campo === 'detail' ? txt : `${campo}: ${txt}`)
-  }
-  return msgs.length ? msgs : [`Error ${err.status}.`]
-}
 
 export default function ReagendarModal({ cita, onClose }: Props) {
   const [fecha, setFecha] = useState('')
@@ -54,7 +41,7 @@ export default function ReagendarModal({ cita, onClose }: Props) {
     try {
       await reagendar.mutateAsync({ id: cita.id, input: { starts_at: startISO, ends_at: endISO } })
       onClose()
-    } catch (err) { setErrores(erroresDe(err)) }
+    } catch (err) { setErrores(erroresDe(err, 'No se pudo reagendar la cita.')) }
   }
 
   return (
