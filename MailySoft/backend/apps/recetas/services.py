@@ -241,6 +241,175 @@ def medication_create(
 
 
 # ---------------------------------------------------------------------------
+# Helpers de prescription_create (extraídos para mantener el orquestador delgado)
+# ---------------------------------------------------------------------------
+
+
+def _validate_prescription_items(items_data: list[dict[str, Any]]) -> None:
+    """Valida que la receta tenga ítems y que cada medicamento cumpla COFEPRIS F2.
+
+    Defensa en profundidad: el serializer ya valida, pero el service se puede
+    llamar directo (Celery, tests, commands). Lanza ValidationError si falla.
+    """
+    if not items_data:
+        raise ValidationError(
+            "La receta debe contener al menos un medicamento (ítem)."
+        )
+
+    for idx, item in enumerate(items_data, start=1):
+        med_name = str(item.get("medication_name", "")).strip()
+        if not med_name:
+            raise ValidationError(
+                f"El ítem #{idx} requiere un nombre de medicamento (medication_name)."
+            )
+        # COFEPRIS F2: validación condicional (defensa en profundidad).
+        item_kind = str(item.get("kind", "medicamento"))
+        if item_kind == "medicamento":
+            missing_cofepris: list[str] = []
+            if not str(item.get("dose", "")).strip():
+                missing_cofepris.append("dose")
+            if not str(item.get("frequency", "")).strip():
+                missing_cofepris.append("frequency")
+            if not str(item.get("route", "")).strip():
+                missing_cofepris.append("route")
+            if not str(item.get("duration", "")).strip():
+                missing_cofepris.append("duration")
+            if missing_cofepris:
+                raise ValidationError(
+                    f"El ítem #{idx} (medicamento) requiere los campos COFEPRIS: "
+                    f"{', '.join(missing_cofepris)}."
+                )
+
+
+def _build_vitals_snapshot(
+    *,
+    vitals: dict[str, Any] | None,
+    patient: Any,
+    issued_at: Any,
+) -> dict[str, object] | None:
+    """Construye el snapshot de signos vitales de la receta (DR-7).
+
+    Precedencia: vitals capturados en la receta > última toma de enfermería.
+    Si `vitals` trae al menos un valor no-None, se usa ese dict (source="prescription").
+    Si no, se cae a vital_signs_latest del expediente (source="nursing"), o None.
+    """
+    from apps.expediente.selectors import vital_signs_latest  # noqa: PLC0415
+
+    inline_vitals_present: bool = bool(
+        vitals and any(v is not None for v in vitals.values())
+    )
+
+    if inline_vitals_present:
+        assert vitals is not None  # satisface mypy — ya verificado arriba
+        w_kg = vitals.get("weight_kg")
+        h_m = vitals.get("height_m")
+        imc: Decimal | None = None
+        if w_kg is not None and h_m is not None and float(h_m) != 0:
+            imc = (
+                Decimal(str(w_kg)) / (Decimal(str(h_m)) ** 2)
+            ).quantize(Decimal("0.01"))
+
+        return {
+            "weight_kg": float(w_kg) if w_kg is not None else None,
+            "height_m": float(h_m) if h_m is not None else None,
+            "imc": float(imc) if imc is not None else None,
+            "heart_rate": vitals.get("heart_rate"),
+            "resp_rate": vitals.get("resp_rate"),
+            "systolic": vitals.get("systolic"),
+            "diastolic": vitals.get("diastolic"),
+            "temperature_c": (
+                float(vitals["temperature_c"])
+                if vitals.get("temperature_c") is not None
+                else None
+            ),
+            "oxygen_saturation": vitals.get("oxygen_saturation"),
+            "glucose": vitals.get("glucose"),
+            "measured_at": issued_at.isoformat(),
+            "source": "prescription",  # distingue de snapshot de enfermería
+        }
+
+    latest_vitals = vital_signs_latest(patient=patient)
+    if latest_vitals is None:
+        return None
+
+    imc = None
+    if latest_vitals.weight_kg is not None and latest_vitals.height_m not in (
+        None,
+        0,
+    ):
+        imc = (
+            Decimal(str(latest_vitals.weight_kg))
+            / (Decimal(str(latest_vitals.height_m)) ** 2)
+        ).quantize(Decimal("0.01"))
+
+    return {
+        "weight_kg": float(latest_vitals.weight_kg) if latest_vitals.weight_kg is not None else None,
+        "height_m": float(latest_vitals.height_m) if latest_vitals.height_m is not None else None,
+        "imc": float(imc) if imc is not None else None,
+        "heart_rate": latest_vitals.heart_rate,
+        "resp_rate": latest_vitals.resp_rate,
+        "systolic": latest_vitals.systolic,
+        "diastolic": latest_vitals.diastolic,
+        "temperature_c": float(latest_vitals.temperature_c) if latest_vitals.temperature_c is not None else None,
+        "oxygen_saturation": latest_vitals.oxygen_saturation,
+        "glucose": latest_vitals.glucose,
+        "measured_at": latest_vitals.measured_at.isoformat(),
+        "source": "nursing",  # distingue del snapshot capturado en la receta
+    }
+
+
+def _resolve_item_controlled_groups(
+    *,
+    items_data: list[dict[str, Any]],
+    tenant: Tenant,
+) -> list[str]:
+    """Resuelve el controlled_group (snapshot DR-7) de cada ítem desde el catálogo.
+
+    Prioridad por ítem: global_medication_id > medication_id (custom) > grupo
+    explícito > 'none'. Lanza ValidationError si un medication_id custom no existe
+    en el tenant. Siempre es un snapshot inmutable aunque el catálogo cambie.
+    """
+    from apps.recetas.models import GlobalMedication  # noqa: PLC0415
+
+    valid_groups = {c[0] for c in ControlledGroup.choices}
+    item_resolved_groups: list[str] = []
+
+    for idx, item_data in enumerate(items_data, start=1):
+        raw_global_id = item_data.get("global_medication_id")
+        raw_med_id = item_data.get("medication_id")
+        raw_group = str(item_data.get("controlled_group", ControlledGroup.NONE)).strip()
+
+        resolved_group = ControlledGroup.NONE
+
+        if raw_global_id is not None:
+            try:
+                gm = GlobalMedication.objects.only("controlled_group").get(id=raw_global_id)
+                resolved_group = gm.controlled_group
+            except GlobalMedication.DoesNotExist:
+                pass  # snapshot conserva 'none'; la FK queda inválida (se validará en create)
+
+        elif raw_med_id is not None:
+            try:
+                cm = Medication.objects.only("controlled_group", "tenant_id").get(
+                    id=raw_med_id, tenant=tenant
+                )
+                resolved_group = cm.controlled_group
+            except Medication.DoesNotExist:
+                raise ValidationError(
+                    f"El ítem #{idx}: el medicamento personalizado indicado "
+                    "no existe o no pertenece a esta clínica."
+                )
+
+        elif raw_group in valid_groups and raw_group != ControlledGroup.NONE:
+            # Valor explícito: solo se acepta si no hay FK (texto libre sin catálogo).
+            resolved_group = raw_group
+
+        item_resolved_groups.append(resolved_group)
+
+    return item_resolved_groups
+
+
+# ---------------------------------------------------------------------------
 # prescription_create (B1.2)
 # ---------------------------------------------------------------------------
 
@@ -323,9 +492,6 @@ def prescription_create(
                           y no se proporcionó controlled_folio.
         PermissionDenied: si el usuario no tiene Doctor activo en el tenant.
     """
-    import uuid as uuid_module
-
-    from apps.expediente.selectors import vital_signs_latest
     from apps.pacientes.models import Patient
     from apps.personal.selectors import doctor_get_for_user
 
@@ -354,37 +520,8 @@ def prescription_create(
             "No se puede emitir una receta para un paciente fallecido."
         )
 
-    # --- Validar ítems ---
-    if not items_data:
-        raise ValidationError(
-            "La receta debe contener al menos un medicamento (ítem)."
-        )
-
-    for idx, item in enumerate(items_data, start=1):
-        med_name = str(item.get("medication_name", "")).strip()
-        if not med_name:
-            raise ValidationError(
-                f"El ítem #{idx} requiere un nombre de medicamento (medication_name)."
-            )
-        # COFEPRIS F2: validación condicional en el service (defensa en profundidad).
-        # El serializer ya la aplica; aquí la repetimos para paths que llamen al service
-        # directamente (Celery, tests, management commands).
-        item_kind = str(item.get("kind", "medicamento"))
-        if item_kind == "medicamento":
-            missing_cofepris: list[str] = []
-            if not str(item.get("dose", "")).strip():
-                missing_cofepris.append("dose")
-            if not str(item.get("frequency", "")).strip():
-                missing_cofepris.append("frequency")
-            if not str(item.get("route", "")).strip():
-                missing_cofepris.append("route")
-            if not str(item.get("duration", "")).strip():
-                missing_cofepris.append("duration")
-            if missing_cofepris:
-                raise ValidationError(
-                    f"El ítem #{idx} (medicamento) requiere los campos COFEPRIS: "
-                    f"{', '.join(missing_cofepris)}."
-                )
+    # --- Validar ítems (no vacío, nombre, campos COFEPRIS F2) ---
+    _validate_prescription_items(items_data)
 
     # --- Resolver appointment (opcional, validar tenant y que pertenezca al mismo paciente — M-1) ---
     appointment = None
@@ -436,117 +573,15 @@ def prescription_create(
     # --- Timestamp de emisión (usado en snapshot y en F6) ---
     issued_at_ts = timezone.now()
 
-    # --- Snapshot de signos vitales (DR-7) ---
-    # Precedencia: vitals capturados en la receta > última toma de enfermería.
-    # Si `vitals` llega con al menos un campo no-None, se usa ese dict.
-    # Si `vitals` es None o todos sus valores son None, se cae al comportamiento
-    # anterior: snapshot de la última toma de enfermería (o None si no hay).
-    vitals_snapshot: dict[str, object] | None = None
-
-    inline_vitals_present: bool = bool(
-        vitals and any(v is not None for v in vitals.values())
+    # --- Snapshot de signos vitales (DR-7): vitals de la receta > toma de enfermería ---
+    vitals_snapshot = _build_vitals_snapshot(
+        vitals=vitals, patient=patient, issued_at=issued_at_ts
     )
 
-    if inline_vitals_present:
-        # Construir snapshot desde los vitals del médico.
-        assert vitals is not None  # satisface mypy — ya verificado arriba
-        w_kg = vitals.get("weight_kg")
-        h_m = vitals.get("height_m")
-        imc: Decimal | None = None
-        if w_kg is not None and h_m is not None and float(h_m) != 0:
-            imc = (
-                Decimal(str(w_kg)) / (Decimal(str(h_m)) ** 2)
-            ).quantize(Decimal("0.01"))
-
-        vitals_snapshot = {
-            "weight_kg": float(w_kg) if w_kg is not None else None,
-            "height_m": float(h_m) if h_m is not None else None,
-            "imc": float(imc) if imc is not None else None,
-            "heart_rate": vitals.get("heart_rate"),
-            "resp_rate": vitals.get("resp_rate"),
-            "systolic": vitals.get("systolic"),
-            "diastolic": vitals.get("diastolic"),
-            "temperature_c": (
-                float(vitals["temperature_c"])
-                if vitals.get("temperature_c") is not None
-                else None
-            ),
-            "oxygen_saturation": vitals.get("oxygen_saturation"),
-            "glucose": vitals.get("glucose"),
-            "measured_at": issued_at_ts.isoformat(),
-            "source": "prescription",  # distingue de snapshot de enfermería
-        }
-    else:
-        latest_vitals = vital_signs_latest(patient=patient)
-        if latest_vitals is not None:
-            imc = None
-            if latest_vitals.weight_kg is not None and latest_vitals.height_m not in (
-                None,
-                0,
-            ):
-                imc = (
-                    Decimal(str(latest_vitals.weight_kg))
-                    / (Decimal(str(latest_vitals.height_m)) ** 2)
-                ).quantize(Decimal("0.01"))
-
-            vitals_snapshot = {
-                "weight_kg": float(latest_vitals.weight_kg) if latest_vitals.weight_kg is not None else None,
-                "height_m": float(latest_vitals.height_m) if latest_vitals.height_m is not None else None,
-                "imc": float(imc) if imc is not None else None,
-                "heart_rate": latest_vitals.heart_rate,
-                "resp_rate": latest_vitals.resp_rate,
-                "systolic": latest_vitals.systolic,
-                "diastolic": latest_vitals.diastolic,
-                "temperature_c": float(latest_vitals.temperature_c) if latest_vitals.temperature_c is not None else None,
-                "oxygen_saturation": latest_vitals.oxygen_saturation,
-                "glucose": latest_vitals.glucose,
-                "measured_at": latest_vitals.measured_at.isoformat(),
-                "source": "nursing",  # distingue del snapshot capturado en la receta
-            }
-
-    # --- F6: resolver controlled_group snapshot por ítem desde el catálogo ---
-    # Para cada ítem se determina el grupo controlado en este orden de prioridad:
-    #   1. Si trae global_medication_id → lee controlled_group del catálogo global.
-    #   2. Si trae medication_id (custom) → lee controlled_group de ese Medication.
-    #   3. Si trae controlled_group explícito en el dict → lo usa directamente.
-    #   4. Fallback: 'none'.
-    # Siempre es un snapshot (DR-7): inmutable aunque el catálogo cambie.
-    from apps.recetas.models import GlobalMedication
-
-    valid_groups = {c[0] for c in ControlledGroup.choices}
-    item_resolved_groups: list[str] = []  # group por cada ítem (pre-CREATE)
-
-    for idx, item_data in enumerate(items_data, start=1):
-        raw_global_id = item_data.get("global_medication_id")
-        raw_med_id = item_data.get("medication_id")
-        raw_group = str(item_data.get("controlled_group", ControlledGroup.NONE)).strip()
-
-        resolved_group = ControlledGroup.NONE
-
-        if raw_global_id is not None:
-            try:
-                gm = GlobalMedication.objects.only("controlled_group").get(id=raw_global_id)
-                resolved_group = gm.controlled_group
-            except GlobalMedication.DoesNotExist:
-                pass  # snapshot conserva 'none'; la FK queda inválida (se validará en create)
-
-        elif raw_med_id is not None:
-            try:
-                cm = Medication.objects.only("controlled_group", "tenant_id").get(
-                    id=raw_med_id, tenant=tenant
-                )
-                resolved_group = cm.controlled_group
-            except Medication.DoesNotExist:
-                raise ValidationError(
-                    f"El ítem #{idx}: el medicamento personalizado indicado "
-                    "no existe o no pertenece a esta clínica."
-                )
-
-        elif raw_group in valid_groups and raw_group != ControlledGroup.NONE:
-            # Valor explícito: solo se acepta si no hay FK (texto libre sin catálogo).
-            resolved_group = raw_group
-
-        item_resolved_groups.append(resolved_group)
+    # --- F6: resolver el controlled_group (snapshot DR-7) de cada ítem ---
+    item_resolved_groups = _resolve_item_controlled_groups(
+        items_data=items_data, tenant=tenant
+    )
 
     # --- F6: determinar si la receta es controlada ---
     controlled_groups_present: set[str] = {
