@@ -41,7 +41,7 @@ REGLA DE PRIVACIDAD — NUNCA incluir PII clínica en logs ni en la bitácora:
 import logging
 from typing import Any
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import IntegrityError, transaction
 
 import datetime
@@ -724,7 +724,7 @@ def evolution_note_create(
         # Capturamos RelatedObjectDoesNotExist para devolver 400 en lugar de 500.
         try:
             membership_user_id = appointment.doctor.membership.user_id
-        except Exception:
+        except (AttributeError, ObjectDoesNotExist):
             raise ValidationError(
                 "El médico de la cita no tiene perfil de membresía válido."
             )
@@ -822,7 +822,7 @@ def evolution_note_create(
                 target_type=NotificationTarget.PATIENT,
                 target_id=patient.id,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.warning(
                 "evolution_note_create: no se pudo notificar a enfermería "
                 "(best-effort). note_id=%s patient_id=%s tenant_id=%s",

@@ -39,6 +39,7 @@ import re
 from decimal import Decimal
 from typing import Any, Optional
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -898,7 +899,7 @@ class NursingInstructionOutputSerializer(serializers.ModelSerializer):
         """
         try:
             return str(obj.doctor.membership.user.get_full_name() or obj.doctor.membership.user.email)
-        except Exception:
+        except (AttributeError, ObjectDoesNotExist):
             return ""
 
 
@@ -1071,7 +1072,7 @@ class BookDoctorSerializer(serializers.Serializer):
         try:
             user = obj.membership.user
             return str(user.get_full_name() or user.email)
-        except Exception:
+        except (AttributeError, ObjectDoesNotExist):
             return ""
 
     def get_cedulas_validadas(self, obj: Any) -> list[str]:
@@ -1098,7 +1099,7 @@ class BookDoctorSerializer(serializers.Serializer):
                 ).values_list("credential_number", flat=True)
                 if num
             ]
-        except Exception:
+        except AttributeError:
             return []
 
 
@@ -1131,7 +1132,7 @@ class BookPrescriptionSummarySerializer(serializers.Serializer):
                     label = f"{label} ({item.dose})"
                 parts.append(label)
             return parts
-        except Exception:
+        except AttributeError:
             return []
 
 
