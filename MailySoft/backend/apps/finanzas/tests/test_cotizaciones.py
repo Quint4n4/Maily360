@@ -44,6 +44,22 @@ def _quote_pdf_url(quote_id: Any) -> str:
     return f"/api/v1/finanzas/cotizaciones/{quote_id}/pdf/"
 
 
+def _quote_pdf_via_async(client: Any, quote_id: Any, tenant: Any) -> Any:
+    """Flujo async del PDF de cotización: encola (202) -> tarea (mock build) -> descarga."""
+    from apps.pdfs.tasks import generate_pdf
+
+    with _tenant_context(tenant):
+        req = client.get(_quote_pdf_url(quote_id))
+    assert req.status_code == 202, req.content
+    job_id = req.json()["job_id"]
+    with patch("apps.finanzas.pdf.quote_pdf_build", return_value=b"%PDF-test"):
+        generate_pdf(job_id)
+    with _tenant_context(tenant):
+        return client.get(
+            f"/api/v1/pdfs/job/{job_id}/file/", HTTP_ACCEPT="application/pdf"
+        )
+
+
 def _quote_send_url(quote_id: Any) -> str:
     return f"/api/v1/finanzas/cotizaciones/{quote_id}/enviar/"
 
@@ -204,76 +220,56 @@ class TestQuotePermission:
 
 
 class TestQuotePdfApi:
-    """Verifica el endpoint GET /cotizaciones/<id>/pdf/."""
+    """Flujo async del PDF de cotización (encolar -> tarea Celery -> descarga)."""
 
-    def test_pdf_requires_accept_header(self, db: None) -> None:
-        """Sin Accept: application/pdf → 406 Not Acceptable."""
+    def test_enqueue_returns_202(self, db: None) -> None:
+        """GET encola y devuelve 202 {job_id, status}."""
         tenant = TenantFactory()
         patient = PatientFactory(tenant=tenant)
         quote = _accepted_quote(tenant, patient)
-
         client = _member_client(tenant, "owner")
         with _tenant_context(tenant):
-            # Sin header Accept PDF → DRF negocia y da 406
-            resp = client.get(_quote_pdf_url(quote.id), HTTP_ACCEPT="application/json")
-        assert resp.status_code == 406
+            resp = client.get(_quote_pdf_url(quote.id))
+        assert resp.status_code == 202
+        assert "job_id" in resp.json()
 
-    def test_pdf_returns_200_with_accept_header(self, db: None) -> None:
-        """Con Accept: application/pdf → 200 y content-type pdf."""
+    def test_pdf_descarga_200(self, db: None) -> None:
+        """Encolar -> correr la tarea (mock build) -> descargar el PDF (200)."""
         tenant = TenantFactory()
         patient = PatientFactory(tenant=tenant)
         quote = _accepted_quote(tenant, patient)
-
-        # Mockeamos quote_pdf_build para no necesitar WeasyPrint en tests.
         client = _member_client(tenant, "owner")
-        with _tenant_context(tenant):
-            with patch(
-                "apps.finanzas.pdf.quote_pdf_build",
-                return_value=b"%PDF-test",
-            ):
-                resp = client.get(
-                    _quote_pdf_url(quote.id),
-                    HTTP_ACCEPT="application/pdf",
-                )
+        resp = _quote_pdf_via_async(client, quote.id, tenant)
         assert resp.status_code == 200
         assert resp["Content-Type"] == "application/pdf"
 
     def test_pdf_requires_auth(self, db: None) -> None:
-        """Sin autenticación → 401."""
+        """Sin autenticación -> 401."""
         tenant = TenantFactory()
         patient = PatientFactory(tenant=tenant)
         quote = _accepted_quote(tenant, patient)
         with _tenant_context(tenant):
-            resp = APIClient().get(
-                _quote_pdf_url(quote.id), HTTP_ACCEPT="application/pdf"
-            )
+            resp = APIClient().get(_quote_pdf_url(quote.id))
         assert resp.status_code == 401
 
     def test_pdf_nurse_gets_403(self, db: None) -> None:
-        """Nurse no tiene permiso sobre cotizaciones → 403."""
+        """Nurse no tiene permiso sobre cotizaciones -> 403."""
         tenant = TenantFactory()
         patient = PatientFactory(tenant=tenant)
         quote = _accepted_quote(tenant, patient)
         client = _member_client(tenant, "nurse")
         with _tenant_context(tenant):
-            resp = client.get(_quote_pdf_url(quote.id), HTTP_ACCEPT="application/pdf")
+            resp = client.get(_quote_pdf_url(quote.id))
         assert resp.status_code == 403
 
     def test_pdf_unknown_quote_returns_404(self, db: None) -> None:
-        """UUID que no existe → 404."""
+        """UUID que no existe -> 404."""
         import uuid
 
         tenant = TenantFactory()
         client = _member_client(tenant, "owner")
         with _tenant_context(tenant):
-            with patch(
-                "apps.finanzas.pdf.quote_pdf_build",
-                return_value=b"%PDF-test",
-            ):
-                resp = client.get(
-                    _quote_pdf_url(uuid.uuid4()),
-                    HTTP_ACCEPT="application/pdf",
-                )
+            resp = client.get(_quote_pdf_url(uuid.uuid4()))
         assert resp.status_code == 404
 
 

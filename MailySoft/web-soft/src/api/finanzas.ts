@@ -6,7 +6,8 @@
  * src/hooks/finanzas.ts (TanStack Query).
  */
 
-import { http, requestBlob } from '../lib/http'
+import { http } from '../lib/http'
+import { pdfJobBlob } from './pdfs'
 
 // ---------------------------------------------------------------------------
 // Tipos compartidos
@@ -170,8 +171,9 @@ export function fetchPeriodReport(params: PeriodReportParams): Promise<PeriodRep
 }
 
 /**
- * GET /finanzas/reporte/pdf/ — descarga el PDF del reporte (Bearer vía requestBlob).
- * El endpoint solo negocia application/pdf; sin este Accept, DRF responde 406.
+ * GET /finanzas/reporte/pdf/ — PDF del reporte de periodo (Blob).
+ * Flujo asíncrono (Celery): el endpoint ENCOLA y `pdfJobBlob` hace el polling y la
+ * descarga por dentro. El reporte es mutable → siempre fresco (sin caché).
  * El token nunca va en la URL: viaja en el header Authorization del cliente central.
  */
 export async function fetchReportPdfBlob(params: {
@@ -181,9 +183,7 @@ export async function fetchReportPdfBlob(params: {
 }): Promise<Blob> {
   const qs = new URLSearchParams({ date_from: params.date_from, date_to: params.date_to })
   if (params.group) qs.set('group', params.group)
-  return requestBlob(`/finanzas/reporte/pdf/?${qs.toString()}`, {
-    headers: { Accept: 'application/pdf' },
-  })
+  return pdfJobBlob(`/finanzas/reporte/pdf/?${qs.toString()}`)
 }
 
 /**
@@ -438,16 +438,13 @@ export function acceptQuote(quoteId: string): Promise<Quote> {
 }
 
 /**
- * GET /finanzas/cotizaciones/<id>/pdf/ — obtiene el PDF de la cotización como Blob
- * (Bearer vía requestBlob). El endpoint solo negocia application/pdf; sin este
- * Accept, DRF responde 406. El token nunca va en la URL: viaja en el header
- * Authorization del cliente central. Lo consume el visor inline (VisorPdf) y
- * también downloadQuotePdf para la descarga directa.
+ * GET /finanzas/cotizaciones/<id>/pdf/ — PDF de la cotización como Blob.
+ * Flujo asíncrono (Celery): el endpoint ENCOLA y `pdfJobBlob` hace el polling y la
+ * descarga por dentro. La cotización es mutable → siempre fresco (sin caché).
+ * El token nunca va en la URL. Lo consume el visor inline (VisorPdf) y downloadQuotePdf.
  */
 export async function fetchQuotePdfBlob(quoteId: string): Promise<Blob> {
-  return requestBlob(`/finanzas/cotizaciones/${quoteId}/pdf/`, {
-    headers: { Accept: 'application/pdf' },
-  })
+  return pdfJobBlob(`/finanzas/cotizaciones/${quoteId}/pdf/`)
 }
 
 /**

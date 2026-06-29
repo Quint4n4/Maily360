@@ -638,59 +638,63 @@ class TestPeriodReportApi:
 # ===========================================================================
 
 
+def _report_pdf_via_async(client: Any, tenant: Any, url: str = REPORT_PDF_URL) -> Any:
+    """Flujo async del PDF de reporte: encola (202) -> corre la tarea -> descarga."""
+    from apps.pdfs.tasks import generate_pdf
+
+    with _tenant_ctx(tenant):
+        req = client.get(url)
+    assert req.status_code == 202, req.content
+    job_id = req.json()["job_id"]
+    generate_pdf(job_id)
+    with _tenant_ctx(tenant):
+        return client.get(
+            f"/api/v1/pdfs/job/{job_id}/file/", HTTP_ACCEPT="application/pdf"
+        )
+
+
 class TestPeriodReportPdfApi:
     def test_requires_auth(self, db: None) -> None:
-        resp = APIClient().get(REPORT_PDF_URL, HTTP_ACCEPT="application/pdf")
+        resp = APIClient().get(REPORT_PDF_URL)
         assert resp.status_code == 401
 
-    def test_pdf_200_with_accept_header(self, db: None) -> None:
-        """Accept: application/pdf → 200 con Content-Type application/pdf."""
+    def test_enqueue_returns_202(self, db: None) -> None:
+        """GET encola y devuelve 202 {job_id, status}."""
         tenant = TenantFactory()
         client = _member_client(tenant, "finance")
         with _tenant_ctx(tenant):
-            resp = client.get(
-                REPORT_PDF_URL,
-                HTTP_ACCEPT="application/pdf",
-            )
+            resp = client.get(REPORT_PDF_URL)
+        assert resp.status_code == 202
+        assert "job_id" in resp.json()
+
+    def test_pdf_descarga_200(self, db: None) -> None:
+        """Encolar -> tarea (WeasyPrint real) -> descargar PDF (200)."""
+        tenant = TenantFactory()
+        client = _member_client(tenant, "finance")
+        resp = _report_pdf_via_async(client, tenant)
         assert resp.status_code == 200
         assert "application/pdf" in resp.get("Content-Type", "")
-
-    def test_pdf_406_without_accept_header(self, db: None) -> None:
-        """Sin Accept: application/pdf → 406 Not Acceptable."""
-        tenant = TenantFactory()
-        client = _member_client(tenant, "finance")
-        with _tenant_ctx(tenant):
-            resp = client.get(REPORT_PDF_URL, HTTP_ACCEPT="application/json")
-        assert resp.status_code == 406
 
     def test_reception_cannot_access_pdf(self, db: None) -> None:
         tenant = TenantFactory()
         client = _member_client(tenant, "reception")
         with _tenant_ctx(tenant):
-            resp = client.get(
-                REPORT_PDF_URL,
-                HTTP_ACCEPT="application/pdf",
-            )
+            resp = client.get(REPORT_PDF_URL)
         assert resp.status_code == 403
 
     def test_pdf_contains_bytes(self, db: None) -> None:
-        """El PDF devuelve bytes (no vacío)."""
+        """El PDF descargado trae bytes (no vacío)."""
         tenant = TenantFactory()
         client = _member_client(tenant, "owner")
-        with _tenant_ctx(tenant):
-            resp = client.get(
-                REPORT_PDF_URL,
-                HTTP_ACCEPT="application/pdf",
-            )
+        resp = _report_pdf_via_async(client, tenant)
         assert resp.status_code == 200
-        assert len(resp.content) > 100  # Al menos 100 bytes de PDF
+        assert len(resp.content) > 100
 
     def test_pdf_content_disposition_inline(self, db: None) -> None:
-        """El PDF devuelve Content-Disposition: inline (no fuerza descarga)."""
+        """El PDF servido va Content-Disposition: inline."""
         tenant = TenantFactory()
         client = _member_client(tenant, "finance")
-        with _tenant_ctx(tenant):
-            resp = client.get(REPORT_PDF_URL, HTTP_ACCEPT="application/pdf")
+        resp = _report_pdf_via_async(client, tenant)
         assert resp.status_code == 200
         assert "inline" in resp.get("Content-Disposition", "")
 

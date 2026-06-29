@@ -22,11 +22,9 @@ from decimal import Decimal
 from typing import Any, Optional
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.http import HttpResponse
 from rest_framework import serializers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.renderers import BaseRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -65,6 +63,7 @@ from apps.finanzas.serializers import (
 )
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
+from apps.pdfs.services import pdf_job_enqueue
 
 logger = logging.getLogger("apps.finanzas.views")
 
@@ -84,28 +83,6 @@ class FinanceDeskPermission(HasClinicRole):
     policy: dict[str, frozenset[str]] = {
         "GET": FINANCE_DESK_ROLES,
     }
-
-
-# ---------------------------------------------------------------------------
-# PdfRenderer — reutiliza el patrón exacto de apps/recetas/views.py
-# ---------------------------------------------------------------------------
-
-
-class _PdfRenderer(BaseRenderer):
-    """Renderer que permite a DRF negociar Accept: application/pdf.
-
-    La vista devuelve HttpResponse directo, pero DRF ejecuta la negociación de
-    contenido al entrar. Sin este renderer, un cliente que envíe
-    Accept: application/pdf recibiría 406. El método render() no se usa
-    (la vista responde con HttpResponse crudo).
-    """
-
-    media_type = "application/pdf"
-    format = "pdf"
-    charset = None
-
-    def render(self, data: Any, accepted_media_type: Any = None, renderer_context: Any = None) -> Any:  # type: ignore[override]
-        return data
 
 
 # ---------------------------------------------------------------------------
@@ -430,63 +407,41 @@ class QuoteAcceptApi(TenantAPIView):
 
 
 class QuotePdfApi(TenantAPIView):
-    """GET /api/v1/finanzas/cotizaciones/<uuid>/pdf/ — PDF de la cotización.
+    """GET /api/v1/finanzas/cotizaciones/<uuid>/pdf/ — encola el PDF de la cotización.
 
-    Devuelve el PDF con Content-Disposition: inline para abrir en el navegador.
-    Requiere Accept: application/pdf; sin ese header DRF responde 406.
+    El PDF se genera en SEGUNDO PLANO (Celery, infra apps.pdfs) para no bloquear los
+    workers de la API (riesgo P0). Devuelve 202 {job_id, status}; el frontend hace
+    polling de GET /pdfs/job/<job_id>/ y descarga con .../file/ al estar "done".
 
-    Permiso: QuotePermission (mismos roles que el resto de endpoints de cotización).
-    Auth: Bearer token (el endpoint NO es público — contiene datos del paciente).
-
-    Seguridad:
-        - WeasyPrint usa _secure_fetcher: bloquea LFI/SSRF (solo data URIs).
-        - X-Frame-Options: DENY, X-Content-Type-Options: nosniff.
-        - Si la generación falla, devuelve 500 con mensaje genérico (sin stack trace).
+    La cotización es MUTABLE (se edita), así que NO se cachea (cache_key="").
+    Permiso QuotePermission. Anti-IDOR por tenant (404).
     """
 
     permission_classes = [IsAuthenticated, QuotePermission]
-    renderer_classes = [_PdfRenderer]
 
-    def get(self, request: Request, quote_id: uuid.UUID) -> HttpResponse:
+    def get(self, request: Request, quote_id: uuid.UUID) -> Response:
         try:
             quote = selectors.quote_get(quote_id=quote_id)
         except Quote.DoesNotExist:
-            return HttpResponse(
-                content=b"Cotizaci\xf3n no encontrada.",
-                status=404,
-                content_type="text/plain; charset=utf-8",
+            return Response(
+                {"detail": "Cotización no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         tenant = get_current_tenant()
-
-        from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
-        from apps.finanzas.pdf import quote_pdf_build  # noqa: PLC0415
-
-        clinic_settings = (
-            clinic_settings_get(tenant_id=tenant.id) if tenant is not None else None
-        )
-
-        try:
-            pdf_bytes = quote_pdf_build(quote=quote, clinic_settings=clinic_settings)
-        except RuntimeError as exc:
-            logger.error(
-                "QuotePdfApi: error al generar PDF de cotización %s — %s",
-                quote_id,
-                exc,
-            )
-            return HttpResponse(
-                content=b"Error al generar el PDF. Intente nuevamente.",
-                status=500,
-                content_type="text/plain",
-            )
-
         folio_short = str(quote.id).replace("-", "")[:8].upper()
-        filename = f"cotizacion-{folio_short}.pdf"
-        response = HttpResponse(content=pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="{filename}"'
-        response["X-Frame-Options"] = "DENY"
-        response["X-Content-Type-Options"] = "nosniff"
-        return response
+        job = pdf_job_enqueue(
+            tenant=tenant,
+            kind="quote",
+            params={"quote_id": str(quote.id)},
+            user=request.user,
+            cache_key="",
+            filename=f"cotizacion-{folio_short}.pdf",
+        )
+        return Response(
+            {"job_id": str(job.id), "status": job.status},
+            status=status.HTTP_202_ACCEPTED,
+        )
 
 
 # ===========================================================================
@@ -902,9 +857,8 @@ class PeriodReportPdfApi(TenantAPIView):
     """
 
     permission_classes = [IsAuthenticated, FinanceDashboardPermission]
-    renderer_classes = [_PdfRenderer]
 
-    def get(self, request: Request) -> HttpResponse:
+    def get(self, request: Request) -> Response:
         today = datetime.date.today()
         date_from = _parse_date(request.query_params.get("date_from")) or (
             today - datetime.timedelta(days=30)
@@ -912,10 +866,9 @@ class PeriodReportPdfApi(TenantAPIView):
         date_to = _parse_date(request.query_params.get("date_to")) or today
 
         if date_from > date_to:
-            return HttpResponse(
-                content=b"date_from no puede ser posterior a date_to.",
-                status=400,
-                content_type="text/plain",
+            return Response(
+                {"detail": "date_from no puede ser posterior a date_to."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         group = request.query_params.get("group", "day")
@@ -924,38 +877,23 @@ class PeriodReportPdfApi(TenantAPIView):
 
         tenant = get_current_tenant()
 
-        from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
-        from apps.finanzas.pdf import finance_report_pdf_build  # noqa: PLC0415
-
-        clinic_settings = (
-            clinic_settings_get(tenant_id=tenant.id) if tenant is not None else None
+        # Reporte MUTABLE (datos vivos) → sin caché; se regenera fresco en Celery.
+        job = pdf_job_enqueue(
+            tenant=tenant,
+            kind="finance_report",
+            params={
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "group": group,
+            },
+            user=request.user,
+            cache_key="",
+            filename=f"reporte-{date_from}-{date_to}.pdf",
         )
-
-        report = selectors.finance_period_report(
-            date_from=date_from,
-            date_to=date_to,
-            group=group,
+        return Response(
+            {"job_id": str(job.id), "status": job.status},
+            status=status.HTTP_202_ACCEPTED,
         )
-
-        try:
-            pdf_bytes = finance_report_pdf_build(report=report, clinic_settings=clinic_settings)
-        except RuntimeError as exc:
-            logger.error(
-                "PeriodReportPdfApi: error al generar PDF — %s",
-                exc,
-            )
-            return HttpResponse(
-                content=b"Error al generar el PDF. Intente nuevamente.",
-                status=500,
-                content_type="text/plain",
-            )
-
-        filename = f"reporte-{date_from}-{date_to}.pdf"
-        response = HttpResponse(content=pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="{filename}"'
-        response["X-Frame-Options"] = "DENY"
-        response["X-Content-Type-Options"] = "nosniff"
-        return response
 
 
 # ===========================================================================
