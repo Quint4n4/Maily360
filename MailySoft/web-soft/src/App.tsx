@@ -1,4 +1,4 @@
-import { ReactElement } from 'react'
+import { lazy, Suspense, ReactElement } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { RequireAuth } from './auth/RequireAuth'
@@ -7,21 +7,25 @@ import { Modulo, accesoModulo, inicioDeRol, puedeAccederConsultorio } from './au
 import { PlatformRoleProvider, usePlatformRole } from './platform/PlatformRoleContext'
 import { DialogProvider } from './components/common/DialogProvider'
 import { PlatModulo, accesoModuloPlat, inicioPlat } from './platform/permisos'
-import LoginPage from './pages/LoginPage'
-import AgendaPage from './pages/AgendaPage'
-import ContactosPage from './pages/ContactosPage'
-import PersonalPage from './pages/PersonalPage'
-import FinanzasPage from './pages/FinanzasPage'
-import CotizacionesPage from './pages/CotizacionesPage'
-import NotasPage from './pages/NotasPage'
-import MiConsultorioPage from './pages/MiConsultorioPage'
 import AlertaCitas from './components/agenda/AlertaCitas'
 import LuzRecordatorios from './components/agenda/LuzRecordatorios'
-import DashboardPlataformaPage from './pages/plataforma/DashboardPage'
-import ClinicasPage from './pages/plataforma/ClinicasPage'
-import SuscripcionesPage from './pages/plataforma/SuscripcionesPage'
-import UsuariosPage from './pages/plataforma/UsuariosPage'
-import SistemaPage from './pages/plataforma/SistemaPage'
+
+// Páginas con carga diferida (code-splitting): cada ruta es su propio chunk,
+// así el bundle inicial no arrastra Finanzas (recharts/jspdf/xlsx) ni el resto
+// hasta que se visita esa ruta.
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const AgendaPage = lazy(() => import('./pages/AgendaPage'))
+const ContactosPage = lazy(() => import('./pages/ContactosPage'))
+const PersonalPage = lazy(() => import('./pages/PersonalPage'))
+const FinanzasPage = lazy(() => import('./pages/FinanzasPage'))
+const CotizacionesPage = lazy(() => import('./pages/CotizacionesPage'))
+const NotasPage = lazy(() => import('./pages/NotasPage'))
+const MiConsultorioPage = lazy(() => import('./pages/MiConsultorioPage'))
+const DashboardPlataformaPage = lazy(() => import('./pages/plataforma/DashboardPage'))
+const ClinicasPage = lazy(() => import('./pages/plataforma/ClinicasPage'))
+const SuscripcionesPage = lazy(() => import('./pages/plataforma/SuscripcionesPage'))
+const UsuariosPage = lazy(() => import('./pages/plataforma/UsuariosPage'))
+const SistemaPage = lazy(() => import('./pages/plataforma/SistemaPage'))
 
 /* App de la clínica: exige sesión válida (RequireAuth) y luego protege por rol */
 function Guard({ modulo, children }: { modulo: Modulo; children: ReactElement }) {
@@ -75,12 +79,31 @@ function PlatformRoute({ modulo, children }: { modulo: PlatModulo; children: Rea
   )
 }
 
+/* Fallback mientras carga el chunk de una página (code-splitting). */
+function PantallaCargando() {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '60vh',
+        color: '#7A756C',
+        fontSize: 14,
+      }}
+    >
+      Cargando…
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <RoleProvider>
         <PlatformRoleProvider>
           <DialogProvider>
+          <Suspense fallback={<PantallaCargando />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
 
@@ -103,6 +126,7 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
+          </Suspense>
 
           {/* Vigilante global: alerta cuando una cita de hoy se queda atrás de su estado */}
           <AlertaCitas />
