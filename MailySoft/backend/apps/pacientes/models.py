@@ -11,6 +11,7 @@ Campos NOM-004 agregados en A1 (expediente-clinico-plan §3.1):
   Usa TextChoices para estado civil, escolaridad y tipo de sangre (D-EC-8).
 """
 
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django.db.models import Q
 
@@ -293,6 +294,36 @@ class Patient(TenantAwareModel):
             models.Index(
                 fields=["tenant", "paternal_surname", "maternal_surname"],
                 name="patient_apellidos_idx",
+            ),
+            # Búsqueda libre "search-as-you-type" (icontains) sobre varios campos
+            # unidos por OR en patient_list. Para que Postgres pueda indexar el OR
+            # completo (y no caer en seq scan O(n) por cada tecleo), CADA campo del
+            # OR necesita un índice de trigramas. Requiere la extensión pg_trgm,
+            # que crea la migración 0012 (TrigramExtension) antes que estos índices.
+            GinIndex(
+                fields=["first_name"],
+                name="patient_first_name_trgm",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["paternal_surname"],
+                name="patient_paternal_trgm",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["maternal_surname"],
+                name="patient_maternal_trgm",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["phone"],
+                name="patient_phone_trgm",
+                opclasses=["gin_trgm_ops"],
+            ),
+            GinIndex(
+                fields=["record_number"],
+                name="patient_record_num_trgm",
+                opclasses=["gin_trgm_ops"],
             ),
         ]
 
