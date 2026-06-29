@@ -51,6 +51,7 @@ from apps.personal.services import (
     schedule_deactivate,
 )
 from apps.tenancy.models import TenantMembership
+from apps.tenancy.selectors import membership_get
 
 
 # ---------------------------------------------------------------------------
@@ -130,9 +131,8 @@ class DoctorListCreateApi(TenantAPIView):
             )
 
         try:
-            membership = TenantMembership.objects.get(
-                id=s.validated_data["membership_id"],
-                tenant=tenant,
+            membership = membership_get(
+                membership_id=s.validated_data["membership_id"],
             )
         except TenantMembership.DoesNotExist:
             return Response(
