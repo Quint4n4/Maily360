@@ -91,6 +91,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/.venv            # ★ preservar el venv del contenedor
+      - media_files:/app/media  # ★ compartir los PDFs generados con el backend (en prod = S3)
     env_file:
       - ./backend/.env.dev
     environment:
