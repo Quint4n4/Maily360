@@ -66,6 +66,28 @@ function Pill({ label, selected, onClick }: { label: string; selected: boolean; 
   )
 }
 
+function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+      style={on ? { background: '#C9A227', color: '#fff' } : { background: 'rgba(255,255,255,0.6)', color: '#7A756C', border: '1px solid rgba(201,162,39,0.3)' }}>
+      {on && <Check className="w-3.5 h-3.5" />} {label}
+    </button>
+  )
+}
+
+function ModoPill({ label, icon: Icon, active, onClick }: { label: string; icon: typeof Ban; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
+      style={active
+        ? { background: '#C9A227', color: '#fff', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }
+        : { background: 'rgba(255,255,255,0.6)', color: '#7A756C', border: '1px solid rgba(255,255,255,0.7)' }}>
+      <Icon className="w-4 h-4" /> {label}
+    </button>
+  )
+}
+
 export default function CrearEventoModal({
   open, onClose, dayKey, fechaLarga, horaInicio, consultorioId, consultorioName, initialMode = 'cita', initialModality = 'office',
 }: CrearEventoModalProps) {
@@ -323,22 +345,7 @@ export default function CrearEventoModal({
 
   const guardar = () => (modo === 'cita' ? guardarCita() : guardarEvento())
 
-  const Chip = ({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) => (
-    <button type="button" onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
-      style={on ? { background: '#C9A227', color: '#fff' } : { background: 'rgba(255,255,255,0.6)', color: '#7A756C', border: '1px solid rgba(201,162,39,0.3)' }}>
-      {on && <Check className="w-3.5 h-3.5" />} {label}
-    </button>
-  )
-  const ModoPill = ({ m, label, icon: Icon }: { m: Modo; label: string; icon: typeof Ban }) => (
-    <button type="button" onClick={() => { setModo(m); setPaso(1); setErrores([]) }}
-      className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
-      style={modo === m
-        ? { background: '#C9A227', color: '#fff', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }
-        : { background: 'rgba(255,255,255,0.6)', color: '#7A756C', border: '1px solid rgba(255,255,255,0.7)' }}>
-      <Icon className="w-4 h-4" /> {label}
-    </button>
-  )
+  const selectModo = (m: Modo) => { setModo(m); setPaso(1); setErrores([]) }
 
   return (
     <AnimatePresence>
@@ -399,9 +406,9 @@ export default function CrearEventoModal({
               <>
               {/* Selector de tipo de registro */}
               <div className="flex gap-2.5">
-                <ModoPill m="cita" label="Cita" icon={CalendarPlus} />
-                <ModoPill m="block" label="Bloqueo" icon={Ban} />
-                <ModoPill m="meeting" label="Reunión" icon={Users} />
+                <ModoPill label="Cita" icon={CalendarPlus} active={modo === 'cita'} onClick={() => selectModo('cita')} />
+                <ModoPill label="Bloqueo" icon={Ban} active={modo === 'block'} onClick={() => selectModo('block')} />
+                <ModoPill label="Reunión" icon={Users} active={modo === 'meeting'} onClick={() => selectModo('meeting')} />
               </div>
 
               {errores.length > 0 && (
