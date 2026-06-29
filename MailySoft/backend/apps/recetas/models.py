@@ -36,6 +36,7 @@ Notas sobre RLS:
 """
 
 import re
+import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -1017,3 +1018,82 @@ class PrescriptionFormat(TenantAwareModel):
         default_flag = " [default]" if self.is_default else ""
         doctor_flag = f" [doctor={self.doctor_id}]" if self.doctor_id else ""
         return f"{self.name}{default_flag}{doctor_flag} (tenant={self.tenant_id})"
+
+
+# ---------------------------------------------------------------------------
+# PrescriptionPdfJob — generación asíncrona del PDF (P0: PDF en Celery)
+# ---------------------------------------------------------------------------
+
+
+def prescription_pdf_path(instance: "PrescriptionPdfJob", filename: str) -> str:
+    """Ruta de subida del PDF generado, aislada por tenant en el storage (BAJO-2)."""
+    return f"tenants/{instance.tenant_id}/recetas/pdf/{uuid.uuid4().hex}.pdf"
+
+
+class PrescriptionPdfJob(TenantAwareModel):
+    """Trabajo de generación asíncrona del PDF de una receta.
+
+    La generación con WeasyPrint se mueve a una tarea de Celery para no bloquear
+    los workers de la API (riesgo P0). Este modelo rastrea el estado del trabajo
+    y guarda el PDF resultante en el storage.
+
+    Caché: como las recetas son INMUTABLES, el PDF de una (receta, formato) nunca
+    cambia. La UniqueConstraint (tenant, cache_key) garantiza un único job por
+    salida; si ya está `done`, se reusa el PDF en vez de regenerarlo.
+
+    No tiene CRUD de usuario: lo crea el servicio (al pedir el PDF) y lo actualiza
+    la tarea Celery. Por eso no expone serializers de entrada para `status`/`file`.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        PROCESSING = "processing", "Procesando"
+        DONE = "done", "Listo"
+        FAILED = "failed", "Falló"
+
+    prescription = models.ForeignKey(
+        "recetas.Prescription",
+        on_delete=models.CASCADE,
+        related_name="pdf_jobs",
+        db_index=True,
+        help_text="Receta cuyo PDF se genera.",
+    )
+    #: Clave de caché que identifica la salida: f"{prescription_id}|{format_id}|{layout}".
+    #: Inmutable porque la receta es inmutable.
+    cache_key = models.CharField(max_length=200)
+    #: Layout solicitado (?formato=); vacío = resolución automática.
+    layout = models.CharField(max_length=40, blank=True, default="")
+    #: PrescriptionFormat persistido solicitado (?format_id=); vacío = automático.
+    format_id = models.CharField(max_length=64, blank=True, default="")
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    file = models.FileField(
+        upload_to=prescription_pdf_path,
+        null=True,
+        blank=True,
+        help_text="PDF generado; None hasta que la tarea termina.",
+    )
+    error = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "recetas_prescription_pdf_jobs"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "cache_key"],
+                name="prescription_pdf_job_cache_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant", "prescription"],
+                name="presc_pdf_job_presc_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"PrescriptionPdfJob(receta={self.prescription_id}, {self.status})"
