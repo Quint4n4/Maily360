@@ -3,11 +3,20 @@
 > 2026-06-29 · Resuelve el riesgo **P0** del reporte de métricas:
 > *"PDF (WeasyPrint) síncrono bloquea workers"*.
 >
-> ✅ **IMPLEMENTADO para RECETAS (2026-06-29):** modelo `PrescriptionPdfJob` + RLS,
-> servicio (encolar + caché), tarea Celery (`generate_prescription_pdf`), 3 endpoints
-> (GET encolar → status → file) y frontend (`VisorPdf` vía encolar+polling+descargar).
+> ✅ **COMPLETADO para TODOS los PDFs (2026-06-29).**
+>
+> - **Recetas** (1ª iteración): `PrescriptionPdfJob` propio + endpoints `/recetas/pdf-job/...`
+>   (con caché, receta inmutable).
+> - **Infra genérica `apps.pdfs`** (Fase A): `PdfJob` genérico + RLS + tarea `generate_pdf`
+>   que despacha por `kind` a un generador registrado (`registry`) + endpoints compartidos
+>   `/pdfs/job/<id>/` (estado) y `/pdfs/job/<id>/file/` (descarga), que revalidan el permiso
+>   del kind. Frontend: helper genérico `pdfJobBlob` (encolar+polling+descargar).
+> - **Libro clínico** (Fase B, kind `book`), **Cotización** (Fase C, kind `quote`) y
+>   **Reporte financiero** (Fase C, kind `finance_report`): salidas MUTABLES → **sin caché**
+>   (cache_key=""), se regeneran frescas cada vez, pero en 2º plano (P0 resuelto).
+>
 > Tarea en la **cola default** (la cola `pdf` dedicada queda como optimización de prod).
-> **Pendiente:** aplicar el mismo patrón al **libro clínico** (`expediente`).
+> Cualquier PDF futuro solo necesita registrar su `kind` con `register_pdf_kind`.
 
 ## 1. El problema (en una línea)
 
