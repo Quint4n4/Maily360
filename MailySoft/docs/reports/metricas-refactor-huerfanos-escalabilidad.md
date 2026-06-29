@@ -159,7 +159,7 @@
 | # | Riesgo | Dónde | Recomendación |
 |---|---|---|---|
 | 4 | **N+1 en el libro clínico:** `obj.credentials.filter()` por médico. | `apps/expediente/serializers.py:1089` | `prefetch_related("doctor__credentials")` en `book_build`. Quick-win. |
-| 5 | **Cero caché de aplicación** pese a tener Redis listo. El dashboard de finanzas y catálogos se recalculan en cada request. | `base.py:150` (configurado, nunca usado) | Cachear dashboard + catálogos con invalidación por tenant. |
+| 5 | ✅ **HECHO (2026-06-29).** Caché de Redis activado para el **dashboard de finanzas** y el **reporte de periodo** (las dos lecturas pesadas), por (tenant, rango), con invalidación por **versión de tenant** al escribir Payment/Charge/Quote (señales). `apps/finanzas/cache.py`. | Los catálogos (`concept_list`) quedaron fuera: son queries indexadas pequeñas, ya rápidas. |
 | 6 | ✅ **HECHO.** Code-splitting aplicado: `React.lazy()` por ruta (13 rutas) + `manualChunks` en Vite. | `web-soft/src/App.tsx`, `vite.config.ts` | — |
 | 7 | **Recordatorios con `eta` lejana retenidos en Redis con `allkeys-lru`** → pueden ser **descartados** silenciosamente bajo presión de memoria (recordatorios perdidos). | `apps/agenda/services.py:1251`, `docker-compose.yml:35` | Redis del broker en `noeviction` (separado del cache), o patrón **beat** que escanee recordatorios PENDING por ventana. |
 
@@ -186,7 +186,7 @@
 **Esfuerzo medio (medio día c/u):**
 5. ✅ **erroresDe HECHO (2026-06-25).** Consolidadas **10** copias de `erroresDe()` en `lib/apiErrors.ts`. −118 LOC. ⏳ **Pendiente:** extraer `<Field>`/`INPUT`/`LABEL` compartido.
 6. ✅ **HECHO (2026-06-29).** PDF a Celery para **TODOS** los PDFs vía infra genérica `apps.pdfs`. Ver `docs/design/pdf-async-celery-plan.md`.
-7. ⏳ **PENDIENTE.** Activar caché de Redis para dashboard de finanzas y catálogos.
+7. ✅ **HECHO (2026-06-29).** Caché de Redis para el dashboard de finanzas + reporte de periodo (invalidación por versión de tenant). Catálogos quedaron fuera (queries pequeñas ya rápidas).
 8. ✅ **HECHO.** `React.lazy()` por ruta + `manualChunks` en Vite.
 
 **Estructural (planear como tarea propia):**
