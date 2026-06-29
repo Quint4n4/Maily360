@@ -31,6 +31,8 @@ from django.db.models import (
 from django.db.models.functions import Coalesce, TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
 
+from apps.core.tenant_context import get_current_tenant
+from apps.finanzas.cache import DASHBOARD_TTL, finance_cache_get_or_set
 from apps.finanzas.models import (
     CfdiDocument,
     Charge,
@@ -319,6 +321,9 @@ def finance_dashboard_metrics(
           - income_by_method: [{method, label, amount, count}] (dona por método)
           - aging:            [{bucket, amount, count}] (barras apiladas de CxC)
           - quotes_funnel:    {sent, accepted, rejected, draft, expired, conversion_rate}
+
+    Resultado cacheado en Redis por (tenant, rango) con TTL de seguridad; se
+    invalida al crear/editar/borrar Payment/Charge/Quote (ver apps.finanzas.cache).
     """
     today = timezone.now().date()
     if date_to is None:
@@ -326,6 +331,23 @@ def finance_dashboard_metrics(
     if date_from is None:
         date_from = date_to - datetime.timedelta(days=30)
 
+    tenant = get_current_tenant()
+    if tenant is None:
+        # Sin contexto de tenant (p. ej. management command) → sin caché.
+        return _finance_dashboard_compute(date_from=date_from, date_to=date_to)
+    return finance_cache_get_or_set(
+        tenant_id=tenant.id,
+        suffix=f"dash:{date_from.isoformat()}:{date_to.isoformat()}",
+        ttl=DASHBOARD_TTL,
+        compute=lambda: _finance_dashboard_compute(date_from=date_from, date_to=date_to),
+    )
+
+
+def _finance_dashboard_compute(
+    *, date_from: datetime.date, date_to: datetime.date
+) -> dict[str, Any]:
+    """Computa las métricas del dashboard (sin caché). Rango ya normalizado."""
+    today = timezone.now().date()
     payments_qs = Payment.objects.filter(
         received_at__date__gte=date_from,
         received_at__date__lte=date_to,
