@@ -59,7 +59,16 @@ def api_tenant_ctx(tenant: Any) -> Generator[None, None, None]:
     y MedicalHistoryApi para el PUT/audit_record) y en el TenantManager/managers.
     """
     with (
-        patch("apps.expediente.views.get_current_tenant", return_value=tenant),
+        # get_current_tenant se importa en CADA módulo de vistas (las vistas se
+        # dividieron por recurso en views_*). Hay que parchearlo en todos para
+        # que cualquier endpoint vea el tenant del test.
+        patch("apps.expediente.views_alergias.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_historia.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_signos.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_evoluciones.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_imagenes.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_libro.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_preguntas.get_current_tenant", return_value=tenant),
         patch("apps.core.managers.get_current_tenant", return_value=tenant),
         patch("apps.core.managers.is_tenant_context_active", return_value=True),
     ):

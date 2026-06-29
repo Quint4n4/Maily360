@@ -863,7 +863,7 @@ class TestEvolutionInmutabilidad:
 
         with api_tenant_ctx(tenant):
             # Parchear active_role para simular que el middleware de tenant lo inyecta.
-            with patch("apps.expediente.views.EvolutionPermission.has_permission", return_value=True):
+            with patch("apps.expediente.views_evoluciones.EvolutionPermission.has_permission", return_value=True):
                 client = _auth_client(user)
                 resp = client.patch(_evoluciones_url(patient.id), data={}, format="json")
 

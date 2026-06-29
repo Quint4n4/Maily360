@@ -172,7 +172,7 @@ def _url_imagen(image_id: Any) -> str:
 def _tenant_ctx(tenant: Any) -> Generator[None, None, None]:
     """Simula el TenantMiddleware en tests con force_authenticate."""
     with (
-        patch("apps.expediente.views.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_imagenes.get_current_tenant", return_value=tenant),
         patch("apps.core.managers.get_current_tenant", return_value=tenant),
         patch("apps.core.managers.is_tenant_context_active", return_value=True),
     ):

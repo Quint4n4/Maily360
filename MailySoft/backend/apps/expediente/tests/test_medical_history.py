@@ -1251,7 +1251,7 @@ class TestAuditRecordFailRuidoso:
 
         client = _auth_client(doctor)
         with api_tenant_ctx(tenant):
-            with patch("apps.expediente.views.audit_record", return_value=None):
+            with patch("apps.expediente.views_historia.audit_record", return_value=None):
                 resp = client.get(_historia_url(patient.id))
 
         # El acceso clínico NO se deniega aunque la bitácora falle.
@@ -1265,8 +1265,8 @@ class TestAuditRecordFailRuidoso:
 
         client = _auth_client(doctor)
         with api_tenant_ctx(tenant):
-            with patch("apps.expediente.views.audit_record", return_value=None):
-                with patch("apps.expediente.views.logger") as mock_logger:
+            with patch("apps.expediente.views_historia.audit_record", return_value=None):
+                with patch("apps.expediente.views_historia.logger") as mock_logger:
                     client.get(_historia_url(patient.id))
 
         # Debe haberse llamado logger.critical al menos una vez.
@@ -1285,7 +1285,7 @@ class TestAuditRecordFailRuidoso:
 
         client = _auth_client(doctor)
         with api_tenant_ctx(tenant):
-            with patch("apps.expediente.views.logger") as mock_logger:
+            with patch("apps.expediente.views_historia.logger") as mock_logger:
                 resp = client.get(_historia_url(patient.id))
 
         assert resp.status_code == 200
