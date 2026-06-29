@@ -57,6 +57,7 @@ from apps.recetas.models import (
     Prescription,
     PrescriptionFormat,
     PrescriptionItem,
+    PrescriptionPdfJob,
     PrescriptionStatus,
     SECTIONS_KEYS,
 )
@@ -1174,3 +1175,70 @@ def _validate_format_fields(
             raise ValidationError(
                 f"El valor de sections.{key} debe ser booleano."
             )
+
+
+# ---------------------------------------------------------------------------
+# PDF asíncrono (P0) — encolar/cachear la generación con Celery
+# ---------------------------------------------------------------------------
+
+
+def _prescription_pdf_cache_key(
+    *, prescription_id: Any, layout: str, format_id: str
+) -> str:
+    """Clave de caché de un PDF de receta: identifica la salida (receta + formato).
+
+    Como la receta es inmutable, el mismo (receta, layout, format_id) produce
+    siempre el mismo PDF → un único job reutilizable.
+    """
+    return f"{prescription_id}|{format_id}|{layout}"
+
+
+def prescription_pdf_job_enqueue(
+    *,
+    prescription: Prescription,
+    user: Any,
+    layout: str = "",
+    format_id: str = "",
+) -> PrescriptionPdfJob:
+    """Encola (o reusa del caché) la generación del PDF de una receta.
+
+    Caché — un único job por (tenant, cache_key):
+      - DONE → se reusa (receta inmutable, PDF idéntico).
+      - PENDING/PROCESSING → ya está en cola, se reusa.
+      - FAILED o nuevo → se (re)encola la tarea Celery.
+
+    La tarea se encola con transaction.on_commit para que el worker vea la fila
+    del job ya comprometida en la BD.
+    """
+    from apps.recetas.tasks import generate_prescription_pdf  # noqa: PLC0415
+
+    tenant = prescription.tenant
+    cache_key = _prescription_pdf_cache_key(
+        prescription_id=prescription.id, layout=layout, format_id=format_id
+    )
+
+    job, created = PrescriptionPdfJob.objects.get_or_create(
+        tenant=tenant,
+        cache_key=cache_key,
+        defaults={
+            "created_by": user,
+            "prescription": prescription,
+            "layout": layout,
+            "format_id": format_id,
+            "status": PrescriptionPdfJob.Status.PENDING,
+        },
+    )
+
+    needs_enqueue = created or job.status == PrescriptionPdfJob.Status.FAILED
+
+    if not created and job.status == PrescriptionPdfJob.Status.FAILED:
+        # Reintentar un job fallido: limpiar estado y volver a encolar.
+        job.status = PrescriptionPdfJob.Status.PENDING
+        job.error = ""
+        job.file = None
+        job.save(update_fields=["status", "error", "file", "updated_at"])
+
+    if needs_enqueue:
+        transaction.on_commit(lambda: generate_prescription_pdf.delay(str(job.id)))
+
+    return job

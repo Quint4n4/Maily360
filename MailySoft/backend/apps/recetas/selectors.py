@@ -25,7 +25,13 @@ from typing import Any, Optional
 from django.db.models import QuerySet
 
 from apps.pacientes.models import Patient
-from apps.recetas.models import GlobalMedication, Medication, Prescription, PrescriptionFormat
+from apps.recetas.models import (
+    GlobalMedication,
+    Medication,
+    Prescription,
+    PrescriptionFormat,
+    PrescriptionPdfJob,
+)
 
 
 # Límite máximo de resultados del autocompletado.
@@ -397,3 +403,13 @@ def prescription_list(*, patient: Patient) -> "QuerySet[Prescription]":
         .filter(patient=patient)
         .order_by("-issued_at")
     )
+
+
+def prescription_pdf_job_get(*, job_id: uuid.UUID) -> PrescriptionPdfJob:
+    """Retorna un job de PDF de receta por UUID (filtrado por tenant activo).
+
+    Raises:
+        PrescriptionPdfJob.DoesNotExist: si no existe en el tenant activo
+            (anti-IDOR: un job de otro tenant produce 404, no 403).
+    """
+    return PrescriptionPdfJob.objects.select_related("prescription").get(id=job_id)
