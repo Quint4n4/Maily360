@@ -190,8 +190,8 @@
 8. `React.lazy()` por ruta + `manualChunks` en Vite.
 
 **Estructural (planear como tarea propia):**
-9. ✅ **HECHO (2026-06-25).** Dividido `agenda/services.py` (1761→1157, 5 módulos) y `expediente/views.py` (1616→84, 7 módulos `views_*`). **Pendiente:** `recetas/services.py` (`prescription_create`, 425 líneas).
-10. Refactor de `CrearEventoModal` (34 `useState` → reducer/hook).
+9. ✅ **HECHO (2026-06-25).** Dividido `agenda/services.py` (1761→1157, 5 módulos), `expediente/views.py` (1616→84, 7 módulos `views_*`) y `recetas/services.py` (`prescription_create` 425→290, 3 helpers extraídos).
+10. 🟡 **PARCIAL (2026-06-25).** `CrearEventoModal`: sacados `Chip`/`ModoPill` del render (anti-patrón). **Pendiente:** los 34 `useState` → `useReducer` — requiere pruebas en navegador (sin tests del modal).
 11. Decidir pgbouncer + compatibilidad con el GUC de RLS.
 12. Resolver la config de mypy/DRF para reducir los 191 `# type: ignore`.
 
