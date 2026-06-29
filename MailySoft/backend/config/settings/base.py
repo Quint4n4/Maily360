@@ -59,6 +59,8 @@ THIRD_PARTY_APPS: list[str] = [
 
 LOCAL_APPS: list[str] = [
     "apps.core",
+    # Infra genérica de PDFs asíncronos (Celery) — los módulos registran su builder
+    "apps.pdfs",
     # authn ANTES que tenancy: tenancy.TenantMembership tiene FK a authn.User
     "apps.authn",
     "apps.tenancy",

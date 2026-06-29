@@ -41,6 +41,8 @@ urlpatterns = [
     path("api/v1/", include("apps.plataforma.urls")),
     # Recetas médicas (Fase B1)
     path("api/v1/", include("apps.recetas.urls")),
+    # PDFs asíncronos — endpoints compartidos de estado/descarga
+    path("api/v1/", include("apps.pdfs.urls")),
 ]
 
 # FIX-8: exponer la documentación OpenAPI SOLO en desarrollo.
