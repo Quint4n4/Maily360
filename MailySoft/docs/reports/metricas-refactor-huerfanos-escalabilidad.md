@@ -161,7 +161,7 @@
 | 4 | **N+1 en el libro clínico:** `obj.credentials.filter()` por médico. | `apps/expediente/serializers.py:1089` | `prefetch_related("doctor__credentials")` en `book_build`. Quick-win. |
 | 5 | ✅ **HECHO (2026-06-29).** Caché de Redis activado para el **dashboard de finanzas** y el **reporte de periodo** (las dos lecturas pesadas), por (tenant, rango), con invalidación por **versión de tenant** al escribir Payment/Charge/Quote (señales). `apps/finanzas/cache.py`. | Los catálogos (`concept_list`) quedaron fuera: son queries indexadas pequeñas, ya rápidas. |
 | 6 | ✅ **HECHO.** Code-splitting aplicado: `React.lazy()` por ruta (13 rutas) + `manualChunks` en Vite. | `web-soft/src/App.tsx`, `vite.config.ts` | — |
-| 7 | **Recordatorios con `eta` lejana retenidos en Redis con `allkeys-lru`** → pueden ser **descartados** silenciosamente bajo presión de memoria (recordatorios perdidos). | `apps/agenda/services.py:1251`, `docker-compose.yml:35` | Redis del broker en `noeviction` (separado del cache), o patrón **beat** que escanee recordatorios PENDING por ventana. |
+| 7 | ✅ **HECHO (2026-06-29).** Redis pasó a **`noeviction`** (+ 512mb): el broker (DB0) ya no descarta tareas/recordatorios bajo presión de memoria; al llenarse rechaza escrituras (falla ruidosa) en vez de perder tareas en silencio. | `docker-compose.yml` | Prod alta escala: broker en instancia dedicada (separado del cache). |
 
 #### 🟡 P2 — A vigilar
 
