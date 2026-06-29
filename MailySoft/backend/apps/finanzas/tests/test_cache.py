@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
 from apps.finanzas.cache import finance_cache_invalidate, finance_cache_version
-from apps.finanzas.selectors import finance_dashboard_metrics
+from apps.finanzas.selectors import finance_dashboard_metrics, finance_period_report
 from tests.factories import ChargeFactory, PaymentFactory, QuoteFactory, TenantFactory
 
 _COMPUTE = "apps.finanzas.selectors._finance_dashboard_compute"
@@ -74,6 +74,32 @@ class TestFinanceDashboardCache:
                 finance_dashboard_metrics(date_from=d1, date_to=d2)
                 finance_dashboard_metrics(date_from=d1, date_to=d2)  # hit
                 finance_dashboard_metrics(date_from=d2, date_to=d2)  # otro rango → recomputa
+        assert m.call_count == 2
+
+
+class TestFinancePeriodReportCache:
+    _RCOMPUTE = "apps.finanzas.selectors._finance_period_report_compute"
+
+    def test_segunda_llamada_usa_cache(self, db: Any) -> None:
+        tenant = TenantFactory()
+        d1 = datetime.date(2026, 1, 1)
+        d2 = datetime.date(2026, 1, 31)
+        with _tenant_ctx(tenant):
+            with patch(self._RCOMPUTE, return_value={"r": 1}) as m:
+                r1 = finance_period_report(date_from=d1, date_to=d2)
+                r2 = finance_period_report(date_from=d1, date_to=d2)
+        assert r1 == r2 == {"r": 1}
+        m.assert_called_once()
+
+    def test_group_distinto_cache_distinto(self, db: Any) -> None:
+        tenant = TenantFactory()
+        d1 = datetime.date(2026, 1, 1)
+        d2 = datetime.date(2026, 1, 31)
+        with _tenant_ctx(tenant):
+            with patch(self._RCOMPUTE, side_effect=[{"g": "day"}, {"g": "month"}]) as m:
+                finance_period_report(date_from=d1, date_to=d2, group="day")
+                finance_period_report(date_from=d1, date_to=d2, group="day")  # hit
+                finance_period_report(date_from=d1, date_to=d2, group="month")  # recomputa
         assert m.call_count == 2
 
 

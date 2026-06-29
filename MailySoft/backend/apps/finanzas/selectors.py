@@ -559,7 +559,29 @@ def finance_period_report(
 
     Returns:
         dict con todos los campos descritos arriba.
+
+    Resultado cacheado en Redis por (tenant, rango, group); se invalida igual que el
+    dashboard al escribir Payment/Charge/Quote (ver apps.finanzas.cache).
     """
+    tenant = get_current_tenant()
+    if tenant is None:
+        return _finance_period_report_compute(
+            date_from=date_from, date_to=date_to, group=group
+        )
+    return finance_cache_get_or_set(
+        tenant_id=tenant.id,
+        suffix=f"report:{date_from.isoformat()}:{date_to.isoformat()}:{group}",
+        ttl=DASHBOARD_TTL,
+        compute=lambda: _finance_period_report_compute(
+            date_from=date_from, date_to=date_to, group=group
+        ),
+    )
+
+
+def _finance_period_report_compute(
+    *, date_from: datetime.date, date_to: datetime.date, group: str = "day"
+) -> dict[str, Any]:
+    """Computa el dataset del reporte de periodo (sin caché)."""
     if group not in _GROUP_TRUNC:
         group = "day"
 
