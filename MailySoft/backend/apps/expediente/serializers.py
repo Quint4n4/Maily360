@@ -1077,21 +1077,26 @@ class BookDoctorSerializer(serializers.Serializer):
     def get_cedulas_validadas(self, obj: Any) -> list[str]:
         """Retorna lista de cédulas validadas del médico (desde DoctorCredential).
 
-        Accede a las credenciales validadas del doctor. Si no están precargadas
-        o no existen, devuelve lista vacía para no fallar en serialización.
+        Si book_build precargó las credenciales validadas (via Prefetch con
+        to_attr="cedulas_validadas_cache"), las usa SIN pegar a la BD —evitando
+        un N+1 de una query de credenciales por capítulo del libro. Si no están
+        precargadas (serializer usado fuera de book_build), cae a una query directa.
         """
+        # Camino rápido: credenciales ya precargadas y filtradas por book_build.
+        cached = getattr(obj, "cedulas_validadas_cache", None)
+        if cached is not None:
+            return [c.credential_number for c in cached if c.credential_number]
+
+        # Fallback defensivo: sin prefetch. Mantiene el comportamiento previo.
         try:
-            # DoctorCredential vive en apps.clinica; se accede via related_name.
-            # El select_related de book_build no precarga credenciales (son opcionales
-            # para el libro y se pueden agregar en Fase 4 de optimización).
             return [
-                c
-                for c in obj.credentials.filter(
+                num
+                for num in obj.credentials.filter(
                     validation_status="validada",
                     is_active=True,
                     deleted_at__isnull=True,
                 ).values_list("credential_number", flat=True)
-                if c
+                if num
             ]
         except Exception:
             return []

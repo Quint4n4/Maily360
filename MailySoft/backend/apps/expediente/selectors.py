@@ -663,6 +663,7 @@ def book_build(
     Returns:
         PatientBook con todos los datos listos para serialización.
     """
+    from apps.clinica.models import DoctorCredential  # noqa: PLC0415
     from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
     from apps.recetas.models import Prescription  # noqa: PLC0415
     from django.db.models import Prefetch  # noqa: PLC0415
@@ -702,6 +703,19 @@ def book_build(
                 queryset=Prescription.objects.filter(
                     deleted_at__isnull=True
                 ).prefetch_related("items"),
+            ),
+            # Anti-N+1: precarga las cédulas validadas de cada médico autor.
+            # Sin esto, BookDoctorSerializer.get_cedulas_validadas dispara una
+            # query de credenciales por capítulo. Se filtra aquí (mismo criterio
+            # que el serializer) y se expone via to_attr="cedulas_validadas_cache".
+            Prefetch(
+                "doctor__credentials",
+                queryset=DoctorCredential.objects.filter(
+                    validation_status="validada",
+                    is_active=True,
+                    deleted_at__isnull=True,
+                ),
+                to_attr="cedulas_validadas_cache",
             ),
         )
         .order_by("-created_at")
@@ -813,6 +827,7 @@ def book_build_all(
         capitulos_count refleja el total real del paciente en todos los modos.
         page=1, total_pages=1, page_size=capitulos_count (convención para PDF).
     """
+    from apps.clinica.models import DoctorCredential  # noqa: PLC0415
     from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
     from apps.recetas.models import Prescription  # noqa: PLC0415
     from django.db.models import Prefetch  # noqa: PLC0415
@@ -849,6 +864,19 @@ def book_build_all(
                 queryset=Prescription.objects.filter(
                     deleted_at__isnull=True
                 ).prefetch_related("items"),
+            ),
+            # Anti-N+1: precarga las cédulas validadas de cada médico autor.
+            # Sin esto, BookDoctorSerializer.get_cedulas_validadas dispara una
+            # query de credenciales por capítulo. Se filtra aquí (mismo criterio
+            # que el serializer) y se expone via to_attr="cedulas_validadas_cache".
+            Prefetch(
+                "doctor__credentials",
+                queryset=DoctorCredential.objects.filter(
+                    validation_status="validada",
+                    is_active=True,
+                    deleted_at__isnull=True,
+                ),
+                to_attr="cedulas_validadas_cache",
             ),
         )
         .order_by("-created_at")

@@ -381,8 +381,11 @@ class TestBookBuildAntiN1:
           8. prefetch images                 (1 query)
           9. prefetch prescriptions          (1 query)
          10. prefetch prescriptions__items   (1 query)
+         11. prefetch doctor__credentials    (1 query — cédulas validadas, anti-N+1)
 
-        TOTAL: 10 queries fijas sin importar cuántas evoluciones haya en la página.
+        TOTAL: 11 queries fijas sin importar cuántas evoluciones haya en la página.
+        (La query 11 evita un N+1 en serialización: sin ella,
+        BookDoctorSerializer.get_cedulas_validadas haría 1 query por capítulo.)
         La allergies QuerySet es lazy y se evalúa después en serialización (fuera
         de esta ventana). La cota de 15 acepta variaciones de implementación (RLS,
         middleware, etc.) sin ser tan amplia que deje pasar un N+1 real.
@@ -421,7 +424,7 @@ class TestBookBuildAntiN1:
         # evoluciones en la página. El test verifica que NO hay N+1: si lo hubiera,
         # con 3 evoluciones ejecutaríamos 3×N queries adicionales.
         with tenant_ctx(tenant):
-            with django_assert_num_queries(10):
+            with django_assert_num_queries(11):
                 result = book_build(patient=patient, page=1, page_size=10)
 
         # Verificar que los datos estén disponibles (prefetch funcionó).
@@ -433,6 +436,9 @@ class TestBookBuildAntiN1:
             _ = list(cap.diagnoses.all())
             _ = list(cap.images.all())
             _ = list(cap.prescriptions.all())
+            # El prefetch anti-N+1 adjuntó las cédulas validadas al doctor
+            # (to_attr), de modo que el serializer las lee sin pegar a la BD.
+            assert hasattr(cap.doctor, "cedulas_validadas_cache")
 
 
 # ===========================================================================
