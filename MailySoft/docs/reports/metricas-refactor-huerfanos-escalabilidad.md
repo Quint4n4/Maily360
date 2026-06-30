@@ -152,7 +152,7 @@
 |---|---|---|---|
 | 1 | ✅ **RESUELTO (2026-06-29).** PDF síncrono que bloqueaba workers. | recetas + libro + cotización + reporte | Movido a **Celery** vía infra genérica `apps.pdfs` (encolar 202 → polling → descarga). Cola default (la dedicada `pdf` queda como optimización). |
 | 2 | **Búsqueda de pacientes sin índice de texto.** `icontains` sobre 5 campos → table scan O(n). Con 50k+ pacientes/clínica, cada tecla del buscador escanea la tabla. | `apps/pacientes/selectors.py:99-108` (el propio código tiene un `TODO(perf)` en la línea 100) | Índice **GIN `pg_trgm`** sobre nombre/apellidos/teléfono (con `tenant_id`). |
-| 3 | **Sin pgbouncer + workers fijos.** `CONN_MAX_AGE=60` reusa conexiones pero al escalar replicas se puede agotar `max_connections` de Postgres. | `Dockerfile:102`, `base.py:139` | pgbouncer. **Ojo:** el modo *transaction* puede chocar con el GUC `app.current_tenant_id` (nivel sesión) → habría que migrar a `SET LOCAL` o usar *session-mode*. Decisión estructural que toca el núcleo de RLS. |
+| 3 | **Sin pgbouncer + workers fijos.** `CONN_MAX_AGE=60` reusa conexiones pero al escalar replicas se puede agotar `max_connections` de Postgres. | `Dockerfile:102`, `base.py:139` | pgbouncer. **Ojo:** el modo *transaction* puede chocar con el GUC `app.current_tenant_id` (nivel sesión) → habría que migrar a `SET LOCAL` o usar *session-mode*. Decisión estructural que toca el núcleo de RLS. **Doc detallado con diagramas: `docs/design/pgbouncer-rls-escalabilidad.md`.** |
 
 #### 🟠 P1 — Importantes
 
