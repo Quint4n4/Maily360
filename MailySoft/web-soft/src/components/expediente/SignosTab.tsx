@@ -168,11 +168,11 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
               </div>
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 pt-2">Laboratorio (opcional)</p>
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-                <Campo label="Colesterol" value={form.colesterol} onChange={set('colesterol')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 180" />
-                <Campo label="Triglicéridos" value={form.trigliceridos} onChange={set('trigliceridos')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 150" />
-                <Campo label="Urea" value={form.urea} onChange={set('urea')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 30" />
-                <Campo label="Creatinina" value={form.creatinina} onChange={set('creatinina')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 0.9" />
-                <Campo label="Hemoglobina" value={form.hemoglobina} onChange={set('hemoglobina')} icon={Droplet} iconColor="#dc2626" placeholder="Ej. 14" />
+                <Campo label="Colesterol" value={form.colesterol} onChange={set('colesterol')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 180" min={50} max={800} />
+                <Campo label="Triglicéridos" value={form.trigliceridos} onChange={set('trigliceridos')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 150" min={20} max={2000} />
+                <Campo label="Urea" value={form.urea} onChange={set('urea')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 30" min={5} max={300} />
+                <Campo label="Creatinina" value={form.creatinina} onChange={set('creatinina')} icon={FlaskConical} iconColor="#b45309" placeholder="Ej. 0.9" min={0.1} max={20} />
+                <Campo label="Hemoglobina" value={form.hemoglobina} onChange={set('hemoglobina')} icon={Droplet} iconColor="#dc2626" placeholder="Ej. 14" min={3} max={25} />
               </div>
               <Campo label="Observaciones" type="text" value={form.notes} onChange={set('notes')} icon={ClipboardList} iconColor="#9A7B1E" placeholder="Ej. Paciente estable, sin novedades" />
               <div className="flex justify-end">
@@ -277,7 +277,7 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
 }
 
 function Campo({
-  label, value, onChange, type = 'number', icon: Icon, iconColor = '#9A7B1E', placeholder, vitalKey,
+  label, value, onChange, type = 'number', icon: Icon, iconColor = '#9A7B1E', placeholder, vitalKey, min, max,
 }: {
   label: string
   value: string
@@ -288,6 +288,9 @@ function Campo({
   placeholder?: string
   /** Si es un signo vital validable, su clave para validar rango en vivo (VITAL_RANGES). */
   vitalKey?: VitalKey
+  /** Rango plausible para inputs NO vitales (p. ej. laboratorio); solo hint de UX. */
+  min?: number
+  max?: number
 }) {
   const error = vitalKey ? errorDeSignoVital(vitalKey, value) : null
   const rango = vitalKey ? VITAL_RANGES[vitalKey] : null
@@ -307,8 +310,8 @@ function Campo({
           className={`input flex-1${error ? ' input-error' : ''}`}
           type={type} step="any"
           inputMode={type === 'number' ? 'decimal' : undefined}
-          min={rango ? rango[0] : undefined}
-          max={rango ? rango[1] : undefined}
+          min={rango ? rango[0] : min}
+          max={rango ? rango[1] : max}
           value={value} onChange={onChange} placeholder={placeholder}
           aria-invalid={error ? true : undefined}
         />
