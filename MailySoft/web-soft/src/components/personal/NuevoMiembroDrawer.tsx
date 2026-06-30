@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useCreateMember } from '../../hooks/miembros'
 import { erroresDe } from '../../lib/apiErrors'
+import { esEmailValido } from '../../lib/validacion'
 import { ROLES } from '../../auth/permisos'
 import type { ClinicRole } from '../../auth/permisos'
 
@@ -33,6 +34,7 @@ export default function NuevoMiembroDrawer({ open, onClose }: Props) {
     const faltan: string[] = []
     if (!form.first_name.trim()) faltan.push('El nombre es obligatorio.')
     if (!form.email.trim()) faltan.push('El correo es obligatorio.')
+    else if (!esEmailValido(form.email)) faltan.push('El correo electrónico no es válido.')
     if (!form.password) faltan.push('La contraseña es obligatoria.')
     if (form.password && form.password.length < 10) faltan.push('La contraseña debe tener al menos 10 caracteres.')
     if (!form.role) faltan.push('Selecciona un rol.')

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, Building2, Loader2, Check, Copy, KeyRound, AlertCircle } from 'lucide-react'
 import { useCreateClinica } from '../../hooks/plataforma'
 import { ApiError } from '../../lib/http'
+import { esEmailValido } from '../../lib/validacion'
 import type { ClinicaCreateResult } from '../../types/plataforma'
 
 interface Props {
@@ -48,6 +49,10 @@ export default function NuevaClinicaModal({ open, onClose }: Props) {
     setError(null)
     if (!nombre.trim() || !dueñoNombre.trim() || !dueñoApellido.trim() || !dueñoEmail.trim()) {
       setError('Completa el nombre de la clínica y los datos del dueño.')
+      return
+    }
+    if (!esEmailValido(dueñoEmail)) {
+      setError('El correo del dueño no es válido.')
       return
     }
     try {
