@@ -125,7 +125,47 @@ Señales de que llegó el momento:
 
 ---
 
-## 5. Referencias en el código
+## 5. Capacidad estimada sin pgbouncer (orden de magnitud)
+
+> Estimaciones **gruesas** (la cifra real solo se obtiene con una prueba de carga).
+> Config actual: gunicorn `4 workers × 2 threads = 8 hilos` por réplica
+> (`Dockerfile:104-106`), `CONN_MAX_AGE=60`, Postgres `max_connections` ~100 (default).
+
+**El muro de conexiones:** ~85 conexiones útiles (100 − ~15 reservadas) ÷ ~8 por
+réplica ≈ **~8–10 réplicas** del backend antes de toparlo. Es muchísima capacidad web.
+
+**No confundir tres formas de contar usuarios** (el cuello lo marcan las *activas a la
+vez*, no las registradas):
+
+| Tipo | Significado | Magnitud |
+|---|---|---|
+| Registradas | clínicas/usuarios con cuenta | la más grande |
+| **Activas a la vez** | app abierta, haciendo clic | define el pico |
+| Mismo instante | request en el mismísimo momento | la más chica (requests duran ms) |
+
+**Los números** (request típico ~100–300 ms; usuario activo ~1 click cada 5–15 s):
+
+| Escenario (sin pgbouncer) | Aguanta, a grandes rasgos |
+|---|---|
+| **1 backend** (lo de hoy) | **~100–150 clínicas / ~200–400 usuarios activos a la vez** — conexiones lejísimos del tope |
+| **Escalando réplicas hasta el muro (~8–10)** | **~800–1.000 clínicas / ~2.000–3.000 usuarios activos a la vez** |
+
+Las **registradas** (total de clientes) pueden ser varias veces eso: no todos en el pico.
+
+**Notas:**
+- Antes del límite de conexiones se suele topar **otra cosa** primero (CPU/RAM del
+  contenedor, queries lentas). El muro de conexiones rara vez es lo primero.
+- Ya empujamos el techo más arriba sin pgbouncer: caché de Redis (dashboard/reportes),
+  PDFs a Celery, índice `pg_trgm`, fix de N+1 → cada request pesa menos en la BD.
+- Movidas baratas que duplican/triplican el muro sin pgbouncer: subir `max_connections`
+  (a 200–300) y activar el pool de psycopg3 dentro de Django (`OPTIONS: {"pool": True}`).
+
+**Conclusión:** sin pgbouncer hay margen cómodo hasta el orden de **~1.000 clínicas /
+un par de miles de usuarios activos simultáneos**. Para la etapa actual, sobra de más.
+
+---
+
+## 6. Referencias en el código
 
 | Qué | Dónde |
 |---|---|
