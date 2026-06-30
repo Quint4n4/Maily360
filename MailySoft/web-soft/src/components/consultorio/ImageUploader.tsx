@@ -1,5 +1,8 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { ImagePlus, Loader2, Trash2 } from 'lucide-react'
+
+const MAX_MB = 5
+const MAX_BYTES = MAX_MB * 1024 * 1024
 
 interface Props {
   /** URL de la imagen actual, o null. */
@@ -30,13 +33,21 @@ export default function ImageUploader({
   height = 140,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const pick = () => {
     if (!uploading) inputRef.current?.click()
   }
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) onFile(file)
+    if (file) {
+      if (file.size > MAX_BYTES) {
+        setError(`La imagen no debe superar ${MAX_MB} MB.`)
+      } else {
+        setError(null)
+        onFile(file)
+      }
+    }
     e.target.value = '' // permite re-elegir el mismo archivo
   }
 
@@ -90,6 +101,8 @@ export default function ImageUploader({
           onChange={onChange}
         />
       </div>
+
+      {error && <p className="text-xs" style={{ color: '#B91C1C' }}>{error}</p>}
 
       {src && onClear && !uploading && (
         <button

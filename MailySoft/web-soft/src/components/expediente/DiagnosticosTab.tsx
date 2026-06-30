@@ -10,6 +10,7 @@ import type { Diagnosis, DiagnosisInput, DiagnosisKind } from '../../types/exped
 import { useCreateDiagnosis, useDiagnoses, useResolveDiagnosis } from '../../hooks/expediente'
 import { formatFechaCorta } from '../../lib/fecha'
 import { erroresDe } from '../../lib/apiErrors'
+import { errorDeCampo, esCie10Valido, MSG } from '../../lib/validacion'
 import { Card, Cargando, ErroresAlerta, Vacio, DIAGNOSIS_KIND_OPTIONS } from './ui'
 
 interface DiagnosticosTabProps {
@@ -25,6 +26,7 @@ export default function DiagnosticosTab({ paciente, puedeEditar }: DiagnosticosT
   const [abierto, setAbierto] = useState(false)
   const [form, setForm] = useState<DiagnosisInput>({ description: '', cie_code: '', kind: 'presuntivo' })
   const [errores, setErrores] = useState<string[]>([])
+  const cieError = errorDeCampo(form.cie_code ?? '', esCie10Valido, MSG.cie10)
 
   const diags: Diagnosis[] = diagsData?.results ?? []
 
@@ -61,15 +63,16 @@ export default function DiagnosticosTab({ paciente, puedeEditar }: DiagnosticosT
               <div className="grid gap-3" style={{ gridTemplateColumns: '2fr 1fr 1fr' }}>
                 <div>
                   <label className="label">Descripción</label>
-                  <input className="input" value={form.description}
+                  <input className="input" value={form.description} maxLength={255}
                     onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                     placeholder="Ej. Diabetes mellitus tipo 2" />
                 </div>
                 <div>
                   <label className="label">CIE-10 (opcional)</label>
-                  <input className="input" value={form.cie_code}
-                    onChange={e => setForm(f => ({ ...f, cie_code: e.target.value }))}
+                  <input className="input" value={form.cie_code} maxLength={8}
+                    onChange={e => setForm(f => ({ ...f, cie_code: e.target.value.toUpperCase() }))}
                     placeholder="Ej. E11" />
+                  {cieError && <p className="text-xs mt-1" style={{ color: '#B91C1C' }}>{cieError}</p>}
                 </div>
                 <div>
                   <label className="label">Tipo</label>
@@ -81,7 +84,7 @@ export default function DiagnosticosTab({ paciente, puedeEditar }: DiagnosticosT
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => { setAbierto(false); setErrores([]) }} className="btn-secondary px-4 py-2">Cancelar</button>
-                <button type="button" onClick={guardar} disabled={crear.isPending}
+                <button type="button" onClick={guardar} disabled={crear.isPending || !!cieError}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
                   style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
                   {crear.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : <><Plus className="w-4 h-4" /> Registrar diagnóstico</>}

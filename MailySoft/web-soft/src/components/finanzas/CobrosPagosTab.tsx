@@ -5,6 +5,7 @@ import type { PatientLite } from '../../api/pacientes'
 import { useCancelCharge, useCharges, useCreateCharge, usePayments, useRegisterPayment } from '../../hooks/finanzas'
 import { can, type Role } from '../../auth/permisos'
 import { formatMoney, formatDateTime } from '../../lib/format'
+import { errorMsg } from '../../lib/apiErrors'
 import PatientPicker from './PatientPicker'
 
 interface Props {
@@ -64,7 +65,7 @@ function ChargesPanel({
   const canCreate = can(role, 'createCharge')
 
   const submit = () => {
-    if (!description || !amount) return
+    if (!description || !amount || Number(amount) <= 0) return
     createCharge.mutate(
       { patient_id: patient.id, description, amount: Number(amount) },
       {
@@ -90,12 +91,12 @@ function ChargesPanel({
 
       {open && canCreate && (
         <div className="rounded-xl p-3 mb-3 space-y-2" style={{ background: 'rgba(0,0,0,0.03)' }}>
-          <input className="input" placeholder="Descripción" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <input className="input" type="number" placeholder="Monto" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input className="input" placeholder="Descripción" maxLength={255} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input className="input" type="number" min="0.01" step="0.01" placeholder="Monto" value={amount} onChange={(e) => setAmount(e.target.value)} />
           {createCharge.isError && (
-            <p className="text-xs" style={{ color: '#B91C1C' }}>{(createCharge.error as Error).message}</p>
+            <p className="text-xs" style={{ color: '#B91C1C' }}>{errorMsg(createCharge.error)}</p>
           )}
-          <button className="btn-primary w-full" onClick={submit} disabled={createCharge.isPending}>
+          <button className="btn-primary w-full" onClick={submit} disabled={createCharge.isPending || !description || Number(amount) <= 0}>
             {createCharge.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar cargo'}
           </button>
         </div>
@@ -169,7 +170,7 @@ function PaymentsPanel({
   )
 
   const submit = () => {
-    if (!amount) return
+    if (!amount || Number(amount) <= 0) return
     const allocs = Object.entries(allocations)
       .filter(([, v]) => Number(v) > 0)
       .map(([charge_id, v]) => ({ charge_id, amount: Number(v) }))
@@ -199,7 +200,7 @@ function PaymentsPanel({
       {open && canRegister && (
         <div className="rounded-xl p-3 mb-3 space-y-2" style={{ background: 'rgba(0,0,0,0.03)' }}>
           <div className="flex gap-2">
-            <input className="input" type="number" placeholder="Monto" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <input className="input" type="number" min="0.01" step="0.01" placeholder="Monto" value={amount} onChange={(e) => setAmount(e.target.value)} />
             <select className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
               <option value="cash">Efectivo</option>
               <option value="card">Tarjeta</option>
@@ -219,6 +220,8 @@ function PaymentsPanel({
                   <input
                     className="input w-24 py-1"
                     type="number"
+                    min="0"
+                    step="0.01"
                     placeholder="0"
                     value={allocations[c.id] ?? ''}
                     onChange={(e) => setAllocations((prev) => ({ ...prev, [c.id]: e.target.value }))}
@@ -229,9 +232,9 @@ function PaymentsPanel({
           )}
 
           {register.isError && (
-            <p className="text-xs" style={{ color: '#B91C1C' }}>{(register.error as Error).message}</p>
+            <p className="text-xs" style={{ color: '#B91C1C' }}>{errorMsg(register.error)}</p>
           )}
-          <button className="btn-primary w-full" onClick={submit} disabled={register.isPending}>
+          <button className="btn-primary w-full" onClick={submit} disabled={register.isPending || Number(amount) <= 0}>
             {register.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Registrar pago'}
           </button>
         </div>

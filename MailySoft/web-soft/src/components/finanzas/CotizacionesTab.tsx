@@ -4,6 +4,7 @@ import { Plus, Loader2, Send, Check, Trash2, FileDown, Info } from 'lucide-react
 import type { PatientLite } from '../../api/pacientes'
 import type { QuoteItemInput, ServiceConcept } from '../../api/finanzas'
 import { fetchQuotePdfBlob } from '../../api/finanzas'
+import { errorMsg } from '../../lib/apiErrors'
 import {
   useAcceptQuote,
   useCreateQuote,
@@ -167,6 +168,7 @@ export default function CotizacionesTab({ role }: Props) {
                   <input
                     className="input"
                     placeholder="Descripción"
+                    maxLength={255}
                     value={it.description}
                     onChange={(e) => setItem(i, { description: e.target.value })}
                   />
@@ -192,6 +194,7 @@ export default function CotizacionesTab({ role }: Props) {
                     type="number"
                     min={0}
                     step="0.01"
+                    max={Number(it.quantity || 0) * Number(it.unit_price || 0)}
                     placeholder="Desc."
                     value={it.discount}
                     onChange={(e) => setItem(i, { discount: e.target.value })}
@@ -231,7 +234,7 @@ export default function CotizacionesTab({ role }: Props) {
               </div>
               {createQuote.isError && (
                 <p className="text-xs" style={{ color: '#B91C1C' }}>
-                  {(createQuote.error as Error).message}
+                  {errorMsg(createQuote.error)}
                 </p>
               )}
             </div>

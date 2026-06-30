@@ -5,6 +5,7 @@ import { useRole } from '../../auth/RoleContext'
 import { useAuth } from '../../auth/AuthContext'
 import { puedeEditar } from '../../auth/permisos'
 import { formatFechaHora } from '../../lib/fecha'
+import { errorMsg } from '../../lib/apiErrors'
 
 interface Props {
   kind: 'cita' | 'evento'
@@ -31,7 +32,9 @@ export default function NotasHilo({ kind, itemId }: Props) {
   const enviar = async () => {
     const body = texto.trim()
     if (!body || agregar.isPending) return
-    try { await agregar.mutateAsync({ kind, id: itemId, body }); setTexto('') } catch { /* el error se ignora visualmente aquí */ }
+    // El error NO se traga: la UI lo muestra con agregar.isError (abajo). El catch
+    // solo evita el unhandled-rejection de mutateAsync; el texto se conserva.
+    try { await agregar.mutateAsync({ kind, id: itemId, body }); setTexto('') } catch { /* mostrado via agregar.isError */ }
   }
 
   return (
@@ -77,19 +80,25 @@ export default function NotasHilo({ kind, itemId }: Props) {
       )}
 
       {puedeAgregar && (
-        <div className="flex items-center gap-2 mt-3">
-          <input
-            value={texto}
-            onChange={e => setTexto(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); enviar() } }}
-            placeholder="Escribe una nota para el equipo…"
-            className="flex-1 rounded-xl border border-white/60 bg-white/70 px-3.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-          />
-          <button onClick={enviar} disabled={!texto.trim() || agregar.isPending}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-white transition-all hover:brightness-110 disabled:opacity-40 shrink-0"
-            style={{ background: '#C9A227' }}>
-            {agregar.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
+        <div className="mt-3">
+          <div className="flex items-center gap-2">
+            <input
+              value={texto}
+              onChange={e => setTexto(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); enviar() } }}
+              placeholder="Escribe una nota para el equipo…"
+              maxLength={1000}
+              className="flex-1 rounded-xl border border-white/60 bg-white/70 px-3.5 py-2 text-sm text-gray-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+            />
+            <button onClick={enviar} disabled={!texto.trim() || agregar.isPending}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-white transition-all hover:brightness-110 disabled:opacity-40 shrink-0"
+              style={{ background: '#C9A227' }}>
+              {agregar.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </div>
+          {agregar.isError && (
+            <p className="text-xs text-red-600 mt-1.5">{errorMsg(agregar.error)}</p>
+          )}
         </div>
       )}
     </div>

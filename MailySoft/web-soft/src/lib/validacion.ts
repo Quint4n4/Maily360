@@ -48,6 +48,14 @@ const CONTROL_CHAR_RE = /[\x00-\x1f]/
 /** CURP — patrón RENAPO del backend (case-insensitive). (_CURP_RE) */
 const CURP_RE = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$/i
 
+/**
+ * RFC (SAT): persona moral (3 letras) o física (4 letras) + fecha (6 dígitos) +
+ * homoclave (3 alfanuméricos) = 12–13 caracteres.
+ * NOTA: a diferencia de los demás, el backend (CFDI simulado) NO impone un regex
+ * estricto de RFC, así que este es el formato ESTÁNDAR del SAT — solo feedback de UX.
+ */
+const RFC_RE = /^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/i
+
 // ── Validadores de formato (true = válido) ──────────────────────────────────
 
 /** ¿El teléfono/celular/WhatsApp tiene formato válido? */
@@ -73,6 +81,23 @@ export function sinHTML(valor: string): boolean {
 /** ¿La CURP cumple el patrón RENAPO del backend? */
 export function esCurpValido(valor: string): boolean {
   return CURP_RE.test(valor)
+}
+
+/** ¿El RFC tiene formato válido del SAT (12-13 caracteres)? */
+export function esRfcValido(valor: string): boolean {
+  return RFC_RE.test(valor)
+}
+
+/**
+ * CIE-10: letra + 2 dígitos + subcategoría opcional (`.` + 1-4 alfanuméricos).
+ * Ej. E11, F32.2, A09.0, C7A.0. Patrón GENEROSO a propósito (el catálogo CIE-10 es
+ * muy variado): solo descarta texto libre evidente ("diabetes"), no códigos reales.
+ */
+const CIE10_RE = /^[A-Z]\d{2}(\.\w{1,4})?$/i
+
+/** ¿El código CIE-10 tiene una forma plausible? (generoso; el backend decide al final) */
+export function esCie10Valido(valor: string): boolean {
+  return CIE10_RE.test(valor)
 }
 
 // ── Helper de UX: error de un campo opcional ────────────────────────────────
@@ -106,6 +131,8 @@ export const MSG = {
   email: 'Correo electrónico inválido',
   html: 'No se permite HTML',
   curp: 'CURP inválida (formato RENAPO, 18 caracteres)',
+  rfc: 'RFC inválido (12-13 caracteres, formato SAT)',
+  cie10: 'Código CIE-10 inválido (ej. E11, F32.2)',
 } as const
 
 // ── Signos vitales — rangos fisiológicos (copia EXACTA del backend) ──────────

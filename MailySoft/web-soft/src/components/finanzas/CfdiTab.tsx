@@ -5,6 +5,8 @@ import type { PatientLite } from '../../api/pacientes'
 import { useCancelCfdi, useCfdiList, useIssueCfdi, usePayments } from '../../hooks/finanzas'
 import { can, type Role } from '../../auth/permisos'
 import { formatMoney, formatDateTime } from '../../lib/format'
+import { errorMsg } from '../../lib/apiErrors'
+import { errorDeCampo, esRfcValido, MSG } from '../../lib/validacion'
 import PatientPicker from './PatientPicker'
 
 interface Props {
@@ -29,9 +31,10 @@ export default function CfdiTab({ role }: Props) {
   const issue = useIssueCfdi()
   const cancel = useCancelCfdi()
   const canIssue = can(role, 'issueCfdi')
+  const rfcError = errorDeCampo(rfc, esRfcValido, MSG.rfc)
 
   const submit = () => {
-    if (!paymentId || !rfc || !name) return
+    if (!paymentId || !rfc || !name || !esRfcValido(rfc)) return
     issue.mutate(
       { payment_id: paymentId, receptor_rfc: rfc, receptor_name: name },
       {
@@ -73,12 +76,13 @@ export default function CfdiTab({ role }: Props) {
                   </option>
                 ))}
               </select>
-              <input className="input" placeholder="RFC del receptor" value={rfc} onChange={(e) => setRfc(e.target.value.toUpperCase())} />
-              <input className="input" placeholder="Razón social del receptor" value={name} onChange={(e) => setName(e.target.value)} />
+              <input className="input" placeholder="RFC del receptor" maxLength={13} value={rfc} onChange={(e) => setRfc(e.target.value.toUpperCase())} />
+              {rfcError && <p className="text-xs" style={{ color: '#B91C1C' }}>{rfcError}</p>}
+              <input className="input" placeholder="Razón social del receptor" maxLength={254} value={name} onChange={(e) => setName(e.target.value)} />
               {issue.isError && (
-                <p className="text-xs" style={{ color: '#B91C1C' }}>{(issue.error as Error).message}</p>
+                <p className="text-xs" style={{ color: '#B91C1C' }}>{errorMsg(issue.error)}</p>
               )}
-              <button className="btn-primary w-full" onClick={submit} disabled={issue.isPending}>
+              <button className="btn-primary w-full" onClick={submit} disabled={issue.isPending || !paymentId || !rfc || !name || !!rfcError}>
                 {issue.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Timbrar comprobante'}
               </button>
             </div>
