@@ -35,16 +35,16 @@ function errorClinica(valor: string, validacion?: Validacion): string | null {
 
 /** Campos de texto editables en esta sección. */
 const CAMPOS = [
-  { key: 'commercial_name', label: 'Nombre comercial', type: 'text' },
-  { key: 'address', label: 'Dirección', type: 'text' },
-  { key: 'address_2', label: 'Dirección 2 (opcional)', type: 'text' },
+  { key: 'commercial_name', label: 'Nombre comercial', type: 'text', maxLength: 150 },
+  { key: 'address', label: 'Dirección', type: 'text', maxLength: 255 },
+  { key: 'address_2', label: 'Dirección 2 (opcional)', type: 'text', maxLength: 255 },
   { key: 'phone', label: 'Teléfono', type: 'tel', inputMode: 'tel', validacion: 'telefono' },
   { key: 'mobile', label: 'Celular', type: 'tel', inputMode: 'tel', validacion: 'telefono' },
   { key: 'email', label: 'Correo electrónico', type: 'email', inputMode: 'email', validacion: 'email' },
   { key: 'website', label: 'Sitio web', type: 'url' },
-  { key: 'facebook', label: 'Facebook', type: 'text', validacion: 'social' },
-  { key: 'instagram', label: 'Instagram', type: 'text', validacion: 'social' },
-  { key: 'youtube', label: 'YouTube', type: 'text', validacion: 'social' },
+  { key: 'facebook', label: 'Facebook', type: 'text', validacion: 'social', maxLength: 255 },
+  { key: 'instagram', label: 'Instagram', type: 'text', validacion: 'social', maxLength: 255 },
+  { key: 'youtube', label: 'YouTube', type: 'text', validacion: 'social', maxLength: 255 },
 ] as const
 
 type CampoKey = (typeof CAMPOS)[number]['key']
@@ -162,6 +162,7 @@ export default function SeccionDatosClinica({ editable }: Props) {
         {CAMPOS.map((c) => {
           const { key, label, type } = c
           const inputMode = 'inputMode' in c ? c.inputMode : undefined
+          const maxLength = 'maxLength' in c ? c.maxLength : undefined
           const err = erroresCampo[key]
           return (
             <div key={key}>
@@ -170,6 +171,7 @@ export default function SeccionDatosClinica({ editable }: Props) {
                 id={`clinic-${key}`}
                 type={type}
                 inputMode={inputMode}
+                maxLength={maxLength}
                 className={`input${err ? ' input-error' : ''}`}
                 value={form[key]}
                 onChange={set(key)}

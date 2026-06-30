@@ -459,6 +459,7 @@ function FormatoEditor({
               <input
                 id="fmt-name"
                 className="input"
+                maxLength={150}
                 placeholder="Ej. Receta dorada"
                 value={st.name}
                 onChange={(e) => setSt((p) => ({ ...p, name: e.target.value }))}

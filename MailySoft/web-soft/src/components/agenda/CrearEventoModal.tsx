@@ -445,7 +445,7 @@ export default function CrearEventoModal({
                       <>
                         <div className="relative mb-2">
                           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar paciente…" className={`${INPUT} pl-10`} />
+                          <input value={search} maxLength={255} onChange={e => setSearch(e.target.value)} placeholder="Buscar paciente…" className={`${INPUT} pl-10`} />
                         </div>
                         <select value={pacienteId} onChange={e => setPacienteId(e.target.value)} className={INPUT}>
                           <option value="">{loadingPac ? 'Cargando…' : 'Selecciona un paciente…'}</option>
@@ -463,12 +463,12 @@ export default function CrearEventoModal({
                           <Info className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#C9A227' }} />
                           <p className="text-xs text-amber-800">Se creará un <b>expediente provisional</b>. Completa sus datos después en Pacientes.</p>
                         </div>
-                        <input value={npNombre} onChange={e => setNpNombre(e.target.value)} placeholder="Nombre(s)" className={INPUT} />
+                        <input value={npNombre} maxLength={150} onChange={e => setNpNombre(e.target.value)} placeholder="Nombre(s)" className={INPUT} />
                         <div className="grid grid-cols-2 gap-3">
-                          <input value={npPaterno} onChange={e => setNpPaterno(e.target.value)} placeholder="Apellido paterno" className={INPUT} />
-                          <input value={npMaterno} onChange={e => setNpMaterno(e.target.value)} placeholder="Apellido materno" className={INPUT} />
+                          <input value={npPaterno} maxLength={150} onChange={e => setNpPaterno(e.target.value)} placeholder="Apellido paterno" className={INPUT} />
+                          <input value={npMaterno} maxLength={150} onChange={e => setNpMaterno(e.target.value)} placeholder="Apellido materno" className={INPUT} />
                         </div>
-                        <input value={npTel} onChange={e => setNpTel(e.target.value)} placeholder="Teléfono (opcional)" className={INPUT} />
+                        <input value={npTel} maxLength={150} onChange={e => setNpTel(e.target.value)} placeholder="Teléfono (opcional)" className={INPUT} />
                       </div>
                     )}
                   </div>
@@ -680,7 +680,7 @@ export default function CrearEventoModal({
                 <>
                   <div>
                     <label className={LABEL}>Título {modo === 'block' && <span className="text-gray-400 font-normal">(opcional)</span>}</label>
-                    <input className={INPUT} value={evTitulo} onChange={e => setEvTitulo(e.target.value)}
+                    <input className={INPUT} maxLength={150} value={evTitulo} onChange={e => setEvTitulo(e.target.value)}
                       placeholder={modo === 'block' ? 'Día festivo, vacaciones…' : 'Junta de equipo'} />
                   </div>
                   <div>
@@ -717,7 +717,7 @@ export default function CrearEventoModal({
                   </div>
                   <div>
                     <label className={LABEL}>Notas <span className="text-gray-400 font-normal">(opcional)</span></label>
-                    <textarea className={`${INPUT} resize-none`} rows={2} value={evNotas} onChange={e => setEvNotas(e.target.value)} />
+                    <textarea className={`${INPUT} resize-none`} rows={2} maxLength={4000} value={evNotas} onChange={e => setEvNotas(e.target.value)} />
                   </div>
                 </>
               )}

@@ -106,7 +106,7 @@ export default function EditarPacienteDrawer({ paciente, onClose }: EditarPacien
 
               <section>
                 <p className={SECCION_LABEL}>Notas</p>
-                <textarea className="input resize-none" rows={3} value={form.notes} onChange={set('notes')} />
+                <textarea className="input resize-none" rows={3} maxLength={4000} value={form.notes} onChange={set('notes')} />
               </section>
             </div>
 

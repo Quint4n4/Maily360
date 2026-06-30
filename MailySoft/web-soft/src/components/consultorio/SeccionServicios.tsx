@@ -318,6 +318,7 @@ function EditorServicio({
           <label className="label">Nombre del servicio</label>
           <input
             className="input"
+            maxLength={150}
             placeholder="Ej. Consulta general"
             value={borrador.name}
             onChange={e => set('name', e.target.value)}
@@ -354,6 +355,7 @@ function EditorServicio({
               <label className="label">Clave de producto/servicio SAT</label>
               <input
                 className="input"
+                maxLength={255}
                 placeholder="Ej. 85121800"
                 value={borrador.sat_product_key}
                 onChange={e => set('sat_product_key', e.target.value)}
@@ -363,6 +365,7 @@ function EditorServicio({
               <label className="label">Clave de unidad SAT</label>
               <input
                 className="input"
+                maxLength={255}
                 placeholder="Ej. E48"
                 value={borrador.sat_unit_key}
                 onChange={e => set('sat_unit_key', e.target.value)}

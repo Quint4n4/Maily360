@@ -169,6 +169,7 @@ export default function SeccionCredencialesValidar({ editable }: Props) {
                 <div className="mt-3 flex flex-col sm:flex-row gap-2">
                   <input
                     className="input flex-1"
+                    maxLength={255}
                     placeholder="Motivo (ej. cédula no encontrada en el portal de la SEP)"
                     value={motivo}
                     onChange={(e) => setMotivo(e.target.value)}

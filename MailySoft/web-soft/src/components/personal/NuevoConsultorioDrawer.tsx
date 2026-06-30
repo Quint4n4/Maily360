@@ -92,11 +92,11 @@ export default function NuevoConsultorioDrawer({ open, onClose, editing }: Props
 
               <div>
                 <label className="label">Nombre</label>
-                <input className="input" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Consultorio 1" />
+                <input className="input" maxLength={150} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Consultorio 1" />
               </div>
               <div>
                 <label className="label">Ubicación</label>
-                <input className="input" value={ubicacion} onChange={e => setUbic(e.target.value)} placeholder="Planta baja, ala norte" />
+                <input className="input" maxLength={255} value={ubicacion} onChange={e => setUbic(e.target.value)} placeholder="Planta baja, ala norte" />
               </div>
               <div>
                 <label className="label">Color en la agenda</label>

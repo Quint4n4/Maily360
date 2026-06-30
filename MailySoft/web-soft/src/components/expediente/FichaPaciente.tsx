@@ -343,7 +343,7 @@ function FichaEditar({
       {verClinico && (
         <Card title="Notas" icon={StickyNote}>
           <p className={SECCION_LABEL}>Notas</p>
-          <textarea className="input resize-none" rows={3} value={form.notes} onChange={set('notes')} />
+          <textarea className="input resize-none" rows={3} maxLength={4000} value={form.notes} onChange={set('notes')} />
         </Card>
       )}
 
@@ -469,7 +469,7 @@ function AlergiasBlock({ patientId, puedeEditar }: { patientId: string; puedeEdi
             <div>
               <label className="label">Sustancia / alérgeno</label>
               <input
-                className="input" value={form.substance}
+                className="input" maxLength={150} value={form.substance}
                 onChange={e => setForm(f => ({ ...f, substance: e.target.value }))}
                 placeholder="Ej. Penicilina"
               />
@@ -487,7 +487,7 @@ function AlergiasBlock({ patientId, puedeEditar }: { patientId: string; puedeEdi
           <div>
             <label className="label">Reacción (opcional)</label>
             <input
-              className="input" value={form.reaction}
+              className="input" maxLength={255} value={form.reaction}
               onChange={e => setForm(f => ({ ...f, reaction: e.target.value }))}
               placeholder="Ej. Urticaria generalizada"
             />

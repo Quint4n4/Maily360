@@ -101,7 +101,7 @@ export default function EventoDetalleModal({ evento, onClose, soloLectura = fals
 
               <div>
                 <label className={LABEL}>Título {esBloqueo && <span className="text-gray-400 font-normal">(opcional)</span>}</label>
-                <input className={INPUT} value={titulo} disabled={soloLectura} onChange={e => setTitulo(e.target.value)} placeholder={esBloqueo ? 'Día festivo…' : 'Junta de equipo'} />
+                <input className={INPUT} maxLength={150} value={titulo} disabled={soloLectura} onChange={e => setTitulo(e.target.value)} placeholder={esBloqueo ? 'Día festivo…' : 'Junta de equipo'} />
               </div>
 
               <div>
@@ -124,7 +124,7 @@ export default function EventoDetalleModal({ evento, onClose, soloLectura = fals
 
               <div>
                 <label className={LABEL}>Notas <span className="text-gray-400 font-normal">(opcional)</span></label>
-                <textarea className={`${INPUT} resize-none`} rows={2} value={notas} disabled={soloLectura} onChange={e => setNotas(e.target.value)} />
+                <textarea className={`${INPUT} resize-none`} rows={2} maxLength={4000} value={notas} disabled={soloLectura} onChange={e => setNotas(e.target.value)} />
               </div>
 
               <div className="pt-3 border-t border-white/40">

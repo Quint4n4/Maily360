@@ -260,7 +260,7 @@ function NotaCard({
           {abierto ? (
             <div className="space-y-2">
               {error && <p className="text-xs text-red-600">{error}</p>}
-              <textarea className="input resize-none" rows={2} placeholder="Escribe el addendum…"
+              <textarea className="input resize-none" rows={2} maxLength={4000} placeholder="Escribe el addendum…"
                 value={body} onChange={e => setBody(e.target.value)} />
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={() => { setAbierto(false); setError('') }} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
@@ -601,6 +601,7 @@ function ExploracionCard({
       {evaluado && (
         <input
           className="input text-xs py-1.5 mt-0.5 w-full"
+          maxLength={255}
           placeholder="Más…"
           value={detalle}
           onChange={e => onDetalle(e.target.value)}
@@ -699,7 +700,7 @@ function NuevaEvolucion({ paciente, onClose }: { paciente: PatientOut; onClose: 
               {TEXTO_CAMPOS_ALL.map(({ key, label }) => (
                 <div key={key}>
                   <label className="label">{label}</label>
-                  <textarea className="input resize-none" rows={2} value={texto[key]} onChange={setT(key)} />
+                  <textarea className="input resize-none" rows={2} maxLength={4000} value={texto[key]} onChange={setT(key)} />
                 </div>
               ))}
             </div>

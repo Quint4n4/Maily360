@@ -373,7 +373,7 @@ function CampoTexto({
   return (
     <div>
       <label className="label">{label}</label>
-      <textarea className="input resize-none" rows={rows} value={value} onChange={onChange} />
+      <textarea className="input resize-none" rows={rows} maxLength={4000} value={value} onChange={onChange} />
     </div>
   )
 }
@@ -554,6 +554,7 @@ function AparatoFila({
       </div>
       <input
         className="input text-sm mt-2"
+        maxLength={255}
         placeholder="Detalle (opcional)…"
         value={detalle}
         onChange={e => onDetalle(e.target.value)}

@@ -459,7 +459,7 @@ function AnularReceta({
         </p>
         {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
         <textarea
-          className="input resize-none" rows={2} placeholder="Motivo de la anulación…"
+          className="input resize-none" rows={2} maxLength={255} placeholder="Motivo de la anulación…"
           value={reason} onChange={e => setReason(e.target.value)}
         />
         <div className="flex justify-end gap-2 mt-3">
@@ -840,6 +840,7 @@ export function NuevaReceta({
           <textarea
             id="receta-diagnostico"
             className="input resize-none" rows={2}
+            maxLength={255}
             placeholder="Ej. Faringoamigdalitis bacteriana aguda"
             value={diagnosis} onChange={e => setDiagnosis(e.target.value)}
           />
@@ -888,6 +889,7 @@ export function NuevaReceta({
             <input
               id="receta-folio-controlado"
               className={`input${hayControlado && !controlledFolio.trim() ? ' input-error' : ''}`}
+              maxLength={150}
               placeholder="Folio del recetario especial emitido por COFEPRIS"
               value={controlledFolio}
               onChange={e => setControlledFolio(e.target.value)}
@@ -922,6 +924,7 @@ export function NuevaReceta({
           </div>
           <textarea
             className="input resize-none" rows={2}
+            maxLength={4000}
             placeholder="Indicaciones generales, cuidados, próxima cita…"
             value={recommendations} onChange={e => setRecommendations(e.target.value)}
           />
@@ -1035,6 +1038,7 @@ function RenglonTratamiento({
           <label className="label">Dosis{esMedicamento && ' *'}</label>
           <input
             className={`input${reqVacio(renglon.dose) ? ' input-error' : ''}`}
+            maxLength={150}
             placeholder="Ej. 1 tableta"
             value={renglon.dose}
             onChange={e => onChange({ dose: e.target.value })}
@@ -1044,6 +1048,7 @@ function RenglonTratamiento({
           <label className="label">Frecuencia{esMedicamento && ' *'}</label>
           <input
             className={`input${reqVacio(renglon.frequency) ? ' input-error' : ''}`}
+            maxLength={150}
             placeholder="Ej. cada 8 horas"
             value={renglon.frequency}
             onChange={e => onChange({ frequency: e.target.value })}
@@ -1064,6 +1069,7 @@ function RenglonTratamiento({
           <label className="label">Duración{esMedicamento && ' *'}</label>
           <input
             className={`input${reqVacio(renglon.duration) ? ' input-error' : ''}`}
+            maxLength={150}
             placeholder="Ej. por 7 días"
             value={renglon.duration}
             onChange={e => onChange({ duration: e.target.value })}
@@ -1093,7 +1099,7 @@ function RenglonTratamiento({
         <div>
           <label className="label">Concentración</label>
           <input
-            className="input" placeholder="Ej. 500 mg"
+            className="input" maxLength={150} placeholder="Ej. 500 mg"
             value={renglon.medication_concentration}
             onChange={e => onChange({ medication_concentration: e.target.value })}
           />
@@ -1101,7 +1107,7 @@ function RenglonTratamiento({
         <div>
           <label className="label">Presentación</label>
           <input
-            className="input" placeholder="Ej. Caja con 20"
+            className="input" maxLength={150} placeholder="Ej. Caja con 20"
             value={renglon.medication_presentation}
             onChange={e => onChange({ medication_presentation: e.target.value })}
           />
@@ -1109,7 +1115,7 @@ function RenglonTratamiento({
         <div>
           <label className="label">Cantidad (opcional)</label>
           <input
-            className="input" placeholder="Ej. 1 caja"
+            className="input" maxLength={150} placeholder="Ej. 1 caja"
             value={renglon.quantity}
             onChange={e => onChange({ quantity: e.target.value })}
           />
@@ -1120,6 +1126,7 @@ function RenglonTratamiento({
         <label className="label">Nota / observación (opcional)</label>
         <textarea
           className="input resize-none" rows={2}
+          maxLength={4000}
           placeholder="Ej. tomar con alimentos; suspender si hay reacción"
           value={renglon.indication}
           onChange={e => onChange({ indication: e.target.value })}
@@ -1187,6 +1194,7 @@ function BuscadorMedicamento({
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         <input
           className="input pl-9"
+          maxLength={150}
           placeholder="Buscar en el catálogo o escribir libremente…"
           value={texto}
           onChange={e => { setTexto(e.target.value); onTextoLibre(e.target.value); setAbierto(true) }}

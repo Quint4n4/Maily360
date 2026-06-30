@@ -110,11 +110,11 @@ export default function NuevaNotaModal({ open, onClose, editing }: Props) {
 
               <div>
                 <label className={LABEL}>Título</label>
-                <input className={INPUT} value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título de la nota…" />
+                <input className={INPUT} maxLength={150} value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título de la nota…" />
               </div>
               <div>
                 <label className={LABEL}>Texto</label>
-                <textarea className={`${INPUT} resize-none`} rows={4} value={cuerpo} onChange={e => setCuerpo(e.target.value)} placeholder="Escribe aquí…" />
+                <textarea className={`${INPUT} resize-none`} rows={4} maxLength={4000} value={cuerpo} onChange={e => setCuerpo(e.target.value)} placeholder="Escribe aquí…" />
               </div>
 
               <div className="flex flex-wrap gap-2">

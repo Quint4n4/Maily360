@@ -340,6 +340,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
                 </select>
                 <input className="input"
                   placeholder="Detalle (opcional)"
+                  maxLength={255}
                   value={celda.detalle ?? ''}
                   onChange={e => setSistema(sistema, { detalle: e.target.value })}
                   disabled={!puedeEditar} />
@@ -472,7 +473,7 @@ function TextField({
     <div>
       <label className="label">{label}</label>
       <input className="input" value={value} placeholder={placeholder} disabled={disabled}
-        onChange={e => onChange(e.target.value)} />
+        maxLength={255} onChange={e => onChange(e.target.value)} />
     </div>
   )
 }
@@ -495,7 +496,7 @@ function TextArea({
   return (
     <div>
       <label className="label">{label}</label>
-      <textarea className="input resize-none" rows={3} value={value} disabled={disabled}
+      <textarea className="input resize-none" rows={3} maxLength={4000} value={value} disabled={disabled}
         onChange={e => onChange(e.target.value)} />
     </div>
   )
@@ -547,7 +548,7 @@ function PreguntaExtraField({
     return (
       <div className="sm:col-span-full">
         {label}
-        <textarea className="input resize-none" rows={3} value={strValue} disabled={disabled}
+        <textarea className="input resize-none" rows={3} maxLength={4000} value={strValue} disabled={disabled}
           onChange={e => onChange(e.target.value)} />
       </div>
     )
@@ -591,7 +592,7 @@ function PreguntaExtraField({
     <div>
       {label}
       <input className="input" value={strValue} disabled={disabled}
-        onChange={e => onChange(e.target.value)} />
+        maxLength={255} onChange={e => onChange(e.target.value)} />
     </div>
   )
 }

@@ -92,11 +92,11 @@ export default function PlantillaModal({ open, kind, editing, onClose }: Props) 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="label" htmlFor="tpl-name">Nombre</label>
-                  <input id="tpl-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
+                  <input id="tpl-name" className="input" maxLength={150} value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div>
                   <label className="label" htmlFor="tpl-group">Grupo (opcional)</label>
-                  <input id="tpl-group" className="input" value={group} onChange={(e) => setGroup(e.target.value)} />
+                  <input id="tpl-group" className="input" maxLength={150} value={group} onChange={(e) => setGroup(e.target.value)} />
                 </div>
               </div>
 

@@ -123,16 +123,16 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
                 <div className="space-y-3">
                   <div>
                     <label className="label">Nombre(s)</label>
-                    <input className="input" value={form.first_name} onChange={set('first_name')} placeholder="María" />
+                    <input className="input" maxLength={150} value={form.first_name} onChange={set('first_name')} placeholder="María" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="label">Apellido paterno</label>
-                      <input className="input" value={form.paternal_surname} onChange={set('paternal_surname')} placeholder="González" />
+                      <input className="input" maxLength={150} value={form.paternal_surname} onChange={set('paternal_surname')} placeholder="González" />
                     </div>
                     <div>
                       <label className="label">Apellido materno</label>
-                      <input className="input" value={form.maternal_surname} onChange={set('maternal_surname')} placeholder="Pérez" />
+                      <input className="input" maxLength={150} value={form.maternal_surname} onChange={set('maternal_surname')} placeholder="Pérez" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -161,6 +161,7 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
                     <input
                       className={`input${errPhone ? ' input-error' : ''}`}
                       inputMode="tel"
+                      maxLength={150}
                       value={form.phone}
                       onChange={set('phone')}
                       placeholder="55 1234 5678"
@@ -199,7 +200,7 @@ export default function NuevoPacienteDrawer({ open, onClose }: NuevoPacienteDraw
 
               <section>
                 <p className={SECCION}>Notas</p>
-                <textarea className="input resize-none" rows={3} value={form.notes} onChange={set('notes')} placeholder="Observaciones, alergias, antecedentes…" />
+                <textarea className="input resize-none" rows={3} maxLength={4000} value={form.notes} onChange={set('notes')} placeholder="Observaciones, alergias, antecedentes…" />
               </section>
 
               <div className="flex items-start gap-2.5 rounded-xl px-4 py-3" style={{ background: 'rgba(201,162,39,0.10)', border: '1px solid rgba(201,162,39,0.25)' }}>

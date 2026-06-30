@@ -238,16 +238,16 @@ export function CamposDatosPersonales({ form, set }: CamposProps) {
     <div className="space-y-3">
       <div>
         <label className="label">Nombre(s)</label>
-        <input className="input" value={form.first_name} onChange={set('first_name')} />
+        <input className="input" maxLength={150} value={form.first_name} onChange={set('first_name')} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Apellido paterno</label>
-          <input className="input" value={form.paternal_surname} onChange={set('paternal_surname')} />
+          <input className="input" maxLength={150} value={form.paternal_surname} onChange={set('paternal_surname')} />
         </div>
         <div>
           <label className="label">Apellido materno</label>
-          <input className="input" value={form.maternal_surname} onChange={set('maternal_surname')} />
+          <input className="input" maxLength={150} value={form.maternal_surname} onChange={set('maternal_surname')} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -279,6 +279,7 @@ export function CamposContacto({ form, set }: CamposProps) {
         <input
           className={`input${errs.phone ? ' input-error' : ''}`}
           inputMode="tel"
+          maxLength={150}
           value={form.phone}
           onChange={set('phone')}
         />
@@ -290,6 +291,7 @@ export function CamposContacto({ form, set }: CamposProps) {
           <input
             className={`input${errs.phone_secondary ? ' input-error' : ''}`}
             inputMode="tel"
+            maxLength={150}
             value={form.phone_secondary}
             onChange={set('phone_secondary')}
           />
@@ -297,7 +299,7 @@ export function CamposContacto({ form, set }: CamposProps) {
         </div>
         <div>
           <label className="label">Etiqueta <span className="text-gray-400 font-normal">(ej. Casa)</span></label>
-          <input className="input" value={form.phone_label} onChange={set('phone_label')} />
+          <input className="input" maxLength={150} value={form.phone_label} onChange={set('phone_label')} />
         </div>
       </div>
       <div>
@@ -322,12 +324,12 @@ export function CamposDomicilio({ form, set }: CamposProps) {
     <div className="space-y-3">
       <div>
         <label className="label">Calle y número</label>
-        <input className="input" value={form.address_street} onChange={set('address_street')} />
+        <input className="input" maxLength={255} value={form.address_street} onChange={set('address_street')} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Colonia</label>
-          <input className="input" value={form.address_neighborhood} onChange={set('address_neighborhood')} />
+          <input className="input" maxLength={255} value={form.address_neighborhood} onChange={set('address_neighborhood')} />
         </div>
         <div>
           <label className="label">Código postal</label>
@@ -344,11 +346,11 @@ export function CamposDomicilio({ form, set }: CamposProps) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Ciudad</label>
-          <input className="input" value={form.city} onChange={set('city')} />
+          <input className="input" maxLength={255} value={form.city} onChange={set('city')} />
         </div>
         <div>
           <label className="label">Estado</label>
-          <input className="input" value={form.state} onChange={set('state')} />
+          <input className="input" maxLength={255} value={form.state} onChange={set('state')} />
         </div>
       </div>
     </div>
@@ -389,7 +391,7 @@ export function CamposNom004({ form, set, setForm }: CamposProps) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Lugar de nacimiento</label>
-          <input className="input" value={form.birthplace} onChange={set('birthplace')} />
+          <input className="input" maxLength={255} value={form.birthplace} onChange={set('birthplace')} />
         </div>
         <div>
           <label className="label">Tipo de sangre</label>
@@ -415,11 +417,11 @@ export function CamposNom004({ form, set, setForm }: CamposProps) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">Ocupación</label>
-          <input className="input" value={form.occupation} onChange={set('occupation')} />
+          <input className="input" maxLength={255} value={form.occupation} onChange={set('occupation')} />
         </div>
         <div>
           <label className="label">Religión</label>
-          <input className="input" value={form.religion} onChange={set('religion')} />
+          <input className="input" maxLength={255} value={form.religion} onChange={set('religion')} />
         </div>
       </div>
       <div>

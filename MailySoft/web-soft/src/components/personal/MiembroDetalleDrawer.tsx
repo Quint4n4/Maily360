@@ -260,11 +260,11 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="label">Nombre(s)</label>
-                        <input className="input" value={firstName} onChange={e => setFirstName(e.target.value)} />
+                        <input className="input" maxLength={150} value={firstName} onChange={e => setFirstName(e.target.value)} />
                       </div>
                       <div>
                         <label className="label">Apellidos</label>
-                        <input className="input" value={lastName} onChange={e => setLastName(e.target.value)} />
+                        <input className="input" maxLength={150} value={lastName} onChange={e => setLastName(e.target.value)} />
                       </div>
                     </div>
                     <div>
@@ -317,11 +317,11 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                     <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                       <div>
                         <label className="label">Cédula profesional</label>
-                        <input className="input" inputMode="numeric" value={cedula} onChange={e => setCedula(e.target.value.replace(/\D/g, ''))} placeholder="Ej. 1234567" />
+                        <input className="input" inputMode="numeric" maxLength={150} value={cedula} onChange={e => setCedula(e.target.value.replace(/\D/g, ''))} placeholder="Ej. 1234567" />
                       </div>
                       <div>
                         <label className="label">Especialidad</label>
-                        <input className="input" value={especialidad} onChange={e => setEspecialidad(e.target.value)} placeholder="Ej. Medicina general" />
+                        <input className="input" maxLength={150} value={especialidad} onChange={e => setEspecialidad(e.target.value)} placeholder="Ej. Medicina general" />
                       </div>
                       <div>
                         <label className="label">Duración de cita (min)</label>
@@ -330,7 +330,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                     </div>
                     <div className="mt-3">
                       <label className="label">Biografía <span className="text-gray-400 font-normal">(opcional)</span></label>
-                      <textarea className="input resize-none" rows={2} value={bio} onChange={e => setBio(e.target.value)} placeholder="Breve descripción profesional…" />
+                      <textarea className="input resize-none" rows={2} maxLength={4000} value={bio} onChange={e => setBio(e.target.value)} placeholder="Breve descripción profesional…" />
                     </div>
                     {doctorPerfil && (
                       <div className="mt-3">

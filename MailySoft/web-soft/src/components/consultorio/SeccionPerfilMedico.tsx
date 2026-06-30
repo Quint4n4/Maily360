@@ -119,6 +119,7 @@ export default function SeccionPerfilMedico() {
           id="cedulas"
           className="input max-w-xl"
           inputMode="numeric"
+          maxLength={150}
           placeholder="1234567, 7654321"
           value={cedulas}
           onChange={(e) => setCedulas(e.target.value.replace(/[^\d,\s]/g, ''))}
@@ -376,6 +377,7 @@ function SeccionCredenciales({ doctorId }: { doctorId: string }) {
               <input
                 id="cred-title"
                 className="input"
+                maxLength={150}
                 placeholder="Ej. Médico Cirujano"
                 value={form.title}
                 onChange={set('title')}
@@ -386,6 +388,7 @@ function SeccionCredenciales({ doctorId }: { doctorId: string }) {
               <input
                 id="cred-inst"
                 className="input"
+                maxLength={150}
                 placeholder="Ej. UNAM"
                 value={form.institution}
                 onChange={set('institution')}
@@ -397,6 +400,7 @@ function SeccionCredenciales({ doctorId }: { doctorId: string }) {
                 id="cred-num"
                 className="input"
                 inputMode="numeric"
+                maxLength={150}
                 placeholder="Ej. 1234567"
                 value={form.credential_number}
                 onChange={(e) =>

@@ -75,7 +75,7 @@ export default function NuevoTipoCitaDrawer({ open, onClose, editing }: Props) {
 
               <div>
                 <label className="label">Nombre</label>
-                <input className="input" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Primera vez, Seguimiento, Urgente…" />
+                <input className="input" maxLength={150} value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Primera vez, Seguimiento, Urgente…" />
               </div>
               <div>
                 <label className="label">Color en la agenda</label>

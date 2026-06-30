@@ -159,6 +159,7 @@ export default function PagoModal({
               <label className="label">Referencia (opcional)</label>
               <input
                 className="input"
+                maxLength={150}
                 placeholder="Folio / autorización"
                 value={reference}
                 onChange={e => setReference(e.target.value)}

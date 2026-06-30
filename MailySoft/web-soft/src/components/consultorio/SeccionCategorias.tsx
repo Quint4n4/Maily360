@@ -56,6 +56,7 @@ export default function SeccionCategorias({ editable }: Props) {
         <div className="flex items-center gap-2 max-w-md">
           <input
             className="input flex-1"
+            maxLength={150}
             placeholder="Nueva categoría"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}

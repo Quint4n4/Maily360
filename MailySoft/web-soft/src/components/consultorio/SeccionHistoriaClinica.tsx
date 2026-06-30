@@ -430,6 +430,7 @@ function EditorPregunta({
           <label className="label">Pregunta</label>
           <input
             className="input"
+            maxLength={150}
             placeholder="Ej. ¿Practica algún deporte?"
             value={borrador.label}
             onChange={e => set('label', e.target.value)}
@@ -463,6 +464,7 @@ function EditorPregunta({
           {selectValue === SECCION_NUEVA && (
             <input
               className="input mt-2"
+              maxLength={150}
               placeholder="Nombre de la sección nueva (ej. Estilo de vida)"
               value={borrador.section}
               onChange={e => set('section', e.target.value)}
@@ -492,6 +494,7 @@ function EditorPregunta({
           <textarea
             className="input resize-none"
             rows={3}
+            maxLength={4000}
             placeholder={'Opción 1\nOpción 2\nOpción 3'}
             value={borrador.optionsText}
             onChange={e => set('optionsText', e.target.value)}
