@@ -163,6 +163,11 @@ Las **registradas** (total de clientes) pueden ser varias veces eso: no todos en
 **Conclusión:** sin pgbouncer hay margen cómodo hasta el orden de **~1.000 clínicas /
 un par de miles de usuarios activos simultáneos**. Para la etapa actual, sobra de más.
 
+> **Confirmado empíricamente (2026-06-29):** una prueba de carga con Locust mostró que
+> a alta concurrencia el backend falla con `FATAL: sorry, too many clients already`
+> (Postgres sin conexiones) — exactamente este cuello. A carga normal (decenas de
+> usuarios) la app va rápida (mediana ~13 ms). Ver `loadtest/README.md`.
+
 ---
 
 ## 6. Referencias en el código
