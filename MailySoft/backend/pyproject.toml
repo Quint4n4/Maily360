@@ -30,6 +30,7 @@ xhtml2pdf = "0.2.17"
 qrcode = "^8.0"
 weasyprint = "^62.3"
 pydyf = "0.11.0"
+sentry-sdk = "^2.64.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3"

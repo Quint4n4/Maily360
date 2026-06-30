@@ -438,7 +438,31 @@ PRESCRIPTION_VERIFY_BASE_URL: str = env(
 )
 
 # ---------------------------------------------------------------------------
-# Sentry (opcional, activar con SENTRY_DSN)
+# Sentry (observabilidad de errores) — opcional, se activa con SENTRY_DSN
 # ---------------------------------------------------------------------------
+#
+# Sin SENTRY_DSN (caso local), Sentry queda DORMIDO: no se inicializa ni envía
+# nada. Se activa en producción/Railway poniendo la variable SENTRY_DSN. Como este
+# settings lo importan tanto gunicorn (web) como el worker de Celery, captura errores
+# de ambos (incluidas las fallas de tareas en segundo plano, p. ej. los PDF).
 
 SENTRY_DSN: str = env("SENTRY_DSN", default="")
+
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.django import DjangoIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=env("SENTRY_ENVIRONMENT", default="production"),
+        integrations=[DjangoIntegration(), CeleryIntegration()],
+        # PRIVACIDAD (app de salud — NOM-024 / LFPDPPP): NUNCA enviar datos de
+        # pacientes a Sentry. Se desactivan PII, cuerpos de request y variables
+        # locales de los tracebacks (que podrían contener nombre, CURP, etc.).
+        send_default_pii=False,
+        max_request_body_size="never",
+        include_local_variables=False,
+        # Performance tracing desactivado por defecto (0.0); subir en prod si se quiere.
+        traces_sample_rate=env.float("SENTRY_TRACES_SAMPLE_RATE", default=0.0),
+    )
