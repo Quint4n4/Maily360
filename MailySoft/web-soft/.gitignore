@@ -1,0 +1,5 @@
+# Playwright (E2E) — artefactos generados, no versionar
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
