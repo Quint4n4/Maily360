@@ -251,7 +251,7 @@
   <div class="rp-header">Rp/</div>
   {% for item in items %}
   <div class="med-item">
-    <div><span class="med-number">{{ forloop.counter }}.</span> <span class="med-name">{{ item.medication_name }}</span></div>
+    <div><span class="med-number">{{ forloop.counter }}.</span> <span class="med-name">{{ item.medication_name }}</span>{% if item.medication_commercial_name %} <span class="med-detail">({{ item.medication_commercial_name }})</span>{% endif %}</div>
     {% if item.medication_detail %}<div class="med-detail">{{ item.medication_detail }}</div>{% endif %}
     <div class="med-indication">{{ item.indication }}</div>
   </div>

@@ -138,7 +138,10 @@ export interface PrescriptionItem {
   order: number
   /** Tipo de ítem (COFEPRIS F2). */
   kind: ItemKind
+  /** Denominación genérica (obligatoria, Art. 83 LGS). */
   medication_name: string
+  /** Denominación comercial/distintiva (opcional). */
+  medication_commercial_name: string
   medication_presentation: string
   medication_form: string
   medication_concentration: string
@@ -222,7 +225,10 @@ export interface PrescriptionDetail {
 export interface PrescriptionItemInput {
   /** Tipo de ítem. Default backend: 'medicamento'. */
   kind?: ItemKind
+  /** Denominación genérica (obligatoria, Art. 83 LGS). */
   medication_name: string
+  /** Denominación comercial/distintiva (opcional). */
+  medication_commercial_name?: string
   /** Renglón estructurado COFEPRIS F2. */
   dose?: string
   frequency?: string
@@ -450,18 +456,24 @@ export const LETTERHEAD_MODE_OPTIONS: { value: LetterheadMode; label: string }[]
   { value: 'preprinted', label: 'Pre-impreso (deja espacio superior en blanco)' },
 ]
 
+/** Secciones legalmente OBLIGATORIAS (NOM-004-SSA3-2012 / Art. 83 LGS): no se
+ *  pueden desactivar en ningún formato. El backend también las fuerza y rechaza
+ *  intentos de apagarlas (REQUIRED_SECTIONS en apps/recetas). */
+export const REQUIRED_SECTION_KEYS: readonly FormatSectionKey[] = ['edad_sexo', 'contacto_clinica']
+
 /** Secciones configurables con su etiqueta (orden de presentación en el editor).
  *  El médico, sus cédulas (COFEPRIS), el folio, el paciente, la fecha, los
- *  medicamentos y el logo/clínica son siempre fijos y no se listan aquí. */
-export const SECTION_OPTIONS: { key: FormatSectionKey; label: string }[] = [
+ *  medicamentos y el logo/clínica son siempre fijos y no se listan aquí.
+ *  `required: true` = obligatoria por ley (no se puede desactivar). */
+export const SECTION_OPTIONS: { key: FormatSectionKey; label: string; required?: boolean }[] = [
   { key: 'signos', label: 'Datos del paciente (signos vitales)' },
-  { key: 'edad_sexo', label: 'Edad y sexo' },
+  { key: 'edad_sexo', label: 'Edad y sexo', required: true },
   { key: 'diagnostico', label: 'Diagnóstico' },
   { key: 'alergias', label: 'Alergias del paciente' },
   { key: 'sueros', label: 'Sueros / soluciones' },
   { key: 'terapias', label: 'Terapias / procedimientos' },
   { key: 'indicaciones', label: 'Recomendaciones (solo receta del paciente)' },
   { key: 'vigencia', label: 'Vigencia de la receta' },
-  { key: 'contacto_clinica', label: 'Datos de contacto de la clínica' },
+  { key: 'contacto_clinica', label: 'Datos de contacto de la clínica', required: true },
   { key: 'qr', label: 'Código QR de verificación' },
 ]

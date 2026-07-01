@@ -366,6 +366,67 @@ class TestPrescriptionCreate:
                     items_data=[dict(_ITEM)],
                 )
 
+    def test_doctor_without_cedula_raises(self, db: Any) -> None:
+        """Médico sin cédula profesional → ValidationError (NOM-004 / Art. 83 LGS)."""
+        from django.core.exceptions import ValidationError
+
+        tenant = TenantFactory()
+        # Doctor SIN cédula (se sobreescribe el default de la factory).
+        membership = TenantMembershipFactory(
+            tenant=tenant, role=TenantMembership.Role.DOCTOR, is_active=True
+        )
+        doctor = DoctorFactory(
+            tenant=tenant, membership=membership, is_active=True, cedula_profesional=""
+        )
+        doctor.created_by = membership.user
+        doctor.save(update_fields=["created_by"])
+        patient = PatientFactory(tenant=tenant, is_deceased=False)
+
+        with tenant_ctx(tenant):
+            with pytest.raises(ValidationError, match="cédula profesional"):
+                prescription_create(
+                    tenant=tenant,
+                    user=membership.user,
+                    patient_id=patient.id,
+                    items_data=[dict(_ITEM)],
+                )
+
+    def test_patient_without_dob_raises(self, db: Any) -> None:
+        """Paciente sin fecha de nacimiento → ValidationError (NOM-004: edad obligatoria)."""
+        from django.core.exceptions import ValidationError
+
+        tenant = TenantFactory()
+        user, _ = _member_with_doctor(tenant)
+        patient = PatientFactory(
+            tenant=tenant, is_deceased=False, date_of_birth=None
+        )
+
+        with tenant_ctx(tenant):
+            with pytest.raises(ValidationError, match="fecha de nacimiento"):
+                prescription_create(
+                    tenant=tenant,
+                    user=user,
+                    patient_id=patient.id,
+                    items_data=[dict(_ITEM)],
+                )
+
+    def test_patient_without_sex_raises(self, db: Any) -> None:
+        """Paciente sin sexo → ValidationError (NOM-004: sexo obligatorio)."""
+        from django.core.exceptions import ValidationError
+
+        tenant = TenantFactory()
+        user, _ = _member_with_doctor(tenant)
+        patient = PatientFactory(tenant=tenant, is_deceased=False, sex="")
+
+        with tenant_ctx(tenant):
+            with pytest.raises(ValidationError, match="sexo"):
+                prescription_create(
+                    tenant=tenant,
+                    user=user,
+                    patient_id=patient.id,
+                    items_data=[dict(_ITEM)],
+                )
+
     def test_no_items_raises(self, db: Any) -> None:
         """Lista de ítems vacía → ValidationError."""
         from django.core.exceptions import ValidationError

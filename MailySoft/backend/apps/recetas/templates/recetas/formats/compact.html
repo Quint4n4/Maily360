@@ -185,7 +185,7 @@
   <div class="meds-title">Medicamentos</div>
   {% for item in medicamentos %}
   <div class="med">
-    <div><span class="med-num">{{ forloop.counter }}</span><span class="med-name">{{ item.medication_name }}</span>{% if item.medication_detail %} <span class="med-pres">· {{ item.medication_detail }}</span>{% endif %}</div>
+    <div><span class="med-num">{{ forloop.counter }}</span><span class="med-name">{{ item.medication_name }}</span>{% if item.medication_commercial_name %} <span class="med-pres">({{ item.medication_commercial_name }})</span>{% endif %}{% if item.medication_detail %} <span class="med-pres">· {{ item.medication_detail }}</span>{% endif %}</div>
     {% if item.dose or item.frequency or item.route_label or item.duration %}
     <div class="med-str">{% if item.dose %}<span class="f"><span class="sl">Dosis:</span> {{ item.dose }}</span>{% endif %}{% if item.frequency %}<span class="f"><span class="sl">Frecuencia:</span> {{ item.frequency }}</span>{% endif %}{% if item.route_label %}<span class="f"><span class="sl">Vía:</span> {{ item.route_label }}</span>{% endif %}{% if item.duration %}<span class="f"><span class="sl">Durante:</span> {{ item.duration }}</span>{% endif %}</div>
     {% endif %}
@@ -198,7 +198,7 @@
   <div class="sec-t">Sueros / Soluciones</div>
   {% for item in sueros %}
   <div class="med">
-    <div><span class="med-num">{{ forloop.counter }}</span><span class="med-name">{{ item.medication_name }}</span>{% if item.medication_detail %} <span class="med-pres">· {{ item.medication_detail }}</span>{% endif %}</div>
+    <div><span class="med-num">{{ forloop.counter }}</span><span class="med-name">{{ item.medication_name }}</span>{% if item.medication_commercial_name %} <span class="med-pres">({{ item.medication_commercial_name }})</span>{% endif %}{% if item.medication_detail %} <span class="med-pres">· {{ item.medication_detail }}</span>{% endif %}</div>
     {% if item.dose or item.frequency or item.route_label or item.duration %}
     <div class="med-str">{% if item.dose %}<span class="f"><span class="sl">Dosis:</span> {{ item.dose }}</span>{% endif %}{% if item.frequency %}<span class="f"><span class="sl">Frecuencia:</span> {{ item.frequency }}</span>{% endif %}{% if item.route_label %}<span class="f"><span class="sl">Vía:</span> {{ item.route_label }}</span>{% endif %}{% if item.duration %}<span class="f"><span class="sl">Durante:</span> {{ item.duration }}</span>{% endif %}</div>
     {% endif %}
@@ -211,7 +211,7 @@
   <div class="sec-t">Terapias / Procedimientos</div>
   {% for item in terapias %}
   <div class="med">
-    <div><span class="med-num">{{ forloop.counter }}</span><span class="med-name">{{ item.medication_name }}</span>{% if item.medication_detail %} <span class="med-pres">· {{ item.medication_detail }}</span>{% endif %}</div>
+    <div><span class="med-num">{{ forloop.counter }}</span><span class="med-name">{{ item.medication_name }}</span>{% if item.medication_commercial_name %} <span class="med-pres">({{ item.medication_commercial_name }})</span>{% endif %}{% if item.medication_detail %} <span class="med-pres">· {{ item.medication_detail }}</span>{% endif %}</div>
     {% if item.frequency or item.duration %}
     <div class="med-str">{% if item.frequency %}<span class="f"><span class="sl">Frecuencia:</span> {{ item.frequency }}</span>{% endif %}{% if item.duration %}<span class="f"><span class="sl">Durante:</span> {{ item.duration }}</span>{% endif %}</div>
     {% endif %}

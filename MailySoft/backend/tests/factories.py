@@ -157,7 +157,10 @@ class DoctorFactory(DjangoModelFactory):
         lambda obj: TenantMembershipFactory(tenant=obj.tenant, role="doctor")
     )
     created_by = factory.LazyAttribute(lambda obj: obj.membership.user)
-    cedula_profesional = ""
+    # Cédula profesional por defecto: un médico "completo" que sí puede emitir
+    # recetas (prescription_create exige cédula por NOM-004 / Art. 83 LGS).
+    # Para probar el caso sin cédula, pásala explícitamente: DoctorFactory(cedula_profesional="").
+    cedula_profesional = factory.Sequence(lambda n: f"{1000000 + n}")
     specialty = factory.Sequence(lambda n: f"Especialidad {n}")
     default_appointment_duration = 30
     bio_short = ""

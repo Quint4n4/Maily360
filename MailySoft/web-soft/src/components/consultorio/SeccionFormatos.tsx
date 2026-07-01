@@ -41,6 +41,7 @@ import type {
 import {
   BASE_LAYOUT_OPTIONS,
   FONT_OPTIONS,
+  REQUIRED_SECTION_KEYS,
   SECTION_OPTIONS,
   THEME_OPTIONS,
 } from '../../types/recetas'
@@ -381,8 +382,11 @@ function FormatoEditor({
     [st.accent_color],
   )
 
-  const toggleSeccion = (key: FormatSectionKey) =>
+  const toggleSeccion = (key: FormatSectionKey) => {
+    // Las secciones obligatorias por ley no se pueden apagar (NOM-004 / Art. 83 LGS).
+    if (REQUIRED_SECTION_KEYS.includes(key)) return
     setSt((p) => ({ ...p, sections: { ...p.sections, [key]: !p.sections[key] } }))
+  }
 
   const guardar = async () => {
     setErrores([])
@@ -391,6 +395,10 @@ function FormatoEditor({
       setErrores(['El color de acento debe tener el formato #RRGGBB.'])
       return
     }
+    // Las secciones obligatorias por ley siempre van en true (defensa; el backend
+    // también las exige y rechaza apagarlas — NOM-004 / Art. 83 LGS).
+    const sections: FormatSections = { ...st.sections }
+    for (const k of REQUIRED_SECTION_KEYS) sections[k] = true
     try {
       if (esEdicion && formato) {
         const input: PrescriptionFormatUpdateInput = {
@@ -399,7 +407,7 @@ function FormatoEditor({
           accent_color: st.accent_color,
           font: st.font,
           theme: st.theme,
-          sections: st.sections,
+          sections,
           is_default: st.is_default,
           doctor_id: st.doctor_id,
           is_authorized: st.doctor_id ? st.is_authorized : false,
@@ -412,7 +420,7 @@ function FormatoEditor({
           accent_color: st.accent_color,
           font: st.font,
           theme: st.theme,
-          sections: st.sections,
+          sections,
           is_default: st.is_default,
           doctor_id: st.doctor_id,
         }
@@ -548,20 +556,34 @@ function FormatoEditor({
             <div>
               <p className="label">Secciones visibles</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {SECTION_OPTIONS.map((s) => (
-                  <label
-                    key={s.key}
-                    className="flex items-center gap-2 rounded-lg border border-gray-100 bg-white/70 px-3 py-2 cursor-pointer text-sm text-gray-700"
-                  >
-                    <input
-                      type="checkbox"
-                      className="accent-amber-600"
-                      checked={!!st.sections[s.key]}
-                      onChange={() => toggleSeccion(s.key)}
-                    />
-                    {s.label}
-                  </label>
-                ))}
+                {SECTION_OPTIONS.map((s) => {
+                  const obligatoria = !!s.required
+                  return (
+                    <label
+                      key={s.key}
+                      title={obligatoria ? 'Obligatoria por ley (NOM-004 / Art. 83 LGS): no se puede desactivar.' : undefined}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                        obligatoria
+                          ? 'border-amber-200 bg-amber-50/60 text-gray-500 cursor-not-allowed'
+                          : 'border-gray-100 bg-white/70 text-gray-700 cursor-pointer'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="accent-amber-600"
+                        checked={obligatoria ? true : !!st.sections[s.key]}
+                        disabled={obligatoria}
+                        onChange={() => toggleSeccion(s.key)}
+                      />
+                      {s.label}
+                      {obligatoria && (
+                        <span className="ml-auto text-[10px] font-semibold uppercase text-amber-700">
+                          Obligatorio
+                        </span>
+                      )}
+                    </label>
+                  )
+                })}
               </div>
               <p className="text-[11px] text-gray-400 mt-1">
                 El médico, sus cédulas, el folio, el paciente, la fecha y los medicamentos

@@ -640,9 +640,19 @@ class PrescriptionItem(TenantAwareModel):
     medication_name = models.CharField(
         max_length=200,
         help_text=(
-            "Nombre del medicamento (snapshot al crear). Requerido. "
-            "Es la fuente de verdad inmutable del documento. "
-            "DR-7: el catálogo puede cambiar; la receta no."
+            "Denominación GENÉRICA del medicamento (snapshot al crear). REQUERIDA "
+            "por el Art. 83 LGS / NOM-004: el genérico se imprime primero. Es la "
+            "fuente de verdad inmutable del documento. DR-7: el catálogo puede "
+            "cambiar; la receta no."
+        ),
+    )
+    medication_commercial_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text=(
+            "Denominación DISTINTIVA (comercial) del medicamento (snapshot, OPCIONAL). "
+            "Se imprime como secundaria; el genérico manda (Art. 83 LGS)."
         ),
     )
     medication_presentation = models.CharField(
@@ -815,6 +825,14 @@ _DEFAULT_SECTIONS: dict[str, bool] = {
     "contacto_clinica": True,
     "qr": True,
 }
+
+# Secciones legalmente OBLIGATORIAS que NO se pueden desactivar en ningún formato
+# (NOM-004-SSA3-2012 / Art. 83 LGS):
+#   - edad_sexo:        edad y sexo del paciente (dato obligatorio del paciente).
+#   - contacto_clinica: domicilio y teléfonos del emisor (dato obligatorio del emisor).
+# Defensa en 3 capas: get_sections_full() las fuerza a True al renderizar, y tanto
+# el modelo (clean) como el servicio (_validate_format_fields) rechazan apagarlas.
+REQUIRED_SECTIONS: frozenset[str] = frozenset({"edad_sexo", "contacto_clinica"})
 
 
 class PrescriptionFormat(TenantAwareModel):
@@ -1000,11 +1018,32 @@ class PrescriptionFormat(TenantAwareModel):
                     raise ValidationError(
                         {"sections": f"El valor de '{key}' debe ser booleano (true/false)."}
                     )
+            # Secciones obligatorias por ley: no se pueden desactivar.
+            forced_off = sorted(
+                k for k in REQUIRED_SECTIONS if self.sections.get(k) is False
+            )
+            if forced_off:
+                raise ValidationError(
+                    {
+                        "sections": (
+                            "Estas secciones son obligatorias por ley "
+                            "(NOM-004 / Art. 83 LGS) y no se pueden desactivar: "
+                            f"{', '.join(forced_off)}."
+                        )
+                    }
+                )
 
     def get_sections_full(self) -> dict[str, bool]:
-        """Devuelve las secciones completas, rellenando con defaults los flags ausentes."""
+        """Devuelve las secciones completas, rellenando con defaults los flags ausentes.
+
+        Las secciones legalmente obligatorias (REQUIRED_SECTIONS) se fuerzan a True
+        aquí, de modo que TODO PDF las incluya aunque un formato tenga guardado un
+        valor viejo en False (defensa a nivel de render — NOM-004 / Art. 83 LGS).
+        """
         merged = dict(_DEFAULT_SECTIONS)
         merged.update(self.sections or {})
+        for key in REQUIRED_SECTIONS:
+            merged[key] = True
         return merged
 
     @property

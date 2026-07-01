@@ -59,6 +59,7 @@ from apps.recetas.models import (
     PrescriptionItem,
     PrescriptionPdfJob,
     PrescriptionStatus,
+    REQUIRED_SECTIONS,
     SECTIONS_KEYS,
 )
 from apps.tenancy.models import Tenant
@@ -434,8 +435,12 @@ def prescription_create(
     Reglas de negocio:
     - El usuario debe tener un perfil de Doctor activo en el tenant.
       Si no lo tiene, lanza PermissionDenied (HTTP 403).
+    - El médico debe tener cédula profesional registrada (NOM-004 / Art. 83 LGS);
+      si falta, lanza ValidationError (400).
     - El paciente debe pertenecer al tenant (anti-IDOR a nivel de servicio).
     - El paciente no puede estar fallecido (is_deceased=True → 400).
+    - El paciente debe tener fecha de nacimiento (edad) y sexo (NOM-004);
+      si faltan, lanza ValidationError (400).
     - La receta debe tener al menos 1 ítem.
     - Cada ítem debe tener `medication_name` no vacío.
     - Si se provee appointment_id, debe pertenecer al mismo tenant.
@@ -488,9 +493,11 @@ def prescription_create(
         Instancia de Prescription creada con sus ítems.
 
     Raises:
-        ValidationError:  si el paciente no existe, está fallecido, no hay ítems,
-                          algún ítem está incompleto, o la receta es controlada
-                          y no se proporcionó controlled_folio.
+        ValidationError:  si el paciente no existe, está fallecido, le falta
+                          fecha de nacimiento o sexo, el médico no tiene cédula
+                          profesional, no hay ítems, algún ítem está incompleto,
+                          o la receta es controlada y no se proporcionó
+                          controlled_folio.
         PermissionDenied: si el usuario no tiene Doctor activo en el tenant.
     """
     from apps.pacientes.models import Patient
@@ -503,6 +510,17 @@ def prescription_create(
         raise PermissionDenied(
             "Solo un médico puede emitir recetas. "
             "El usuario no tiene un perfil de médico activo en esta clínica."
+        )
+
+    # --- NOM-004 / Art. 83 LGS: el médico DEBE tener cédula profesional ---
+    # Sin cédula profesional registrada, la receta no es legalmente válida en
+    # México. Es un requisito del emisor; se valida en la capa de servicio
+    # (autoridad) para que aplique también desde Celery/commands/tests.
+    if not (doctor.cedula_profesional or "").strip():
+        raise ValidationError(
+            "Tu perfil de médico no tiene cédula profesional registrada. "
+            "Es obligatoria (NOM-004 / Art. 83 LGS) para emitir recetas; "
+            "complétala en tu perfil antes de emitir."
         )
 
     # --- Verificar que el paciente existe y pertenece al tenant ---
@@ -519,6 +537,22 @@ def prescription_create(
     if getattr(patient, "is_deceased", False):
         raise ValidationError(
             "No se puede emitir una receta para un paciente fallecido."
+        )
+
+    # --- NOM-004: edad (fecha de nacimiento) y sexo del paciente son obligatorios ---
+    # La receta debe identificar la edad y el sexo del paciente. Si el expediente
+    # está incompleto (p. ej. provisional creado desde la agenda), no se emite.
+    datos_faltantes: list[str] = []
+    if patient.date_of_birth is None:
+        datos_faltantes.append("fecha de nacimiento (edad)")
+    if not (patient.sex or "").strip():
+        datos_faltantes.append("sexo")
+    if datos_faltantes:
+        raise ValidationError(
+            "El expediente del paciente no tiene "
+            + " ni ".join(datos_faltantes)
+            + ". La NOM-004 exige edad y sexo en la receta; "
+            "complétalos en el expediente del paciente antes de emitir."
         )
 
     # --- Validar ítems (no vacío, nombre, campos COFEPRIS F2) ---
@@ -642,6 +676,9 @@ def prescription_create(
             order=order,
             kind=str(item_data.get("kind", "medicamento")),
             medication_name=str(item_data.get("medication_name", "")).strip(),
+            medication_commercial_name=str(
+                item_data.get("medication_commercial_name", "")
+            ).strip(),
             medication_presentation=str(item_data.get("medication_presentation", "")).strip(),
             medication_form=str(item_data.get("medication_form", "")).strip(),
             medication_concentration=str(item_data.get("medication_concentration", "")).strip(),
@@ -1175,6 +1212,14 @@ def _validate_format_fields(
             raise ValidationError(
                 f"El valor de sections.{key} debe ser booleano."
             )
+
+    # Secciones obligatorias por ley (NOM-004 / Art. 83 LGS): no se pueden apagar.
+    forced_off = sorted(k for k in REQUIRED_SECTIONS if sections.get(k) is False)
+    if forced_off:
+        raise ValidationError(
+            "Estas secciones son obligatorias por ley (NOM-004 / Art. 83 LGS) "
+            f"y no se pueden desactivar: {', '.join(forced_off)}."
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -39,6 +39,7 @@ from apps.recetas.models import (
     ItemKind,
     MedicationForm,
     PrescriptionFormat,
+    REQUIRED_SECTIONS,
     RouteOfAdministration,
     SECTIONS_KEYS,
 )
@@ -201,7 +202,17 @@ class PrescriptionItemInputSerializer(serializers.Serializer):
     )
     medication_name = serializers.CharField(
         max_length=200,
-        help_text="Nombre del medicamento/suero/terapia (requerido). Snapshot inmutable.",
+        help_text=(
+            "Denominación GENÉRICA del medicamento/suero/terapia (requerida, Art. 83 "
+            "LGS). Snapshot inmutable — se imprime primero."
+        ),
+    )
+    medication_commercial_name = serializers.CharField(
+        max_length=200,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Denominación DISTINTIVA (comercial) — opcional. Snapshot.",
     )
     # --- COFEPRIS F2: renglón estructurado ---
     dose = serializers.CharField(
@@ -599,6 +610,7 @@ class PrescriptionItemOutputSerializer(serializers.Serializer):
     order = serializers.IntegerField()
     kind = serializers.CharField()
     medication_name = serializers.CharField()
+    medication_commercial_name = serializers.CharField()
     medication_presentation = serializers.CharField()
     medication_form = serializers.CharField()
     medication_concentration = serializers.CharField()
@@ -773,6 +785,13 @@ class SectionsField(serializers.DictField):
                     f"El valor de sections.{key} debe ser booleano (true/false)."
                 )
             result[key] = val
+        # Secciones obligatorias por ley (NOM-004 / Art. 83 LGS): no se pueden apagar.
+        forced_off = sorted(k for k in REQUIRED_SECTIONS if result.get(k) is False)
+        if forced_off:
+            raise serializers.ValidationError(
+                "Estas secciones son obligatorias por ley (NOM-004 / Art. 83 LGS) "
+                f"y no se pueden desactivar: {', '.join(forced_off)}."
+            )
         return result
 
 

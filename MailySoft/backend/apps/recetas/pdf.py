@@ -27,6 +27,7 @@ from io import BytesIO
 from typing import Any, Literal, Optional
 
 from django.template.loader import render_to_string
+from django.utils import timezone
 from PIL import Image, ImageEnhance
 
 logger = logging.getLogger("apps.recetas.pdf")
@@ -379,7 +380,11 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
     # --- Fecha de emisión ---
     issued_at_str: str = ""
     if prescription.issued_at:
-        issued_at_str = prescription.issued_at.strftime("%d/%m/%Y")
+        # Fecha Y HORA en zona local (America/Mexico_City) — NOM-004 exige la hora
+        # de emisión. localtime() convierte el UTC guardado a la hora local correcta.
+        issued_at_str = timezone.localtime(prescription.issued_at).strftime(
+            "%d/%m/%Y %H:%M"
+        )
 
     # --- Vitals snapshot ---
     vitals: Optional[dict[str, Any]] = prescription.vitals_snapshot or None
@@ -409,6 +414,7 @@ def _build_context(prescription: Any, fmt: "Any | None" = None) -> dict[str, Any
 
         item_ctx: dict[str, Any] = {
             "medication_name": item.medication_name,
+            "medication_commercial_name": item.medication_commercial_name or "",
             "medication_detail": med_detail,
             "dose": item.dose or "",
             "frequency": item.frequency or "",

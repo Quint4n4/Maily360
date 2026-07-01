@@ -145,6 +145,41 @@ def test_get_sections_full_fills_defaults() -> None:
 
 
 @pytest.mark.django_db
+def test_get_sections_full_forces_required_true() -> None:
+    """get_sections_full() fuerza a True las secciones obligatorias por ley,
+    aunque un formato viejo las tenga guardadas en False (NOM-004 / Art. 83 LGS)."""
+    fmt = PrescriptionFormatFactory.build(
+        sections={"edad_sexo": False, "contacto_clinica": False}
+    )
+    full = fmt.get_sections_full()
+    assert full["edad_sexo"] is True
+    assert full["contacto_clinica"] is True
+
+
+@pytest.mark.django_db
+def test_clean_rejects_required_section_off() -> None:
+    """clean() rechaza apagar una sección obligatoria por ley."""
+    fmt = PrescriptionFormatFactory.build(sections={"edad_sexo": False})
+    with pytest.raises(ValidationError, match="obligatorias por ley"):
+        fmt.clean()
+
+
+@pytest.mark.django_db
+def test_format_create_rejects_required_section_off() -> None:
+    """El servicio rechaza crear un formato con una sección obligatoria apagada."""
+    tenant = TenantFactory()
+    user = UserFactory()
+    with tenant_ctx(tenant):
+        with pytest.raises(ValidationError, match="obligatorias por ley"):
+            prescription_format_create(
+                tenant=tenant,
+                user=user,
+                name="Sin contacto",
+                sections={"contacto_clinica": False},
+            )
+
+
+@pytest.mark.django_db
 def test_font_family_helvetica() -> None:
     fmt = PrescriptionFormatFactory.build(font="helvetica")
     assert "Helvetica" in fmt.font_family

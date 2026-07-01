@@ -68,7 +68,10 @@ interface RenglonEdit {
   uid: string
   /** Tipo de ítem (COFEPRIS F2): medicamento / suero / terapia. */
   kind: ItemKind
+  /** Denominación genérica (obligatoria, Art. 83 LGS). */
   medication_name: string
+  /** Denominación comercial/distintiva (opcional, Art. 83 LGS). */
+  medication_commercial_name: string
   medication_form: string
   medication_concentration: string
   medication_presentation: string
@@ -98,6 +101,7 @@ const renglonVacio = (): RenglonEdit => ({
   uid: nuevoUid(),
   kind: 'medicamento',
   medication_name: '',
+  medication_commercial_name: '',
   medication_form: '',
   medication_concentration: '',
   medication_presentation: '',
@@ -581,6 +585,7 @@ export function NuevaReceta({
         uid: nuevoUid(),
         kind: it.kind,
         medication_name: it.medication_name,
+        medication_commercial_name: it.medication_commercial_name,
         medication_form: it.medication_form,
         medication_concentration: it.medication_concentration,
         medication_presentation: it.medication_presentation,
@@ -710,6 +715,8 @@ export function NuevaReceta({
         kind: r.kind,
         medication_name: r.medication_name.trim(),
       }
+      if (r.medication_commercial_name.trim())
+        item.medication_commercial_name = r.medication_commercial_name.trim()
       if (r.dose.trim()) item.dose = r.dose.trim()
       if (r.frequency.trim()) item.frequency = r.frequency.trim()
       if (r.route) item.route = r.route
@@ -1008,6 +1015,7 @@ function RenglonTratamiento({
         })}
         onSeleccionar={med => onChange({
           medication_name: med.generic_name,
+          medication_commercial_name: med.commercial_name,
           medication_form: med.form,
           medication_concentration: med.concentration,
           medication_presentation: med.presentation,
@@ -1017,6 +1025,16 @@ function RenglonTratamiento({
           // folio). El backend lo re-resuelve desde la FK; no lo enviamos en el item.
           controlled_group: med.controlled_group,
         })}
+      />
+
+      {/* Denominación comercial (opcional). Art. 83 LGS: el genérico es el obligatorio
+          y se imprime primero; el comercial es opcional. Se prellena si eliges del catálogo. */}
+      <input
+        className="input mt-2"
+        maxLength={200}
+        placeholder="Nombre comercial (opcional)"
+        value={renglon.medication_commercial_name}
+        onChange={e => onChange({ medication_commercial_name: e.target.value })}
       />
 
       {/* Aviso de medicamento controlado en el renglón (Tarea B) */}
