@@ -73,7 +73,14 @@ collect_static() {
 # ---------------------------------------------------------------------------
 main() {
     wait_for_postgres
-    run_migrations
+
+    # Solo el servicio web corre migraciones. En Railway el worker las omite con
+    # RUN_MIGRATIONS=false para evitar carreras. Default true → web/local sin cambios.
+    if [[ "${RUN_MIGRATIONS:-true}" == "true" ]]; then
+        run_migrations
+    else
+        log_info "RUN_MIGRATIONS=false → se omiten migraciones (las corre el servicio web)."
+    fi
 
     # Solo collectstatic si no es worker de Celery
     if [[ "${1:-}" != "celery"* ]]; then

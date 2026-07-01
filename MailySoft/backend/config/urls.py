@@ -7,12 +7,21 @@ y se incluyen aquí con prefijo /api/v1/.
 
 from django.conf import settings
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import include, path  # noqa: F401  (include se usa al sumar apps)
 from rest_framework_simplejwt.views import TokenVerifyView
 
 from apps.authn.views import CookieTokenRefreshView, LogoutView, MailyTokenObtainPairView
 
+
+def healthz(_request) -> HttpResponse:
+    """Sonda de salud para el healthcheck de Railway (sin DB, exenta de SSL redirect)."""
+    return HttpResponse("ok", content_type="text/plain")
+
+
 urlpatterns = [
+    # Sonda de salud (Railway) — respuesta simple 200.
+    path("healthz/", healthz, name="healthz"),
     # Admin de Django
     path("admin/", admin.site.urls),
     # Auth — patrón híbrido: access en JSON, refresh en cookie httpOnly.
@@ -62,7 +71,29 @@ if settings.DEBUG:
     ]
 
     # Servir archivos subidos (avatares) en desarrollo. En producción los sirve
-    # el almacenamiento (S3) o el servidor web, NUNCA Django.
+    # el almacenamiento (Cloudinary/S3), NUNCA Django.
     from django.conf.urls.static import static
 
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+# ---------------------------------------------------------------------------
+# SPA (producción): el backend sirve el frontend React en el MISMO origen.
+# Cualquier ruta que NO sea /api, /admin, /static o /media devuelve index.html
+# para que React Router maneje el enrutado del lado del cliente. Solo se activa
+# cuando el build del frontend fue copiado (settings.FRONTEND_DIST_DIR existe),
+# es decir en el contenedor de Railway; en desarrollo no hace nada.
+# ---------------------------------------------------------------------------
+import os  # noqa: E402
+
+if os.path.isdir(settings.FRONTEND_DIST_DIR):
+    from django.urls import re_path  # noqa: E402
+    from django.views.generic import TemplateView  # noqa: E402
+
+    urlpatterns += [
+        re_path(
+            r"^(?!api/|admin/|static/|media/).*$",
+            TemplateView.as_view(template_name="index.html"),
+            name="spa",
+        ),
+    ]

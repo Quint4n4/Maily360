@@ -1,0 +1,39 @@
+# Contexto de build para el Dockerfile de Railway (raíz = MailySoft/).
+# Excluye artefactos pesados o específicos del host para un build correcto y rápido.
+
+# Git
+.git
+.gitignore
+
+# Python / backend
+**/__pycache__/
+**/*.py[cod]
+backend/.venv/
+backend/venv/
+backend/staticfiles/
+backend/media/
+backend/frontend_dist/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/htmlcov/
+backend/.coverage
+backend/coverage.xml
+
+# Node / frontend  (¡crítico! node_modules del host rompe el contenedor Alpine)
+web-soft/node_modules/
+web-soft/dist/
+web-soft/.vite/
+web-soft/playwright-report/
+web-soft/test-results/
+
+# Variables de entorno / secretos
+**/.env
+**/.env.*
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Documentación (no se necesita en la imagen)
+docs/

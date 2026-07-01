@@ -55,6 +55,10 @@ THIRD_PARTY_APPS: list[str] = [
     "channels",
     "drf_spectacular",
     "corsheaders",
+    # Almacenamiento de media en Cloudinary (opcional; activo si se configura
+    # CLOUDINARY_URL + DJANGO_DEFAULT_FILE_STORAGE). Inofensivo si no se usa.
+    "cloudinary_storage",
+    "cloudinary",
 ]
 
 LOCAL_APPS: list[str] = [
@@ -285,6 +289,29 @@ AWS_S3_REGION_NAME: str = env("AWS_S3_REGION_NAME", default="us-east-1")
 AWS_S3_CUSTOM_DOMAIN: str = env("AWS_S3_CUSTOM_DOMAIN", default="")
 AWS_DEFAULT_ACL: str = "private"
 AWS_S3_FILE_OVERWRITE: bool = False
+
+# ---------------------------------------------------------------------------
+# Media en Cloudinary (piloto)
+# ---------------------------------------------------------------------------
+# La librería `cloudinary` lee CLOUDINARY_URL del entorno automáticamente
+# (formato cloudinary://<api_key>:<api_secret>@<cloud_name>). Para activarlo en
+# producción basta con setear esa variable y
+# DJANGO_DEFAULT_FILE_STORAGE=cloudinary_storage.storage.MediaCloudinaryStorage.
+# NUNCA hardcodear el CLOUDINARY_URL aquí (es un secreto).
+
+# ---------------------------------------------------------------------------
+# Frontend (SPA React) servido por el MISMO backend en producción
+# ---------------------------------------------------------------------------
+# En el despliegue de Railway el Dockerfile compila web-soft (Vite) y copia el
+# build a esta carpeta. Cuando existe:
+#   - WhiteNoise sirve los assets (/assets/*, favicon, etc.) tal cual.
+#   - urls.py agrega una ruta catch-all que devuelve index.html (React Router).
+#   - las plantillas encuentran index.html.
+# En desarrollo la carpeta NO existe → cero efecto (el frontend corre en Vite).
+FRONTEND_DIST_DIR: Path = BASE_DIR / "frontend_dist"
+if FRONTEND_DIST_DIR.is_dir():
+    WHITENOISE_ROOT: str = str(FRONTEND_DIST_DIR)
+    TEMPLATES[0]["DIRS"].append(str(FRONTEND_DIST_DIR))  # type: ignore[index]
 
 # ---------------------------------------------------------------------------
 # Email

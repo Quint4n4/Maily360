@@ -26,6 +26,10 @@ whitenoise = "^6.7"
 Pillow = "^12.0"
 boto3 = "^1.35"
 django-storages = { version = "^1.14", extras = ["s3"] }
+# Media en Cloudinary (piloto). Alternativa a S3; se activa vía CLOUDINARY_URL
+# + DJANGO_DEFAULT_FILE_STORAGE=cloudinary_storage.storage.MediaCloudinaryStorage.
+cloudinary = "^1.41"
+django-cloudinary-storage = "^0.3"
 xhtml2pdf = "0.2.17"
 qrcode = "^8.0"
 weasyprint = "^62.3"

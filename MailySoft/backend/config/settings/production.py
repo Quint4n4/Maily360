@@ -35,6 +35,9 @@ SIMPLE_JWT["SIGNING_KEY"] = env("JWT_SIGNING_KEY")  # type: ignore[index]  # Sin
 # ---------------------------------------------------------------------------
 
 SECURE_SSL_REDIRECT: bool = True
+# El healthcheck interno de Railway llega por HTTP sin X-Forwarded-Proto; se exenta
+# /healthz/ del redirect a HTTPS para que responda 200 (no 301).
+SECURE_REDIRECT_EXEMPT: list[str] = [r"^healthz/?$"]
 SECURE_HSTS_SECONDS: int = 31536000  # 1 año
 SECURE_HSTS_INCLUDE_SUBDOMAINS: bool = True
 SECURE_HSTS_PRELOAD: bool = True
