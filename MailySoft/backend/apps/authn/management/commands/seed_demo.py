@@ -26,10 +26,10 @@ from django.core.management.base import BaseCommand, CommandError
 from apps.core.tenant_context import set_current_tenant
 from apps.personal.models import Doctor
 from apps.personal.services import doctor_create
-from apps.tenancy.models import Tenant, TenantMembership
+from apps.tenancy.models import TenantMembership
 
-_DEMO_TENANT_SLUG = "demo"
 _OWNER_EMAIL = "owner@demo.maily.mx"
+_DOCTOR_EMAIL = "doctor@demo.maily.mx"
 
 
 class Command(BaseCommand):
@@ -58,14 +58,23 @@ class Command(BaseCommand):
         self.stdout.write("→ seed_medicamentos (catálogo de medicamentos)…")
         call_command("seed_medicamentos")
 
-        tenant = Tenant.objects.filter(slug=_DEMO_TENANT_SLUG).first()
-        if tenant is None:
-            raise CommandError(f"No se encontró el tenant demo '{_DEMO_TENANT_SLUG}'.")
-
         user_model = get_user_model()
         owner = user_model.objects.filter(email=_OWNER_EMAIL).first()
         if owner is None:
-            raise CommandError(f"No se encontró el usuario dueño '{_OWNER_EMAIL}'.")
+            raise CommandError(
+                f"No se encontró el usuario dueño '{_OWNER_EMAIL}' (¿corrió seed_finanzas?)."
+            )
+
+        # El tenant es el de la membresía del dueño. seed_finanzas puede REUSAR un
+        # tenant existente en vez de crear el slug 'demo', así que no lo buscamos por slug.
+        owner_membership = (
+            TenantMembership.objects.filter(user=owner, is_active=True)
+            .select_related("tenant")
+            .first()
+        )
+        if owner_membership is None:
+            raise CommandError("El dueño no tiene membresía activa en ninguna clínica.")
+        tenant = owner_membership.tenant
 
         # 3) Contraseña del dueño desde el entorno (no hardcodeada).
         owner.set_password(password)
@@ -73,36 +82,55 @@ class Command(BaseCommand):
         owner.save(update_fields=["password", "is_active"])
         self.stdout.write("  · contraseña del dueño actualizada desde DEMO_OWNER_PASSWORD.")
 
-        membership = TenantMembership.objects.filter(
-            tenant=tenant, user=owner, is_active=True
-        ).first()
-        if membership is None:
-            raise CommandError("El dueño no tiene membresía activa en la clínica demo.")
+        # 4) Usuario MÉDICO dedicado con cédula (para emitir recetas). El dueño
+        #    tiene rol "owner" y doctor_create exige rol "doctor", así que el
+        #    médico es un usuario aparte con su propia membresía de rol doctor.
+        doctor_user, _ = user_model.objects.get_or_create(
+            email=_DOCTOR_EMAIL,
+            defaults={"first_name": "Doctora", "last_name": "Demo", "is_active": True},
+        )
+        doctor_user.is_active = True
+        doctor_user.set_password(password)
+        doctor_user.save(update_fields=["password", "is_active"])
 
-        # 4) Perfil de médico con cédula (para emitir recetas — NOM-004 / Art. 83 LGS).
+        doctor_membership, _ = TenantMembership.objects.get_or_create(
+            user=doctor_user,
+            tenant=tenant,
+            defaults={"role": TenantMembership.Role.DOCTOR, "is_active": True},
+        )
+        if (
+            doctor_membership.role != TenantMembership.Role.DOCTOR
+            or not doctor_membership.is_active
+        ):
+            doctor_membership.role = TenantMembership.Role.DOCTOR
+            doctor_membership.is_active = True
+            doctor_membership.save(update_fields=["role", "is_active"])
+
         set_current_tenant(tenant)
-        doctor = Doctor.objects.filter(tenant=tenant, membership=membership).first()
+        doctor = Doctor.objects.filter(
+            tenant=tenant, membership=doctor_membership
+        ).first()
         if doctor is None:
             doctor_create(
                 tenant=tenant,
-                user=owner,
-                membership=membership,
+                user=doctor_user,
+                membership=doctor_membership,
                 cedula_profesional=str(options["cedula"]),
                 specialty="Medicina General",
             )
-            self.stdout.write("  · perfil de médico creado (con cédula).")
+            self.stdout.write("  · usuario médico creado (con cédula).")
         elif not (doctor.cedula_profesional or "").strip():
             doctor.cedula_profesional = str(options["cedula"])
             doctor.save(update_fields=["cedula_profesional"])
-            self.stdout.write("  · cédula asignada al médico dueño.")
+            self.stdout.write("  · cédula asignada al médico.")
 
         self.stdout.write(
             self.style.SUCCESS(
-                "\n✅ Entorno demo listo. Login del personal de la clínica:\n"
-                f"   Usuario:  {_OWNER_EMAIL}\n"
-                "   Password: (la que pusiste en DEMO_OWNER_PASSWORD)\n"
-                "   Rol:      dueño (owner) + médico con cédula\n"
-                "   Otros usuarios (misma contraseña de demo, ver seed_finanzas):\n"
+                "\n✅ Entorno demo listo. Logins del personal (misma contraseña):\n"
+                f"   Dueño / admin:  {_OWNER_EMAIL}\n"
+                f"   Médico:         {_DOCTOR_EMAIL}\n"
+                "   Password:       (la que pusiste en DEMO_OWNER_PASSWORD)\n"
+                "   Otros (contraseña Demo1234! de seed_finanzas):\n"
                 "     finance@demo.maily.mx · reception@demo.maily.mx · readonly@demo.maily.mx\n"
             )
         )
