@@ -4,7 +4,8 @@ Serializers de entrada y salida para el panel interno de plataforma.
 Regla: Input y Output siempre separados. Sin create()/update() con lógica.
 """
 
-from typing import Any, Optional
+from decimal import Decimal
+from typing import Any
 
 from rest_framework import serializers
 
@@ -55,9 +56,7 @@ class DashboardMetricsOutputSerializer(serializers.Serializer):
     """Serializer de salida para las métricas del dashboard de plataforma."""
 
     total_clinicas = serializers.IntegerField(read_only=True)
-    clinicas_por_estado = serializers.DictField(
-        child=serializers.IntegerField(), read_only=True
-    )
+    clinicas_por_estado = serializers.DictField(child=serializers.IntegerField(), read_only=True)
     total_usuarios = serializers.IntegerField(read_only=True)
     total_platform_staff = serializers.IntegerField(read_only=True)
     total_pacientes = serializers.IntegerField(read_only=True)
@@ -147,9 +146,7 @@ class ClinicaCreateInputSerializer(serializers.Serializer):
 
         limpio = value.strip()
         if len(slugify(limpio)) < 3:
-            raise serializers.ValidationError(
-                "El nombre debe tener al menos 3 letras o números."
-            )
+            raise serializers.ValidationError("El nombre debe tener al menos 3 letras o números.")
         return limpio
 
     def validate_owner_first_name(self, value: str) -> str:
@@ -271,13 +268,13 @@ class AuditLogOutputSerializer(serializers.Serializer):
         """Devuelve el label legible de la acción."""
         return obj.get_action_display()
 
-    def get_actor_email(self, obj: Any) -> Optional[str]:
+    def get_actor_email(self, obj: Any) -> str | None:
         """Email del actor, o None si el evento es anónimo o el usuario se borró."""
         if obj.actor_id is None:
             return None
         return obj.actor.email
 
-    def get_tenant_name(self, obj: Any) -> Optional[str]:
+    def get_tenant_name(self, obj: Any) -> str | None:
         """Nombre de la clínica, o None si el evento es global (sin tenant)."""
         if obj.tenant_id is None:
             return None
@@ -347,13 +344,113 @@ class PlanOutputSerializer(serializers.Serializer):
     slug = serializers.SlugField(read_only=True)
     name = serializers.CharField(read_only=True)
     description = serializers.CharField(read_only=True)
-    price_monthly = serializers.DecimalField(
-        read_only=True, max_digits=10, decimal_places=2
-    )
+    price_monthly = serializers.DecimalField(read_only=True, max_digits=10, decimal_places=2)
     is_featured = serializers.BooleanField(read_only=True)
     features = serializers.ListField(child=serializers.CharField(), read_only=True)
     is_active = serializers.BooleanField(read_only=True)
     order = serializers.IntegerField(read_only=True)
+
+
+# ---------------------------------------------------------------------------
+# Input — Alta y edición de planes (Fase 3.1)
+# ---------------------------------------------------------------------------
+
+
+class PlanCreateInputSerializer(serializers.Serializer):
+    """Input para POST /api/v1/plataforma/planes/.
+
+    NO incluye `slug` (se genera en el servicio a partir de `name`) ni
+    `is_active` como excepción distinta a la de PATCH: aquí SÍ se permite
+    porque es la creación del recurso (no un update de un flag de estado
+    sobre un objeto ya existente); el dueño puede querer dar de alta un plan
+    ya desactivado (ej. mientras prepara su lanzamiento).
+    """
+
+    name = serializers.CharField(
+        max_length=100,
+        help_text="Nombre comercial del plan.",
+    )
+    price_monthly = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        help_text="Precio mensual en MXN. No puede ser negativo.",
+    )
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=2000,
+        help_text="Descripción comercial breve (máx. 2000). Default: cadena vacía.",
+    )
+    is_featured = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Si el plan aparece destacado en la vitrina.",
+    )
+    features = serializers.ListField(
+        child=serializers.CharField(allow_blank=False, max_length=200),
+        required=False,
+        allow_null=True,
+        default=list,
+        max_length=50,
+        help_text="Lista de strings no vacíos con las características incluidas (máx. 50).",
+    )
+    is_active = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text="Si el plan queda activo/asignable desde su creación.",
+    )
+    order = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Orden de despliegue. Si se omite, se asigna al final del catálogo.",
+    )
+
+    def validate_name(self, value: str) -> str:
+        """Rechaza nombres vacíos o solo espacios."""
+        limpio = value.strip()
+        if not limpio:
+            raise serializers.ValidationError("El nombre del plan no puede estar vacío.")
+        return limpio
+
+
+class PlanUpdateInputSerializer(serializers.Serializer):
+    """Input para PATCH /api/v1/plataforma/planes/<plan_id>/.
+
+    Todos los campos son opcionales (PATCH parcial): solo se envían los que
+    se quieren cambiar. `slug` NO aparece aquí — es inmutable, lo aplica
+    `_PLAN_IMMUTABLE_FIELDS` en el servicio `plan_update`.
+
+    EXCEPCIÓN EXPLÍCITA a la regla general de "is_active nunca en el
+    InputSerializer de un PATCH genérico": Plan es el caso documentado en el
+    encargo (ver docstring de `plan_update` en apps/plataforma/services.py) —
+    no tiene borrado físico (PROTECT desde TenantSubscription) y el dueño
+    pidió un único flujo de edición sin endpoint separado de
+    activar/desactivar.
+    """
+
+    name = serializers.CharField(max_length=100, required=False)
+    description = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    price_monthly = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False
+    )
+    is_featured = serializers.BooleanField(required=False)
+    features = serializers.ListField(
+        child=serializers.CharField(allow_blank=False, max_length=200),
+        required=False,
+        max_length=50,
+    )
+    is_active = serializers.BooleanField(required=False)
+    order = serializers.IntegerField(required=False)
+
+    def validate_name(self, value: str) -> str:
+        """Rechaza nombres vacíos o solo espacios cuando se envía el campo."""
+        limpio = value.strip()
+        if not limpio:
+            raise serializers.ValidationError("El nombre del plan no puede estar vacío.")
+        return limpio
 
 
 # ---------------------------------------------------------------------------
@@ -432,9 +529,7 @@ class SubscripcionesResumenOutputSerializer(serializers.Serializer):
     sin_plan = serializers.IntegerField(read_only=True)
     por_plan = SubscripcionesPorPlanOutputSerializer(many=True, read_only=True)
     alertas = SubscripcionesAlertasOutputSerializer(read_only=True)
-    mrr_estimado = serializers.DecimalField(
-        read_only=True, max_digits=12, decimal_places=2
-    )
+    mrr_estimado = serializers.DecimalField(read_only=True, max_digits=12, decimal_places=2)
 
 
 # ---------------------------------------------------------------------------

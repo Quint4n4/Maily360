@@ -1,7 +1,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import {
   Search, Check, Loader2, AlertCircle, AlertTriangle, Building2, Layers,
-  TrendingUp, ChevronLeft, ChevronRight, CreditCard,
+  TrendingUp, ChevronLeft, ChevronRight, CreditCard, Pencil, Plus,
 } from 'lucide-react'
 import PlatformLayout from '../../platform/PlatformLayout'
 import { usePlatformRole } from '../../platform/PlatformRoleContext'
@@ -9,9 +9,10 @@ import { puedeEditarPlat } from '../../platform/permisos'
 import { ESTADO_CLINICA, mxn } from '../../data/clinicas'
 import { usePlatformPlanes, usePlatformSuscripciones, useSuscripcionesResumen } from '../../hooks/plataforma'
 import AsignarPlanModal from '../../components/plataforma/AsignarPlanModal'
+import PlanFormModal from '../../components/plataforma/PlanFormModal'
 import { formatFechaCorta, fromDayKey } from '../../lib/fecha'
 import { ALERTA_SUSCRIPCION } from '../../types/plataforma'
-import type { SuscripcionRow } from '../../types/plataforma'
+import type { PlanPlataforma, SuscripcionRow } from '../../types/plataforma'
 
 type FiltroAlerta = 'todas' | 'vencidas' | 'por_vencer'
 
@@ -44,6 +45,8 @@ function AlertaBadge({ row }: { row: SuscripcionRow }) {
 export default function SuscripcionesPage() {
   const { role } = usePlatformRole()
   const editar = puedeEditarPlat(role, 'suscripciones')
+  // Crear/editar PLANES es más restrictivo (solo super_admin); el backend responde 403 al resto.
+  const editarPlanes = puedeEditarPlat(role, 'planes')
 
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -51,6 +54,8 @@ export default function SuscripcionesPage() {
   const [chip, setChip] = useState<FiltroAlerta>('todas')
   const [page, setPage] = useState(1)
   const [seleccion, setSeleccion] = useState<SuscripcionRow | null>(null)
+  // 'nuevo' abre el formulario en modo crear; un plan lo abre en modo editar.
+  const [planForm, setPlanForm] = useState<PlanPlataforma | 'nuevo' | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 350)
@@ -72,7 +77,12 @@ export default function SuscripcionesPage() {
   const lista = data?.results ?? []
   const total = data?.count ?? 0
 
-  const planesActivos = (planes.data ?? []).filter(p => p.is_active).sort((a, b) => a.order - b.order)
+  // El GET ahora también trae planes inactivos: en las cards van atenuados al final;
+  // AsignarPlanModal sigue ofreciendo SOLO activos (filtra adentro).
+  const porOrden = (a: PlanPlataforma, b: PlanPlataforma): number => a.order - b.order
+  const planesActivos = (planes.data ?? []).filter(p => p.is_active).sort(porOrden)
+  const planesInactivos = (planes.data ?? []).filter(p => !p.is_active).sort(porOrden)
+  const planesCards = [...planesActivos, ...planesInactivos]
   const alertas = resumen.data?.alertas
   const vencidas = (alertas?.trial_vencido ?? 0) + (alertas?.periodo_vencido ?? 0)
   const cuentaPlan = (planId: string): number =>
@@ -106,8 +116,8 @@ export default function SuscripcionesPage() {
           <select value={planFiltro} onChange={e => setPlanFiltro(e.target.value)}
             className="input w-auto min-w-[160px]" style={{ background: 'rgba(255,255,255,0.7)' }} aria-label="Filtrar por plan">
             <option value="">Todos los planes</option>
-            {planesActivos.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+            {planesCards.map(p => (
+              <option key={p.id} value={p.id}>{p.is_active ? p.name : `${p.name} (inactivo)`}</option>
             ))}
           </select>
 
@@ -171,16 +181,41 @@ export default function SuscripcionesPage() {
             ))}
           </div>
 
-          {/* Planes reales */}
+          {/* Planes reales (crear/editar = solo super_admin; el backend es la autoridad) */}
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-gray-800">Planes</h2>
+            {editarPlanes && (
+              <button onClick={() => setPlanForm('nuevo')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:brightness-110"
+                style={{ background: '#C9A227' }}>
+                <Plus className="w-4 h-4" /> Nuevo plan
+              </button>
+            )}
+          </div>
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-            {planesActivos.map(p => (
+            {planesCards.map(p => (
               <div key={p.id} className="glass-card rounded-2xl p-6 relative"
-                style={p.is_featured ? { border: '2px solid #C9A227' } : {}}>
-                {p.is_featured && (
-                  <span className="absolute top-4 right-4 text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full"
-                    style={{ background: '#C9A227', color: '#fff' }}>Popular</span>
-                )}
-                <h3 className="text-lg font-bold text-gray-900">{p.name}</h3>
+                style={{
+                  ...(p.is_featured ? { border: '2px solid #C9A227' } : {}),
+                  ...(p.is_active ? {} : { opacity: 0.55 }),
+                }}>
+                <div className="absolute top-4 right-4 flex items-center gap-1.5">
+                  {!p.is_active && (
+                    <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(122,117,108,0.18)', color: '#7A756C' }}>Inactivo</span>
+                  )}
+                  {p.is_featured && (
+                    <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full"
+                      style={{ background: '#C9A227', color: '#fff' }}>Popular</span>
+                  )}
+                  {editarPlanes && (
+                    <button onClick={() => setPlanForm(p)} aria-label={`Editar plan ${p.name}`}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 pr-16">{p.name}</h3>
                 {p.description && <p className="text-xs text-gray-500 mt-0.5">{p.description}</p>}
                 <p className="mt-1">
                   <span className="text-2xl font-bold" style={{ color: '#B8860B' }}>{mxn(Number(p.price_monthly))}</span>
@@ -198,7 +233,7 @@ export default function SuscripcionesPage() {
                 </ul>
               </div>
             ))}
-            {planesActivos.length === 0 && (
+            {planesCards.length === 0 && (
               <div className="col-span-full glass-card rounded-2xl py-10 text-center">
                 <p className="text-sm text-gray-400">Aún no hay planes configurados.</p>
               </div>
@@ -304,6 +339,10 @@ export default function SuscripcionesPage() {
 
       {seleccion && (
         <AsignarPlanModal row={seleccion} planes={planes.data ?? []} onClose={() => setSeleccion(null)} />
+      )}
+
+      {planForm !== null && (
+        <PlanFormModal plan={planForm === 'nuevo' ? undefined : planForm} onClose={() => setPlanForm(null)} />
       )}
     </PlatformLayout>
   )

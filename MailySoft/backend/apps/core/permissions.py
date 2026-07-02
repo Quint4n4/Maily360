@@ -41,7 +41,7 @@ Uso en vistas:
         permission_classes = [IsAuthenticated, PatientPermission]
 """
 
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
@@ -143,12 +143,8 @@ class PatientPermission(HasClinicRole):
 
     policy: dict[str, frozenset[str]] = {
         "GET": ALL_ROLES,
-        "POST": frozenset(
-            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}
-        ),
-        "PATCH": frozenset(
-            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}
-        ),
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}),
+        "PATCH": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}),
         "DELETE": MANAGE_ROLES,
     }
 
@@ -202,9 +198,7 @@ class AppointmentStatusPermission(HasClinicRole):
     """
 
     policy: dict[str, frozenset[str]] = {
-        "POST": frozenset(
-            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}
-        ),
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}),
     }
 
 
@@ -282,9 +276,7 @@ FINANCE_DESK_ROLES: frozenset[str] = frozenset(
 )
 
 # Roles financieros "duros" (cargos, CFDI): owner/admin/finance, sin recepción.
-FINANCE_CORE_ROLES: frozenset[str] = frozenset(
-    {Role.OWNER, Role.ADMIN, Role.FINANCE}
-)
+FINANCE_CORE_ROLES: frozenset[str] = frozenset({Role.OWNER, Role.ADMIN, Role.FINANCE})
 
 
 class FinanceDashboardPermission(HasClinicRole):
@@ -343,9 +335,7 @@ class FinanceQuotePermission(HasClinicRole):
 # SOLO owner, admin, doctor y reception. El doctor entra porque puede crear,
 # ver, enviar y aceptar cotizaciones en consulta (cierra venta en el acto).
 # Finanzas y enfermería quedan FUERA del módulo por decisión del cliente.
-_QUOTE_ROLES: frozenset[str] = frozenset(
-    {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.RECEPTION}
-)
+_QUOTE_ROLES: frozenset[str] = frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.RECEPTION})
 
 
 class QuotePermission(HasClinicRole):
@@ -430,7 +420,7 @@ def _tenant_doctors_see_costs(request: Request) -> bool:
         True si la clínica permite que los médicos vean costos; False en cualquier
         otro caso (tenant no encontrado, ClinicSettings no existe, flag apagado).
     """
-    cached: Optional[bool] = getattr(request, "_doctors_see_costs", None)
+    cached: bool | None = getattr(request, "_doctors_see_costs", None)
     if cached is not None:
         return cached
 
@@ -449,8 +439,7 @@ def _tenant_doctors_see_costs(request: Request) -> bool:
         return False
 
     result: bool = (
-        ClinicSettings.objects
-        .filter(tenant_id=tenant.id, deleted_at__isnull=True)
+        ClinicSettings.objects.filter(tenant_id=tenant.id, deleted_at__isnull=True)
         .values_list("doctors_see_costs", flat=True)
         .first()
         or False
@@ -488,7 +477,7 @@ class PatientStatementPermission(BasePermission):
         if request.method == "OPTIONS":
             return True
 
-        role: Optional[str] = getattr(request, "active_role", None)
+        role: str | None = getattr(request, "active_role", None)
         if role is None:
             return False
 
@@ -531,7 +520,7 @@ class ChargeListPermission(BasePermission):
 
         request_method: str = "GET" if request.method == "HEAD" else (request.method or "")
 
-        role: Optional[str] = getattr(request, "active_role", None)
+        role: str | None = getattr(request, "active_role", None)
         if role is None:
             return False
 
@@ -590,12 +579,8 @@ class AgendaItemNotePermission(HasClinicRole):
             {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
         ),
         # READONLY puede ver el hilo pero NO escribir (rol de solo lectura).
-        "POST": frozenset(
-            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}
-        ),
-        "DELETE": frozenset(
-            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}
-        ),
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}),
+        "DELETE": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION}),
     }
 
 
@@ -950,9 +935,7 @@ _PLATFORM_ROLES_ALL: frozenset[str] = frozenset(
 _PLATFORM_ROLES_MANAGE_CLINICS: frozenset[str] = frozenset(
     {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.SALES}
 )
-_PLATFORM_ROLES_SUPER_ADMIN_ONLY: frozenset[str] = frozenset(
-    {User.PlatformRole.SUPER_ADMIN}
-)
+_PLATFORM_ROLES_SUPER_ADMIN_ONLY: frozenset[str] = frozenset({User.PlatformRole.SUPER_ADMIN})
 _PLATFORM_ROLES_AUDIT: frozenset[str] = frozenset(
     {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.ENGINEERING}
 )
@@ -962,6 +945,14 @@ _PLATFORM_ROLES_SYSTEM: frozenset[str] = frozenset(
 _PLATFORM_ROLES_SUBSCRIPTION: frozenset[str] = frozenset(
     {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.SALES}
 )
+# Nota (security review, Fase 3.1): esta es la fuente única de verdad para
+# "solo super_admin" en el panel de plataforma. PlatformStaffListPermission
+# (arriba) declara su propio frozenset local _PLATFORM_ROLES_SUPER_ADMIN_ONLY
+# con el mismo contenido — se deja así (fuera de alcance de esta tarea) pero
+# CUALQUIER permiso NUEVO que necesite "solo super_admin" debe reutilizar
+# _PLATFORM_ROLES_SUPER_ADMIN_ONLY en vez de declarar otro frozenset duplicado.
+# Pendiente de refactor (no bloqueante): migrar PlatformStaffListPermission
+# para que también reutilice esta misma constante.
 
 
 class RetentionPermission(HasClinicRole):
@@ -1003,8 +994,7 @@ class IsPlatformStaff(BasePermission):
             return True
         user = request.user
         return bool(
-            getattr(user, "is_authenticated", False)
-            and getattr(user, "is_platform_staff", False)
+            getattr(user, "is_authenticated", False) and getattr(user, "is_platform_staff", False)
         )
 
 
@@ -1137,3 +1127,27 @@ class PlatformSubscriptionPermission(IsPlatformStaff):
             return True
         role: str = getattr(request.user, "platform_role", "")
         return role in _PLATFORM_ROLES_SUBSCRIPTION
+
+
+class PlatformPlanWritePermission(IsPlatformStaff):
+    """Alta y edición del catálogo de planes (Fase 3.1): solo super_admin.
+
+    A diferencia de PlatformSubscriptionPermission (lectura de planes +
+    asignación de suscripciones: super_admin y sales), escribir el CATÁLOGO
+    de planes (crear/editar nombre, precio, features) es una decisión de
+    producto/pricing que corresponde únicamente al dueño (super_admin).
+    Sales puede leer y asignar planes existentes, pero no definir precios.
+
+    Reutiliza _PLATFORM_ROLES_SUPER_ADMIN_ONLY (misma fuente que
+    PlatformStaffListPermission) en vez de declarar otro frozenset local.
+    """
+
+    message: str = "Solo super_admin puede crear o editar planes del catálogo."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        role: str = getattr(request.user, "platform_role", "")
+        return role in _PLATFORM_ROLES_SUPER_ADMIN_ONLY

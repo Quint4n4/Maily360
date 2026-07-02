@@ -43,12 +43,14 @@ from apps.core.permissions import (
     PlatformClinicReadPermission,
     PlatformClinicWritePermission,
     PlatformMetricsPermission,
+    PlatformPlanWritePermission,
     PlatformStaffListPermission,
     PlatformSubscriptionPermission,
     PlatformSystemPermission,
 )
 from apps.core.tenant_context import set_request_context
 from apps.plataforma.selectors import (
+    plan_get,
     platform_audit_log_list,
     platform_clinica_detail,
     platform_clinicas_list,
@@ -68,7 +70,9 @@ from apps.plataforma.serializers import (
     ClinicaEstadoInputSerializer,
     ClinicaOutputSerializer,
     DashboardMetricsOutputSerializer,
+    PlanCreateInputSerializer,
     PlanOutputSerializer,
+    PlanUpdateInputSerializer,
     PlatformStaffOutputSerializer,
     SubscripcionesQueryInputSerializer,
     SubscripcionesResumenOutputSerializer,
@@ -77,12 +81,14 @@ from apps.plataforma.serializers import (
     TenantSubscriptionInputSerializer,
 )
 from apps.plataforma.services import (
+    plan_create,
+    plan_update,
     tenant_and_owner_create,
     tenant_set_status,
     tenant_subscription_set,
 )
 from apps.plataforma.system_health import system_health_get
-from apps.tenancy.models import Tenant
+from apps.tenancy.models import Plan, Tenant
 
 # ---------------------------------------------------------------------------
 # Base view de plataforma
@@ -424,17 +430,101 @@ class PlatformSistemaApi(PlatformAPIView):
 
 
 class PlatformPlanesListApi(PlatformAPIView):
-    """Catálogo de planes de suscripción (sin paginar).
+    """Catálogo de planes de suscripción (sin paginar) y alta de plan nuevo.
 
-    GET → super_admin, sales (PlatformSubscriptionPermission).
+    GET  → super_admin, sales (PlatformSubscriptionPermission). Incluye
+           TODOS los planes, activos e inactivos (platform_plan_list no
+           filtra por is_active — el portal los muestra atenuados).
+    POST → solo super_admin (PlatformPlanWritePermission, Fase 3.1). Sales
+           puede leer y asignar planes existentes, pero no define precios.
+
+    Mismo patrón que PlatformClinicasListApi: permiso resuelto por método
+    vía get_permissions() en lugar de mezclar dos permission classes que se
+    solapan en permission_classes.
     """
 
-    permission_classes = [IsAuthenticated, PlatformSubscriptionPermission]
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self) -> list:
+        """Devuelve la lista de permisos según el método HTTP."""
+        if self.request.method == "POST":
+            return [IsAuthenticated(), PlatformPlanWritePermission()]
+        # GET, HEAD, OPTIONS
+        return [IsAuthenticated(), PlatformSubscriptionPermission()]
 
     def get(self, request: Request) -> Response:
         """Lista todos los planes (activos e inactivos) ordenados por `order`."""
         qs = platform_plan_list()
         return Response(PlanOutputSerializer(qs, many=True).data)
+
+    def post(self, request: Request) -> Response:
+        """Crea un plan nuevo en el catálogo. Solo super_admin."""
+        s = PlanCreateInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        data = s.validated_data
+
+        try:
+            plan = plan_create(
+                actor=request.user,  # type: ignore[arg-type]
+                name=data["name"],
+                price_monthly=data["price_monthly"],
+                description=data.get("description", ""),
+                is_featured=data.get("is_featured", False),
+                features=data.get("features") or [],
+                is_active=data.get("is_active", True),
+                order=data.get("order"),
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+        except IntegrityError as exc:
+            # Carrera al generar el slug (check-then-act), igual que en
+            # tenant_and_owner_create.
+            raise serializers.ValidationError(
+                "Conflicto al crear el plan (identificador duplicado). Intenta de nuevo."
+            ) from exc
+
+        return Response(PlanOutputSerializer(plan).data, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/v1/plataforma/planes/<plan_id>/
+# ---------------------------------------------------------------------------
+
+
+class PlatformPlanDetailApi(PlatformAPIView):
+    """Edición de un plan existente del catálogo (Fase 3.1).
+
+    PATCH → solo super_admin (PlatformPlanWritePermission).
+    PUT y DELETE no están ruteados → 405 (no hay delete físico: Plan tiene
+    PROTECT desde TenantSubscription; desactivar es is_active=False vía
+    este mismo PATCH).
+    """
+
+    permission_classes = [IsAuthenticated, PlatformPlanWritePermission]
+
+    def patch(self, request: Request, plan_id: _uuid_module.UUID) -> Response:
+        """Actualiza un subconjunto de campos del plan indicado."""
+        try:
+            plan_get(plan_id=plan_id)
+        except Plan.DoesNotExist:
+            return Response(
+                {"detail": "Plan no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        s = PlanUpdateInputSerializer(data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+
+        try:
+            updated = plan_update(
+                actor=request.user,  # type: ignore[arg-type]
+                plan_id=plan_id,
+                **s.validated_data,
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+
+        return Response(PlanOutputSerializer(updated).data)
 
 
 # ---------------------------------------------------------------------------

@@ -180,6 +180,27 @@ Objetivo: que SuscripcionesPage deje de ser maqueta y los vencimientos se vigile
   `services.py` y `permissions.py` (una sola fuente de verdad); `bulk_update` en
   la tarea de avisos si el número de clínicas crece a cientos.
 
+#### Fase 3.1 — Gestión del catálogo de planes — ✅ HECHA (2026-07-02)
+
+Pedido del dueño: poder agregar y editar los planes desde el portal.
+
+- [x] `POST /plataforma/planes/` y `PATCH /plataforma/planes/<id>/` — escritura
+      SOLO super_admin (`PlatformPlanWritePermission`, fuente única de roles
+      `_PLATFORM_ROLES_SUPER_ADMIN_ONLY`); sales sigue leyendo/asignando.
+      Slug generado del nombre (único con sufijos, respaldo unique en BD e
+      IntegrityError→400) e INMUTABLE al renombrar. Sin DELETE: solo desactivar
+      (`is_active=false`; PROTECT desde TenantSubscription). Los inactivos se
+      listan en el GET (para reactivarlos) pero la asignación los rechaza.
+      Auditado con `PLAN_CREATE`/`PLAN_UPDATE` (precio old→new en metadata).
+- [x] Frontend: botón "Nuevo plan" + lápiz por card (solo super_admin, módulo
+      `planes` en permisos.ts), PlanFormModal (nombre, precio, descripción,
+      características editables, Popular, activo, orden); inactivos atenuados
+      con badge y excluidos del dropdown de asignación.
+- [x] 45 tests nuevos (`test_planes_crud.py`); revisión APROBADA y seguridad
+      SEGURO PARA DESPLEGAR; correcciones menores de ambos aplicadas (tope de
+      2000 chars en descripción, máx. 50 características, excepción específica
+      en test, test renombrado).
+
 ### Fase 4 — Gestión del equipo de plataforma y cuentas
 
 - Alta/edición/desactivación de staff de Maily desde el portal (solo super_admin),

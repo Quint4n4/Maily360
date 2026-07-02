@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createClinica,
+  createPlatformPlan,
   getClinicaDetail,
   getPlatformMetrics,
   getPlatformSistema,
@@ -14,11 +15,13 @@ import {
   listPlatformSuscripciones,
   setClinicaEstado,
   setClinicaSuscripcion,
+  updatePlatformPlan,
   type ListClinicasParams,
 } from '../api/plataforma'
 import type {
   AuditoriaFiltros,
   ClinicaCreateInput,
+  PlanFormInput,
   SuscripcionAsignarInput,
   SuscripcionesFiltros,
 } from '../types/plataforma'
@@ -110,6 +113,32 @@ export function useSuscripcionesResumen(enabled = true) {
     queryKey: platKeys.suscripcionesResumen(),
     queryFn: getSuscripcionesResumen,
     enabled,
+  })
+}
+
+/** Crear un plan comercial (solo super_admin). Invalida planes, suscripciones y resumen. */
+export function useCreatePlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PlanFormInput) => createPlatformPlan(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: platKeys.planes() })
+      qc.invalidateQueries({ queryKey: ['plataforma', 'suscripciones'] }) // lista + resumen
+    },
+  })
+}
+
+/** Editar un plan comercial (solo super_admin). Invalida planes, suscripciones y resumen
+ *  (el nombre/precio del plan se refleja en la tabla y en el MRR). */
+export function useUpdatePlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ planId, input }: { planId: string; input: Partial<PlanFormInput> }) =>
+      updatePlatformPlan(planId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: platKeys.planes() })
+      qc.invalidateQueries({ queryKey: ['plataforma', 'suscripciones'] }) // lista + resumen
+    },
   })
 }
 

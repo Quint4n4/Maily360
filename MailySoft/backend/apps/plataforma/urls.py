@@ -14,6 +14,8 @@ Rutas:
     plataforma/auditoria/                     GET  PlatformAuditoriaListApi  (super_admin, engineering)
     plataforma/sistema/                       GET  PlatformSistemaApi        (super_admin, engineering)
     plataforma/planes/                        GET  PlatformPlanesListApi     (super_admin, sales)
+    plataforma/planes/                        POST PlatformPlanesListApi     (super_admin)
+    plataforma/planes/<plan_id>/              PATCH PlatformPlanDetailApi    (super_admin)
     plataforma/suscripciones/                 GET  PlatformSuscripcionesListApi   (super_admin, sales)
     plataforma/suscripciones/resumen/         GET  PlatformSuscripcionesResumenApi (super_admin, sales)
 """
@@ -27,6 +29,7 @@ from apps.plataforma.views import (
     PlatformClinicasListApi,
     PlatformClinicaSuscripcionApi,
     PlatformMetricasApi,
+    PlatformPlanDetailApi,
     PlatformPlanesListApi,
     PlatformSistemaApi,
     PlatformSuscripcionesListApi,
@@ -79,6 +82,11 @@ urlpatterns = [
         "plataforma/planes/",
         PlatformPlanesListApi.as_view(),
         name="platform-planes-list",
+    ),
+    path(
+        "plataforma/planes/<uuid:plan_id>/",
+        PlatformPlanDetailApi.as_view(),
+        name="platform-plan-detail",
     ),
     # /suscripciones/resumen/ ANTES que el patrón sin sufijo — Django prueba
     # los path() en orden y "resumen/" no colisiona con la lista (no lleva

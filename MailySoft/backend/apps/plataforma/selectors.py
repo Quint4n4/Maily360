@@ -17,7 +17,7 @@ REGLA CRÍTICA: SIEMPRE usar Model.all_objects (nunca Model.objects).
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from django.db.models import Count, IntegerField, Max, OuterRef, Q, QuerySet, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
@@ -33,7 +33,7 @@ from apps.tenancy.models import Plan, Tenant, TenantMembership, TenantSubscripti
 def platform_clinicas_list(
     *,
     search: str = "",
-    status: Optional[str] = None,
+    status: str | None = None,
 ) -> "QuerySet[Tenant]":
     """Lista todas las clínicas anotadas con conteos de miembros y pacientes.
 
@@ -111,18 +111,14 @@ def platform_dashboard_metrics() -> dict[str, Any]:
 
     # Usuarios activos e inactivos (todos).
     total_usuarios = User.objects.filter(is_active=True).count()
-    total_platform_staff = User.objects.filter(
-        is_active=True, is_platform_staff=True
-    ).count()
+    total_platform_staff = User.objects.filter(is_active=True, is_platform_staff=True).count()
 
     # Pacientes cross-tenant (all_objects para bypassar TenantManager).
     total_pacientes = Patient.all_objects.filter(deleted_at__isnull=True).count()
 
     # Últimas 5 clínicas creadas.
     ultimas_clinicas: list[dict[str, Any]] = list(
-        tenant_qs.order_by("-created_at").values("id", "name", "status", "created_at")[
-            :5
-        ]
+        tenant_qs.order_by("-created_at").values("id", "name", "status", "created_at")[:5]
     )
 
     return {
@@ -152,10 +148,7 @@ def platform_staff_list(*, search: str = "") -> "QuerySet[User]":
 
         qs = qs.annotate(
             full_name_search=Concat("first_name", Value(" "), "last_name"),
-        ).filter(
-            Q(email__icontains=search)
-            | Q(full_name_search__icontains=search)
-        )
+        ).filter(Q(email__icontains=search) | Q(full_name_search__icontains=search))
 
     return qs.order_by("email")
 
@@ -207,9 +200,7 @@ def platform_clinica_detail(*, tenant_id: uuid.UUID) -> dict[str, Any]:
     ).count()
 
     # Última actividad: max created_at de Appointment del tenant.
-    ultima_qs = Appointment.all_objects.filter(tenant=tenant).aggregate(
-        ultima=Max("created_at")
-    )
+    ultima_qs = Appointment.all_objects.filter(tenant=tenant).aggregate(ultima=Max("created_at"))
     ultima_actividad = ultima_qs["ultima"]  # None si no hay citas
 
     # Lista de miembros con select_related para evitar N+1 al acceder a user.
@@ -254,11 +245,11 @@ def platform_clinica_detail(*, tenant_id: uuid.UUID) -> dict[str, Any]:
 
 def platform_audit_log_list(
     *,
-    tenant_id: Optional[uuid.UUID] = None,
-    action: Optional[str] = None,
-    actor_id: Optional[uuid.UUID] = None,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
+    tenant_id: uuid.UUID | None = None,
+    action: str | None = None,
+    actor_id: uuid.UUID | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     search: str = "",
 ) -> "QuerySet[AuditLog]":
     """Lista la bitácora de auditoría cross-tenant para el panel de plataforma.
@@ -293,9 +284,7 @@ def platform_audit_log_list(
         qs = qs.filter(created_at__lte=date_to)
 
     if search:
-        qs = qs.filter(
-            Q(description__icontains=search) | Q(actor__email__icontains=search)
-        )
+        qs = qs.filter(Q(description__icontains=search) | Q(actor__email__icontains=search))
 
     return qs.order_by("-created_at")
 
@@ -314,18 +303,45 @@ def platform_plan_list() -> "QuerySet[Plan]":
     Sin paginar (contrato fijo: GET /plataforma/planes/ devuelve una lista
     simple, no un objeto paginado) — el catálogo de planes es pequeño y
     completo por diseño (unas pocas filas).
+
+    Fase 3.1: este selector SIEMPRE incluye planes inactivos a propósito — el
+    portal de plataforma los muestra atenuados (el dueño necesita verlos para
+    poder reactivarlos). No confundir con la asignación de suscripción
+    (tenant_subscription_set), que sí rechaza explícitamente planes inactivos;
+    esa validación vive en el service y es independiente de este selector.
     """
     return Plan.objects.all().order_by("order", "name")
+
+
+def plan_get(*, plan_id: uuid.UUID) -> Plan:
+    """Obtiene un Plan por id para uso en servicios de escritura (Fase 3.1).
+
+    Plan es catálogo global (no TenantAware), así que no hay aislamiento por
+    tenant que aplicar aquí — pero se centraliza en un selector de todos modos
+    para que ningún service/vista haga `Plan.objects.get(...)` inline (patrón
+    consistente con el resto del proyecto) y para tener un único punto de
+    cambio si en el futuro se agrega soft-delete u otra condición de lectura.
+
+    Args:
+        plan_id: UUID del plan a buscar.
+
+    Returns:
+        La instancia Plan.
+
+    Raises:
+        Plan.DoesNotExist: si no existe un plan con ese id.
+    """
+    return Plan.objects.get(id=plan_id)
 
 
 def _calcular_alerta(
     *,
     tenant_status: str,
-    trial_ends_at: Optional[datetime],
-    current_period_end: Optional[date],
-    reference_now: Optional[datetime] = None,
-    reference_today: Optional[date] = None,
-) -> Optional[str]:
+    trial_ends_at: datetime | None,
+    current_period_end: date | None,
+    reference_now: datetime | None = None,
+    reference_today: date | None = None,
+) -> str | None:
     """Calcula la alerta de vencimiento de una fila tenant+suscripción.
 
     Se resuelve en Python (no en SQL) a propósito: mezcla una regla sobre
@@ -387,7 +403,7 @@ def _calcular_alerta(
 def platform_subscription_row_build(
     *,
     tenant: Tenant,
-    reference_now: Optional[datetime] = None,
+    reference_now: datetime | None = None,
 ) -> dict[str, Any]:
     """Construye el dict de una fila del listado de suscripciones para un tenant.
 
@@ -403,7 +419,7 @@ def platform_subscription_row_build(
         Dict con el contrato fijo de una fila de suscripción.
     """
     try:
-        subscription: Optional[TenantSubscription] = tenant.subscription
+        subscription: TenantSubscription | None = tenant.subscription
     except TenantSubscription.DoesNotExist:
         subscription = None
 
@@ -433,9 +449,9 @@ def platform_subscription_row_build(
 def platform_subscriptions_list(
     *,
     search: str = "",
-    plan_id: Optional[uuid.UUID] = None,
-    alerta: Optional[str] = None,
-    reference_now: Optional[datetime] = None,
+    plan_id: uuid.UUID | None = None,
+    alerta: str | None = None,
+    reference_now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Lista una fila por Tenant (todas las clínicas, con o sin suscripción).
 
@@ -469,21 +485,18 @@ def platform_subscriptions_list(
         qs = qs.filter(subscription__plan_id=plan_id)
 
     rows = [
-        platform_subscription_row_build(tenant=tenant, reference_now=reference_now)
-        for tenant in qs
+        platform_subscription_row_build(tenant=tenant, reference_now=reference_now) for tenant in qs
     ]
 
     if alerta == "vencidas":
         rows = [r for r in rows if r["alerta"] in ("trial_vencido", "periodo_vencido")]
     elif alerta == "por_vencer":
-        rows = [
-            r for r in rows if r["alerta"] in ("trial_por_vencer", "periodo_por_vencer")
-        ]
+        rows = [r for r in rows if r["alerta"] in ("trial_por_vencer", "periodo_por_vencer")]
 
     return rows
 
 
-def platform_subscriptions_resumen(*, reference_now: Optional[datetime] = None) -> dict[str, Any]:
+def platform_subscriptions_resumen(*, reference_now: datetime | None = None) -> dict[str, Any]:
     """Resumen agregado de suscripciones para el panel de plataforma.
 
     Returns:
@@ -509,12 +522,9 @@ def platform_subscriptions_resumen(*, reference_now: Optional[datetime] = None) 
         for row in por_plan_qs
     ]
 
-    mrr_estimado: Decimal = (
-        TenantSubscription.objects.filter(tenant__status=Tenant.Status.ACTIVE).aggregate(
-            total=Sum("plan__price_monthly")
-        )["total"]
-        or Decimal("0")
-    )
+    mrr_estimado: Decimal = TenantSubscription.objects.filter(
+        tenant__status=Tenant.Status.ACTIVE
+    ).aggregate(total=Sum("plan__price_monthly"))["total"] or Decimal("0")
 
     rows = platform_subscriptions_list(reference_now=reference_now)
     alertas = {

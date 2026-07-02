@@ -39,7 +39,7 @@ from rest_framework.test import APIClient
 
 from apps.audit.models import ActionType, AuditLog
 from apps.plataforma.tasks import avisar_vencimientos
-from apps.tenancy.models import Plan, Tenant, TenantSubscription
+from apps.tenancy.models import Tenant, TenantSubscription
 from tests.factories import (
     PlanFactory,
     PlatformStaffFactory,
@@ -133,11 +133,8 @@ def test_planes_anonymous_is_rejected(db: Any) -> None:
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_planes_post_not_allowed(db: Any, super_admin: Any) -> None:
-    client = APIClient()
-    client.force_authenticate(user=super_admin)
-    response = client.post(reverse(PLANES_URL_NAME), {})
-    assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+# NOTA (Fase 3.1): POST /planes/ dejó de ser 405 — ahora crea un plan
+# (solo super_admin). Cobertura completa en test_planes_crud.py.
 
 
 # ---------------------------------------------------------------------------
@@ -214,9 +211,7 @@ def test_suscripciones_sales_can_read(db: Any, sales_user: Any, url_name: str) -
 
 
 @pytest.mark.parametrize("url_name", [SUSCRIPCIONES_URL_NAME, RESUMEN_URL_NAME])
-def test_suscripciones_super_admin_can_read(
-    db: Any, super_admin: Any, url_name: str
-) -> None:
+def test_suscripciones_super_admin_can_read(db: Any, super_admin: Any, url_name: str) -> None:
     client = APIClient()
     client.force_authenticate(user=super_admin)
     response = client.get(reverse(url_name))
@@ -272,9 +267,7 @@ def test_listado_incluye_tenants_sin_suscripcion(db: Any, super_admin: Any) -> N
     response = client.get(reverse(SUSCRIPCIONES_URL_NAME))
 
     assert response.status_code == status.HTTP_200_OK
-    row = next(
-        r for r in response.data["results"] if r["tenant_id"] == str(tenant_sin_plan.id)
-    )
+    row = next(r for r in response.data["results"] if r["tenant_id"] == str(tenant_sin_plan.id))
     assert row["plan_id"] is None
     assert row["plan_name"] is None
     assert row["billing_cycle"] is None
@@ -290,9 +283,7 @@ def test_listado_incluye_tenants_con_suscripcion(db: Any, super_admin: Any) -> N
 
     response = client.get(reverse(SUSCRIPCIONES_URL_NAME))
 
-    row = next(
-        r for r in response.data["results"] if r["tenant_id"] == str(sub.tenant_id)
-    )
+    row = next(r for r in response.data["results"] if r["tenant_id"] == str(sub.tenant_id))
     assert row["plan_id"] == str(plan.id)
     assert row["plan_name"] == "Pro Test"
     assert row["plan_slug"] == "pro-test"
@@ -491,12 +482,8 @@ def test_filtro_plan_id(db: Any, super_admin: Any) -> None:
 
 @freeze_time("2026-07-02 12:00:00")
 def test_filtro_alerta_vencidas(db: Any, super_admin: Any) -> None:
-    vencido = TenantFactory(
-        status="trial", trial_ends_at=timezone.now() - timedelta(days=1)
-    )
-    por_vencer = TenantFactory(
-        status="trial", trial_ends_at=timezone.now() + timedelta(days=2)
-    )
+    vencido = TenantFactory(status="trial", trial_ends_at=timezone.now() - timedelta(days=1))
+    por_vencer = TenantFactory(status="trial", trial_ends_at=timezone.now() + timedelta(days=2))
     client = APIClient()
     client.force_authenticate(user=super_admin)
 
@@ -509,12 +496,8 @@ def test_filtro_alerta_vencidas(db: Any, super_admin: Any) -> None:
 
 @freeze_time("2026-07-02 12:00:00")
 def test_filtro_alerta_por_vencer(db: Any, super_admin: Any) -> None:
-    vencido = TenantFactory(
-        status="trial", trial_ends_at=timezone.now() - timedelta(days=1)
-    )
-    por_vencer = TenantFactory(
-        status="trial", trial_ends_at=timezone.now() + timedelta(days=2)
-    )
+    vencido = TenantFactory(status="trial", trial_ends_at=timezone.now() - timedelta(days=1))
+    por_vencer = TenantFactory(status="trial", trial_ends_at=timezone.now() + timedelta(days=2))
     client = APIClient()
     client.force_authenticate(user=super_admin)
 
@@ -705,9 +688,7 @@ def test_asignar_plan_registra_auditoria(db: Any, super_admin: Any) -> None:
     }
     client.post(_suscripcion_url(tenant.id), payload, format="json")
 
-    log = AuditLog.all_objects.filter(action=ActionType.SUBSCRIPTION_CHANGE).latest(
-        "created_at"
-    )
+    log = AuditLog.all_objects.filter(action=ActionType.SUBSCRIPTION_CHANGE).latest("created_at")
     assert log.actor_id == super_admin.id
     assert log.metadata["tenant_id"] == str(tenant.id)
     assert log.metadata["new_plan_slug"] == "plan-auditado"
@@ -715,9 +696,7 @@ def test_asignar_plan_registra_auditoria(db: Any, super_admin: Any) -> None:
     assert "password" not in log.metadata
 
 
-def test_asignar_plan_resetea_notificacion_de_vencimiento(
-    db: Any, super_admin: Any
-) -> None:
+def test_asignar_plan_resetea_notificacion_de_vencimiento(db: Any, super_admin: Any) -> None:
     """Renovar con fecha futura resetea period_expired_notified_at (D-3)."""
     plan = PlanFactory(slug="plan-reset")
     sub = TenantSubscriptionFactory(
@@ -762,18 +741,14 @@ def test_asignar_plan_sales_puede_escribir(db: Any, sales_user: Any) -> None:
 
 @freeze_time("2026-07-02 12:00:00")
 def test_tarea_avisa_trial_vencido(db: Any) -> None:
-    tenant = TenantFactory(
-        status="trial", trial_ends_at=timezone.now() - timedelta(days=1)
-    )
+    tenant = TenantFactory(status="trial", trial_ends_at=timezone.now() - timedelta(days=1))
 
     result = avisar_vencimientos()
 
     assert result["trials_avisados"] == 1
     tenant.refresh_from_db()
     assert tenant.trial_expired_notified_at is not None
-    log = AuditLog.all_objects.get(
-        action=ActionType.TRIAL_EXPIRED, resource_id=tenant.id
-    )
+    log = AuditLog.all_objects.get(action=ActionType.TRIAL_EXPIRED, resource_id=tenant.id)
     assert log.actor is None
     assert log.metadata["tenant_slug"] == tenant.slug
 
@@ -787,9 +762,7 @@ def test_tarea_avisa_periodo_vencido(db: Any) -> None:
     assert result["periodos_avisados"] == 1
     sub.refresh_from_db()
     assert sub.period_expired_notified_at is not None
-    log = AuditLog.all_objects.get(
-        action=ActionType.SUBSCRIPTION_EXPIRED, resource_id=sub.id
-    )
+    log = AuditLog.all_objects.get(action=ActionType.SUBSCRIPTION_EXPIRED, resource_id=sub.id)
     assert log.actor is None
 
 
@@ -814,9 +787,7 @@ def test_tarea_no_avisa_periodo_vigente(db: Any) -> None:
 @freeze_time("2026-07-02 12:00:00")
 def test_tarea_no_suspende_nada(db: Any) -> None:
     """Decisión del dueño: la tarea SOLO avisa, jamás cambia Tenant.status."""
-    tenant = TenantFactory(
-        status="trial", trial_ends_at=timezone.now() - timedelta(days=5)
-    )
+    tenant = TenantFactory(status="trial", trial_ends_at=timezone.now() - timedelta(days=5))
 
     avisar_vencimientos()
 
@@ -839,18 +810,14 @@ def test_tarea_es_idempotente_segunda_corrida(db: Any) -> None:
     assert second["periodos_avisados"] == 0
 
     assert AuditLog.all_objects.filter(action=ActionType.TRIAL_EXPIRED).count() == 1
-    assert (
-        AuditLog.all_objects.filter(action=ActionType.SUBSCRIPTION_EXPIRED).count() == 1
-    )
+    assert AuditLog.all_objects.filter(action=ActionType.SUBSCRIPTION_EXPIRED).count() == 1
 
 
 def test_tarea_respeta_extension_de_trial(db: Any) -> None:
     """Si el trial vence, se avisa; si luego se EXTIENDE (nueva fecha futura) y
     vuelve a vencer, la tarea debe poder avisar de nuevo (no queda "quemada")."""
     with freeze_time("2026-07-02 12:00:00"):
-        tenant = TenantFactory(
-            status="trial", trial_ends_at=timezone.now() - timedelta(days=1)
-        )
+        tenant = TenantFactory(status="trial", trial_ends_at=timezone.now() - timedelta(days=1))
         result = avisar_vencimientos()
         assert result["trials_avisados"] == 1
 
@@ -884,6 +851,4 @@ def test_tarea_respeta_renovacion_de_periodo(db: Any) -> None:
         result = avisar_vencimientos()
         assert result["periodos_avisados"] == 1
 
-    assert (
-        AuditLog.all_objects.filter(action=ActionType.SUBSCRIPTION_EXPIRED).count() == 2
-    )
+    assert AuditLog.all_objects.filter(action=ActionType.SUBSCRIPTION_EXPIRED).count() == 2

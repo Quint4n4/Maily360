@@ -11,7 +11,6 @@ Se hereda de TenantAwareModel para tener all_objects, objects con TenantManager
 y los timestamps de BaseModel; el campo tenant se sobreescribe como nullable.
 """
 
-import uuid
 
 from django.conf import settings
 from django.db import models
@@ -136,6 +135,10 @@ class ActionType(models.TextChoices):
     SUBSCRIPTION_CHANGE = "SUBSCRIPTION_CHANGE", "Asignar o cambiar plan de suscripción"
     TRIAL_EXPIRED = "TRIAL_EXPIRED", "Aviso: periodo de prueba vencido"
     SUBSCRIPTION_EXPIRED = "SUBSCRIPTION_EXPIRED", "Aviso: periodo de suscripción vencido"
+
+    # Plataforma — Catálogo de planes (Fase 3.1)
+    PLAN_CREATE = "PLAN_CREATE", "Crear plan del catálogo"
+    PLAN_UPDATE = "PLAN_UPDATE", "Actualizar plan del catálogo"
 
     # Autenticación
     LOGIN = "LOGIN", "Inicio de sesión"
@@ -343,10 +346,7 @@ class AuditLog(TenantAwareModel):
             RuntimeError: si se intenta actualizar un registro existente.
         """
         if not self._state.adding:
-            raise RuntimeError(
-                "AuditLog es append-only: no se permite UPDATE. "
-                f"pk={self.pk}"
-            )
+            raise RuntimeError("AuditLog es append-only: no se permite UPDATE. " f"pk={self.pk}")
         super().save(*args, **kwargs)
 
     def delete(self, *args: object, **kwargs: object) -> tuple[int, dict[str, int]]:  # type: ignore[override]
@@ -355,10 +355,7 @@ class AuditLog(TenantAwareModel):
         Raises:
             RuntimeError: siempre.
         """
-        raise RuntimeError(
-            "AuditLog es append-only: no se permite DELETE. "
-            f"pk={self.pk}"
-        )
+        raise RuntimeError("AuditLog es append-only: no se permite DELETE. " f"pk={self.pk}")
 
     def __str__(self) -> str:
         actor_str = str(self.actor_id) if self.actor_id else "anon"

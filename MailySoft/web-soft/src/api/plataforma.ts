@@ -20,6 +20,7 @@ import type {
   ClinicaPlat,
   DashboardMetrics,
   EstadoClinica,
+  PlanFormInput,
   PlanPlataforma,
   PlatformStaff,
   SistemaSalud,
@@ -96,6 +97,23 @@ export async function getPlatformSistema(): Promise<SistemaSalud> {
 /** GET /plataforma/planes/ — catálogo de planes comerciales (array SIN paginar). */
 export async function listPlatformPlanes(): Promise<PlanPlataforma[]> {
   return request<PlanPlataforma[]>('/plataforma/planes/')
+}
+
+/** POST /plataforma/planes/ — crea un plan (solo super_admin; el backend genera el slug). */
+export async function createPlatformPlan(body: PlanFormInput): Promise<PlanPlataforma> {
+  return request<PlanPlataforma>('/plataforma/planes/', { method: 'POST', body })
+}
+
+/**
+ * PATCH /plataforma/planes/<plan_id>/ — edita un plan (solo super_admin).
+ * Acepta un subconjunto de campos; el slug nunca cambia. No hay DELETE:
+ * desactivar un plan = PATCH con is_active=false.
+ */
+export async function updatePlatformPlan(
+  planId: string,
+  body: Partial<PlanFormInput>,
+): Promise<PlanPlataforma> {
+  return request<PlanPlataforma>(`/plataforma/planes/${planId}/`, { method: 'PATCH', body })
 }
 
 /** GET /plataforma/suscripciones/ — clínicas con su plan y alertas de vencimiento. */

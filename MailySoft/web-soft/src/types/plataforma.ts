@@ -164,6 +164,22 @@ export interface PlanPlataforma {
   order: number
 }
 
+/**
+ * Cuerpo para crear/editar un plan (POST /plataforma/planes/ y
+ * PATCH /plataforma/planes/<id>/; solo super_admin). El slug lo genera
+ * el backend a partir del nombre y NUNCA se manda ni cambia.
+ * En PATCH se envía un subconjunto (todos los campos son opcionales ahí).
+ */
+export interface PlanFormInput {
+  name: string
+  price_monthly: string // decimal como string, p. ej. "1500.00"
+  description?: string
+  is_featured?: boolean
+  features?: string[]
+  is_active?: boolean
+  order?: number
+}
+
 /** Ciclo de cobro de una suscripción. */
 export type BillingCycle = 'monthly' | 'annual'
 

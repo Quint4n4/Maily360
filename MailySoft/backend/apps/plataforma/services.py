@@ -23,21 +23,25 @@ SEGURIDAD ESPECIAL — tenant_and_owner_create:
 import logging
 import secrets
 import uuid
+from collections.abc import Callable
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.utils.text import slugify
 from django.utils.timezone import now
 
 from apps.agenda.services import appointment_type_create
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
-from apps.clinica.services import seed_system_patient_categories
 from apps.authn.models import User
+from apps.clinica.services import seed_system_patient_categories
+from apps.core.permissions import _PLATFORM_ROLES_SUPER_ADMIN_ONLY
 from apps.core.tenant_context import clear_current_tenant, set_current_tenant
 from apps.personal.services import consultorio_create
+from apps.plataforma.selectors import plan_get
 from apps.tenancy.models import Plan, Tenant, TenantSubscription
 from apps.tenancy.services import member_create
 
@@ -61,10 +65,10 @@ _ALLOWED_ACTOR_ROLES: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 # Alfabeto de la contraseña temporal (sin caracteres ambiguos: 0/O, 1/l/I).
 # ---------------------------------------------------------------------------
-_PWD_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"   # sin I, O
-_PWD_LOWER = "abcdefghjkmnpqrstuvwxyz"    # sin i, l, o
-_PWD_DIGITS = "23456789"                   # sin 0, 1
-_PWD_SYMBOLS = "!@#$%^&*"                 # seguros en todos los sistemas
+_PWD_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"  # sin I, O
+_PWD_LOWER = "abcdefghjkmnpqrstuvwxyz"  # sin i, l, o
+_PWD_DIGITS = "23456789"  # sin 0, 1
+_PWD_SYMBOLS = "!@#$%^&*"  # seguros en todos los sistemas
 _PWD_ALL = _PWD_UPPER + _PWD_LOWER + _PWD_DIGITS + _PWD_SYMBOLS
 
 
@@ -132,6 +136,34 @@ def _slug_unico(name: str) -> str:
     return candidate
 
 
+def _slug_unico_generico(*, name: str, fallback: str, existe: Callable[[str], bool]) -> str:
+    """Helper genérico de slug único, parametrizado por una función de existencia.
+
+    Generaliza el mismo patrón que `_slug_unico` (slugify + sufijo -2, -3, ...)
+    para reutilizarlo en modelos distintos a Tenant (aquí: Plan) sin duplicar
+    la lógica de generación. `_slug_unico` se deja intacta (no se toca código
+    que ya funciona) porque tiene su propio fallback ("clinica") y su propio
+    querier fijo (Tenant.objects); este helper es la versión reutilizable para
+    el resto de la plataforma.
+
+    Args:
+        name:     Texto de origen para slugificar (ej. nombre del plan).
+        fallback: Slug base a usar si `slugify(name)` da cadena vacía.
+        existe:   Callable(candidate: str) -> bool que indica si el slug ya
+                  existe en el modelo destino.
+
+    Returns:
+        Slug único que `existe()` confirma como libre.
+    """
+    base_slug = slugify(name) or fallback
+    candidate = base_slug
+    counter = 2
+    while existe(candidate):
+        candidate = f"{base_slug}-{counter}"
+        counter += 1
+    return candidate
+
+
 def tenant_and_owner_create(
     *,
     actor: User,
@@ -182,9 +214,7 @@ def tenant_and_owner_create(
                          o la contraseña generada no pasa los validadores de Django.
     """
     if not getattr(actor, "is_platform_staff", False):
-        raise ValidationError(
-            "Solo el staff de plataforma puede crear clínicas."
-        )
+        raise ValidationError("Solo el staff de plataforma puede crear clínicas.")
     if getattr(actor, "platform_role", "") not in _ALLOWED_ACTOR_ROLES:
         raise ValidationError(
             f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
@@ -313,9 +343,7 @@ def tenant_set_status(
         ValidationError: Si el actor no está autorizado o el estado es inválido.
     """
     if not getattr(actor, "is_platform_staff", False):
-        raise ValidationError(
-            "Solo el staff de plataforma puede cambiar el estado de una clínica."
-        )
+        raise ValidationError("Solo el staff de plataforma puede cambiar el estado de una clínica.")
     if getattr(actor, "platform_role", "") not in _ALLOWED_ACTOR_ROLES:
         raise ValidationError(
             f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
@@ -397,9 +425,7 @@ def tenant_subscription_set(
             current_period_end no es una fecha futura.
     """
     if not getattr(actor, "is_platform_staff", False):
-        raise ValidationError(
-            "Solo el staff de plataforma puede gestionar suscripciones."
-        )
+        raise ValidationError("Solo el staff de plataforma puede gestionar suscripciones.")
     if getattr(actor, "platform_role", "") not in _ALLOWED_ACTOR_ROLES:
         raise ValidationError(
             f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
@@ -475,3 +501,266 @@ def tenant_subscription_set(
     )
 
     return subscription
+
+
+# ---------------------------------------------------------------------------
+# Catálogo de planes — alta y edición (Fase 3.1)
+# ---------------------------------------------------------------------------
+
+# Campos inmutables del servicio de update: identidad, timestamps y el slug
+# (estable a propósito — lo referencian TenantSubscription y el frontend).
+_PLAN_IMMUTABLE_FIELDS: frozenset[str] = frozenset(
+    {"id", "slug", "tenant", "tenant_id", "created_at", "updated_at", "deleted_at"}
+)
+
+# Campos editables por plan_update (allowlist explícita, no blocklist: un
+# campo nuevo del modelo Plan queda fuera de PATCH hasta que se agregue aquí
+# a propósito).
+_PLAN_UPDATABLE_FIELDS: frozenset[str] = frozenset(
+    {"name", "description", "price_monthly", "is_featured", "features", "is_active", "order"}
+)
+
+
+def _validar_campos_plan(fields: dict[str, Any]) -> None:
+    """Valida name/price_monthly/features para plan_create y plan_update.
+
+    Solo valida los campos presentes en `fields` — permite validación
+    parcial en PATCH (no exige que todos los campos estén presentes).
+
+    Args:
+        fields: subconjunto de campos que se van a persistir.
+
+    Raises:
+        ValidationError: price_monthly negativo, name vacío, o features no
+            es una lista de strings no vacíos.
+    """
+    if "name" in fields and not str(fields["name"]).strip():
+        raise ValidationError("El nombre del plan no puede estar vacío.")
+
+    if "price_monthly" in fields and fields["price_monthly"] is not None:
+        if fields["price_monthly"] < 0:
+            raise ValidationError("El precio mensual no puede ser negativo.")
+
+    if "features" in fields and fields["features"] is not None:
+        features = fields["features"]
+        if not isinstance(features, list):
+            raise ValidationError("features debe ser una lista de strings.")
+        for item in features:
+            if not isinstance(item, str) or not item.strip():
+                raise ValidationError("Cada elemento de features debe ser un string no vacío.")
+
+
+def _validar_actor_plan_write(actor: User) -> None:
+    """Revalida en el service que el actor sea super_admin (defensa en profundidad).
+
+    Espeja PlatformPlanWritePermission (apps/core/permissions.py), incluyendo
+    su misma fuente de roles (_PLATFORM_ROLES_SUPER_ADMIN_ONLY, importada de
+    apps.core.permissions — NO se duplica el frozenset aquí). La vista ya
+    exige ese permiso, pero el service puede invocarse desde management
+    commands/seeds/Celery sin pasar por HTTP, así que se revalida — mismo
+    patrón que _ALLOWED_ACTOR_ROLES en tenant_and_owner_create /
+    tenant_subscription_set (esos dos SÍ mantienen su propio frozenset
+    porque su conjunto de roles, super_admin+sales, no coincide con ningún
+    otro permiso existente; aquí el conjunto es idéntico al de
+    PlatformStaffListPermission, así que reutilizar es lo correcto).
+
+    Raises:
+        ValidationError: actor no es staff de plataforma o su platform_role
+            no es super_admin.
+    """
+    if not getattr(actor, "is_platform_staff", False):
+        raise ValidationError("Solo el staff de plataforma puede gestionar el catálogo de planes.")
+    if getattr(actor, "platform_role", "") not in _PLATFORM_ROLES_SUPER_ADMIN_ONLY:
+        raise ValidationError(
+            f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
+            "no autorizado: solo super_admin edita el catálogo de planes."
+        )
+
+
+def plan_create(
+    *,
+    actor: User,
+    name: str,
+    price_monthly: Decimal,
+    description: str = "",
+    is_featured: bool = False,
+    features: list[str] | None = None,
+    is_active: bool = True,
+    order: int | None = None,
+) -> Plan:
+    """Crea un plan nuevo en el catálogo global de suscripción.
+
+    Solo super_admin (revalidado aquí, defensa en profundidad — ver
+    _validar_actor_plan_write). El slug se genera de `name` con slugify y
+    sufijo -2/-3/... si ya existe (reutiliza _slug_unico_generico, el mismo
+    algoritmo que _slug_unico usa para Tenant). Si `order` no se especifica,
+    se asigna al final del catálogo (max(order) + 1).
+
+    Args:
+        actor:         Usuario de plataforma que crea el plan (auditoría).
+        name:          Nombre comercial del plan.
+        price_monthly: Precio mensual en MXN. Debe ser >= 0.
+        description:   Descripción comercial breve (default "").
+        is_featured:   Si se destaca en la vitrina (default False).
+        features:      Lista de strings no vacíos con las características
+                       incluidas (default: lista vacía).
+        is_active:     Si el plan queda activo/asignable de inmediato
+                       (default True).
+        order:         Orden de despliegue. Si es None, se asigna
+                       max(order actual) + 1.
+
+    Returns:
+        El Plan creado.
+
+    Raises:
+        ValidationError: actor no autorizado, price_monthly negativo, name
+            vacío, o features con formato inválido.
+    """
+    _validar_actor_plan_write(actor)
+
+    features_norm: list[str] = list(features) if features is not None else []
+    _validar_campos_plan({"name": name, "price_monthly": price_monthly, "features": features_norm})
+
+    slug = _slug_unico_generico(
+        name=name,
+        fallback="plan",
+        existe=lambda candidate: Plan.objects.filter(slug=candidate).exists(),
+    )
+
+    with transaction.atomic():
+        if order is None:
+            max_order = Plan.objects.aggregate(m=models.Max("order"))["m"]
+            order = (max_order + 1) if max_order is not None else 0
+
+        plan = Plan.objects.create(
+            slug=slug,
+            name=name,
+            description=description,
+            price_monthly=price_monthly,
+            is_featured=is_featured,
+            features=features_norm,
+            is_active=is_active,
+            order=order,
+        )
+
+    audit_record(
+        action=ActionType.PLAN_CREATE,
+        resource_type="Plan",
+        actor=actor,
+        tenant=None,  # catálogo global, no evento de una clínica
+        resource_id=plan.id,
+        resource_repr=str(plan),
+        description=(
+            f"Plan '{plan.name}' ({plan.slug}) creado por {actor.email} "
+            f"({getattr(actor, 'platform_role', '')}), precio {plan.price_monthly}."
+        ),
+        actor_role=getattr(actor, "platform_role", ""),
+        metadata={
+            "slug": plan.slug,
+            "price": str(plan.price_monthly),
+        },
+    )
+
+    logger.info(
+        "plan_create: plan=%s slug=%s precio=%s por actor=%s",
+        plan.id,
+        plan.slug,
+        plan.price_monthly,
+        actor.email,
+    )
+
+    return plan
+
+
+def plan_update(*, actor: User, plan_id: uuid.UUID, **fields: Any) -> Plan:
+    """Actualiza un subconjunto de campos de un plan existente.
+
+    Solo super_admin (revalidado aquí, defensa en profundidad). El slug
+    NUNCA se puede modificar por este servicio (es el identificador estable
+    que usan TenantSubscription y el frontend) — está en
+    _PLAN_IMMUTABLE_FIELDS.
+
+    EXCEPCIÓN documentada a la regla general "is_active nunca en PATCH
+    genérico": aquí SÍ se permite, a propósito. Plan no tiene delete físico
+    (TenantSubscription.plan es PROTECT) y el dueño pidió explícitamente
+    poder desactivar un plan retirándolo del catálogo sin necesidad de un
+    endpoint separado de activar/desactivar. No hay ambigüedad de "estado de
+    negocio complejo" aquí: is_active de Plan es un simple flag de catálogo
+    (visible/no-asignable), no un ciclo de vida con transiciones que validar.
+
+    Args:
+        actor:    Usuario de plataforma que edita el plan (auditoría).
+        plan_id:  UUID del plan a actualizar.
+        **fields: subconjunto de {name, description, price_monthly,
+            is_featured, features, is_active, order}.
+
+    Returns:
+        El Plan actualizado.
+
+    Raises:
+        ValidationError: actor no autorizado, campo inmutable/desconocido
+            en fields, o valores inválidos (precio negativo, features mal
+            formado, name vacío).
+        Plan.DoesNotExist: no existe un plan con ese id (→ 404 en la vista).
+    """
+    _validar_actor_plan_write(actor)
+
+    bad_immutable = set(fields) & _PLAN_IMMUTABLE_FIELDS
+    if bad_immutable:
+        raise ValidationError(
+            f"No se pueden modificar los campos: {', '.join(sorted(bad_immutable))}."
+        )
+
+    bad_unknown = set(fields) - _PLAN_UPDATABLE_FIELDS
+    if bad_unknown:
+        raise ValidationError(
+            f"Campos no reconocidos para actualizar un plan: {', '.join(sorted(bad_unknown))}."
+        )
+
+    if "features" in fields and fields["features"] is not None:
+        fields["features"] = list(fields["features"])
+
+    _validar_campos_plan(fields)
+
+    plan = plan_get(plan_id=plan_id)
+
+    old_price = plan.price_monthly
+    changed_fields = sorted(fields.keys())
+
+    with transaction.atomic():
+        for field_name, value in fields.items():
+            setattr(plan, field_name, value)
+        plan.save(update_fields=[*fields.keys(), "updated_at"])
+
+    metadata: dict[str, Any] = {
+        "slug": plan.slug,
+        "cambios": changed_fields,
+    }
+    if "price_monthly" in fields and fields["price_monthly"] != old_price:
+        metadata["price_old"] = str(old_price)
+        metadata["price_new"] = str(plan.price_monthly)
+
+    audit_record(
+        action=ActionType.PLAN_UPDATE,
+        resource_type="Plan",
+        actor=actor,
+        tenant=None,
+        resource_id=plan.id,
+        resource_repr=str(plan),
+        description=(
+            f"Plan '{plan.name}' ({plan.slug}) actualizado por {actor.email} "
+            f"({getattr(actor, 'platform_role', '')}). Campos: {', '.join(changed_fields)}."
+        ),
+        actor_role=getattr(actor, "platform_role", ""),
+        metadata=metadata,
+    )
+
+    logger.info(
+        "plan_update: plan=%s slug=%s campos=%s por actor=%s",
+        plan.id,
+        plan.slug,
+        changed_fields,
+        actor.email,
+    )
+
+    return plan
