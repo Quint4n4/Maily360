@@ -12,6 +12,8 @@
 import { request } from '../lib/http'
 import type { Paginated } from '../types/paciente'
 import type {
+  AuditoriaEvento,
+  AuditoriaFiltros,
   ClinicaCreateInput,
   ClinicaCreateResult,
   ClinicaDetail,
@@ -56,6 +58,21 @@ export async function listPlatformStaff(params: { search?: string } = {}): Promi
 /** POST /plataforma/clinicas/ — da de alta una clínica nueva + su dueño. */
 export async function createClinica(input: ClinicaCreateInput): Promise<ClinicaCreateResult> {
   return request<ClinicaCreateResult>('/plataforma/clinicas/', { method: 'POST', body: input })
+}
+
+/** GET /plataforma/auditoria/ — log de auditoría cross-tenant (super_admin / engineering). */
+export async function listPlatformAuditoria(params: AuditoriaFiltros = {}): Promise<Paginated<AuditoriaEvento>> {
+  const qs = new URLSearchParams()
+  if (params.tenant_id) qs.set('tenant_id', params.tenant_id)
+  if (params.action) qs.set('action', params.action)
+  if (params.actor_id) qs.set('actor_id', params.actor_id)
+  if (params.date_from) qs.set('date_from', params.date_from)
+  if (params.date_to) qs.set('date_to', params.date_to)
+  if (params.search) qs.set('search', params.search)
+  if (params.page) qs.set('page', String(params.page))
+  if (params.page_size) qs.set('page_size', String(params.page_size))
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return request<Paginated<AuditoriaEvento>>(`/plataforma/auditoria/${suffix}`)
 }
 
 /** GET /plataforma/clinicas/<id>/ — ficha de detalle de una clínica. */

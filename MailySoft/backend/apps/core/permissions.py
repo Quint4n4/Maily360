@@ -953,6 +953,9 @@ _PLATFORM_ROLES_MANAGE_CLINICS: frozenset[str] = frozenset(
 _PLATFORM_ROLES_SUPER_ADMIN_ONLY: frozenset[str] = frozenset(
     {User.PlatformRole.SUPER_ADMIN}
 )
+_PLATFORM_ROLES_AUDIT: frozenset[str] = frozenset(
+    {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.ENGINEERING}
+)
 
 
 class RetentionPermission(HasClinicRole):
@@ -1064,3 +1067,23 @@ class PlatformStaffListPermission(IsPlatformStaff):
             return True
         role: str = getattr(request.user, "platform_role", "")
         return role in _PLATFORM_ROLES_SUPER_ADMIN_ONLY
+
+
+class PlatformAuditPermission(IsPlatformStaff):
+    """Bitácora de auditoría cross-tenant: solo super_admin y engineering.
+
+    Sales queda fuera: la auditoría expone eventos operativos/técnicos
+    (accesos, cambios de estado, IPs) que no son necesarios para su función
+    comercial. Solo lectura: AuditLog es append-only, no existe endpoint de
+    escritura de todos modos.
+    """
+
+    message: str = "Solo super_admin y engineering pueden ver la bitácora de auditoría."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        role: str = getattr(request.user, "platform_role", "")
+        return role in _PLATFORM_ROLES_AUDIT

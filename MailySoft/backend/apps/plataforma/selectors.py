@@ -15,12 +15,14 @@ REGLA CRÍTICA: SIEMPRE usar Model.all_objects (nunca Model.objects).
 """
 
 import uuid
+from datetime import datetime
 from typing import Any, Optional
 
-from django.db.models import Count, IntegerField, Max, OuterRef, QuerySet, Subquery, Value
+from django.db.models import Count, IntegerField, Max, OuterRef, Q, QuerySet, Subquery, Value
 from django.db.models.functions import Coalesce
 
 from apps.agenda.models import Appointment
+from apps.audit.models import AuditLog
 from apps.authn.models import User
 from apps.pacientes.models import Patient
 from apps.tenancy.models import Tenant, TenantMembership
@@ -246,3 +248,51 @@ def platform_clinica_detail(*, tenant_id: uuid.UUID) -> dict[str, Any]:
         "ultima_actividad": ultima_actividad,
         "members": members,
     }
+
+
+def platform_audit_log_list(
+    *,
+    tenant_id: Optional[uuid.UUID] = None,
+    action: Optional[str] = None,
+    actor_id: Optional[uuid.UUID] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    search: str = "",
+) -> "QuerySet[AuditLog]":
+    """Lista la bitácora de auditoría cross-tenant para el panel de plataforma.
+
+    Args:
+        tenant_id: filtra por clínica exacta. None = sin filtro (todas las clínicas).
+        action: filtra por ActionType exacto. None/vacío = sin filtro.
+        actor_id: filtra por el usuario que realizó la acción. None = sin filtro.
+        date_from: filtra created_at >= date_from (datetime ISO completo).
+        date_to: filtra created_at <= date_to (datetime ISO completo).
+        search: icontains sobre description o el email del actor. Vacío = sin filtro.
+
+    Returns:
+        QuerySet de AuditLog (Model.all_objects, cross-tenant) con
+        select_related("actor", "tenant"), ordenado por -created_at.
+    """
+    qs = AuditLog.all_objects.select_related("actor", "tenant")
+
+    if tenant_id is not None:
+        qs = qs.filter(tenant_id=tenant_id)
+
+    if action:
+        qs = qs.filter(action=action)
+
+    if actor_id is not None:
+        qs = qs.filter(actor_id=actor_id)
+
+    if date_from is not None:
+        qs = qs.filter(created_at__gte=date_from)
+
+    if date_to is not None:
+        qs = qs.filter(created_at__lte=date_to)
+
+    if search:
+        qs = qs.filter(
+            Q(description__icontains=search) | Q(actor__email__icontains=search)
+        )
+
+    return qs.order_by("-created_at")

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Building2, CreditCard, UserCog, Activity, ChevronDown, LogOut, User, Check, Stethoscope } from 'lucide-react'
+import { LayoutDashboard, Building2, CreditCard, UserCog, Activity, ScrollText, ChevronDown, LogOut, User, Check, Stethoscope } from 'lucide-react'
 import { usePlatformRole } from './PlatformRoleContext'
 import { PlatModulo, accesoModuloPlat, inicioPlat, ROLES_PLAT, ROLE_PLAT_LABEL } from './permisos'
 import { useAuth } from '../auth/AuthContext'
@@ -17,6 +17,7 @@ const NAV: { key: PlatModulo; label: string; icon: typeof LayoutDashboard }[] = 
   { key: 'suscripciones', label: 'Suscripciones', icon: CreditCard },
   { key: 'usuarios',      label: 'Equipo',        icon: UserCog },
   { key: 'sistema',       label: 'Sistema',       icon: Activity },
+  { key: 'auditoria',     label: 'Auditoría',     icon: ScrollText },
 ]
 
 export default function PlatformTopbar({ active = 'dashboard' }: Props) {

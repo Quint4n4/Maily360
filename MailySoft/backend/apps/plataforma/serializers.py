@@ -4,7 +4,7 @@ Serializers de entrada y salida para el panel interno de plataforma.
 Regla: Input y Output siempre separados. Sin create()/update() con lógica.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 from rest_framework import serializers
 
@@ -222,3 +222,64 @@ class ClinicaDetailOutputSerializer(serializers.Serializer):
     appointment_count = serializers.IntegerField(read_only=True)
     ultima_actividad = serializers.DateTimeField(read_only=True, allow_null=True)
     members = ClinicaMemberOutputSerializer(many=True, read_only=True)
+
+
+# ---------------------------------------------------------------------------
+# Input — Filtros de la bitácora de auditoría
+# ---------------------------------------------------------------------------
+
+
+class AuditoriaQueryInputSerializer(serializers.Serializer):
+    """Valida los query params de GET /api/v1/plataforma/auditoria/.
+
+    Todos los campos son opcionales: filtro no aplicado si se omiten. Se usa
+    para coercer/validar tipos (UUID, datetime ISO) antes de pasarlos al
+    selector, devolviendo 400 claro en vez de dejar que un valor inválido
+    explote como error 500 en el ORM.
+    """
+
+    tenant_id = serializers.UUIDField(required=False)
+    action = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    actor_id = serializers.UUIDField(required=False)
+    date_from = serializers.DateTimeField(required=False)
+    date_to = serializers.DateTimeField(required=False)
+    search = serializers.CharField(required=False, allow_blank=True, max_length=200)
+
+
+# ---------------------------------------------------------------------------
+# Output — Bitácora de auditoría (cross-tenant)
+# ---------------------------------------------------------------------------
+
+
+class AuditLogOutputSerializer(serializers.Serializer):
+    """Serializer de salida para un registro de AuditLog en el panel de plataforma."""
+
+    id = serializers.UUIDField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    action = serializers.CharField(read_only=True)
+    action_display = serializers.SerializerMethodField()
+    actor_email = serializers.SerializerMethodField()
+    actor_role = serializers.CharField(read_only=True)
+    tenant_id = serializers.UUIDField(read_only=True, allow_null=True)
+    tenant_name = serializers.SerializerMethodField()
+    resource_type = serializers.CharField(read_only=True)
+    resource_id = serializers.UUIDField(read_only=True, allow_null=True)
+    description = serializers.CharField(read_only=True)
+    ip_address = serializers.IPAddressField(read_only=True, allow_null=True)
+    metadata = serializers.JSONField(read_only=True)
+
+    def get_action_display(self, obj: Any) -> str:
+        """Devuelve el label legible de la acción."""
+        return obj.get_action_display()
+
+    def get_actor_email(self, obj: Any) -> Optional[str]:
+        """Email del actor, o None si el evento es anónimo o el usuario se borró."""
+        if obj.actor_id is None:
+            return None
+        return obj.actor.email
+
+    def get_tenant_name(self, obj: Any) -> Optional[str]:
+        """Nombre de la clínica, o None si el evento es global (sin tenant)."""
+        if obj.tenant_id is None:
+            return None
+        return obj.tenant.name

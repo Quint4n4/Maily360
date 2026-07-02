@@ -23,6 +23,7 @@ PERMISOS por endpoint:
   POST /clinicas/          → PlatformClinicWritePermission (super_admin, sales)
   GET  /clinicas/<id>/     → PlatformClinicReadPermission  (super_admin, sales, engineering)
   POST /clinicas/<id>/estado/ → PlatformClinicWritePermission (super_admin, sales)
+  GET  /auditoria/         → PlatformAuditPermission (super_admin, engineering)
 """
 
 import uuid as _uuid_module
@@ -37,6 +38,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.permissions import (
+    PlatformAuditPermission,
     PlatformClinicReadPermission,
     PlatformClinicWritePermission,
     PlatformMetricsPermission,
@@ -44,12 +46,15 @@ from apps.core.permissions import (
 )
 from apps.core.tenant_context import set_request_context
 from apps.plataforma.selectors import (
+    platform_audit_log_list,
     platform_clinica_detail,
     platform_clinicas_list,
     platform_dashboard_metrics,
     platform_staff_list,
 )
 from apps.plataforma.serializers import (
+    AuditLogOutputSerializer,
+    AuditoriaQueryInputSerializer,
     ClinicaCreateInputSerializer,
     ClinicaCreateOutputSerializer,
     ClinicaDetailOutputSerializer,
@@ -325,4 +330,49 @@ class PlatformUsuariosListApi(PlatformAPIView):
             return paginator.get_paginated_response(serializer.data)
 
         serializer = PlatformStaffOutputSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/plataforma/auditoria/
+# ---------------------------------------------------------------------------
+
+
+class PlatformAuditoriaListApi(PlatformAPIView):
+    """Bitácora de auditoría cross-tenant (solo lectura).
+
+    GET → super_admin, engineering (PlatformAuditPermission). Sales queda fuera.
+
+    AuditLog es append-only: no existe endpoint de escritura sobre este recurso.
+    """
+
+    permission_classes = [IsAuthenticated, PlatformAuditPermission]
+
+    def get(self, request: Request) -> Response:
+        """Lista la bitácora de auditoría con filtros opcionales.
+
+        Query params (todos opcionales): tenant_id, action, actor_id,
+        date_from, date_to (datetime ISO), search.
+        Valores con formato inválido (UUID/fecha) devuelven 400.
+        """
+        query = AuditoriaQueryInputSerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        filters = query.validated_data
+
+        qs = platform_audit_log_list(
+            tenant_id=filters.get("tenant_id"),
+            action=filters.get("action") or None,
+            actor_id=filters.get("actor_id"),
+            date_from=filters.get("date_from"),
+            date_to=filters.get("date_to"),
+            search=filters.get("search", ""),
+        )
+
+        paginator = _StandardPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        if page is not None:
+            serializer = AuditLogOutputSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = AuditLogOutputSerializer(qs, many=True)
         return Response(serializer.data)

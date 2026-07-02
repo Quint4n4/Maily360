@@ -4,7 +4,7 @@
    ──────────────────────────────────────────────────────────────────────── */
 
 export type PlatformRole = 'super_admin' | 'sales' | 'engineering'
-export type PlatModulo = 'dashboard' | 'clinicas' | 'suscripciones' | 'usuarios' | 'sistema'
+export type PlatModulo = 'dashboard' | 'clinicas' | 'suscripciones' | 'usuarios' | 'sistema' | 'auditoria'
 export type Acceso = 'edit' | 'view'
 
 export const ROLES_PLAT: { key: PlatformRole; label: string }[] = [
@@ -18,9 +18,9 @@ export const ROLE_PLAT_LABEL: Record<PlatformRole, string> = {
 }
 
 export const PERMISOS_PLAT: Record<PlatformRole, Partial<Record<PlatModulo, Acceso>>> = {
-  super_admin: { dashboard: 'edit', clinicas: 'edit', suscripciones: 'edit', usuarios: 'edit', sistema: 'view' },
+  super_admin: { dashboard: 'edit', clinicas: 'edit', suscripciones: 'edit', usuarios: 'edit', sistema: 'view', auditoria: 'view' },
   sales:       { dashboard: 'edit', clinicas: 'edit', suscripciones: 'edit' },
-  engineering: { dashboard: 'view', clinicas: 'view', sistema: 'edit' },
+  engineering: { dashboard: 'view', clinicas: 'view', sistema: 'edit', auditoria: 'view' },
 }
 
 export const accesoModuloPlat = (role: PlatformRole, m: PlatModulo): Acceso | undefined => PERMISOS_PLAT[role][m]

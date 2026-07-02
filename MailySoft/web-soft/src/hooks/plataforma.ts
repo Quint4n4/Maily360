@@ -5,12 +5,13 @@ import {
   createClinica,
   getClinicaDetail,
   getPlatformMetrics,
+  listPlatformAuditoria,
   listPlatformClinicas,
   listPlatformStaff,
   setClinicaEstado,
   type ListClinicasParams,
 } from '../api/plataforma'
-import type { ClinicaCreateInput } from '../types/plataforma'
+import type { AuditoriaFiltros, ClinicaCreateInput } from '../types/plataforma'
 
 export const platKeys = {
   all: ['plataforma'] as const,
@@ -18,6 +19,7 @@ export const platKeys = {
   clinicas: (p: ListClinicasParams) => ['plataforma', 'clinicas', p.search ?? '', p.status ?? ''] as const,
   clinicaDetail: (id: string) => ['plataforma', 'clinica', id] as const,
   staff: (search: string) => ['plataforma', 'usuarios', search] as const,
+  auditoria: (p: AuditoriaFiltros) => ['plataforma', 'auditoria', p] as const,
 }
 
 /** Métricas del dashboard de plataforma. */
@@ -33,6 +35,15 @@ export function usePlatformClinicas(params: ListClinicasParams = {}) {
 /** Lista del equipo interno de Maily. */
 export function usePlatformStaff(search = '') {
   return useQuery({ queryKey: platKeys.staff(search), queryFn: () => listPlatformStaff({ search }) })
+}
+
+/** Log de auditoría cross-tenant. `enabled` permite apagarla si el rol no tiene acceso. */
+export function usePlatformAuditoria(params: AuditoriaFiltros = {}, enabled = true) {
+  return useQuery({
+    queryKey: platKeys.auditoria(params),
+    queryFn: () => listPlatformAuditoria(params),
+    enabled,
+  })
 }
 
 /** Suspender / reactivar una clínica. Invalida métricas y lista al terminar. */

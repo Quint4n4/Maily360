@@ -27,6 +27,7 @@ const ClinicasPage = lazy(() => import('./pages/plataforma/ClinicasPage'))
 const SuscripcionesPage = lazy(() => import('./pages/plataforma/SuscripcionesPage'))
 const UsuariosPage = lazy(() => import('./pages/plataforma/UsuariosPage'))
 const SistemaPage = lazy(() => import('./pages/plataforma/SistemaPage'))
+const AuditoriaPage = lazy(() => import('./pages/plataforma/AuditoriaPage'))
 
 /* App de la clínica: exige sesión válida (RequireAuth) y luego protege por rol */
 function Guard({ modulo, children }: { modulo: Modulo; children: ReactElement }) {
@@ -126,6 +127,7 @@ export default function App() {
             <Route path="/plataforma/suscripciones" element={<PlatformRoute modulo="suscripciones"><SuscripcionesPage /></PlatformRoute>} />
             <Route path="/plataforma/usuarios"      element={<PlatformRoute modulo="usuarios"><UsuariosPage /></PlatformRoute>} />
             <Route path="/plataforma/sistema"       element={<PlatformRoute modulo="sistema"><SistemaPage /></PlatformRoute>} />
+            <Route path="/plataforma/auditoria"     element={<PlatformRoute modulo="auditoria"><AuditoriaPage /></PlatformRoute>} />
 
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
