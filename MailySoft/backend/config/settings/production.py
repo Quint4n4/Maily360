@@ -95,13 +95,11 @@ CORS_ALLOW_ALL_ORIGINS: bool = False
 CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS")
 
 # ---------------------------------------------------------------------------
-# Almacenamiento en S3
+# Almacenamiento de media
 # ---------------------------------------------------------------------------
-
-DEFAULT_FILE_STORAGE: str = env(
-    "DJANGO_DEFAULT_FILE_STORAGE",
-    default="storages.backends.s3boto3.S3Boto3Storage",
-)
+# El backend se define en base.py vía STORAGES["default"], que lee
+# DJANGO_DEFAULT_FILE_STORAGE del entorno (Cloudinary en este piloto; S3 o
+# FileSystemStorage según se configure). Django 5.1+ ya NO usa DEFAULT_FILE_STORAGE.
 
 # ---------------------------------------------------------------------------
 # BAJO-3 — Guardia S3: imágenes clínicas nunca deben quedar en URLs públicas.

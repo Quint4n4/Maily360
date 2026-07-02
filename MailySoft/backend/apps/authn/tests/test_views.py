@@ -189,8 +189,12 @@ def test_refresh_does_not_return_refresh_in_body(api_client: APIClient, credenti
 
 
 @pytest.mark.django_db
-def test_refresh_rotates_cookie(api_client: APIClient, credentials: dict) -> None:
-    """Con ROTATE_REFRESH_TOKENS=True, /refresh/ setea una nueva cookie maily_refresh."""
+def test_refresh_returns_new_access_without_rotating(
+    api_client: APIClient, credentials: dict
+) -> None:
+    """Con ROTATE_REFRESH_TOKENS=False, /refresh/ devuelve un access nuevo pero NO
+    rota la cookie de refresh (queda estable → evita logouts intermitentes al
+    recargar la página justo tras un cambio)."""
     # Arrange
     login_resp = do_login(api_client, credentials)
     original_refresh = login_resp.cookies[COOKIE_NAME].value
@@ -199,10 +203,10 @@ def test_refresh_rotates_cookie(api_client: APIClient, credentials: dict) -> Non
     # Act
     response = api_client.post(REFRESH_URL, format="json")
 
-    # Assert: hay cookie nueva en la respuesta (puede ser igual o diferente al original
-    # dependiendo de la política de SimpleJWT; lo importante es que esté presente)
+    # Assert: nuevo access en el body; sin cookie de refresh nueva (no rota).
     assert response.status_code == 200
-    assert COOKIE_NAME in response.cookies
+    assert response.data.get("access")
+    assert COOKIE_NAME not in response.cookies
 
 
 @pytest.mark.django_db

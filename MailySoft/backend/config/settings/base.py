@@ -216,8 +216,15 @@ SPECTACULAR_SETTINGS: dict = {
 SIMPLE_JWT: dict = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env.int("JWT_ACCESS_MINUTES", default=15)),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=env.int("JWT_REFRESH_DAYS", default=7)),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
+    # ROTATE=False: el refresh token NO cambia en cada renovación → la cookie es
+    # estable y no puede quedar "desincronizada". Antes (ROTATE+BLACKLIST) cada
+    # refresco anulaba el token anterior; si el usuario recargaba la página justo
+    # cuando la cookie nueva aún no se guardaba, la siguiente petición usaba el
+    # token ya anulado → 401 → sesión cerrada intermitentemente. La cookie sigue
+    # segura (httpOnly + Secure + SameSite=Strict, vence a los 7 días) y el LOGOUT
+    # sí invalida el token vía blacklist.
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
     # FIX-10: clave de firma JWT propia para que rotar SECRET_KEY no invalide tokens.
@@ -264,7 +271,6 @@ CHANNEL_LAYERS: dict = {
 
 STATIC_URL: str = "/static/"
 STATIC_ROOT: Path = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE: str = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL: str = "/media/"
 MEDIA_ROOT: Path = BASE_DIR / "media"
@@ -277,10 +283,22 @@ DATA_UPLOAD_MAX_MEMORY_SIZE: int = 5 * 1024 * 1024  # 5 MB
 # Almacenamiento (S3/MinIO en prod, local en dev)
 # ---------------------------------------------------------------------------
 
-DEFAULT_FILE_STORAGE: str = env(
-    "DJANGO_DEFAULT_FILE_STORAGE",
-    default="django.core.files.storage.FileSystemStorage",
-)
+# Django 5.1+ ELIMINÓ los settings DEFAULT_FILE_STORAGE / STATICFILES_STORAGE:
+# ahora la configuración de almacenamiento vive en STORAGES. Si se usan los viejos,
+# Django los IGNORA silenciosamente (media caía a FileSystemStorage → imágenes 404
+# en prod). El backend de media se elige por entorno (Cloudinary en prod;
+# FileSystemStorage en dev); los estáticos SIEMPRE con WhiteNoise.
+STORAGES = {
+    "default": {
+        "BACKEND": env(
+            "DJANGO_DEFAULT_FILE_STORAGE",
+            default="django.core.files.storage.FileSystemStorage",
+        ),
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 AWS_ACCESS_KEY_ID: str = env("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY: str = env("AWS_SECRET_ACCESS_KEY", default="")
