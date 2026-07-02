@@ -956,6 +956,9 @@ _PLATFORM_ROLES_SUPER_ADMIN_ONLY: frozenset[str] = frozenset(
 _PLATFORM_ROLES_AUDIT: frozenset[str] = frozenset(
     {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.ENGINEERING}
 )
+_PLATFORM_ROLES_SYSTEM: frozenset[str] = frozenset(
+    {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.ENGINEERING}
+)
 
 
 class RetentionPermission(HasClinicRole):
@@ -1087,3 +1090,22 @@ class PlatformAuditPermission(IsPlatformStaff):
             return True
         role: str = getattr(request.user, "platform_role", "")
         return role in _PLATFORM_ROLES_AUDIT
+
+
+class PlatformSystemPermission(IsPlatformStaff):
+    """Salud del sistema (BD/Redis/Celery/cola de PDFs): solo super_admin y engineering.
+
+    Sales queda fuera: el estado de infraestructura es información técnica sin
+    valor para su función comercial. Mismo patrón que PlatformAuditPermission.
+    Solo lectura: no existe endpoint de escritura sobre este recurso.
+    """
+
+    message: str = "Solo super_admin y engineering pueden ver la salud del sistema."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        role: str = getattr(request.user, "platform_role", "")
+        return role in _PLATFORM_ROLES_SYSTEM

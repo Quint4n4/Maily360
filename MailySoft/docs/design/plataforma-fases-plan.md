@@ -127,16 +127,28 @@ Seguimiento anotado por los revisores (no bloqueante, atender antes de escalar):
 - Deuda mypy preexistente en `apps/plataforma/serializers.py` (patrón repetido en
   las 9 clases previas; mypy es informativo, no bloqueante).
 
-### Fase 2 — "Sistema" con salud real
+### Fase 2 — "Sistema" con salud real — ✅ HECHA (2026-07-02)
 
 Objetivo: sustituir la maqueta de SistemaPage por datos reales.
 
-- `GET /api/v1/plataforma/sistema/` (super_admin, engineering): ping BD, Redis,
-  estado del worker Celery (inspect/heartbeat), versión desplegada (commit/fecha),
-  conteos de errores recientes si Sentry tiene DSN, tamaño de cola de PDFs.
-- Frontend: conectar SistemaPage; estados Operativo/Degradado/Caído calculados, no inventados.
-- Nota honesta: uptime histórico "99.98%" no lo tenemos — se muestra lo medible hoy
-  (checks en vivo + incidentes registrados a mano o desde auditoría), no números de adorno.
+- [x] `GET /api/v1/plataforma/sistema/` (`PlatformSystemPermission`: super_admin y
+      engineering; sales 403): ping cronometrado a PostgreSQL (`SELECT 1` con
+      `SET LOCAL statement_timeout=3s`) y Redis (timeout 2s, conexión de django-redis,
+      cero URLs hardcodeadas), ping al worker Celery (`control.ping` timeout 2s),
+      versión (commit de Railway/Django/Python/entorno) y cola de PDFs (conteos
+      reales de PdfJob en una sola query agregada). Checks aislados: un servicio
+      caído nunca tira el endpoint (responde 200 con down/degraded).
+      Lógica en `apps/plataforma/system_health.py`; 25 tests en `tests/test_sistema.py`.
+- [x] Seguridad (hallazgo ALTO de la auditoría de este ciclo, corregido): el
+      `detail` de un servicio caído es un mensaje genérico — el texto crudo de la
+      excepción (puede incluir hostname interno, puerto y usuario de BD) va SOLO
+      a logs del servidor. Test que lo blinda.
+- [x] Frontend: SistemaPage conectada (banner de estado global, cards por servicio
+      con latencia, cola de PDFs con alerta de fallidos, versión, refresco cada 30s);
+      eliminados el uptime inventado y los incidentes ficticios (ahora enlaza a Auditoría).
+- Seguimiento no bloqueante: cachear el snapshot 5-10s si crecen los usuarios del
+  panel; índice parcial para `PdfJob(status=failed, updated_at)` si crece la tabla;
+  paralelizar los pings si se agregan más checks.
 
 ### Fase 3 — Suscripciones y planes reales
 

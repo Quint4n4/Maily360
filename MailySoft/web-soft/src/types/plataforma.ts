@@ -145,6 +145,42 @@ export const ACCIONES_AUDITORIA: { value: string; label: string }[] = [
   { value: 'CONFIG_UPDATE',          label: 'Actualizar configuración de agenda' },
 ]
 
+/** Estado de salud de un servicio o del sistema completo. */
+export type SistemaEstado = 'operational' | 'degraded' | 'down'
+
+/** Un servicio monitoreado (PostgreSQL, Redis, worker Celery…). */
+export interface SistemaServicio {
+  key: string
+  label: string
+  status: SistemaEstado
+  latency_ms: number | null
+  detail: string | null
+}
+
+/** Versión desplegada del backend. */
+export interface SistemaVersion {
+  commit: string | null
+  django: string
+  python: string
+  environment: string
+}
+
+/** Estado de la cola de PDFs (Celery). */
+export interface SistemaPdfQueue {
+  pending: number
+  processing: number
+  failed_24h: number
+}
+
+/** Respuesta de GET /plataforma/sistema/ — salud del sistema (super_admin / engineering). */
+export interface SistemaSalud {
+  generated_at: string // ISO
+  overall_status: SistemaEstado
+  services: SistemaServicio[]
+  version: SistemaVersion
+  pdf_queue: SistemaPdfQueue
+}
+
 /** Ficha de detalle de una clínica. */
 export interface ClinicaDetail {
   id: string

@@ -10,7 +10,6 @@ from rest_framework import serializers
 
 from apps.tenancy.models import Tenant
 
-
 # ---------------------------------------------------------------------------
 # Output — Clínicas (listado)
 # ---------------------------------------------------------------------------
@@ -283,3 +282,50 @@ class AuditLogOutputSerializer(serializers.Serializer):
         if obj.tenant_id is None:
             return None
         return obj.tenant.name
+
+
+# ---------------------------------------------------------------------------
+# Output — Salud del sistema (Fase 2, cross-tenant)
+# ---------------------------------------------------------------------------
+
+
+class SystemServiceOutputSerializer(serializers.Serializer):
+    """Serializer de salida para el estado de un servicio individual (BD/Redis/Celery)."""
+
+    key = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    latency_ms = serializers.FloatField(read_only=True, allow_null=True)
+    detail = serializers.CharField(read_only=True, allow_null=True)
+
+
+class SystemVersionOutputSerializer(serializers.Serializer):
+    """Serializer de salida para el bloque de versión/commit/entorno."""
+
+    commit = serializers.CharField(read_only=True, allow_null=True)
+    django = serializers.CharField(read_only=True)
+    python = serializers.CharField(read_only=True)
+    environment = serializers.CharField(read_only=True)
+
+
+class SystemPdfQueueOutputSerializer(serializers.Serializer):
+    """Serializer de salida para los conteos de la cola de generación de PDFs."""
+
+    pending = serializers.IntegerField(read_only=True)
+    processing = serializers.IntegerField(read_only=True)
+    failed_24h = serializers.IntegerField(read_only=True)
+
+
+class SystemHealthOutputSerializer(serializers.Serializer):
+    """Serializer de salida para GET /api/v1/plataforma/sistema/.
+
+    Contrato fijado con el frontend (docs/design/plataforma-fases-plan.md,
+    Fase 2 — "Sistema" con salud real): NO modificar las llaves sin coordinar
+    el cambio con el frontend.
+    """
+
+    generated_at = serializers.DateTimeField(read_only=True)
+    overall_status = serializers.CharField(read_only=True)
+    services = SystemServiceOutputSerializer(many=True, read_only=True)
+    version = SystemVersionOutputSerializer(read_only=True)
+    pdf_queue = SystemPdfQueueOutputSerializer(read_only=True)

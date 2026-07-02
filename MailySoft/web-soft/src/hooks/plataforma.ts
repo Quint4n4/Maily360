@@ -5,6 +5,7 @@ import {
   createClinica,
   getClinicaDetail,
   getPlatformMetrics,
+  getPlatformSistema,
   listPlatformAuditoria,
   listPlatformClinicas,
   listPlatformStaff,
@@ -20,6 +21,7 @@ export const platKeys = {
   clinicaDetail: (id: string) => ['plataforma', 'clinica', id] as const,
   staff: (search: string) => ['plataforma', 'usuarios', search] as const,
   auditoria: (p: AuditoriaFiltros) => ['plataforma', 'auditoria', p] as const,
+  sistema: () => ['plataforma', 'sistema'] as const,
 }
 
 /** Métricas del dashboard de plataforma. */
@@ -61,6 +63,17 @@ export function useCreateClinica() {
   return useMutation({
     mutationFn: (input: ClinicaCreateInput) => createClinica(input),
     onSuccess: () => qc.invalidateQueries({ queryKey: platKeys.all }),
+  })
+}
+
+/** Salud del sistema (super_admin / engineering). Auto-refresca cada 30 s,
+ *  mismo patrón de polling que la campana de notificaciones. */
+export function usePlatformSistema() {
+  return useQuery({
+    queryKey: platKeys.sistema(),
+    queryFn: getPlatformSistema,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   })
 }
 

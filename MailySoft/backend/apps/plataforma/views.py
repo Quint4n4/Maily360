@@ -24,6 +24,7 @@ PERMISOS por endpoint:
   GET  /clinicas/<id>/     → PlatformClinicReadPermission  (super_admin, sales, engineering)
   POST /clinicas/<id>/estado/ → PlatformClinicWritePermission (super_admin, sales)
   GET  /auditoria/         → PlatformAuditPermission (super_admin, engineering)
+  GET  /sistema/           → PlatformSystemPermission (super_admin, engineering)
 """
 
 import uuid as _uuid_module
@@ -43,6 +44,7 @@ from apps.core.permissions import (
     PlatformClinicWritePermission,
     PlatformMetricsPermission,
     PlatformStaffListPermission,
+    PlatformSystemPermission,
 )
 from apps.core.tenant_context import set_request_context
 from apps.plataforma.selectors import (
@@ -62,10 +64,11 @@ from apps.plataforma.serializers import (
     ClinicaOutputSerializer,
     DashboardMetricsOutputSerializer,
     PlatformStaffOutputSerializer,
+    SystemHealthOutputSerializer,
 )
 from apps.plataforma.services import tenant_and_owner_create, tenant_set_status
+from apps.plataforma.system_health import system_health_get
 from apps.tenancy.models import Tenant
-
 
 # ---------------------------------------------------------------------------
 # Base view de plataforma
@@ -376,3 +379,26 @@ class PlatformAuditoriaListApi(PlatformAPIView):
 
         serializer = AuditLogOutputSerializer(qs, many=True)
         return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/plataforma/sistema/
+# ---------------------------------------------------------------------------
+
+
+class PlatformSistemaApi(PlatformAPIView):
+    """Salud real del sistema (BD/Redis/Celery/cola de PDFs), sin datos inventados.
+
+    GET → super_admin, engineering (PlatformSystemPermission). Sales queda fuera.
+
+    Cada check (apps.plataforma.system_health) está aislado con try/except:
+    la caída de un servicio individual nunca produce un 500, solo se refleja
+    en su status ("down") y en overall_status ("degraded"/"down").
+    """
+
+    permission_classes = [IsAuthenticated, PlatformSystemPermission]
+
+    def get(self, request: Request) -> Response:
+        """Devuelve el snapshot de salud del sistema (contrato fijo con el frontend)."""
+        health = system_health_get()
+        return Response(SystemHealthOutputSerializer(health).data)

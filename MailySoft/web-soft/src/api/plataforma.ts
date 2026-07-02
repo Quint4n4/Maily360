@@ -21,6 +21,7 @@ import type {
   DashboardMetrics,
   EstadoClinica,
   PlatformStaff,
+  SistemaSalud,
 } from '../types/plataforma'
 
 /** GET /plataforma/metricas/ — conteos globales para el dashboard. */
@@ -78,4 +79,9 @@ export async function listPlatformAuditoria(params: AuditoriaFiltros = {}): Prom
 /** GET /plataforma/clinicas/<id>/ — ficha de detalle de una clínica. */
 export async function getClinicaDetail(id: string): Promise<ClinicaDetail> {
   return request<ClinicaDetail>(`/plataforma/clinicas/${id}/`)
+}
+
+/** GET /plataforma/sistema/ — salud del sistema (super_admin / engineering; sales → 403). */
+export async function getPlatformSistema(): Promise<SistemaSalud> {
+  return request<SistemaSalud>('/plataforma/sistema/')
 }

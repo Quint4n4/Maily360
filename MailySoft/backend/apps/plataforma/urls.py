@@ -11,6 +11,7 @@ Rutas:
     plataforma/clinicas/<tenant_id>/estado/   POST PlatformClinicaEstadoApi  (super_admin, sales)
     plataforma/usuarios/                      GET  PlatformUsuariosListApi   (super_admin)
     plataforma/auditoria/                     GET  PlatformAuditoriaListApi  (super_admin, engineering)
+    plataforma/sistema/                       GET  PlatformSistemaApi        (super_admin, engineering)
 """
 
 from django.urls import path
@@ -21,6 +22,7 @@ from apps.plataforma.views import (
     PlatformClinicaEstadoApi,
     PlatformClinicasListApi,
     PlatformMetricasApi,
+    PlatformSistemaApi,
     PlatformUsuariosListApi,
 )
 
@@ -54,5 +56,10 @@ urlpatterns = [
         "plataforma/auditoria/",
         PlatformAuditoriaListApi.as_view(),
         name="platform-auditoria-list",
+    ),
+    path(
+        "plataforma/sistema/",
+        PlatformSistemaApi.as_view(),
+        name="platform-sistema",
     ),
 ]
