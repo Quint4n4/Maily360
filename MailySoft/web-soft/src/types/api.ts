@@ -39,6 +39,11 @@ export interface Me {
   avatar: string | null
   is_platform_staff: boolean
   platform_role: string
+  /**
+   * true si la contraseña es temporal y el backend exige cambiarla antes de
+   * usar la app (responde 403 password_change_required en endpoints de negocio).
+   */
+  must_change_password: boolean
   /** Si el usuario es médico, el id de su perfil Doctor en el tenant activo; null si no. */
   doctor_id: string | null
   active_tenant: TenantBrief | null
@@ -60,6 +65,8 @@ export interface RefreshResponse {
 /** Forma típica de un error de DRF. */
 export interface ApiErrorBody {
   detail?: string
+  /** Código de error de negocio (ej. 'password_change_required' en un 403). */
+  code?: string
   /** Errores por campo (validación). */
   [field: string]: string | string[] | undefined
 }

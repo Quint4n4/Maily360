@@ -23,6 +23,10 @@ import type {
   PlanFormInput,
   PlanPlataforma,
   PlatformStaff,
+  StaffCreateResult,
+  StaffFormInput,
+  StaffResetPasswordResult,
+  StaffUpdateInput,
   SistemaSalud,
   SuscripcionAsignarInput,
   SuscripcionRow,
@@ -60,6 +64,34 @@ export async function listPlatformStaff(params: { search?: string } = {}): Promi
   if (params.search) qs.set('search', params.search)
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
   return request<Paginated<PlatformStaff>>(`/plataforma/usuarios/${suffix}`)
+}
+
+/* ── Gestión del equipo interno (SOLO super_admin; el backend da 403 al resto) ── */
+
+/**
+ * POST /plataforma/usuarios/ — da de alta a un miembro del equipo Maily.
+ * La respuesta incluye temporary_password UNA sola vez (no se vuelve a mostrar).
+ */
+export async function createPlatformStaff(input: StaffFormInput): Promise<StaffCreateResult> {
+  return request<StaffCreateResult>('/plataforma/usuarios/', { method: 'POST', body: input })
+}
+
+/**
+ * PATCH /plataforma/usuarios/<user_id>/ — edita nombre/rol/activo de un miembro.
+ * 400 si intentas cambiar tu propio is_active o platform_role.
+ */
+export async function updatePlatformStaff(userId: string, body: StaffUpdateInput): Promise<PlatformStaff> {
+  return request<PlatformStaff>(`/plataforma/usuarios/${userId}/`, { method: 'PATCH', body })
+}
+
+/**
+ * POST /plataforma/usuarios/<user_id>/reset-password/ — genera una contraseña
+ * temporal nueva (mostrar UNA vez). 400 si el usuario está inactivo.
+ */
+export async function resetStaffPassword(userId: string): Promise<StaffResetPasswordResult> {
+  return request<StaffResetPasswordResult>(`/plataforma/usuarios/${userId}/reset-password/`, {
+    method: 'POST',
+  })
 }
 
 /** POST /plataforma/clinicas/ — da de alta una clínica nueva + su dueño. */

@@ -187,6 +187,10 @@ REST_FRAMEWORK: dict = {
         "user": env("DRF_THROTTLE_USER", default="300/minute"),
         # Límite estricto para login: protege contra fuerza bruta de credenciales.
         "auth_login": env("DRF_THROTTLE_LOGIN", default="5/minute"),
+        # Límite estricto para cambio/reset de contraseña (propio y de staff de
+        # plataforma): protege contra fuerza bruta sobre current_password y
+        # contra abuso del reset administrativo. Mismo criterio que auth_login.
+        "auth_password_change": env("DRF_THROTTLE_PASSWORD_CHANGE", default="10/minute"),
         # Límite anti-enumeración para el endpoint público de verificación de receta (F5).
         # 30 consultas/min por IP es suficiente para una farmacia real; bloquea scrapers.
         "prescription_verify": env("DRF_THROTTLE_VERIFY", default="30/minute"),
@@ -373,7 +377,10 @@ AUTH_USER_MODEL: str = "authn.User"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 10},
+    },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]

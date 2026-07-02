@@ -28,6 +28,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.text import slugify
@@ -41,7 +42,7 @@ from apps.clinica.services import seed_system_patient_categories
 from apps.core.permissions import _PLATFORM_ROLES_SUPER_ADMIN_ONLY
 from apps.core.tenant_context import clear_current_tenant, set_current_tenant
 from apps.personal.services import consultorio_create
-from apps.plataforma.selectors import plan_get
+from apps.plataforma.selectors import plan_get, platform_staff_get
 from apps.tenancy.models import Plan, Tenant, TenantSubscription
 from apps.tenancy.services import member_create
 
@@ -250,6 +251,12 @@ def tenant_and_owner_create(
                 password=password_temporal,
                 role="owner",
             )
+
+            # La contraseña es temporal (generada por plataforma): forzar cambio
+            # en el primer login. member_create no lo hace (se usa también para
+            # altas internas de la propia clínica, donde no aplica esta regla).
+            owner.user.must_change_password = True
+            owner.user.save(update_fields=["must_change_password"])
 
             # -----------------------------------------------------------------
             # Datos semilla: consultorio y tipos de cita por defecto.
@@ -764,3 +771,366 @@ def plan_update(*, actor: User, plan_id: uuid.UUID, **fields: Any) -> Plan:
     )
 
     return plan
+
+
+# ---------------------------------------------------------------------------
+# Equipo de plataforma — alta, edición y reseteo de contraseña (Fase 4)
+# ---------------------------------------------------------------------------
+
+# Campos editables por platform_staff_update (allowlist explícita). is_active
+# y platform_role SÍ están aquí a propósito (a diferencia de la regla general
+# "is_active nunca en un PATCH genérico"): este servicio VALIDA explícitamente
+# que el actor no se los cambie a sí mismo (ver _validar_no_auto_modificacion),
+# así que no hay "puerta trasera" — es la única vía de escritura y está
+# protegida por esa regla, no por omitir el campo del serializer.
+_STAFF_UPDATABLE_FIELDS: frozenset[str] = frozenset(
+    {"first_name", "last_name", "platform_role", "is_active"}
+)
+
+# Campos que el actor NUNCA puede cambiar sobre SÍ MISMO vía este endpoint
+# (evita que un super_admin se destituya o se bloquee y quede sin acceso).
+_STAFF_SELF_PROTECTED_FIELDS: frozenset[str] = frozenset({"platform_role", "is_active"})
+
+
+def _validar_actor_staff_write(actor: User) -> None:
+    """Revalida en el service que el actor sea super_admin (defensa en profundidad).
+
+    Espeja PlatformStaffWritePermission (apps/core/permissions.py), reutilizando
+    _PLATFORM_ROLES_SUPER_ADMIN_ONLY — mismo patrón que _validar_actor_plan_write.
+
+    Raises:
+        ValidationError: actor no es staff de plataforma o su platform_role
+            no es super_admin.
+    """
+    if not getattr(actor, "is_platform_staff", False):
+        raise ValidationError("Solo el staff de plataforma puede administrar cuentas del equipo.")
+    if getattr(actor, "platform_role", "") not in _PLATFORM_ROLES_SUPER_ADMIN_ONLY:
+        raise ValidationError(
+            f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
+            "no autorizado: solo super_admin administra el equipo de plataforma."
+        )
+
+
+def platform_staff_create(
+    *,
+    actor: User,
+    email: str,
+    first_name: str,
+    last_name: str,
+    platform_role: str,
+) -> dict[str, Any]:
+    """Crea un usuario nuevo del equipo interno de Maily con contraseña temporal.
+
+    Solo super_admin (revalidado aquí, defensa en profundidad). Reutiliza el
+    mismo generador criptográfico de contraseña temporal que
+    tenant_and_owner_create (_generar_password_temporal): 16 caracteres, nunca
+    persistida ni logueada, solo devuelta una vez en el dict de resultado.
+
+    El usuario queda con is_active=True, is_platform_staff=True y
+    must_change_password=True (Fase 4, D-2: debe cambiarla en su primer login).
+
+    Args:
+        actor:         Usuario de plataforma que da de alta (auditoría). Debe
+                       ser super_admin.
+        email:         Correo del nuevo miembro del equipo (único, será su login).
+        first_name:    Nombre(s).
+        last_name:     Apellidos.
+        platform_role: Rol de plataforma (super_admin | sales | engineering).
+
+    Returns:
+        Dict con:
+            - user (User): el usuario creado.
+            - temporary_password (str): contraseña a mostrar UNA VEZ.
+
+    Raises:
+        ValidationError: actor no autorizado, ya existe una cuenta de
+            PLATAFORMA con ese correo, rol inválido, o la contraseña
+            generada no pasa los validadores de Django (evento extremadamente
+            raro dado el alfabeto usado). Si el correo pertenece a un usuario
+            de CLÍNICA (no de plataforma), este pre-check NO lo detecta a
+            propósito (ver nota de seguridad abajo) — el INSERT fallará por
+            el UniqueConstraint de email a nivel User y la vista traduce ese
+            IntegrityError a un 400 con mensaje genérico.
+
+    SEGURIDAD (enumeración de correos): el pre-check de duplicado solo mira
+    is_platform_staff=True. Si se comprobara contra TODOS los usuarios
+    (incluyendo clínica), el mensaje de error revelaría a cualquier
+    super_admin si un correo arbitrario ya está registrado como cuenta de
+    clínica de otro tenant — una fuga de información cross-tenant. Al acotar
+    el pre-check a cuentas de plataforma, un correo de clínica pasa esta
+    validación y falla más abajo por el UniqueConstraint de email a nivel
+    User (capturado como IntegrityError en la vista, con mensaje genérico
+    que no confirma ni niega la existencia de la cuenta de clínica).
+    """
+    _validar_actor_staff_write(actor)
+
+    valid_roles = frozenset(choice[0] for choice in User.PlatformRole.choices)
+    if platform_role not in valid_roles:
+        raise ValidationError(f"Rol de plataforma inválido: '{platform_role}'.")
+
+    normalized_email = email.strip().lower()
+    if User.objects.filter(email=normalized_email, is_platform_staff=True).exists():
+        raise ValidationError("Ya existe una cuenta de plataforma con ese correo.")
+
+    password_temporal = _generar_password_temporal()
+
+    new_user = User(
+        email=normalized_email,
+        first_name=first_name.strip(),
+        last_name=last_name.strip(),
+        is_active=True,
+        is_staff=True,
+        is_platform_staff=True,
+        platform_role=platform_role,
+        must_change_password=True,
+    )
+    validate_password(password_temporal, user=new_user)
+
+    with transaction.atomic():
+        new_user.set_password(password_temporal)
+        new_user.save()
+
+    # Auditoría SIN la contraseña temporal (mismo patrón que tenant_and_owner_create).
+    audit_record(
+        action=ActionType.STAFF_CREATE,
+        resource_type="User",
+        actor=actor,
+        tenant=None,  # evento de plataforma, no de clínica
+        resource_id=new_user.id,
+        resource_repr=new_user.email,
+        description=(
+            f"Usuario de plataforma '{new_user.email}' creado con rol "
+            f"'{platform_role}' por {actor.email} ({getattr(actor, 'platform_role', '')})."
+        ),
+        actor_role=getattr(actor, "platform_role", ""),
+        metadata={"platform_role": platform_role},
+    )
+
+    logger.info(
+        "platform_staff_create: user=%s email=%s rol=%s por actor=%s",
+        new_user.id,
+        new_user.email,
+        platform_role,
+        actor.email,
+    )
+
+    return {"user": new_user, "temporary_password": password_temporal}
+
+
+def platform_staff_update(*, actor: User, user_id: uuid.UUID, **fields: Any) -> User:
+    """Actualiza un subconjunto de campos de un usuario del equipo de plataforma.
+
+    Solo super_admin (revalidado aquí, defensa en profundidad). 404 (vía
+    User.DoesNotExist, que la vista traduce) si el user no existe o no es
+    is_platform_staff=True — este endpoint NUNCA edita usuarios de clínica.
+
+    Regla anti-lockout: el actor NO puede cambiar su PROPIO platform_role ni
+    su propio is_active (evita que un super_admin se destituya o se bloquee a
+    sí mismo y quede sin acceso al panel). Sí puede editar su propio nombre.
+
+    Regla del último super_admin: si el TARGET (puede ser otro usuario, no
+    solo el propio actor) es un super_admin activo y el cambio lo
+    desactivaría o le quitaría el rol, se exige que quede al menos otro
+    super_admin activo en la plataforma. Complementa la regla anti-lockout
+    de arriba: esa protege al actor de bloquearse a sí mismo; esta protege a
+    la plataforma de quedarse sin NINGÚN super_admin si el actor va
+    degradando/desactivando a los demás uno por uno.
+
+    Args:
+        actor:    Usuario de plataforma que edita (auditoría). Debe ser super_admin.
+        user_id:  UUID del usuario de plataforma a actualizar.
+        **fields: subconjunto de {first_name, last_name, platform_role, is_active}.
+
+    Returns:
+        El User actualizado.
+
+    Raises:
+        ValidationError: actor no autorizado, campo desconocido, auto-modificación
+            de platform_role/is_active, platform_role con valor inválido, o el
+            cambio dejaría a la plataforma sin ningún super_admin activo.
+        User.DoesNotExist: no existe un usuario de plataforma con ese id (→ 404).
+    """
+    _validar_actor_staff_write(actor)
+
+    bad_unknown = set(fields) - _STAFF_UPDATABLE_FIELDS
+    if bad_unknown:
+        raise ValidationError(
+            f"Campos no reconocidos para actualizar un usuario de plataforma: "
+            f"{', '.join(sorted(bad_unknown))}."
+        )
+
+    target = platform_staff_get(user_id=user_id)  # DoesNotExist → 404 en la vista
+
+    if target.id == actor.id:
+        self_forbidden = set(fields) & _STAFF_SELF_PROTECTED_FIELDS
+        if self_forbidden:
+            raise ValidationError(
+                "No puedes cambiar tu propio rol de plataforma ni tu propio estado "
+                f"activo/inactivo: {', '.join(sorted(self_forbidden))}."
+            )
+
+    if "platform_role" in fields:
+        valid_roles = frozenset(choice[0] for choice in User.PlatformRole.choices)
+        if fields["platform_role"] not in valid_roles:
+            raise ValidationError(f"Rol de plataforma inválido: '{fields['platform_role']}'.")
+
+    # Regla del último super_admin: si el target es un super_admin ACTIVO y el
+    # cambio lo desactivaría (is_active=False) o le quitaría el rol
+    # (platform_role distinto de "super_admin"), debe quedar al menos otro
+    # super_admin activo. Sin esta regla, el propio anti-lockout de "no te
+    # puedes tocar a ti mismo" no evita que un super_admin degrade/desactive
+    # a TODOS los demás uno por uno y deje la plataforma sin nadie que pueda
+    # administrar el equipo.
+    target_es_super_admin_activo = (
+        target.platform_role == User.PlatformRole.SUPER_ADMIN and target.is_active
+    )
+    lo_desactiva = fields.get("is_active") is False
+    le_quita_el_rol = (
+        "platform_role" in fields and fields["platform_role"] != User.PlatformRole.SUPER_ADMIN
+    )
+    if target_es_super_admin_activo and (lo_desactiva or le_quita_el_rol):
+        queda_otro_super_admin_activo = (
+            User.objects.filter(
+                is_platform_staff=True,
+                platform_role=User.PlatformRole.SUPER_ADMIN,
+                is_active=True,
+            )
+            .exclude(id=target.id)
+            .exists()
+        )
+        if not queda_otro_super_admin_activo:
+            raise ValidationError(
+                "No puedes desactivar o degradar al último super administrador activo."
+            )
+
+    changed_fields = sorted(fields.keys())
+    old_role = target.platform_role
+
+    with transaction.atomic():
+        if "first_name" in fields:
+            target.first_name = fields["first_name"].strip()
+        if "last_name" in fields:
+            target.last_name = fields["last_name"].strip()
+        if "platform_role" in fields:
+            target.platform_role = fields["platform_role"]
+        if "is_active" in fields:
+            target.is_active = fields["is_active"]
+        # User (AbstractBaseUser) no tiene updated_at — a diferencia de los
+        # modelos de negocio (BaseModel), aquí update_fields es solo los
+        # campos realmente tocados.
+        target.save(update_fields=list(fields.keys()))
+
+    metadata: dict[str, Any] = {"cambios": changed_fields}
+    if "platform_role" in fields and fields["platform_role"] != old_role:
+        metadata["platform_role_old"] = old_role
+        metadata["platform_role_new"] = target.platform_role
+
+    audit_record(
+        action=ActionType.STAFF_UPDATE,
+        resource_type="User",
+        actor=actor,
+        tenant=None,
+        resource_id=target.id,
+        resource_repr=target.email,
+        description=(
+            f"Usuario de plataforma '{target.email}' actualizado por {actor.email} "
+            f"({getattr(actor, 'platform_role', '')}). Campos: {', '.join(changed_fields)}."
+        ),
+        actor_role=getattr(actor, "platform_role", ""),
+        metadata=metadata,
+    )
+
+    logger.info(
+        "platform_staff_update: user=%s email=%s campos=%s por actor=%s",
+        target.id,
+        target.email,
+        changed_fields,
+        actor.email,
+    )
+
+    return target
+
+
+def platform_staff_password_reset(*, actor: User, user_id: uuid.UUID) -> dict[str, Any]:
+    """Restablece la contraseña de un usuario de plataforma a una temporal nueva.
+
+    Solo super_admin. 404 si el usuario no existe o no es staff de plataforma.
+    400 si el usuario está inactivo (no tiene sentido resetear la contraseña de
+    una cuenta que no puede iniciar sesión).
+
+    Efectos:
+      - Contraseña reemplazada por una temporal nueva (16 chars, criptográfica).
+      - must_change_password=True (debe cambiarla en su próximo login).
+      - Invalida TODAS las refresh tokens vigentes del usuario (blacklist de
+        SimpleJWT — rest_framework_simplejwt.token_blacklist está instalado):
+        una contraseña reseteada por el equipo (ej. sospecha de credencial
+        filtrada) debe cerrar cualquier sesión activa, no solo bloquear logins
+        futuros. Si el usuario no tiene tokens emitidos (nunca hizo login, o ya
+        expiraron/fueron blacklisteados), OutstandingToken.objects.filter(...)
+        simplemente no itera nada — no es un error.
+
+    Args:
+        actor:   Usuario de plataforma que resetea (auditoría). Debe ser super_admin.
+        user_id: UUID del usuario de plataforma objetivo.
+
+    Returns:
+        Dict con:
+            - temporary_password (str): contraseña a mostrar UNA VEZ.
+
+    Raises:
+        ValidationError: actor no autorizado o el usuario objetivo está inactivo.
+        User.DoesNotExist: no existe un usuario de plataforma con ese id (→ 404).
+    """
+    _validar_actor_staff_write(actor)
+
+    target = platform_staff_get(user_id=user_id)  # DoesNotExist → 404 en la vista
+
+    if not target.is_active:
+        raise ValidationError("No se puede resetear la contraseña de un usuario inactivo.")
+
+    password_temporal = _generar_password_temporal()
+    # No se valida con validate_password aquí: mismo alfabeto criptográfico que
+    # platform_staff_create, que ya lo valida en el flujo de alta; regenerar la
+    # verificación en cada reset sería redundante sin aportar seguridad real.
+
+    with transaction.atomic():
+        target.set_password(password_temporal)
+        target.must_change_password = True
+        target.save(update_fields=["password", "must_change_password"])
+
+        # Invalidar sesiones activas: blacklistear todos los refresh tokens
+        # vigentes emitidos para este usuario. token_blacklist ya está en
+        # INSTALLED_APPS (config/settings/base.py) y ROTATE_REFRESH_TOKENS=True
+        # ya usa esta misma tabla en el flujo normal de refresh.
+        from rest_framework_simplejwt.token_blacklist.models import (
+            BlacklistedToken,
+            OutstandingToken,
+        )
+
+        outstanding = OutstandingToken.objects.filter(user=target)
+        for token in outstanding:
+            BlacklistedToken.objects.get_or_create(token=token)
+
+    audit_record(
+        action=ActionType.STAFF_PASSWORD_RESET,
+        resource_type="User",
+        actor=actor,
+        tenant=None,
+        resource_id=target.id,
+        resource_repr=target.email,
+        description=(
+            f"Contraseña de '{target.email}' restablecida por {actor.email} "
+            f"({getattr(actor, 'platform_role', '')}). Sesiones activas invalidadas."
+        ),
+        actor_role=getattr(actor, "platform_role", ""),
+        metadata={},
+    )
+
+    logger.info(
+        "platform_staff_password_reset: user=%s email=%s por actor=%s",
+        target.id,
+        target.email,
+        actor.email,
+    )
+
+    return {"temporary_password": password_temporal}

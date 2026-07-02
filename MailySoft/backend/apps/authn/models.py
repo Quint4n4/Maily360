@@ -74,6 +74,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         default="",
         help_text="Rol dentro del equipo de plataforma. Ignorado si is_platform_staff=False.",
     )
+    must_change_password = models.BooleanField(
+        default=False,
+        help_text=(
+            "True obliga a cambiar la contraseña en el próximo request de negocio "
+            "(POST /api/v1/auth/change-password/ la limpia). Se activa al recibir "
+            "una contraseña temporal: alta de clínica (dueño) o alta de staff de "
+            "plataforma. Los usuarios de seed la dejan explícitamente en False."
+        ),
+    )
     date_joined = models.DateTimeField(auto_now_add=True)
 
     objects = UserManager()

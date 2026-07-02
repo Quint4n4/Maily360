@@ -43,9 +43,47 @@ export interface PlatformStaff {
   id: string
   email: string
   full_name: string
+  first_name: string
+  last_name: string
   platform_role: PlatformRoleApi
   platform_role_display: string
   is_active: boolean
+}
+
+/** Rol asignable a un miembro del equipo (sin la variante vacía de lectura). */
+export type PlatformRoleAsignable = Exclude<PlatformRoleApi, ''>
+
+/** Cuerpo para dar de alta a un miembro del equipo (POST /plataforma/usuarios/). */
+export interface StaffFormInput {
+  email: string
+  first_name: string
+  last_name: string
+  platform_role: PlatformRoleAsignable
+}
+
+/**
+ * Cuerpo para editar a un miembro (PATCH /plataforma/usuarios/<user_id>/).
+ * Subconjunto: solo se mandan los campos que cambian. El backend responde 400
+ * si intentas cambiar tu PROPIO is_active o platform_role.
+ */
+export interface StaffUpdateInput {
+  first_name?: string
+  last_name?: string
+  platform_role?: PlatformRoleAsignable
+  is_active?: boolean
+}
+
+/**
+ * Resultado del alta de un miembro: incluye la contraseña temporal.
+ * Se muestra UNA sola vez; ninguna otra respuesta la vuelve a incluir.
+ */
+export interface StaffCreateResult extends PlatformStaff {
+  temporary_password: string
+}
+
+/** Respuesta de POST /plataforma/usuarios/<user_id>/reset-password/ (mostrar UNA vez). */
+export interface StaffResetPasswordResult {
+  temporary_password: string
 }
 
 /** Cuerpo para dar de alta una clínica nueva (POST /plataforma/clinicas/). */

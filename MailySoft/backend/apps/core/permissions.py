@@ -1151,3 +1151,24 @@ class PlatformPlanWritePermission(IsPlatformStaff):
             return True
         role: str = getattr(request.user, "platform_role", "")
         return role in _PLATFORM_ROLES_SUPER_ADMIN_ONLY
+
+
+class PlatformStaffWritePermission(IsPlatformStaff):
+    """Alta, edición y reseteo de contraseña del equipo de plataforma (Fase 4).
+
+    Solo super_admin: gestionar cuentas del propio equipo interno de Maily
+    (crear staff nuevo, cambiar su rol/estado, resetear su contraseña) es la
+    operación más privilegiada del panel — mismo criterio que
+    PlatformStaffListPermission (lectura) y PlatformPlanWritePermission
+    (mismo frozenset _PLATFORM_ROLES_SUPER_ADMIN_ONLY, reutilizado aquí).
+    """
+
+    message: str = "Solo super_admin puede administrar cuentas del equipo de plataforma."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        role: str = getattr(request.user, "platform_role", "")
+        return role in _PLATFORM_ROLES_SUPER_ADMIN_ONLY

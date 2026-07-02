@@ -10,7 +10,6 @@ Jerarquía de serializers para /me/:
 """
 
 import uuid
-from typing import Optional
 
 from rest_framework import serializers
 
@@ -77,6 +76,7 @@ class MeSerializer(serializers.Serializer):
     avatar = serializers.ImageField(read_only=True)
     is_platform_staff = serializers.BooleanField(read_only=True)
     platform_role = serializers.CharField(read_only=True)
+    must_change_password = serializers.BooleanField(read_only=True)
 
     # Tenant activo: puede ser null para platform staff sin membership
     active_tenant = serializers.SerializerMethodField()
@@ -89,23 +89,23 @@ class MeSerializer(serializers.Serializer):
     # Permite que el frontend sepa "qué Doctor soy yo" sin hacer otra llamada.
     doctor_id = serializers.SerializerMethodField()
 
-    def get_active_tenant(self, obj: User) -> Optional[dict]:
+    def get_active_tenant(self, obj: User) -> dict | None:
         """Retorna la representación del tenant activo o null."""
-        tenant: Optional[Tenant] = self.context.get("active_tenant")
+        tenant: Tenant | None = self.context.get("active_tenant")
         if tenant is None:
             return None
         return _TenantBriefSerializer(tenant).data  # type: ignore[return-value]
 
-    def get_active_role(self, obj: User) -> Optional[str]:
+    def get_active_role(self, obj: User) -> str | None:
         """Retorna el rol del usuario en el tenant activo o null."""
-        active_membership: Optional[TenantMembership] = self.context.get("active_membership")
+        active_membership: TenantMembership | None = self.context.get("active_membership")
         if active_membership is None:
             return None
         return active_membership.role
 
-    def get_active_role_display(self, obj: User) -> Optional[str]:
+    def get_active_role_display(self, obj: User) -> str | None:
         """Retorna la etiqueta legible del rol activo o null."""
-        active_membership: Optional[TenantMembership] = self.context.get("active_membership")
+        active_membership: TenantMembership | None = self.context.get("active_membership")
         if active_membership is None:
             return None
         return TenantMembership.Role(active_membership.role).label
@@ -115,14 +115,36 @@ class MeSerializer(serializers.Serializer):
         memberships: list[TenantMembership] = self.context.get("memberships", [])
         return _MembershipSerializer(memberships, many=True).data  # type: ignore[return-value]
 
-    def get_doctor_id(self, obj: User) -> Optional[str]:
+    def get_doctor_id(self, obj: User) -> str | None:
         """Retorna el UUID del Doctor del usuario si su rol activo es 'doctor'.
 
         El valor se inyecta desde el contexto por MeApi.get() para no duplicar
         lógica en el serializer. El serializer solo forma la salida.
         Devuelve el UUID como string para consistencia con el resto de la API.
         """
-        doctor_id: Optional[uuid.UUID] = self.context.get("doctor_id")
+        doctor_id: uuid.UUID | None = self.context.get("doctor_id")
         if doctor_id is None:
             return None
         return str(doctor_id)
+
+
+class PasswordChangeInputSerializer(serializers.Serializer):
+    """Input para POST /api/v1/auth/change-password/.
+
+    La validación de fortaleza de new_password (longitud, no común, no
+    numérica, no similar a los atributos del usuario) la corre el SERVICE
+    (password_change, vía validate_password de Django) porque necesita la
+    instancia de usuario — el serializer no la conoce hasta que la vista se
+    la pasa al servicio.
+    """
+
+    current_password = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+        help_text="Contraseña actual del usuario.",
+    )
+    new_password = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+        help_text="Contraseña nueva. Debe cumplir los validadores de Django.",
+    )

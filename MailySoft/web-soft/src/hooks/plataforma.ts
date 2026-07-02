@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createClinica,
   createPlatformPlan,
+  createPlatformStaff,
   getClinicaDetail,
   getPlatformMetrics,
   getPlatformSistema,
@@ -13,15 +14,19 @@ import {
   listPlatformPlanes,
   listPlatformStaff,
   listPlatformSuscripciones,
+  resetStaffPassword,
   setClinicaEstado,
   setClinicaSuscripcion,
   updatePlatformPlan,
+  updatePlatformStaff,
   type ListClinicasParams,
 } from '../api/plataforma'
 import type {
   AuditoriaFiltros,
   ClinicaCreateInput,
   PlanFormInput,
+  StaffFormInput,
+  StaffUpdateInput,
   SuscripcionAsignarInput,
   SuscripcionesFiltros,
 } from '../types/plataforma'
@@ -31,6 +36,8 @@ export const platKeys = {
   metrics: () => ['plataforma', 'metricas'] as const,
   clinicas: (p: ListClinicasParams) => ['plataforma', 'clinicas', p.search ?? '', p.status ?? ''] as const,
   clinicaDetail: (id: string) => ['plataforma', 'clinica', id] as const,
+  /** Prefijo de TODAS las listas de staff (para invalidar sin importar la búsqueda). */
+  staffAll: ['plataforma', 'usuarios'] as const,
   staff: (search: string) => ['plataforma', 'usuarios', search] as const,
   auditoria: (p: AuditoriaFiltros) => ['plataforma', 'auditoria', p] as const,
   sistema: () => ['plataforma', 'sistema'] as const,
@@ -78,6 +85,42 @@ export function useCreateClinica() {
   return useMutation({
     mutationFn: (input: ClinicaCreateInput) => createClinica(input),
     onSuccess: () => qc.invalidateQueries({ queryKey: platKeys.all }),
+  })
+}
+
+/** Alta de un miembro del equipo Maily (solo super_admin). Invalida la lista
+ *  de staff y las métricas (total_platform_staff del dashboard). */
+export function useCreateStaff() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: StaffFormInput) => createPlatformStaff(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: platKeys.staffAll })
+      qc.invalidateQueries({ queryKey: platKeys.metrics() })
+    },
+  })
+}
+
+/** Editar nombre/rol/activo de un miembro (solo super_admin). Invalida la lista. */
+export function useUpdateStaff() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, input }: { userId: string; input: StaffUpdateInput }) =>
+      updatePlatformStaff(userId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: platKeys.staffAll })
+      qc.invalidateQueries({ queryKey: platKeys.metrics() })
+    },
+  })
+}
+
+/** Restablecer la contraseña de un miembro (solo super_admin). La contraseña
+ *  temporal viene UNA sola vez en la respuesta. */
+export function useResetStaffPassword() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) => resetStaffPassword(userId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: platKeys.staffAll }),
   })
 }
 

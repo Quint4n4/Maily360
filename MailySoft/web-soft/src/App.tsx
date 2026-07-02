@@ -1,7 +1,8 @@
-import { lazy, Suspense, ReactElement } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense, ReactElement, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { RequireAuth } from './auth/RequireAuth'
+import { onPasswordChangeRequired } from './lib/http'
 import { RoleProvider, useRole } from './auth/RoleContext'
 import { Modulo, accesoModulo, inicioDeRol, puedeAccederConsultorio } from './auth/permisos'
 import { PlatformRoleProvider, usePlatformRole } from './platform/PlatformRoleContext'
@@ -15,6 +16,7 @@ import LuzRecordatorios from './components/agenda/LuzRecordatorios'
 // hasta que se visita esa ruta.
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const VerificarRecetaPage = lazy(() => import('./pages/VerificarRecetaPage'))
+const CambiarContrasenaPage = lazy(() => import('./pages/CambiarContrasenaPage'))
 const AgendaPage = lazy(() => import('./pages/AgendaPage'))
 const ContactosPage = lazy(() => import('./pages/ContactosPage'))
 const PersonalPage = lazy(() => import('./pages/PersonalPage'))
@@ -81,6 +83,26 @@ function PlatformRoute({ modulo, children }: { modulo: PlatModulo; children: Rea
   )
 }
 
+/* Vigilante del 403 password_change_required: si el backend bloquea un endpoint
+   de negocio porque la contraseña es temporal (p. ej. must_change_password cambió
+   a media sesión tras un reset), navega a la pantalla de cambio. Se suscribe al
+   cliente http central (que no conoce React) con el mismo patrón que
+   tokenStore.onAccessTokenChange. */
+function VigilanteCambioPassword() {
+  const navigate = useNavigate()
+  const { reloadMe } = useAuth()
+
+  useEffect(() => {
+    return onPasswordChangeRequired(() => {
+      // Sincroniza /me/ (must_change_password) — /me/ sí funciona en este estado.
+      void reloadMe().catch(() => {})
+      navigate('/cambiar-contrasena', { replace: true })
+    })
+  }, [navigate, reloadMe])
+
+  return null
+}
+
 /* Fallback mientras carga el chunk de una página (code-splitting). */
 function PantallaCargando() {
   return (
@@ -111,6 +133,10 @@ export default function App() {
             {/* Verificación pública de receta (QR) — SIN login, fuera de RequireAuth */}
             <Route path="/verificar-receta/:id" element={<VerificarRecetaPage />} />
 
+            {/* Cambio de contraseña (forzado si es temporal) — sesión sí, rol no.
+                Aplica a clínica Y plataforma; sin navegación de la app. */}
+            <Route path="/cambiar-contrasena" element={<RequireAuth><CambiarContrasenaPage /></RequireAuth>} />
+
             {/* ── App de la clínica (sesión real) ── */}
             <Route path="/agenda"    element={<ClinicRoute modulo="agenda"><AgendaPage /></ClinicRoute>} />
             <Route path="/contactos" element={<ClinicRoute modulo="contactos"><ContactosPage /></ClinicRoute>} />
@@ -133,6 +159,8 @@ export default function App() {
           </Routes>
           </Suspense>
 
+          {/* Vigilante global: 403 password_change_required → /cambiar-contrasena */}
+          <VigilanteCambioPassword />
           {/* Vigilante global: alerta cuando una cita de hoy se queda atrás de su estado */}
           <AlertaCitas />
           {/* Luz amarilla global: recordatorios de hoy ya vencidos y pendientes */}

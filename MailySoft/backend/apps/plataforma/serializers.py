@@ -9,6 +9,7 @@ from typing import Any
 
 from rest_framework import serializers
 
+from apps.authn.models import User
 from apps.tenancy.models import Tenant
 
 # ---------------------------------------------------------------------------
@@ -86,21 +87,111 @@ class ClinicaEstadoInputSerializer(serializers.Serializer):
 
 
 class PlatformStaffOutputSerializer(serializers.Serializer):
-    """Serializer de salida para un usuario del equipo de plataforma."""
+    """Serializer de salida para un usuario del equipo de plataforma.
+
+    Contrato fijo con el frontend (Fase 4): incluye first_name/last_name
+    (además de full_name, que ya se consumía) para que el formulario de
+    edición pueda precargar los campos por separado.
+    """
 
     id = serializers.UUIDField(read_only=True)
     email = serializers.EmailField(read_only=True)
     full_name = serializers.CharField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
     platform_role = serializers.CharField(read_only=True)
     platform_role_display = serializers.SerializerMethodField()
     is_active = serializers.BooleanField(read_only=True)
 
     def get_platform_role_display(self, obj: Any) -> str:
         """Devuelve el label legible del platform_role."""
-        from apps.authn.models import User
-
         role_val: str = getattr(obj, "platform_role", "")
         return dict(User.PlatformRole.choices).get(role_val, role_val)
+
+
+# ---------------------------------------------------------------------------
+# Input/Output — Equipo de plataforma: alta, edición, reseteo (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+class StaffCreateInputSerializer(serializers.Serializer):
+    """Input para POST /api/v1/plataforma/usuarios/."""
+
+    email = serializers.EmailField(help_text="Correo del nuevo miembro del equipo (será su login).")
+    first_name = serializers.CharField(max_length=150, help_text="Nombre(s).")
+    last_name = serializers.CharField(max_length=150, help_text="Apellidos.")
+    platform_role = serializers.ChoiceField(
+        choices=[
+            ("super_admin", "Súper Admin"),
+            ("sales", "Ventas / Éxito de Cliente"),
+            ("engineering", "Ingeniería"),
+        ],
+        help_text="Rol dentro del equipo de plataforma.",
+    )
+
+    def validate_first_name(self, value: str) -> str:
+        return value.strip()
+
+    def validate_last_name(self, value: str) -> str:
+        return value.strip()
+
+
+class StaffCreateOutputSerializer(serializers.Serializer):
+    """Salida para POST /api/v1/plataforma/usuarios/.
+
+    SEGURIDAD: temporary_password SOLO se devuelve en esta respuesta. Mismo
+    patrón que ClinicaCreateOutputSerializer (alta de clínica): el frontend
+    debe mostrarla exactamente una vez y no persistirla.
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    email = serializers.EmailField(read_only=True)
+    full_name = serializers.CharField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    platform_role = serializers.CharField(read_only=True)
+    platform_role_display = serializers.SerializerMethodField()
+    is_active = serializers.BooleanField(read_only=True)
+    temporary_password = serializers.CharField(read_only=True)
+
+    def get_platform_role_display(self, obj: Any) -> str:
+        """Devuelve el label legible del platform_role."""
+        role_val: str = getattr(obj, "platform_role", "")
+        return dict(User.PlatformRole.choices).get(role_val, role_val)
+
+
+class StaffUpdateInputSerializer(serializers.Serializer):
+    """Input para PATCH /api/v1/plataforma/usuarios/<user_id>/.
+
+    Todos los campos son opcionales (PATCH parcial). La regla de "no puedes
+    cambiar tu propio platform_role/is_active" la valida el SERVICIO
+    (platform_staff_update), no este serializer — el serializer no conoce
+    quién es el actor.
+    """
+
+    first_name = serializers.CharField(max_length=150, required=False)
+    last_name = serializers.CharField(max_length=150, required=False)
+    platform_role = serializers.ChoiceField(
+        choices=[
+            ("super_admin", "Súper Admin"),
+            ("sales", "Ventas / Éxito de Cliente"),
+            ("engineering", "Ingeniería"),
+        ],
+        required=False,
+    )
+    is_active = serializers.BooleanField(required=False)
+
+    def validate_first_name(self, value: str) -> str:
+        return value.strip()
+
+    def validate_last_name(self, value: str) -> str:
+        return value.strip()
+
+
+class StaffPasswordResetOutputSerializer(serializers.Serializer):
+    """Salida para POST /api/v1/plataforma/usuarios/<user_id>/reset-password/."""
+
+    temporary_password = serializers.CharField(read_only=True)
 
 
 # ---------------------------------------------------------------------------

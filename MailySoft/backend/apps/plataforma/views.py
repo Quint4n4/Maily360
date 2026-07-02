@@ -25,6 +25,10 @@ PERMISOS por endpoint:
   POST /clinicas/<id>/estado/ → PlatformClinicWritePermission (super_admin, sales)
   GET  /auditoria/         → PlatformAuditPermission (super_admin, engineering)
   GET  /sistema/           → PlatformSystemPermission (super_admin, engineering)
+  GET  /usuarios/          → PlatformStaffListPermission  (super_admin)
+  POST /usuarios/          → PlatformStaffWritePermission (super_admin)
+  PATCH /usuarios/<id>/    → PlatformStaffWritePermission (super_admin)
+  POST /usuarios/<id>/reset-password/ → PlatformStaffWritePermission (super_admin)
 """
 
 import uuid as _uuid_module
@@ -36,8 +40,10 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from apps.authn.models import User as PlatformUser
 from apps.core.permissions import (
     PlatformAuditPermission,
     PlatformClinicReadPermission,
@@ -45,10 +51,12 @@ from apps.core.permissions import (
     PlatformMetricsPermission,
     PlatformPlanWritePermission,
     PlatformStaffListPermission,
+    PlatformStaffWritePermission,
     PlatformSubscriptionPermission,
     PlatformSystemPermission,
 )
 from apps.core.tenant_context import set_request_context
+from apps.core.views import enforce_password_change
 from apps.plataforma.selectors import (
     plan_get,
     platform_audit_log_list,
@@ -56,6 +64,7 @@ from apps.plataforma.selectors import (
     platform_clinicas_list,
     platform_dashboard_metrics,
     platform_plan_list,
+    platform_staff_get,
     platform_staff_list,
     platform_subscription_row_build,
     platform_subscriptions_list,
@@ -74,6 +83,10 @@ from apps.plataforma.serializers import (
     PlanOutputSerializer,
     PlanUpdateInputSerializer,
     PlatformStaffOutputSerializer,
+    StaffCreateInputSerializer,
+    StaffCreateOutputSerializer,
+    StaffPasswordResetOutputSerializer,
+    StaffUpdateInputSerializer,
     SubscripcionesQueryInputSerializer,
     SubscripcionesResumenOutputSerializer,
     SubscriptionRowOutputSerializer,
@@ -83,6 +96,9 @@ from apps.plataforma.serializers import (
 from apps.plataforma.services import (
     plan_create,
     plan_update,
+    platform_staff_create,
+    platform_staff_password_reset,
+    platform_staff_update,
     tenant_and_owner_create,
     tenant_set_status,
     tenant_subscription_set,
@@ -118,8 +134,18 @@ class PlatformAPIView(APIView):
         No resuelve tenant ni setea GUC. El contexto de request se necesita
         para que audit_record() capture ip/user_agent/request_id sin acoplar
         los services a HTTP.
+
+        Candado de contraseña temporal (Fase 4): se evalúa DESPUÉS de
+        super().initial() porque ahí es donde DRF corre perform_authentication()
+        y puebla request.user con el usuario real del JWT (antes de eso sería
+        AnonymousUser). Un usuario de plataforma con must_change_password=True
+        no puede operar ningún endpoint del panel hasta cambiarla — mismo
+        criterio que TenantAPIView (apps/core/views.py), duplicado aquí porque
+        PlatformAPIView hereda de APIView directo, no de TenantAPIView.
         """
         super().initial(request, *args, **kwargs)
+        if getattr(request.user, "is_authenticated", False):
+            enforce_password_change(request)
         # Poblar contexto de auditoría sin tocar el contexto de tenant.
         x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
         ip: str = (
@@ -333,12 +359,25 @@ class PlatformClinicaEstadoApi(PlatformAPIView):
 
 
 class PlatformUsuariosListApi(PlatformAPIView):
-    """Listado de usuarios del equipo de plataforma.
+    """Listado de usuarios del equipo de plataforma y alta de staff nuevo.
 
-    GET → solo super_admin.
+    GET  → solo super_admin  (PlatformStaffListPermission).
+    POST → solo super_admin  (PlatformStaffWritePermission).
+
+    Mismo patrón que PlatformClinicasListApi: permiso resuelto por método vía
+    get_permissions() (ambos son "solo super_admin", pero permisos separados
+    a propósito — un futuro cambio en la lectura no debe relajar sin querer
+    la escritura, mismo criterio documentado en PlatformClinicWritePermission).
     """
 
-    permission_classes = [IsAuthenticated, PlatformStaffListPermission]
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self) -> list:
+        """Devuelve la lista de permisos según el método HTTP."""
+        if self.request.method == "POST":
+            return [IsAuthenticated(), PlatformStaffWritePermission()]
+        # GET, HEAD, OPTIONS
+        return [IsAuthenticated(), PlatformStaffListPermission()]
 
     def get(self, request: Request) -> Response:
         """Lista todos los usuarios con is_platform_staff=True."""
@@ -354,6 +393,157 @@ class PlatformUsuariosListApi(PlatformAPIView):
 
         serializer = PlatformStaffOutputSerializer(qs, many=True)
         return Response(serializer.data)
+
+    def post(self, request: Request) -> Response:
+        """Crea un usuario nuevo del equipo de plataforma con contraseña temporal.
+
+        SEGURIDAD: devuelve la contraseña temporal en la respuesta. El
+        frontend DEBE mostrarla exactamente una vez (mismo patrón que el alta
+        de clínica).
+
+        SEGURIDAD (anti-enumeración): el pre-check de platform_staff_create()
+        solo detecta correos YA registrados como cuenta de plataforma (mensaje
+        específico "Ya existe una cuenta de plataforma..."). Si el correo
+        pertenece a un usuario de CLÍNICA, el pre-check lo deja pasar y el
+        INSERT falla por el UniqueConstraint de email a nivel User —eso llega
+        aquí como IntegrityError. En ese caso respondemos con un mensaje
+        GENÉRICO que no confirma ni niega que la cuenta exista, para no
+        filtrar (a un super_admin del panel de plataforma) que un correo
+        arbitrario ya está en uso por una clínica de otro tenant.
+        """
+        s = StaffCreateInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        data = s.validated_data
+
+        try:
+            resultado = platform_staff_create(
+                actor=request.user,  # type: ignore[arg-type]
+                email=data["email"],
+                first_name=data["first_name"],
+                last_name=data["last_name"],
+                platform_role=data["platform_role"],
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+        except IntegrityError as exc:
+            # UniqueConstraint de email a nivel User: puede ser una carrera
+            # (check-then-act) sobre un correo de plataforma, o un correo que
+            # ya pertenece a un usuario de CLÍNICA (el pre-check de
+            # platform_staff_create no lo detecta a propósito — ver docstring
+            # arriba). Mensaje genérico en ambos casos: no revela cuál fue.
+            raise serializers.ValidationError(
+                "No se pudo crear la cuenta con ese correo. Verifica el dato o usa otro."
+            ) from exc
+
+        new_user = resultado["user"]
+        output = {
+            "id": new_user.id,
+            "email": new_user.email,
+            "full_name": new_user.full_name,
+            "first_name": new_user.first_name,
+            "last_name": new_user.last_name,
+            "platform_role": new_user.platform_role,
+            "is_active": new_user.is_active,
+            "temporary_password": resultado["temporary_password"],
+        }
+
+        # MEDIO-1 (mismo criterio que el alta de clínica): la respuesta
+        # contiene la contraseña temporal de primer acceso — no cachear.
+        response = Response(
+            StaffCreateOutputSerializer(output).data,
+            status=status.HTTP_201_CREATED,
+        )
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        response["Pragma"] = "no-cache"
+        return response
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/v1/plataforma/usuarios/<user_id>/
+# ---------------------------------------------------------------------------
+
+
+class PlatformStaffDetailApi(PlatformAPIView):
+    """Edición de un usuario existente del equipo de plataforma (Fase 4).
+
+    PATCH → solo super_admin (PlatformStaffWritePermission).
+    """
+
+    permission_classes = [IsAuthenticated, PlatformStaffWritePermission]
+
+    def patch(self, request: Request, user_id: _uuid_module.UUID) -> Response:
+        """Actualiza un subconjunto de campos del usuario de plataforma indicado."""
+        try:
+            platform_staff_get(user_id=user_id)
+        except PlatformUser.DoesNotExist:
+            return Response(
+                {"detail": "Usuario de plataforma no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        s = StaffUpdateInputSerializer(data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+
+        try:
+            updated = platform_staff_update(
+                actor=request.user,  # type: ignore[arg-type]
+                user_id=user_id,
+                **s.validated_data,
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+
+        return Response(PlatformStaffOutputSerializer(updated).data)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/plataforma/usuarios/<user_id>/reset-password/
+# ---------------------------------------------------------------------------
+
+
+class PlatformStaffPasswordResetApi(PlatformAPIView):
+    """Restablece la contraseña de un usuario del equipo de plataforma (Fase 4).
+
+    POST (sin body) → solo super_admin (PlatformStaffWritePermission).
+
+    Throttle dedicado (auth_password_change, 10/min) — mismo scope que
+    PasswordChangeApi (apps/authn/views.py): frena el abuso del reset
+    administrativo de contraseñas.
+    """
+
+    permission_classes = [IsAuthenticated, PlatformStaffWritePermission]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_password_change"
+
+    def post(self, request: Request, user_id: _uuid_module.UUID) -> Response:
+        """Genera y asigna una contraseña temporal nueva para el usuario indicado.
+
+        SEGURIDAD: devuelve la contraseña temporal en la respuesta. El
+        frontend DEBE mostrarla exactamente una vez.
+        """
+        try:
+            platform_staff_get(user_id=user_id)
+        except PlatformUser.DoesNotExist:
+            return Response(
+                {"detail": "Usuario de plataforma no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            resultado = platform_staff_password_reset(
+                actor=request.user,  # type: ignore[arg-type]
+                user_id=user_id,
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+
+        response = Response(
+            StaffPasswordResetOutputSerializer(resultado).data,
+            status=status.HTTP_200_OK,
+        )
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        response["Pragma"] = "no-cache"
+        return response
 
 
 # ---------------------------------------------------------------------------

@@ -61,6 +61,28 @@ export interface RequestOptions {
   skipAuthRefresh?: boolean
 }
 
+/* ── Contraseña temporal (403 password_change_required) ─────────────────────
+   Mientras el usuario tenga una contraseña temporal, el backend responde 403
+   con {"code": "password_change_required"} en los endpoints de negocio (solo
+   me/refresh/logout/change-password funcionan). Este módulo no conoce React,
+   así que — mismo patrón que tokenStore.onAccessTokenChange — expone una
+   suscripción para que la capa de UI navegue a /cambiar-contrasena. */
+
+const passwordChangeListeners = new Set<() => void>()
+
+/** Suscríbete al 403 password_change_required. Devuelve la función para cancelar. */
+export function onPasswordChangeRequired(listener: () => void): () => void {
+  passwordChangeListeners.add(listener)
+  return () => passwordChangeListeners.delete(listener)
+}
+
+/** Notifica a la UI si el error es el 403 de contraseña temporal pendiente. */
+function notifyIfPasswordChangeRequired(status: number, body: ApiErrorBody | null): void {
+  if (status === 403 && body?.code === 'password_change_required') {
+    for (const listener of passwordChangeListeners) listener()
+  }
+}
+
 /** Promesa de refresh compartida: si varias peticiones dan 401 a la vez, refrescamos UNA sola vez. */
 let refreshInFlight: Promise<boolean> | null = null
 
@@ -186,6 +208,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   if (!response.ok) {
     const errorBody = (parsed && typeof parsed === 'object' ? parsed : null) as ApiErrorBody | null
+    notifyIfPasswordChangeRequired(response.status, errorBody)
     throw new ApiError(response.status, errorBody)
   }
 
@@ -211,6 +234,7 @@ export async function requestBlob(path: string, options: RequestOptions = {}): P
     // El error puede venir como JSON ({detail}) o como texto plano; reusamos parseBody.
     const parsed = await parseBody(response)
     const errorBody = (parsed && typeof parsed === 'object' ? parsed : null) as ApiErrorBody | null
+    notifyIfPasswordChangeRequired(response.status, errorBody)
     throw new ApiError(response.status, errorBody)
   }
 

@@ -37,9 +37,17 @@ class Command(BaseCommand):
 
         user, _created = user_model.objects.get_or_create(
             email=E2E_EMAIL,
-            defaults={"first_name": "E2E", "last_name": "Test", "is_active": True},
+            defaults={
+                "first_name": "E2E",
+                "last_name": "Test",
+                "is_active": True,
+                "must_change_password": False,
+            },
         )
         user.is_active = True
+        # False explícito: si no, el flujo de login de Playwright chocaría con
+        # el enforcement de "cambio de contraseña obligatorio" (ver apps/core/views.py).
+        user.must_change_password = False
         user.set_password(E2E_PASSWORD)  # siempre, para garantizar la contraseña conocida
         user.save()
 
@@ -51,7 +59,6 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Usuario E2E listo: {E2E_EMAIL} / {E2E_PASSWORD} "
-                f"(owner en {E2E_TENANT_SLUG})."
+                f"Usuario E2E listo: {E2E_EMAIL} / {E2E_PASSWORD} " f"(owner en {E2E_TENANT_SLUG})."
             )
         )

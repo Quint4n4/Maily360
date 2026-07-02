@@ -48,11 +48,13 @@ Registrados en apps/authn/urls.py:
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
+from rest_framework import serializers as drf_serializers
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -65,7 +67,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.authn.models import User
 from apps.authn.selectors import user_active_memberships
-from apps.authn.serializers import MeSerializer
+from apps.authn.serializers import MeSerializer, PasswordChangeInputSerializer
+from apps.authn.services import password_change
 from apps.core.tenant_context import resolve_membership_for_user, resolve_tenant_for_user
 from apps.tenancy.models import Tenant, TenantMembership
 
@@ -178,7 +181,11 @@ class MailyTokenObtainPairView(TokenObtainPairView):
 
             # Poblar contexto HTTP para que audit_record lea ip/user_agent.
             x_forwarded: str = request.META.get("HTTP_X_FORWARDED_FOR", "")
-            ip: str = x_forwarded.split(",")[0].strip() if x_forwarded else request.META.get("REMOTE_ADDR", "")
+            ip: str = (
+                x_forwarded.split(",")[0].strip()
+                if x_forwarded
+                else request.META.get("REMOTE_ADDR", "")
+            )
             user_agent: str = request.META.get("HTTP_USER_AGENT", "")[:512]
             raw_request_id: str = request.META.get("HTTP_X_REQUEST_ID", "")
             import uuid as _uuid
@@ -202,8 +209,8 @@ class MailyTokenObtainPairView(TokenObtainPairView):
                 return
 
             # Resolver tenant para el usuario autenticado.
-            membership: Optional[TenantMembership] = resolve_membership_for_user(user)
-            tenant: Optional[Tenant] = membership.tenant if membership is not None else None
+            membership: TenantMembership | None = resolve_membership_for_user(user)
+            tenant: Tenant | None = membership.tenant if membership is not None else None
             actor_role: str = membership.role if membership is not None else ""
 
             audit_record(
@@ -246,7 +253,7 @@ class CookieTokenRefreshView(TokenRefreshView):
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Lee la cookie de refresh, rota si aplica, devuelve {access}."""
-        refresh_token: Optional[str] = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE)
+        refresh_token: str | None = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE)
 
         if not refresh_token:
             return Response(
@@ -264,7 +271,7 @@ class CookieTokenRefreshView(TokenRefreshView):
         if response.status_code == 200:
             # Si SimpleJWT rotó el refresh token, sacarlo del body y mandarlo
             # a la cookie. ROTATE_REFRESH_TOKENS=True en base.py.
-            new_refresh: Optional[str] = response.data.pop("refresh", None)  # type: ignore[union-attr]
+            new_refresh: str | None = response.data.pop("refresh", None)  # type: ignore[union-attr]
             if new_refresh:
                 _set_refresh_cookie(response, new_refresh)
 
@@ -298,7 +305,7 @@ class LogoutView(APIView):
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Invalida el refresh token y elimina la cookie de sesión."""
-        refresh_token: Optional[str] = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE)
+        refresh_token: str | None = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE)
 
         if refresh_token:
             try:
@@ -334,7 +341,9 @@ class LogoutView(APIView):
                 actor_role=membership.role if membership is not None else "",
             )
         except Exception as exc:  # noqa: BLE001
-            logger.error("LogoutView._audit_logout: error al auditar LOGOUT — %s", exc, exc_info=True)
+            logger.error(
+                "LogoutView._audit_logout: error al auditar LOGOUT — %s", exc, exc_info=True
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -362,14 +371,14 @@ class MeApi(APIView):
         user: User = request.user  # type: ignore[assignment]
 
         # 1. Resolver el tenant activo del usuario.
-        active_tenant: Optional[Tenant] = resolve_tenant_for_user(user)
+        active_tenant: Tenant | None = resolve_tenant_for_user(user)
 
         # 2. Obtener todas las membresías activas del usuario (con select_related).
         memberships_qs = user_active_memberships(user=user)
         memberships: list[TenantMembership] = list(memberships_qs)
 
         # 3. Localizar la membership que corresponde al tenant activo.
-        active_membership: Optional[TenantMembership] = None
+        active_membership: TenantMembership | None = None
         if active_tenant is not None:
             for m in memberships:
                 if m.tenant_id == active_tenant.id:
@@ -380,7 +389,8 @@ class MeApi(APIView):
         #    Solo se incluye si el usuario tiene rol 'doctor' en el tenant activo.
         #    Para cualquier otro rol (owner, admin, reception, nurse…) será None.
         import uuid as _uuid_mod
-        doctor_id: Optional[_uuid_mod.UUID] = None
+
+        doctor_id: _uuid_mod.UUID | None = None
         if (
             active_tenant is not None
             and active_membership is not None
@@ -401,3 +411,67 @@ class MeApi(APIView):
             },
         )
         return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# 5. Cambio de contraseña (voluntario o forzado por must_change_password)
+# ---------------------------------------------------------------------------
+
+
+class PasswordChangeApi(APIView):
+    """POST /api/v1/auth/change-password/ — cambia la contraseña del usuario autenticado.
+
+    Aplica tanto al cambio voluntario como al flujo forzado por
+    must_change_password=True (contraseña temporal de alta de clínica o de
+    staff de plataforma — ver apps/plataforma/services.py).
+
+    EXENTA del candado "cambio de contraseña obligatorio" (apps.core.views.
+    enforce_password_change) por diseño: hereda de APIView directo, igual que
+    MeApi/LogoutView/CookieTokenRefreshView, NO de TenantAPIView ni
+    PlatformAPIView (los dos puntos donde vive el candado). Un usuario con
+    must_change_password=True DEBE poder llegar a este endpoint para
+    resolver su propio bloqueo.
+
+    Requiere Bearer token válido (IsAuthenticated) — mismo criterio que
+    LogoutView: si el access expiró, el frontend llama primero a /refresh/.
+
+    Throttle dedicado (auth_password_change, 10/min) — mismo criterio que el
+    login: frena fuerza bruta sobre current_password.
+
+    Rotación de sesión propia: el servicio password_change() blacklistea
+    TODOS los OutstandingToken del usuario (incluida la cookie de refresh
+    actual), así que tras un cambio exitoso esta vista emite un refresh
+    token NUEVO y lo deposita en la misma cookie httpOnly que usa el login
+    — si no, la sesión propia moriría silenciosamente en cuanto el access
+    token en memoria expirara (~15 min) y el frontend intentara refrescar
+    con el refresh ya blacklisteado.
+    IMPORTANTE: el reset por un admin (platform_staff_password_reset)
+    invalida TODO sin emitir sesión nueva (correcto: el admin no es quien
+    sigue operando esa cuenta); el cambio PROPIO, en cambio, rota la sesión
+    para no desloguear al usuario que acaba de autenticarse con su
+    contraseña actual.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_password_change"
+
+    def post(self, request: Request) -> Response:
+        """Valida la contraseña actual, aplica la nueva y rota la cookie de sesión."""
+        s = PasswordChangeInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        data = s.validated_data
+
+        try:
+            user = password_change(
+                user=request.user,  # type: ignore[arg-type]
+                current_password=data["current_password"],
+                new_password=data["new_password"],
+            )
+        except DjangoValidationError as exc:
+            raise drf_serializers.ValidationError(exc.messages) from exc
+
+        response = Response(status=status.HTTP_200_OK)
+        new_refresh = RefreshToken.for_user(user)
+        _set_refresh_cookie(response, str(new_refresh))
+        return response

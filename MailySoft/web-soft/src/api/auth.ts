@@ -49,6 +49,21 @@ export async function logout(): Promise<void> {
   await request<void>('/auth/logout/', { method: 'POST' })
 }
 
+export interface ChangePasswordInput {
+  current_password: string
+  new_password: string
+}
+
+/**
+ * POST /auth/change-password/ — cambia la contraseña del usuario autenticado.
+ * Al completarse, el backend deja must_change_password en false (hay que
+ * re-consultar /me/ para reflejarlo en el AuthContext). 400 si la actual es
+ * incorrecta o la nueva es débil (errores por campo de DRF).
+ */
+export async function changePassword(input: ChangePasswordInput): Promise<void> {
+  await request<void>('/auth/change-password/', { method: 'POST', body: input })
+}
+
 /**
  * Intenta restaurar la sesión al arrancar la app (fire-and-forget desde main.tsx).
  *

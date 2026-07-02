@@ -11,7 +11,6 @@ Se hereda de TenantAwareModel para tener all_objects, objects con TenantManager
 y los timestamps de BaseModel; el campo tenant se sobreescribe como nullable.
 """
 
-
 from django.conf import settings
 from django.db import models
 
@@ -140,10 +139,16 @@ class ActionType(models.TextChoices):
     PLAN_CREATE = "PLAN_CREATE", "Crear plan del catálogo"
     PLAN_UPDATE = "PLAN_UPDATE", "Actualizar plan del catálogo"
 
+    # Plataforma — Equipo de plataforma (Fase 4)
+    STAFF_CREATE = "STAFF_CREATE", "Crear usuario de plataforma"
+    STAFF_UPDATE = "STAFF_UPDATE", "Actualizar usuario de plataforma"
+    STAFF_PASSWORD_RESET = "STAFF_PASSWORD_RESET", "Restablecer contraseña de usuario de plataforma"
+
     # Autenticación
     LOGIN = "LOGIN", "Inicio de sesión"
     LOGOUT = "LOGOUT", "Cierre de sesión"
     LOGIN_FAILED = "LOGIN_FAILED", "Intento de sesión fallido"
+    PASSWORD_CHANGE = "PASSWORD_CHANGE", "Cambio de contraseña"
 
     # Mi Consultorio — configuración de la clínica (Fase B base)
     CLINIC_SETTINGS_UPDATE = "CLINIC_SETTINGS_UPDATE", "Actualizar configuración de clínica"

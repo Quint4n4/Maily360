@@ -77,9 +77,13 @@ class Command(BaseCommand):
         tenant = owner_membership.tenant
 
         # 3) Contraseña del dueño desde el entorno (no hardcodeada).
+        # must_change_password=False explícito: es un usuario demo/piloto con
+        # contraseña conocida y documentada, NO una contraseña temporal generada
+        # por plataforma — forzar el cambio rompería el demo de Railway.
         owner.set_password(password)
         owner.is_active = True
-        owner.save(update_fields=["password", "is_active"])
+        owner.must_change_password = False
+        owner.save(update_fields=["password", "is_active", "must_change_password"])
         self.stdout.write("  · contraseña del dueño actualizada desde DEMO_OWNER_PASSWORD.")
 
         # 4) Usuario MÉDICO dedicado con cédula (para emitir recetas). El dueño
@@ -87,11 +91,17 @@ class Command(BaseCommand):
         #    médico es un usuario aparte con su propia membresía de rol doctor.
         doctor_user, _ = user_model.objects.get_or_create(
             email=_DOCTOR_EMAIL,
-            defaults={"first_name": "Doctora", "last_name": "Demo", "is_active": True},
+            defaults={
+                "first_name": "Doctora",
+                "last_name": "Demo",
+                "is_active": True,
+                "must_change_password": False,
+            },
         )
         doctor_user.is_active = True
+        doctor_user.must_change_password = False
         doctor_user.set_password(password)
-        doctor_user.save(update_fields=["password", "is_active"])
+        doctor_user.save(update_fields=["password", "is_active", "must_change_password"])
 
         doctor_membership, _ = TenantMembership.objects.get_or_create(
             user=doctor_user,
@@ -107,9 +117,7 @@ class Command(BaseCommand):
             doctor_membership.save(update_fields=["role", "is_active"])
 
         set_current_tenant(tenant)
-        doctor = Doctor.objects.filter(
-            tenant=tenant, membership=doctor_membership
-        ).first()
+        doctor = Doctor.objects.filter(tenant=tenant, membership=doctor_membership).first()
         if doctor is None:
             doctor_create(
                 tenant=tenant,

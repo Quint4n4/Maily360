@@ -41,13 +41,13 @@ Nota sobre platform staff sin membresía:
     plataforma opera vía el admin de Django, no vía la API de clínica.
 """
 
-from typing import Any, Optional
-
-from django.db import connection
-from rest_framework.request import Request
-from rest_framework.views import APIView
 
 import uuid as _uuid_module
+
+from django.db import connection
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.request import Request
+from rest_framework.views import APIView
 
 from apps.core.tenant_context import (
     resolve_membership_for_user,
@@ -55,6 +55,52 @@ from apps.core.tenant_context import (
     set_request_context,
     set_tenant_context_active,
 )
+
+# ---------------------------------------------------------------------------
+# Enforcement de "cambio de contraseña obligatorio" (Fase 4, plataforma).
+# ---------------------------------------------------------------------------
+#
+# DECISIÓN DE ARQUITECTURA: el candado vive en las DOS vistas base que
+# concentran TODO endpoint de negocio (TenantAPIView para clínica,
+# PlatformAPIView para el panel de plataforma — ver apps/plataforma/views.py).
+# Es el punto más central posible sin tocar cada vista una por una:
+#   - Toda vista de clínica hereda de TenantAPIView.
+#   - Toda vista de plataforma hereda de PlatformAPIView (que a su vez hereda
+#     de APIView, NO de TenantAPIView — por eso el check se duplica ahí, ver
+#     su propio initial()).
+# Los endpoints de authn (me/, login/, refresh/, logout/, change-password/)
+# heredan de APIView directo (no de TenantAPIView/PlatformAPIView) por diseño
+# — así quedan exentos SIN necesidad de una whitelist explícita de rutas: el
+# candado nunca se ejecuta para ellos porque no pasan por este código.
+#
+# Se corta en PermissionDenied (403) con un body de código estable
+# ("password_change_required") para que el frontend intercepte y redirija a
+# la pantalla de cambio de contraseña sin tener que parsear el mensaje humano.
+
+
+class PasswordChangeRequired(PermissionDenied):
+    """403 con código estable para el frontend: `must_change_password=True`."""
+
+    default_detail = "Debes cambiar tu contraseña temporal antes de continuar."
+    default_code = "password_change_required"
+
+    def __init__(self) -> None:
+        super().__init__(detail={"detail": self.default_detail, "code": self.default_code})
+
+
+def enforce_password_change(request: Request) -> None:
+    """Corta la request con 403 si el usuario autenticado tiene must_change_password=True.
+
+    Se llama desde TenantAPIView.check_permissions() y desde
+    PlatformAPIView.initial(), DESPUÉS de confirmar que el usuario está
+    autenticado (evita tocar request.user.must_change_password sobre un
+    AnonymousUser, que no tiene ese atributo).
+
+    Raises:
+        PasswordChangeRequired: si el usuario debe cambiar su contraseña.
+    """
+    if getattr(request.user, "must_change_password", False):
+        raise PasswordChangeRequired()
 
 
 class TenantAPIView(APIView):
@@ -91,6 +137,11 @@ class TenantAPIView(APIView):
             super().check_permissions(request)
             return
 
+        # Candado de contraseña temporal (Fase 4): corta ANTES de resolver la
+        # membresía. Un usuario con must_change_password=True no debe poder
+        # operar ningún endpoint de negocio de clínica hasta que la cambie.
+        enforce_password_change(request)
+
         # Resolver membresía para que HasClinicRole pueda leer request.active_role.
         membership = resolve_membership_for_user(request.user)
 
@@ -120,7 +171,11 @@ class TenantAPIView(APIView):
         # Poblar el contexto de request HTTP (ip/user_agent/request_id) en thread-local.
         # El helper audit_record() lo consume sin acoplar los services a HTTP.
         x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-        ip: str = x_forwarded.split(",")[0].strip() if x_forwarded else request.META.get("REMOTE_ADDR", "")
+        ip: str = (
+            x_forwarded.split(",")[0].strip()
+            if x_forwarded
+            else request.META.get("REMOTE_ADDR", "")
+        )
         user_agent: str = request.META.get("HTTP_USER_AGENT", "")[:512]
         raw_request_id: str = request.META.get("HTTP_X_REQUEST_ID", "")
         request_id: str = raw_request_id if raw_request_id else _uuid_module.uuid4().hex

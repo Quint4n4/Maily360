@@ -153,6 +153,27 @@ def platform_staff_list(*, search: str = "") -> "QuerySet[User]":
     return qs.order_by("email")
 
 
+def platform_staff_get(*, user_id: uuid.UUID) -> User:
+    """Obtiene un usuario del equipo de plataforma por id (Fase 4).
+
+    SOLO usuarios con is_platform_staff=True: un usuario de clínica (aunque
+    exista con ese id) debe verse como inexistente desde este endpoint —
+    el filtro is_platform_staff=True en la query, no una validación posterior,
+    es lo que garantiza que el caller reciba DoesNotExist y la vista devuelva
+    404 (nunca 403: no se revela si el id pertenece a un usuario de clínica).
+
+    Args:
+        user_id: UUID del usuario a buscar.
+
+    Returns:
+        La instancia User (is_platform_staff=True).
+
+    Raises:
+        User.DoesNotExist: si no existe, o si existe pero no es staff de plataforma.
+    """
+    return User.objects.get(id=user_id, is_platform_staff=True)
+
+
 def platform_clinica_detail(*, tenant_id: uuid.UUID) -> dict[str, Any]:
     """Ficha de detalle de una clínica para el panel interno de plataforma.
 

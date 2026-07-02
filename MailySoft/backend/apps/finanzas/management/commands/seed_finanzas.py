@@ -16,11 +16,12 @@ corre dos veces puede crear duplicados de pagos/cargos (datos demo, aceptable).
 import datetime
 import random
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
+from apps.authn.models import User
 from apps.core.tenant_context import (
     clear_current_tenant,
     set_current_tenant,
@@ -35,7 +36,6 @@ from apps.finanzas.services import (
     quote_accept,
     quote_create,
 )
-from apps.authn.models import User
 from apps.pacientes.models import Patient
 from apps.pacientes.services import patient_create
 from apps.tenancy.models import Tenant, TenantMembership
@@ -153,16 +153,22 @@ class Command(BaseCommand):
                 roll = rng.random()
                 if roll < 0.45:
                     payment_register(
-                        tenant=tenant, user=user, patient=patient,
-                        amount=charge.amount, method=rng.choice(methods),
+                        tenant=tenant,
+                        user=user,
+                        patient=patient,
+                        amount=charge.amount,
+                        method=rng.choice(methods),
                         received_at=issued + datetime.timedelta(days=1),
                         allocations=[{"charge_id": str(charge.id), "amount": str(charge.amount)}],
                     )
                 elif roll < 0.7:
                     half = (charge.amount / 2).quantize(Decimal("0.01"))
                     payment_register(
-                        tenant=tenant, user=user, patient=patient,
-                        amount=half, method=rng.choice(methods),
+                        tenant=tenant,
+                        user=user,
+                        patient=patient,
+                        amount=half,
+                        method=rng.choice(methods),
                         received_at=issued + datetime.timedelta(days=1),
                         allocations=[{"charge_id": str(charge.id), "amount": str(half)}],
                     )
@@ -170,7 +176,7 @@ class Command(BaseCommand):
         # 6. Un CFDI timbrado (PAC simulado) sobre el primer pago disponible.
         from apps.finanzas.models import Payment
 
-        first_payment: Optional[Payment] = Payment.objects.order_by("received_at").first()
+        first_payment: Payment | None = Payment.objects.order_by("received_at").first()
         if first_payment is not None:
             cfdi_issue(
                 tenant=tenant,
@@ -186,7 +192,7 @@ class Command(BaseCommand):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _resolve_tenant(self, slug: Optional[str]) -> Tenant:
+    def _resolve_tenant(self, slug: str | None) -> Tenant:
         if slug:
             tenant = Tenant.objects.filter(slug=slug).first()
             if tenant is None:
@@ -211,6 +217,9 @@ class Command(BaseCommand):
                     "first_name": label,
                     "last_name": "Demo",
                     "is_active": True,
+                    # Usuario de seed con contraseña conocida y documentada:
+                    # NO debe forzar cambio de contraseña (rompería el demo/E2E).
+                    "must_change_password": False,
                 },
             )
             if created:

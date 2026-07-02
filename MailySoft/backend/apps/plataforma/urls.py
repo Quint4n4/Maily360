@@ -3,21 +3,24 @@ URLs del panel interno de plataforma.
 
 Se incluyen en config/urls.py bajo el prefijo api/v1/plataforma/.
 
-Rutas:
-    plataforma/metricas/                      GET  PlatformMetricasApi
-    plataforma/clinicas/                      GET  PlatformClinicasListApi   (super_admin, sales, engineering)
-    plataforma/clinicas/                      POST PlatformClinicasListApi   (super_admin, sales)
-    plataforma/clinicas/<tenant_id>/          GET  PlatformClinicaDetailApi  (super_admin, sales, engineering)
-    plataforma/clinicas/<tenant_id>/estado/   POST PlatformClinicaEstadoApi  (super_admin, sales)
-    plataforma/clinicas/<tenant_id>/suscripcion/ POST PlatformClinicaSuscripcionApi (super_admin, sales)
-    plataforma/usuarios/                      GET  PlatformUsuariosListApi   (super_admin)
-    plataforma/auditoria/                     GET  PlatformAuditoriaListApi  (super_admin, engineering)
-    plataforma/sistema/                       GET  PlatformSistemaApi        (super_admin, engineering)
-    plataforma/planes/                        GET  PlatformPlanesListApi     (super_admin, sales)
-    plataforma/planes/                        POST PlatformPlanesListApi     (super_admin)
-    plataforma/planes/<plan_id>/              PATCH PlatformPlanDetailApi    (super_admin)
-    plataforma/suscripciones/                 GET  PlatformSuscripcionesListApi   (super_admin, sales)
-    plataforma/suscripciones/resumen/         GET  PlatformSuscripcionesResumenApi (super_admin, sales)
+Rutas (roles permitidos entre paréntesis; SA=super_admin, sales, eng=engineering):
+    plataforma/metricas/                           GET   PlatformMetricasApi
+    plataforma/clinicas/                           GET   PlatformClinicasListApi   (SA, sales, eng)
+    plataforma/clinicas/                           POST  PlatformClinicasListApi   (SA, sales)
+    plataforma/clinicas/<tenant_id>/                GET   PlatformClinicaDetailApi  (SA, sales, eng)
+    plataforma/clinicas/<tenant_id>/estado/         POST  PlatformClinicaEstadoApi  (SA, sales)
+    plataforma/clinicas/<tenant_id>/suscripcion/    POST  PlatformClinicaSuscripcionApi (SA, sales)
+    plataforma/usuarios/                           GET   PlatformUsuariosListApi   (SA)
+    plataforma/usuarios/                           POST  PlatformUsuariosListApi   (SA)
+    plataforma/usuarios/<user_id>/                  PATCH PlatformStaffDetailApi   (SA)
+    plataforma/usuarios/<user_id>/reset-password/   POST  PlatformStaffPasswordResetApi (SA)
+    plataforma/auditoria/                          GET   PlatformAuditoriaListApi  (SA, eng)
+    plataforma/sistema/                            GET   PlatformSistemaApi        (SA, eng)
+    plataforma/planes/                             GET   PlatformPlanesListApi     (SA, sales)
+    plataforma/planes/                             POST  PlatformPlanesListApi     (SA)
+    plataforma/planes/<plan_id>/                    PATCH PlatformPlanDetailApi    (SA)
+    plataforma/suscripciones/                      GET   PlatformSuscripcionesListApi   (SA, sales)
+    plataforma/suscripciones/resumen/              GET   PlatformSuscripcionesResumenApi (SA, sales)
 """
 
 from django.urls import path
@@ -32,6 +35,8 @@ from apps.plataforma.views import (
     PlatformPlanDetailApi,
     PlatformPlanesListApi,
     PlatformSistemaApi,
+    PlatformStaffDetailApi,
+    PlatformStaffPasswordResetApi,
     PlatformSuscripcionesListApi,
     PlatformSuscripcionesResumenApi,
     PlatformUsuariosListApi,
@@ -67,6 +72,16 @@ urlpatterns = [
         "plataforma/usuarios/",
         PlatformUsuariosListApi.as_view(),
         name="platform-usuarios-list",
+    ),
+    path(
+        "plataforma/usuarios/<uuid:user_id>/",
+        PlatformStaffDetailApi.as_view(),
+        name="platform-staff-detail",
+    ),
+    path(
+        "plataforma/usuarios/<uuid:user_id>/reset-password/",
+        PlatformStaffPasswordResetApi.as_view(),
+        name="platform-staff-password-reset",
     ),
     path(
         "plataforma/auditoria/",
