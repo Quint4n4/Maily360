@@ -48,6 +48,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=120, blank=True)
     avatar = models.ImageField(
         upload_to=user_avatar_path,
+        max_length=255,
         null=True,
         blank=True,
         help_text="Foto de perfil del usuario (opcional).",

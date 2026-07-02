@@ -99,6 +99,7 @@ class Doctor(TenantAwareModel):
     # --- Campos agregados por módulo Mi Consultorio ---
     sello = models.ImageField(
         upload_to=_doctor_sello_path,
+        max_length=255,
         null=True,
         blank=True,
         validators=[_validate_doctor_image],
@@ -106,6 +107,7 @@ class Doctor(TenantAwareModel):
     )
     foto = models.ImageField(
         upload_to=_doctor_foto_path,
+        max_length=255,
         null=True,
         blank=True,
         validators=[_validate_doctor_image],

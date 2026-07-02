@@ -143,6 +143,7 @@ class Patient(TenantAwareModel):
     # (PatientCategory kind=favorite/vip) en la relación `categories`.
     avatar = models.ImageField(
         upload_to=patient_avatar_path,
+        max_length=255,
         null=True,
         blank=True,
         help_text="Foto del paciente (opcional).",

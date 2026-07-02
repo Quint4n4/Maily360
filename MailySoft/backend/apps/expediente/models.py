@@ -821,6 +821,7 @@ class EvolutionImage(TenantAwareModel):
     )
     image = models.ImageField(
         upload_to=evolution_image_path,
+        max_length=255,
         help_text=(
             "Imagen clínica (JPEG/PNG/WEBP, máx 10 MB). "
             "El nombre se aleatoriza al guardar (anti path-traversal)."

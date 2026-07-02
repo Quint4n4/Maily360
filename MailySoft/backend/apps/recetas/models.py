@@ -1112,6 +1112,7 @@ class PrescriptionPdfJob(TenantAwareModel):
     )
     file = models.FileField(
         upload_to=prescription_pdf_path,
+        max_length=255,
         null=True,
         blank=True,
         help_text="PDF generado; None hasta que la tarea termina.",

@@ -52,6 +52,7 @@ class PdfJob(TenantAwareModel):
     )
     file = models.FileField(
         upload_to=pdf_job_path,
+        max_length=255,
         null=True,
         blank=True,
         help_text="PDF generado; None hasta que la tarea termina.",

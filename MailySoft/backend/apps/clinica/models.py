@@ -132,6 +132,7 @@ class ClinicSettings(TenantAwareModel):
     # --- Identidad visual ---
     logo = models.ImageField(
         upload_to=clinic_logo_path,
+        max_length=255,
         null=True,
         blank=True,
         validators=[validate_clinic_image],
@@ -197,6 +198,7 @@ class ClinicSettings(TenantAwareModel):
     # --- Membretes ---
     letterhead_full = models.ImageField(
         upload_to=clinic_letterhead_full_path,
+        max_length=255,
         null=True,
         blank=True,
         validators=[validate_clinic_image],
@@ -204,6 +206,7 @@ class ClinicSettings(TenantAwareModel):
     )
     letterhead_half = models.ImageField(
         upload_to=clinic_letterhead_half_path,
+        max_length=255,
         null=True,
         blank=True,
         validators=[validate_clinic_image],
@@ -561,6 +564,7 @@ class DoctorCredential(TenantAwareModel):
     )
     logo = models.ImageField(
         upload_to=doctor_credential_logo_path,
+        max_length=255,
         null=True,
         blank=True,
         validators=[validate_clinic_image],
