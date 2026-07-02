@@ -132,6 +132,11 @@ class ActionType(models.TextChoices):
     TENANT_CREATE = "TENANT_CREATE", "Crear clínica nueva"
     TENANT_STATUS_CHANGE = "TENANT_STATUS_CHANGE", "Cambiar estado de clínica"
 
+    # Plataforma — Suscripciones y planes (Fase 3)
+    SUBSCRIPTION_CHANGE = "SUBSCRIPTION_CHANGE", "Asignar o cambiar plan de suscripción"
+    TRIAL_EXPIRED = "TRIAL_EXPIRED", "Aviso: periodo de prueba vencido"
+    SUBSCRIPTION_EXPIRED = "SUBSCRIPTION_EXPIRED", "Aviso: periodo de suscripción vencido"
+
     # Autenticación
     LOGIN = "LOGIN", "Inicio de sesión"
     LOGOUT = "LOGOUT", "Cierre de sesión"

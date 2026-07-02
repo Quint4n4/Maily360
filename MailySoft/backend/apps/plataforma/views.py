@@ -44,6 +44,7 @@ from apps.core.permissions import (
     PlatformClinicWritePermission,
     PlatformMetricsPermission,
     PlatformStaffListPermission,
+    PlatformSubscriptionPermission,
     PlatformSystemPermission,
 )
 from apps.core.tenant_context import set_request_context
@@ -52,7 +53,11 @@ from apps.plataforma.selectors import (
     platform_clinica_detail,
     platform_clinicas_list,
     platform_dashboard_metrics,
+    platform_plan_list,
     platform_staff_list,
+    platform_subscription_row_build,
+    platform_subscriptions_list,
+    platform_subscriptions_resumen,
 )
 from apps.plataforma.serializers import (
     AuditLogOutputSerializer,
@@ -63,10 +68,19 @@ from apps.plataforma.serializers import (
     ClinicaEstadoInputSerializer,
     ClinicaOutputSerializer,
     DashboardMetricsOutputSerializer,
+    PlanOutputSerializer,
     PlatformStaffOutputSerializer,
+    SubscripcionesQueryInputSerializer,
+    SubscripcionesResumenOutputSerializer,
+    SubscriptionRowOutputSerializer,
     SystemHealthOutputSerializer,
+    TenantSubscriptionInputSerializer,
 )
-from apps.plataforma.services import tenant_and_owner_create, tenant_set_status
+from apps.plataforma.services import (
+    tenant_and_owner_create,
+    tenant_set_status,
+    tenant_subscription_set,
+)
 from apps.plataforma.system_health import system_health_get
 from apps.tenancy.models import Tenant
 
@@ -402,3 +416,121 @@ class PlatformSistemaApi(PlatformAPIView):
         """Devuelve el snapshot de salud del sistema (contrato fijo con el frontend)."""
         health = system_health_get()
         return Response(SystemHealthOutputSerializer(health).data)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/plataforma/planes/
+# ---------------------------------------------------------------------------
+
+
+class PlatformPlanesListApi(PlatformAPIView):
+    """Catálogo de planes de suscripción (sin paginar).
+
+    GET → super_admin, sales (PlatformSubscriptionPermission).
+    """
+
+    permission_classes = [IsAuthenticated, PlatformSubscriptionPermission]
+
+    def get(self, request: Request) -> Response:
+        """Lista todos los planes (activos e inactivos) ordenados por `order`."""
+        qs = platform_plan_list()
+        return Response(PlanOutputSerializer(qs, many=True).data)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/plataforma/suscripciones/
+# ---------------------------------------------------------------------------
+
+
+class PlatformSuscripcionesListApi(PlatformAPIView):
+    """Listado paginado de suscripciones: una fila por clínica.
+
+    GET → super_admin, sales (PlatformSubscriptionPermission).
+    """
+
+    permission_classes = [IsAuthenticated, PlatformSubscriptionPermission]
+
+    def get(self, request: Request) -> Response:
+        """Lista todas las clínicas con su suscripción (o sin ella) y su alerta."""
+        query = SubscripcionesQueryInputSerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        filters = query.validated_data
+
+        rows = platform_subscriptions_list(
+            search=filters.get("search", ""),
+            plan_id=filters.get("plan_id"),
+            alerta=filters.get("alerta") or None,
+        )
+
+        paginator = _StandardPagination()
+        page = paginator.paginate_queryset(rows, request, view=self)
+        if page is not None:
+            serializer = SubscriptionRowOutputSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        serializer = SubscriptionRowOutputSerializer(rows, many=True)
+        return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/plataforma/suscripciones/resumen/
+# ---------------------------------------------------------------------------
+
+
+class PlatformSuscripcionesResumenApi(PlatformAPIView):
+    """Resumen agregado de suscripciones (conteos, alertas, MRR estimado).
+
+    GET → super_admin, sales (PlatformSubscriptionPermission).
+    """
+
+    permission_classes = [IsAuthenticated, PlatformSubscriptionPermission]
+
+    def get(self, request: Request) -> Response:
+        """Devuelve el resumen agregado para el panel de suscripciones."""
+        resumen = platform_subscriptions_resumen()
+        return Response(SubscripcionesResumenOutputSerializer(resumen).data)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/plataforma/clinicas/<tenant_id>/suscripcion/
+# ---------------------------------------------------------------------------
+
+
+class PlatformClinicaSuscripcionApi(PlatformAPIView):
+    """Asigna o cambia el plan de suscripción de una clínica.
+
+    POST → super_admin, sales (PlatformSubscriptionPermission).
+    """
+
+    permission_classes = [IsAuthenticated, PlatformSubscriptionPermission]
+
+    def post(self, request: Request, tenant_id: _uuid_module.UUID) -> Response:
+        """Crea o actualiza la suscripción de la clínica indicada."""
+        try:
+            tenant = Tenant.objects.get(id=tenant_id)
+        except Tenant.DoesNotExist:
+            return Response(
+                {"detail": "Clínica no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        s = TenantSubscriptionInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        data = s.validated_data
+
+        try:
+            tenant_subscription_set(
+                tenant=tenant,
+                actor=request.user,  # type: ignore[arg-type]
+                plan_id=data["plan_id"],
+                billing_cycle=data["billing_cycle"],
+                current_period_end=data["current_period_end"],
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+
+        # Refresca el tenant con la suscripción recién asignada para construir
+        # la fila de salida con el mismo shape que el listado.
+        tenant.refresh_from_db()
+        row = platform_subscription_row_build(tenant=tenant)
+        return Response(SubscriptionRowOutputSerializer(row).data)

@@ -57,7 +57,7 @@ from apps.recetas.models import (
 )
 from apps.pacientes.models import Patient
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
-from apps.tenancy.models import Tenant, TenantMembership
+from apps.tenancy.models import Plan, Tenant, TenantMembership, TenantSubscription
 
 
 class UserFactory(DjangoModelFactory):
@@ -104,6 +104,36 @@ class TenantMembershipFactory(DjangoModelFactory):
     tenant = factory.SubFactory(TenantFactory)
     role = "doctor"
     is_active = True
+
+
+class PlanFactory(DjangoModelFactory):
+    """Plan de suscripción del catálogo global de plataforma."""
+
+    class Meta:
+        model = Plan
+
+    slug = factory.Sequence(lambda n: f"plan-{n}")
+    name = factory.Sequence(lambda n: f"Plan {n}")
+    description = ""
+    price_monthly = Decimal("1500.00")
+    is_featured = False
+    features = factory.LazyFunction(list)
+    is_active = True
+    order = factory.Sequence(lambda n: n)
+
+
+class TenantSubscriptionFactory(DjangoModelFactory):
+    """Suscripción de un tenant a un plan."""
+
+    class Meta:
+        model = TenantSubscription
+
+    tenant = factory.SubFactory(TenantFactory)
+    plan = factory.SubFactory(PlanFactory)
+    billing_cycle = "monthly"
+    current_period_end = factory.LazyFunction(
+        lambda: (timezone.now() + datetime.timedelta(days=30)).date()
+    )
 
 
 class PatientFactory(DjangoModelFactory):

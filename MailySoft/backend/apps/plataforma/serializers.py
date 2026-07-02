@@ -329,3 +329,131 @@ class SystemHealthOutputSerializer(serializers.Serializer):
     services = SystemServiceOutputSerializer(many=True, read_only=True)
     version = SystemVersionOutputSerializer(read_only=True)
     pdf_queue = SystemPdfQueueOutputSerializer(read_only=True)
+
+
+# ---------------------------------------------------------------------------
+# Output — Planes (Fase 3, catálogo global sin paginar)
+# ---------------------------------------------------------------------------
+
+
+class PlanOutputSerializer(serializers.Serializer):
+    """Serializer de salida para un Plan del catálogo.
+
+    Contrato fijo con el frontend (docs/design/plataforma-fases-plan.md, Fase 3):
+    GET /api/v1/plataforma/planes/ → lista SIN paginar, ordenada por `order`.
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    slug = serializers.SlugField(read_only=True)
+    name = serializers.CharField(read_only=True)
+    description = serializers.CharField(read_only=True)
+    price_monthly = serializers.DecimalField(
+        read_only=True, max_digits=10, decimal_places=2
+    )
+    is_featured = serializers.BooleanField(read_only=True)
+    features = serializers.ListField(child=serializers.CharField(), read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
+    order = serializers.IntegerField(read_only=True)
+
+
+# ---------------------------------------------------------------------------
+# Output — Suscripciones (Fase 3, listado paginado por Tenant)
+# ---------------------------------------------------------------------------
+
+
+class SubscriptionRowOutputSerializer(serializers.Serializer):
+    """Serializer de salida para una fila del listado de suscripciones.
+
+    Contrato fijo con el frontend: una fila por Tenant (con o sin
+    TenantSubscription). Los campos de plan/suscripción son `allow_null`
+    porque el tenant puede no tener suscripción asignada todavía.
+    """
+
+    tenant_id = serializers.UUIDField(read_only=True)
+    tenant_name = serializers.CharField(read_only=True)
+    tenant_slug = serializers.SlugField(read_only=True)
+    tenant_status = serializers.CharField(read_only=True)
+    trial_ends_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    plan_id = serializers.UUIDField(read_only=True, allow_null=True)
+    plan_name = serializers.CharField(read_only=True, allow_null=True)
+    plan_slug = serializers.CharField(read_only=True, allow_null=True)
+    billing_cycle = serializers.CharField(read_only=True, allow_null=True)
+    current_period_end = serializers.DateField(read_only=True, allow_null=True)
+    plan_price_monthly = serializers.DecimalField(
+        read_only=True, allow_null=True, max_digits=10, decimal_places=2
+    )
+    alerta = serializers.CharField(read_only=True, allow_null=True)
+
+
+# ---------------------------------------------------------------------------
+# Input — Filtros del listado de suscripciones
+# ---------------------------------------------------------------------------
+
+
+class SubscripcionesQueryInputSerializer(serializers.Serializer):
+    """Valida los query params de GET /api/v1/plataforma/suscripciones/."""
+
+    search = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    plan_id = serializers.UUIDField(required=False)
+    alerta = serializers.ChoiceField(
+        choices=["vencidas", "por_vencer"],
+        required=False,
+        allow_blank=True,
+        help_text="'vencidas' = solo alertas vencidas. 'por_vencer' = solo por vencer.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Output — Resumen de suscripciones
+# ---------------------------------------------------------------------------
+
+
+class SubscripcionesPorPlanOutputSerializer(serializers.Serializer):
+    """Conteo de suscripciones agrupado por plan."""
+
+    plan_id = serializers.UUIDField(read_only=True)
+    plan_name = serializers.CharField(read_only=True)
+    count = serializers.IntegerField(read_only=True)
+
+
+class SubscripcionesAlertasOutputSerializer(serializers.Serializer):
+    """Conteos de alertas de vencimiento para el resumen del panel."""
+
+    trial_vencido = serializers.IntegerField(read_only=True)
+    trial_por_vencer = serializers.IntegerField(read_only=True)
+    periodo_vencido = serializers.IntegerField(read_only=True)
+    periodo_por_vencer = serializers.IntegerField(read_only=True)
+
+
+class SubscripcionesResumenOutputSerializer(serializers.Serializer):
+    """Serializer de salida para GET /api/v1/plataforma/suscripciones/resumen/."""
+
+    total_clinicas = serializers.IntegerField(read_only=True)
+    sin_plan = serializers.IntegerField(read_only=True)
+    por_plan = SubscripcionesPorPlanOutputSerializer(many=True, read_only=True)
+    alertas = SubscripcionesAlertasOutputSerializer(read_only=True)
+    mrr_estimado = serializers.DecimalField(
+        read_only=True, max_digits=12, decimal_places=2
+    )
+
+
+# ---------------------------------------------------------------------------
+# Input — Asignar/cambiar plan de una clínica
+# ---------------------------------------------------------------------------
+
+
+class TenantSubscriptionInputSerializer(serializers.Serializer):
+    """Input para POST /api/v1/plataforma/clinicas/<tenant_id>/suscripcion/.
+
+    Los 3 campos son obligatorios (decisión del encargo: sin defaults, la
+    plataforma siempre elige explícitamente plan + ciclo + vigencia).
+    """
+
+    plan_id = serializers.UUIDField(help_text="UUID del plan a asignar.")
+    billing_cycle = serializers.ChoiceField(
+        choices=["monthly", "annual"],
+        help_text="Ciclo de facturación: 'monthly' o 'annual'.",
+    )
+    current_period_end = serializers.DateField(
+        help_text="Fecha de fin del periodo de facturación. Debe ser futura.",
+    )

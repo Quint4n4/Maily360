@@ -20,8 +20,13 @@ import type {
   ClinicaPlat,
   DashboardMetrics,
   EstadoClinica,
+  PlanPlataforma,
   PlatformStaff,
   SistemaSalud,
+  SuscripcionAsignarInput,
+  SuscripcionRow,
+  SuscripcionesFiltros,
+  SuscripcionesResumen,
 } from '../types/plataforma'
 
 /** GET /plataforma/metricas/ — conteos globales para el dashboard. */
@@ -84,4 +89,38 @@ export async function getClinicaDetail(id: string): Promise<ClinicaDetail> {
 /** GET /plataforma/sistema/ — salud del sistema (super_admin / engineering; sales → 403). */
 export async function getPlatformSistema(): Promise<SistemaSalud> {
   return request<SistemaSalud>('/plataforma/sistema/')
+}
+
+/* ── Suscripciones (super_admin / sales; engineering → 403) ─────────────── */
+
+/** GET /plataforma/planes/ — catálogo de planes comerciales (array SIN paginar). */
+export async function listPlatformPlanes(): Promise<PlanPlataforma[]> {
+  return request<PlanPlataforma[]>('/plataforma/planes/')
+}
+
+/** GET /plataforma/suscripciones/ — clínicas con su plan y alertas de vencimiento. */
+export async function listPlatformSuscripciones(
+  params: SuscripcionesFiltros = {},
+): Promise<Paginated<SuscripcionRow>> {
+  const qs = new URLSearchParams()
+  if (params.search) qs.set('search', params.search)
+  if (params.plan_id) qs.set('plan_id', params.plan_id)
+  if (params.alerta) qs.set('alerta', params.alerta)
+  if (params.page) qs.set('page', String(params.page))
+  if (params.page_size) qs.set('page_size', String(params.page_size))
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return request<Paginated<SuscripcionRow>>(`/plataforma/suscripciones/${suffix}`)
+}
+
+/** GET /plataforma/suscripciones/resumen/ — KPIs (conteos por plan, alertas, MRR). */
+export async function getSuscripcionesResumen(): Promise<SuscripcionesResumen> {
+  return request<SuscripcionesResumen>('/plataforma/suscripciones/resumen/')
+}
+
+/** POST /plataforma/clinicas/<tenant_id>/suscripcion/ — asigna o cambia el plan. */
+export async function setClinicaSuscripcion(
+  tenantId: string,
+  body: SuscripcionAsignarInput,
+): Promise<SuscripcionRow> {
+  return request<SuscripcionRow>(`/plataforma/clinicas/${tenantId}/suscripcion/`, { method: 'POST', body })
 }

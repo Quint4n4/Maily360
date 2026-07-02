@@ -15,17 +15,19 @@ REGLA CRÍTICA: SIEMPRE usar Model.all_objects (nunca Model.objects).
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, Optional
 
-from django.db.models import Count, IntegerField, Max, OuterRef, Q, QuerySet, Subquery, Value
+from django.db.models import Count, IntegerField, Max, OuterRef, Q, QuerySet, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils.timezone import now
 
 from apps.agenda.models import Appointment
 from apps.audit.models import AuditLog
 from apps.authn.models import User
 from apps.pacientes.models import Patient
-from apps.tenancy.models import Tenant, TenantMembership
+from apps.tenancy.models import Plan, Tenant, TenantMembership, TenantSubscription
 
 
 def platform_clinicas_list(
@@ -296,3 +298,236 @@ def platform_audit_log_list(
         )
 
     return qs.order_by("-created_at")
+
+
+# ---------------------------------------------------------------------------
+# Suscripciones y planes (Fase 3)
+# ---------------------------------------------------------------------------
+
+#: Ventana de "por vencer": vence en <= N días (pero todavía no venció).
+_ALERTA_DIAS_POR_VENCER: int = 7
+
+
+def platform_plan_list() -> "QuerySet[Plan]":
+    """Lista TODOS los planes activos e inactivos, ordenados por `order`.
+
+    Sin paginar (contrato fijo: GET /plataforma/planes/ devuelve una lista
+    simple, no un objeto paginado) — el catálogo de planes es pequeño y
+    completo por diseño (unas pocas filas).
+    """
+    return Plan.objects.all().order_by("order", "name")
+
+
+def _calcular_alerta(
+    *,
+    tenant_status: str,
+    trial_ends_at: Optional[datetime],
+    current_period_end: Optional[date],
+    reference_now: Optional[datetime] = None,
+    reference_today: Optional[date] = None,
+) -> Optional[str]:
+    """Calcula la alerta de vencimiento de una fila tenant+suscripción.
+
+    Se resuelve en Python (no en SQL) a propósito: mezcla una regla sobre
+    datetime (trial_ends_at, con hora) con otra sobre date (current_period_end,
+    solo fecha) y una prioridad vencido > por_vencer entre dos fuentes
+    independientes (trial vs. suscripción) — expresarlo como Case/When anidado
+    en el ORM sería menos legible y más difícil de testear que esta función
+    pura, sin perder rendimiento real (el volumen de tenants es bajo y no hay
+    N+1: los selectors ya precargan todo con una query).
+
+    Prioridad: vencido > por_vencer. Un tenant puede tener AMBAS condiciones
+    (trial vencido Y suscripción vencida) pero el contrato solo permite un
+    valor: se prioriza "trial_vencido" sobre "periodo_vencido" porque el
+    trial es lógicamente anterior/más urgente que una suscripción ya asignada.
+
+    Args:
+        tenant_status: Tenant.Status del tenant (trial/active/suspended).
+        trial_ends_at: fecha/hora de fin de trial (None si no aplica).
+        current_period_end: fecha de fin del periodo de suscripción (None si
+            el tenant no tiene TenantSubscription).
+        reference_now: instante de referencia para "ahora" (inyectable en tests).
+        reference_today: fecha de referencia para "hoy" (inyectable en tests).
+
+    Returns:
+        Uno de "trial_vencido" | "trial_por_vencer" | "periodo_vencido" |
+        "periodo_por_vencer" | None.
+    """
+    reference_now = reference_now or now()
+    reference_today = reference_today or reference_now.date()
+
+    trial_vencido = False
+    trial_por_vencer = False
+    if tenant_status == Tenant.Status.TRIAL and trial_ends_at is not None:
+        if trial_ends_at < reference_now:
+            trial_vencido = True
+        elif trial_ends_at <= reference_now + timedelta(days=_ALERTA_DIAS_POR_VENCER):
+            trial_por_vencer = True
+
+    periodo_vencido = False
+    periodo_por_vencer = False
+    if current_period_end is not None:
+        if current_period_end < reference_today:
+            periodo_vencido = True
+        elif current_period_end <= reference_today + timedelta(days=_ALERTA_DIAS_POR_VENCER):
+            periodo_por_vencer = True
+
+    # Prioridad: vencido > por_vencer; trial > periodo (dentro de cada nivel).
+    if trial_vencido:
+        return "trial_vencido"
+    if periodo_vencido:
+        return "periodo_vencido"
+    if trial_por_vencer:
+        return "trial_por_vencer"
+    if periodo_por_vencer:
+        return "periodo_por_vencer"
+    return None
+
+
+def platform_subscription_row_build(
+    *,
+    tenant: Tenant,
+    reference_now: Optional[datetime] = None,
+) -> dict[str, Any]:
+    """Construye el dict de una fila del listado de suscripciones para un tenant.
+
+    `tenant` debe venir con `.subscription` precargado por select_related
+    (falla silenciosa a None si no existe: OneToOne inverso ausente) para no
+    generar una query adicional por fila.
+
+    Args:
+        tenant: instancia de Tenant, idealmente con select_related("subscription__plan").
+        reference_now: instante de referencia para el cálculo de alerta (tests).
+
+    Returns:
+        Dict con el contrato fijo de una fila de suscripción.
+    """
+    try:
+        subscription: Optional[TenantSubscription] = tenant.subscription
+    except TenantSubscription.DoesNotExist:
+        subscription = None
+
+    alerta = _calcular_alerta(
+        tenant_status=tenant.status,
+        trial_ends_at=tenant.trial_ends_at,
+        current_period_end=subscription.current_period_end if subscription else None,
+        reference_now=reference_now,
+    )
+
+    return {
+        "tenant_id": tenant.id,
+        "tenant_name": tenant.name,
+        "tenant_slug": tenant.slug,
+        "tenant_status": tenant.status,
+        "trial_ends_at": tenant.trial_ends_at,
+        "plan_id": subscription.plan_id if subscription else None,
+        "plan_name": subscription.plan.name if subscription else None,
+        "plan_slug": subscription.plan.slug if subscription else None,
+        "billing_cycle": subscription.billing_cycle if subscription else None,
+        "current_period_end": subscription.current_period_end if subscription else None,
+        "plan_price_monthly": subscription.plan.price_monthly if subscription else None,
+        "alerta": alerta,
+    }
+
+
+def platform_subscriptions_list(
+    *,
+    search: str = "",
+    plan_id: Optional[uuid.UUID] = None,
+    alerta: Optional[str] = None,
+    reference_now: Optional[datetime] = None,
+) -> list[dict[str, Any]]:
+    """Lista una fila por Tenant (todas las clínicas, con o sin suscripción).
+
+    "Left join" lógico: se recorren TODOS los tenants (Tenant.objects, no es
+    TenantAware) con select_related de su suscripción+plan (OneToOne inverso,
+    una sola query, sin N+1); los tenants sin TenantSubscription simplemente
+    devuelven None en los campos de plan.
+
+    El filtro `alerta` se aplica DESPUÉS de calcular la alerta en Python
+    (no se puede empujar a SQL sin duplicar la lógica de `_calcular_alerta`);
+    el volumen de tenants es bajo (catálogo de clínicas de la plataforma, no
+    una tabla de negocio de alto volumen), así que evaluarlo en Python es la
+    opción más simple y testeable sin costo real de performance.
+
+    Args:
+        search: icontains sobre nombre/slug del tenant. Vacío = sin filtro.
+        plan_id: filtra por plan asignado exacto. None = sin filtro.
+        alerta: "vencidas" (solo alertas *_vencido) | "por_vencer" (solo
+            alertas *_por_vencer) | None (sin filtro, todas las filas).
+        reference_now: instante de referencia para el cálculo de alerta (tests).
+
+    Returns:
+        Lista de dicts (contrato fijo), ordenada por nombre de tenant.
+    """
+    qs = Tenant.objects.select_related("subscription", "subscription__plan").order_by("name")
+
+    if search:
+        qs = qs.filter(Q(name__icontains=search) | Q(slug__icontains=search))
+
+    if plan_id is not None:
+        qs = qs.filter(subscription__plan_id=plan_id)
+
+    rows = [
+        platform_subscription_row_build(tenant=tenant, reference_now=reference_now)
+        for tenant in qs
+    ]
+
+    if alerta == "vencidas":
+        rows = [r for r in rows if r["alerta"] in ("trial_vencido", "periodo_vencido")]
+    elif alerta == "por_vencer":
+        rows = [
+            r for r in rows if r["alerta"] in ("trial_por_vencer", "periodo_por_vencer")
+        ]
+
+    return rows
+
+
+def platform_subscriptions_resumen(*, reference_now: Optional[datetime] = None) -> dict[str, Any]:
+    """Resumen agregado de suscripciones para el panel de plataforma.
+
+    Returns:
+        Dict con:
+          - total_clinicas: int (todas las clínicas, tengan o no suscripción).
+          - sin_plan: int (tenants sin TenantSubscription).
+          - por_plan: list de {plan_id, plan_name, count}.
+          - alertas: dict con los 4 conteos de alerta.
+          - mrr_estimado: Decimal — suma de price_monthly de suscripciones
+            cuyo TENANT tiene status=active (no cuenta trial ni suspended,
+            aunque tengan un plan asignado: MRR real es solo ingreso activo).
+    """
+    total_clinicas = Tenant.objects.count()
+    sin_plan = Tenant.objects.filter(subscription__isnull=True).count()
+
+    por_plan_qs = (
+        TenantSubscription.objects.values("plan_id", "plan__name")
+        .annotate(count=Count("id"))
+        .order_by("plan__order", "plan__name")
+    )
+    por_plan = [
+        {"plan_id": row["plan_id"], "plan_name": row["plan__name"], "count": row["count"]}
+        for row in por_plan_qs
+    ]
+
+    mrr_estimado: Decimal = (
+        TenantSubscription.objects.filter(tenant__status=Tenant.Status.ACTIVE).aggregate(
+            total=Sum("plan__price_monthly")
+        )["total"]
+        or Decimal("0")
+    )
+
+    rows = platform_subscriptions_list(reference_now=reference_now)
+    alertas = {
+        "trial_vencido": sum(1 for r in rows if r["alerta"] == "trial_vencido"),
+        "trial_por_vencer": sum(1 for r in rows if r["alerta"] == "trial_por_vencer"),
+        "periodo_vencido": sum(1 for r in rows if r["alerta"] == "periodo_vencido"),
+        "periodo_por_vencer": sum(1 for r in rows if r["alerta"] == "periodo_por_vencer"),
+    }
+
+    return {
+        "total_clinicas": total_clinicas,
+        "sin_plan": sin_plan,
+        "por_plan": por_plan,
+        "alertas": alertas,
+        "mrr_estimado": mrr_estimado,
+    }

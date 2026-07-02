@@ -22,7 +22,8 @@ SEGURIDAD ESPECIAL — tenant_and_owner_create:
 
 import logging
 import secrets
-from datetime import timedelta
+import uuid
+from datetime import date, timedelta
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -37,7 +38,7 @@ from apps.clinica.services import seed_system_patient_categories
 from apps.authn.models import User
 from apps.core.tenant_context import clear_current_tenant, set_current_tenant
 from apps.personal.services import consultorio_create
-from apps.tenancy.models import Tenant
+from apps.tenancy.models import Plan, Tenant, TenantSubscription
 from apps.tenancy.services import member_create
 
 logger = logging.getLogger("apps.plataforma.services")
@@ -362,3 +363,115 @@ def tenant_set_status(
     )
 
     return tenant
+
+
+def tenant_subscription_set(
+    *,
+    tenant: Tenant,
+    actor: User,
+    plan_id: uuid.UUID,
+    billing_cycle: str,
+    current_period_end: date,
+) -> TenantSubscription:
+    """Crea o actualiza la suscripción (OneToOne) de una clínica a un plan.
+
+    Idempotente en el sentido de "asignar de nuevo": si el tenant ya tenía
+    suscripción, esta función la actualiza en el sitio (update_or_create)
+    en lugar de crear una fila duplicada — TenantSubscription.tenant es
+    OneToOne, así que un segundo INSERT violaría la constraint de todos modos;
+    se prefiere el update explícito para poder registrar plan_anterior→nuevo
+    en la auditoría.
+
+    Args:
+        tenant:             Clínica a la que se asigna/cambia el plan.
+        actor:              Usuario de plataforma que realiza el cambio (auditoría).
+        plan_id:             UUID del Plan a asignar. Debe existir y estar activo.
+        billing_cycle:       'monthly' | 'annual'.
+        current_period_end:  Fecha de fin del periodo. Debe ser futura.
+
+    Returns:
+        La TenantSubscription creada o actualizada.
+
+    Raises:
+        ValidationError: actor no autorizado, plan inexistente/inactivo, o
+            current_period_end no es una fecha futura.
+    """
+    if not getattr(actor, "is_platform_staff", False):
+        raise ValidationError(
+            "Solo el staff de plataforma puede gestionar suscripciones."
+        )
+    if getattr(actor, "platform_role", "") not in _ALLOWED_ACTOR_ROLES:
+        raise ValidationError(
+            f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
+            "no autorizado para gestionar suscripciones."
+        )
+
+    try:
+        plan = Plan.objects.get(id=plan_id)
+    except Plan.DoesNotExist as exc:
+        raise ValidationError("El plan indicado no existe.") from exc
+
+    if not plan.is_active:
+        raise ValidationError("No se puede asignar un plan inactivo.")
+
+    if billing_cycle not in TenantSubscription.BillingCycle.values:
+        raise ValidationError(f"Ciclo de facturación inválido: '{billing_cycle}'.")
+
+    if current_period_end <= now().date():
+        raise ValidationError("La fecha de fin de periodo debe ser futura.")
+
+    with transaction.atomic():
+        existing: TenantSubscription | None = TenantSubscription.objects.filter(
+            tenant=tenant
+        ).first()
+        old_plan_slug = existing.plan.slug if existing else None
+        old_billing_cycle = existing.billing_cycle if existing else None
+
+        subscription, _created = TenantSubscription.objects.update_or_create(
+            tenant=tenant,
+            defaults={
+                "plan": plan,
+                "billing_cycle": billing_cycle,
+                "current_period_end": current_period_end,
+                # Nueva fecha futura → resetea la idempotencia del aviso de
+                # vencimiento (D-3 del encargo: extender/renovar debe poder
+                # volver a avisar en el futuro).
+                "period_expired_notified_at": None,
+            },
+        )
+
+    audit_record(
+        action=ActionType.SUBSCRIPTION_CHANGE,
+        resource_type="TenantSubscription",
+        actor=actor,
+        tenant=None,  # evento de plataforma, no de clínica
+        resource_id=subscription.id,
+        resource_repr=str(subscription),
+        description=(
+            f"Suscripción de la clínica '{tenant.name}' cambiada "
+            f"de plan '{old_plan_slug or '(sin plan)'}' a '{plan.slug}' "
+            f"({billing_cycle}, vence {current_period_end}) "
+            f"por {actor.email} ({getattr(actor, 'platform_role', '')})."
+        ),
+        actor_role=getattr(actor, "platform_role", ""),
+        metadata={
+            "tenant_id": str(tenant.id),
+            "tenant_slug": tenant.slug,
+            "old_plan_slug": old_plan_slug,
+            "new_plan_slug": plan.slug,
+            "old_billing_cycle": old_billing_cycle,
+            "new_billing_cycle": billing_cycle,
+            "current_period_end": current_period_end.isoformat(),
+        },
+    )
+
+    logger.info(
+        "tenant_subscription_set: tenant=%s plan=%s ciclo=%s vence=%s por actor=%s",
+        tenant.id,
+        plan.slug,
+        billing_cycle,
+        current_period_end,
+        actor.email,
+    )
+
+    return subscription

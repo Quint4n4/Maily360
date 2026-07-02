@@ -9,6 +9,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from celery.schedules import crontab
 
 # ---------------------------------------------------------------------------
 # Rutas
@@ -251,6 +252,23 @@ CELERY_TASK_TRACK_STARTED: bool = True
 CELERY_TASK_TIME_LIMIT: int = 30 * 60  # 30 minutos hard limit
 CELERY_TASK_SOFT_TIME_LIMIT: int = 25 * 60  # 25 minutos soft limit
 CELERY_RESULT_EXPIRES: int = env.int("CELERY_RESULT_EXPIRES", default=3600)  # 1h
+
+# Tareas periódicas (Celery beat). El worker se arranca con
+# `celery -A config.celery beat -l INFO` (ver docstring de config/celery.py).
+# NOTA: django_celery_beat (DatabaseScheduler) todavía no está instalado en
+# el proyecto; con el scheduler por defecto de Celery (PersistentScheduler)
+# este dict ya es suficiente para correr la tarea. Si en el futuro se agrega
+# django_celery_beat, su DatabaseScheduler sincroniza este mismo
+# CELERY_BEAT_SCHEDULE a la base de datos al arrancar, así que no hace falta
+# tocar este bloque.
+CELERY_BEAT_SCHEDULE: dict = {
+    "plataforma-avisar-vencimientos": {
+        "task": "apps.plataforma.tasks.avisar_vencimientos",
+        # Diaria a las 8:00 America/Mexico_City (CELERY_TIMEZONE ya está
+        # configurado arriba con esa zona horaria).
+        "schedule": crontab(hour=8, minute=0),
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Channels (WebSockets)

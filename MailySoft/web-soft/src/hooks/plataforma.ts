@@ -6,13 +6,22 @@ import {
   getClinicaDetail,
   getPlatformMetrics,
   getPlatformSistema,
+  getSuscripcionesResumen,
   listPlatformAuditoria,
   listPlatformClinicas,
+  listPlatformPlanes,
   listPlatformStaff,
+  listPlatformSuscripciones,
   setClinicaEstado,
+  setClinicaSuscripcion,
   type ListClinicasParams,
 } from '../api/plataforma'
-import type { AuditoriaFiltros, ClinicaCreateInput } from '../types/plataforma'
+import type {
+  AuditoriaFiltros,
+  ClinicaCreateInput,
+  SuscripcionAsignarInput,
+  SuscripcionesFiltros,
+} from '../types/plataforma'
 
 export const platKeys = {
   all: ['plataforma'] as const,
@@ -22,6 +31,9 @@ export const platKeys = {
   staff: (search: string) => ['plataforma', 'usuarios', search] as const,
   auditoria: (p: AuditoriaFiltros) => ['plataforma', 'auditoria', p] as const,
   sistema: () => ['plataforma', 'sistema'] as const,
+  planes: () => ['plataforma', 'planes'] as const,
+  suscripciones: (p: SuscripcionesFiltros) => ['plataforma', 'suscripciones', 'lista', p] as const,
+  suscripcionesResumen: () => ['plataforma', 'suscripciones', 'resumen'] as const,
 }
 
 /** Métricas del dashboard de plataforma. */
@@ -74,6 +86,44 @@ export function usePlatformSistema() {
     queryFn: getPlatformSistema,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
+  })
+}
+
+/** Catálogo de planes comerciales. `enabled` la apaga si el rol no tiene acceso. */
+export function usePlatformPlanes(enabled = true) {
+  return useQuery({ queryKey: platKeys.planes(), queryFn: listPlatformPlanes, enabled })
+}
+
+/** Clínicas con su suscripción (búsqueda + filtro de plan/alerta + paginación). */
+export function usePlatformSuscripciones(params: SuscripcionesFiltros = {}, enabled = true) {
+  return useQuery({
+    queryKey: platKeys.suscripciones(params),
+    queryFn: () => listPlatformSuscripciones(params),
+    enabled,
+  })
+}
+
+/** KPIs de suscripciones (conteos por plan, alertas de vencimiento, MRR).
+ *  `enabled` permite apagarla para roles sin acceso al módulo (engineering → 403). */
+export function useSuscripcionesResumen(enabled = true) {
+  return useQuery({
+    queryKey: platKeys.suscripcionesResumen(),
+    queryFn: getSuscripcionesResumen,
+    enabled,
+  })
+}
+
+/** Asignar / cambiar el plan de una clínica. Invalida suscripciones, resumen y clínicas. */
+export function useSetClinicaSuscripcion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tenantId, input }: { tenantId: string; input: SuscripcionAsignarInput }) =>
+      setClinicaSuscripcion(tenantId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['plataforma', 'suscripciones'] }) // lista + resumen
+      qc.invalidateQueries({ queryKey: ['plataforma', 'clinicas'] })
+      qc.invalidateQueries({ queryKey: platKeys.metrics() })
+    },
   })
 }
 

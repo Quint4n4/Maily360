@@ -116,6 +116,10 @@ export const ACCIONES_AUDITORIA: { value: string; label: string }[] = [
   // Plataforma (cross-tenant)
   { value: 'TENANT_CREATE',          label: 'Crear clínica nueva' },
   { value: 'TENANT_STATUS_CHANGE',   label: 'Cambiar estado de clínica' },
+  // Suscripciones
+  { value: 'SUBSCRIPTION_CHANGE',    label: 'Cambio de suscripción' },
+  { value: 'TRIAL_EXPIRED',          label: 'Prueba vencida' },
+  { value: 'SUBSCRIPTION_EXPIRED',   label: 'Suscripción vencida' },
   // Pacientes
   { value: 'PATIENT_CREATE',         label: 'Crear paciente' },
   { value: 'PATIENT_UPDATE',         label: 'Actualizar paciente' },
@@ -144,6 +148,85 @@ export const ACCIONES_AUDITORIA: { value: string; label: string }[] = [
   { value: 'CLINIC_SETTINGS_UPDATE', label: 'Actualizar configuración de clínica' },
   { value: 'CONFIG_UPDATE',          label: 'Actualizar configuración de agenda' },
 ]
+
+/* ── Suscripciones (Fase 3) ─────────────────────────────────────────────── */
+
+/** Un plan comercial de la plataforma (GET /plataforma/planes/; array SIN paginar). */
+export interface PlanPlataforma {
+  id: string
+  slug: string
+  name: string
+  description: string
+  price_monthly: string // decimal como string, p. ej. "1500.00"
+  is_featured: boolean
+  features: string[]
+  is_active: boolean
+  order: number
+}
+
+/** Ciclo de cobro de una suscripción. */
+export type BillingCycle = 'monthly' | 'annual'
+
+/** Alerta de vencimiento calculada por el backend (solo aviso; la suspensión es manual). */
+export type AlertaSuscripcion =
+  | 'trial_vencido'
+  | 'trial_por_vencer'
+  | 'periodo_vencido'
+  | 'periodo_por_vencer'
+
+/** Etiqueta + badge por tipo de alerta (mismo lenguaje visual que ESTADO_CLINICA). */
+export const ALERTA_SUSCRIPCION: Record<AlertaSuscripcion, { label: string; badge: string }> = {
+  trial_vencido:      { label: 'Prueba vencida',     badge: 'badge-danger' },
+  trial_por_vencer:   { label: 'Prueba por vencer',  badge: 'badge-warning' },
+  periodo_vencido:    { label: 'Periodo vencido',    badge: 'badge-danger' },
+  periodo_por_vencer: { label: 'Periodo por vencer', badge: 'badge-warning' },
+}
+
+/** Una clínica con su plan (item de GET /plataforma/suscripciones/). */
+export interface SuscripcionRow {
+  tenant_id: string
+  tenant_name: string
+  tenant_slug: string
+  tenant_status: EstadoClinica
+  trial_ends_at: string | null // ISO
+  plan_id: string | null
+  plan_name: string | null
+  plan_slug: string | null
+  billing_cycle: BillingCycle | null
+  current_period_end: string | null // YYYY-MM-DD
+  plan_price_monthly: string | null
+  alerta: AlertaSuscripcion | null
+}
+
+/** Filtros de la lista de suscripciones (query params del endpoint). */
+export interface SuscripcionesFiltros {
+  search?: string
+  plan_id?: string
+  alerta?: 'vencidas' | 'por_vencer'
+  page?: number
+  page_size?: number
+}
+
+/** Respuesta de GET /plataforma/suscripciones/resumen/. */
+export interface SuscripcionesResumen {
+  total_clinicas: number
+  sin_plan: number
+  por_plan: { plan_id: string; plan_name: string; count: number }[]
+  alertas: {
+    trial_vencido: number
+    trial_por_vencer: number
+    periodo_vencido: number
+    periodo_por_vencer: number
+  }
+  mrr_estimado: string // decimal como string
+}
+
+/** Cuerpo de POST /plataforma/clinicas/<tenant_id>/suscripcion/. */
+export interface SuscripcionAsignarInput {
+  plan_id: string
+  billing_cycle: BillingCycle
+  current_period_end: string // YYYY-MM-DD
+}
 
 /** Estado de salud de un servicio o del sistema completo. */
 export type SistemaEstado = 'operational' | 'degraded' | 'down'

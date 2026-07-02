@@ -1,8 +1,8 @@
-import { Building2, Sparkles, Users, HeartPulse, Loader2, AlertCircle, ScrollText, ChevronRight } from 'lucide-react'
+import { Building2, Sparkles, Users, HeartPulse, Loader2, AlertCircle, AlertTriangle, ScrollText, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import PlatformLayout from '../../platform/PlatformLayout'
 import { ESTADO_CLINICA } from '../../data/clinicas'
-import { usePlatformMetrics, usePlatformAuditoria } from '../../hooks/plataforma'
+import { usePlatformMetrics, usePlatformAuditoria, useSuscripcionesResumen } from '../../hooks/plataforma'
 import { usePlatformRole } from '../../platform/PlatformRoleContext'
 import { accesoModuloPlat } from '../../platform/permisos'
 import { formatMesAnio, formatFechaHora } from '../../lib/fecha'
@@ -16,6 +16,13 @@ export default function DashboardPlataformaPage() {
   const verAuditoria = !!accesoModuloPlat(role, 'auditoria')
   const auditoria = usePlatformAuditoria({ page_size: 5 }, verAuditoria)
   const eventos = auditoria.data?.results ?? []
+
+  // Alerta de vencimientos: solo roles con acceso al módulo de suscripciones.
+  const verSuscripciones = !!accesoModuloPlat(role, 'suscripciones')
+  const resumenSusc = useSuscripcionesResumen(verSuscripciones)
+  const vencidas = resumenSusc.data
+    ? resumenSusc.data.alertas.trial_vencido + resumenSusc.data.alertas.periodo_vencido
+    : 0
 
   const porEstado = data?.clinicas_por_estado ?? {}
   const metricas = [
@@ -33,6 +40,26 @@ export default function DashboardPlataformaPage() {
           {isLoading ? 'Cargando…' : `Resumen general · ${data?.total_clinicas ?? 0} clínicas`}
         </p>
       </div>
+
+      {/* Alerta de suscripciones vencidas (solo aviso; la suspensión es manual) */}
+      {verSuscripciones && vencidas > 0 && (
+        <div className="glass-card rounded-2xl px-5 py-4 flex flex-wrap items-center justify-between gap-3"
+          style={{ border: '1px solid rgba(192,57,43,0.35)', background: 'rgba(192,57,43,0.07)' }}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(192,57,43,0.12)' }}>
+              <AlertTriangle className="w-5 h-5" style={{ color: '#C0392B' }} />
+            </div>
+            <p className="text-sm" style={{ color: '#8C2B21' }}>
+              <strong>{vencidas} clínica{vencidas === 1 ? '' : 's'}</strong> con la prueba o el periodo vencido — la suspensión es manual.
+            </p>
+          </div>
+          <button onClick={() => navigate('/plataforma/suscripciones')}
+            className="inline-flex items-center gap-1 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:brightness-110"
+            style={{ background: '#C0392B' }}>
+            Ver suscripciones <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {isError && (
         <div className="glass-card rounded-2xl py-10 px-6 flex items-center justify-center gap-3">

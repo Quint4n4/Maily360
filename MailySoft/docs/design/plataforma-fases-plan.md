@@ -150,19 +150,35 @@ Objetivo: sustituir la maqueta de SistemaPage por datos reales.
   panel; índice parcial para `PdfJob(status=failed, updated_at)` si crece la tabla;
   paralelizar los pings si se agregan más checks.
 
-### Fase 3 — Suscripciones y planes reales
+### Fase 3 — Suscripciones y planes reales — ✅ HECHA (2026-07-02)
 
-Objetivo: que SuscripcionesPage deje de ser maqueta y el trial se administre solo.
+Objetivo: que SuscripcionesPage deje de ser maqueta y los vencimientos se vigilen solos.
 
-- Modelo mínimo en backend: `Plan` (nombre, precio, módulos incluidos) y
-  `TenantSubscription` (tenant, plan, ciclo, vigencia, estado) — diseño alineado a lo
-  que ya vende Maily (trial 60 días → anual con CFDI, ver `DECISIONES-CLAVE.md`).
-- Endpoints plataforma: listar planes, asignar/cambiar plan de una clínica (super_admin, sales),
-  listado de suscripciones con vencimientos.
-- Tarea Celery beat: trials vencidos → aviso y/o suspensión automática (decisión de negocio:
-  ¿suspender automático o solo alertar al equipo? — preguntar antes de implementar).
-- Frontend: conectar SuscripcionesPage (planes reales, clínicas por plan, vencimientos).
-- Auditoría: `SUBSCRIPTION_CHANGE` como nuevo ActionType.
+- [x] Modelos en `apps/tenancy`: `Plan` (sembrado con Básico $1500 / Pro $4500 /
+      Premium $8900 de la maqueta) y `TenantSubscription` (OneToOne con tenant,
+      plan, ciclo mensual/anual, fin de periodo). Deliberadamente NO TenantAware
+      (catálogo/gestión exclusiva de plataforma; documentado en los docstrings).
+- [x] Endpoints (`PlatformSubscriptionPermission`: solo super_admin y sales):
+      `GET /plataforma/planes/`, `GET /plataforma/suscripciones/` (con `alerta`
+      trial_vencido/trial_por_vencer/periodo_vencido/periodo_por_vencer),
+      `GET /plataforma/suscripciones/resumen/` (conteos por plan, alertas, MRR)
+      y `POST /plataforma/clinicas/<id>/suscripcion/` (asignar/cambiar plan,
+      auditado con `SUBSCRIPTION_CHANGE`).
+- [x] Tarea Celery beat diaria `plataforma.avisar_vencimientos` (8:00 CDMX):
+      **SOLO AVISA** — registra `TRIAL_EXPIRED`/`SUBSCRIPTION_EXPIRED` en la
+      bitácora, idempotente, respeta extensiones/renovaciones y NUNCA toca
+      `Tenant.status`. **Decisión del dueño (2026-07-02): la suspensión/
+      cancelación es MANUAL; el sistema únicamente avisa cuando la fecha ya pasó.**
+      Nota: django_celery_beat no está instalado; beat usa CELERY_BEAT_SCHEDULE
+      estándar (compose ya tiene el perfil `beat`).
+- [x] Frontend: SuscripcionesPage real (banner de vencidas con leyenda "la
+      suspensión es manual", KPIs con MRR, cards de planes con conteos, tabla con
+      alertas, filtros, modal Asignar/Cambiar plan) + aviso en el Dashboard.
+- [x] 55 tests nuevos (`test_suscripciones.py`); revisión APROBADA y auditoría de
+      seguridad SEGURO PARA DESPLEGAR.
+- Seguimiento no bloqueante: unificar los frozensets de roles duplicados entre
+  `services.py` y `permissions.py` (una sola fuente de verdad); `bulk_update` en
+  la tarea de avisos si el número de clínicas crece a cientos.
 
 ### Fase 4 — Gestión del equipo de plataforma y cuentas
 

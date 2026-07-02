@@ -3,7 +3,9 @@ Configuración de Celery para Maily Soft.
 
 El worker se inicia con:
     celery -A config.celery worker -l INFO
-    celery -A config.celery beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    celery -A config.celery beat -l INFO
+(django_celery_beat NO está instalado: beat usa el scheduler de archivo por
+defecto de Celery y lee CELERY_BEAT_SCHEDULE de settings/base.py)
 """
 
 import os

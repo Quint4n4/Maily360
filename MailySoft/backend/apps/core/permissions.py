@@ -959,6 +959,9 @@ _PLATFORM_ROLES_AUDIT: frozenset[str] = frozenset(
 _PLATFORM_ROLES_SYSTEM: frozenset[str] = frozenset(
     {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.ENGINEERING}
 )
+_PLATFORM_ROLES_SUBSCRIPTION: frozenset[str] = frozenset(
+    {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.SALES}
+)
 
 
 class RetentionPermission(HasClinicRole):
@@ -1109,3 +1112,28 @@ class PlatformSystemPermission(IsPlatformStaff):
             return True
         role: str = getattr(request.user, "platform_role", "")
         return role in _PLATFORM_ROLES_SYSTEM
+
+
+class PlatformSubscriptionPermission(IsPlatformStaff):
+    """Suscripciones y planes de clínicas: solo super_admin y sales.
+
+    Engineering queda fuera (matriz del frontend: suscripciones es un módulo
+    comercial/administrativo, no técnico — mismo criterio que
+    PlatformClinicWritePermission para el alta/estado de clínicas).
+
+    Aplica TANTO a lectura (listar planes/suscripciones/resumen) como a
+    escritura (asignar/cambiar el plan de una clínica): a diferencia de
+    PlatformAuditPermission/PlatformSystemPermission (solo lectura, sin
+    endpoint de escritura), aquí si existe escritura y el mismo conjunto de
+    roles la controla, así que un único permiso method-agnostic es correcto.
+    """
+
+    message: str = "Solo super_admin y sales pueden gestionar suscripciones."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method == "OPTIONS":
+            return True
+        role: str = getattr(request.user, "platform_role", "")
+        return role in _PLATFORM_ROLES_SUBSCRIPTION
