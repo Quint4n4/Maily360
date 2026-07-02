@@ -14,6 +14,7 @@ import LuzRecordatorios from './components/agenda/LuzRecordatorios'
 // así el bundle inicial no arrastra Finanzas (recharts/jspdf/xlsx) ni el resto
 // hasta que se visita esa ruta.
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const VerificarRecetaPage = lazy(() => import('./pages/VerificarRecetaPage'))
 const AgendaPage = lazy(() => import('./pages/AgendaPage'))
 const ContactosPage = lazy(() => import('./pages/ContactosPage'))
 const PersonalPage = lazy(() => import('./pages/PersonalPage'))
@@ -106,6 +107,8 @@ export default function App() {
           <Suspense fallback={<PantallaCargando />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            {/* Verificación pública de receta (QR) — SIN login, fuera de RequireAuth */}
+            <Route path="/verificar-receta/:id" element={<VerificarRecetaPage />} />
 
             {/* ── App de la clínica (sesión real) ── */}
             <Route path="/agenda"    element={<ClinicRoute modulo="agenda"><AgendaPage /></ClinicRoute>} />

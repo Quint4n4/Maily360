@@ -163,6 +163,32 @@ export async function getPrescriptionPdfWithFormat(
   return _prescriptionPdfBlob(prescriptionId, suffix)
 }
 
+// ── F5 — Verificación pública de autenticidad (QR) ─────────────────────────────
+
+/** Resultado del endpoint público de verificación (SIN PII del paciente). */
+export interface PrescriptionVerifyResult {
+  folio: number
+  estado: 'vigente' | 'anulada'
+  fecha_emision: string // YYYY-MM-DD
+  medico: { nombre: string; cedula_profesional: string }
+  clinica: string
+  controlado: boolean
+  vigencia: string | null // ISO datetime o null
+}
+
+/**
+ * GET verificar-receta/<id>/?sig=<token> — endpoint PÚBLICO (sin sesión).
+ * Confirma la autenticidad de una receta al escanear su QR; devuelve solo datos
+ * no sensibles. Firma inválida o receta inexistente → 404 (ApiError).
+ */
+export async function verificarReceta(
+  prescriptionId: string,
+  sig: string,
+): Promise<PrescriptionVerifyResult> {
+  const qs = new URLSearchParams({ sig }).toString()
+  return request<PrescriptionVerifyResult>(`/verificar-receta/${prescriptionId}/?${qs}`)
+}
+
 // ── F3 — PrescriptionFormat (galería de formatos) ──────────────────────────────
 
 /** GET recetas/formatos/ — formatos del tenant (array directo, no paginado). */
