@@ -1,53 +1,77 @@
-/** Tipos del panel interno de plataforma (equipo Maily) — reflejan apps/plataforma/serializers.py. */
+/**
+ * Tipos del panel interno de plataforma (equipo Maily).
+ *
+ * FASE 5 — ADOPCIÓN DE TIPOS OPENAPI:
+ * Los tipos de SALIDA de la API ahora DERIVAN del esquema OpenAPI autogenerado
+ * (`src/types/openapi.d.ts`, generado con `npm run types:api`). En vez de
+ * duplicar a mano la forma de cada respuesta, tomamos `components['schemas'][…]`.
+ * Un cambio en un serializer del backend se propaga al regenerar el esquema y,
+ * si algo deja de cuadrar, el frontend deja de compilar.
+ *
+ * Regla de derivación aplicada:
+ *   - Los OUTPUT que calzan 1:1 se re-exportan tal cual del esquema.
+ *   - Donde el backend documenta un campo como `CharField` genérico (string)
+ *     pero el frontend depende de un ENUM estrecho para la UX (indexar
+ *     ESTADO_CLINICA[…], ALERTA_SUSCRIPCION[…], etc.), ESTRECHAMOS el campo con
+ *     `Omit<…> & { campo: EnumEstrecho }`. Esto NO es una discrepancia de
+ *     contrato: el backend devuelve exactamente esos valores; el serializer solo
+ *     no los declara como choices, así que el esquema pierde el enum. El
+ *     estrechamiento es deliberado y del lado del cliente.
+ *   - Los INPUT (formularios) se mantienen a mano: el esquema los expone como
+ *     `…Request` con campos opcionales-por-default que ensucian los formularios;
+ *     documentado abajo endpoint por endpoint.
+ */
+
+import type { components } from './openapi'
 
 import type { EstadoClinica } from '../data/clinicas'
 
 export type { EstadoClinica }
 
+/** Atajo al mapa de esquemas OpenAPI. */
+type Schemas = components['schemas']
+
 /** Rol del equipo interno de Maily. */
 export type PlatformRoleApi = 'super_admin' | 'sales' | 'engineering' | ''
 
-/** Una clínica (Tenant) vista desde la plataforma, con conteos. */
-export interface ClinicaPlat {
-  id: string
-  name: string
-  slug: string
+/**
+ * Una clínica (Tenant) vista desde la plataforma, con conteos.
+ * DERIVADO de `ClinicaOutput`; solo se estrecha `status` (el backend lo
+ * documenta como string, pero siempre es un EstadoClinica y la UI lo indexa).
+ */
+export type ClinicaPlat = Omit<Schemas['ClinicaOutput'], 'status'> & {
   status: EstadoClinica
-  status_display: string
-  trial_ends_at: string | null // ISO
-  created_at: string // ISO
-  member_count: number
-  patient_count: number
 }
 
-/** Resumen de una clínica reciente (para el dashboard). */
-export interface UltimaClinica {
-  id: string
-  name: string
+/**
+ * Resumen de una clínica reciente (para el dashboard).
+ * DERIVADO de `UltimaClinicaOutput`; se estrecha `status` a EstadoClinica.
+ */
+export type UltimaClinica = Omit<Schemas['UltimaClinicaOutput'], 'status'> & {
   status: EstadoClinica
-  created_at: string
 }
 
-/** Métricas globales del dashboard de plataforma. */
-export interface DashboardMetrics {
-  total_clinicas: number
+/**
+ * Métricas globales del dashboard de plataforma.
+ * DERIVADO de `DashboardMetricsOutput`. `clinicas_por_estado` se estrecha de
+ * `{ [k: string]: number }` a `Partial<Record<EstadoClinica, number>>`, y
+ * `ultimas_clinicas` a nuestro `UltimaClinica` estrechado.
+ */
+export type DashboardMetrics = Omit<
+  Schemas['DashboardMetricsOutput'],
+  'clinicas_por_estado' | 'ultimas_clinicas'
+> & {
   clinicas_por_estado: Partial<Record<EstadoClinica, number>>
-  total_usuarios: number
-  total_platform_staff: number
-  total_pacientes: number
   ultimas_clinicas: UltimaClinica[]
 }
 
-/** Un usuario del equipo interno de Maily. */
-export interface PlatformStaff {
-  id: string
-  email: string
-  full_name: string
-  first_name: string
-  last_name: string
+/**
+ * Un usuario del equipo interno de Maily.
+ * DERIVADO de `PlatformStaffOutput`; se estrecha `platform_role` (el backend
+ * lo documenta como string; siempre es un PlatformRoleApi).
+ */
+export type PlatformStaff = Omit<Schemas['PlatformStaffOutput'], 'platform_role'> & {
   platform_role: PlatformRoleApi
-  platform_role_display: string
-  is_active: boolean
 }
 
 /** Rol asignable a un miembro del equipo (sin la variante vacía de lectura). */
@@ -76,15 +100,18 @@ export interface StaffUpdateInput {
 /**
  * Resultado del alta de un miembro: incluye la contraseña temporal.
  * Se muestra UNA sola vez; ninguna otra respuesta la vuelve a incluir.
+ * DERIVADO de `StaffCreateOutput` (se estrecha `platform_role`, igual que
+ * PlatformStaff).
  */
-export interface StaffCreateResult extends PlatformStaff {
-  temporary_password: string
+export type StaffCreateResult = Omit<Schemas['StaffCreateOutput'], 'platform_role'> & {
+  platform_role: PlatformRoleApi
 }
 
-/** Respuesta de POST /plataforma/usuarios/<user_id>/reset-password/ (mostrar UNA vez). */
-export interface StaffResetPasswordResult {
-  temporary_password: string
-}
+/**
+ * Respuesta de POST /plataforma/usuarios/<user_id>/reset-password/ (mostrar UNA vez).
+ * DERIVADO de `StaffPasswordResetOutput` (calza 1:1).
+ */
+export type StaffResetPasswordResult = Schemas['StaffPasswordResetOutput']
 
 /** Cuerpo para dar de alta una clínica nueva (POST /plataforma/clinicas/). */
 export interface ClinicaCreateInput {
@@ -96,37 +123,40 @@ export interface ClinicaCreateInput {
   trial_days?: number
 }
 
-/** Resultado del alta: incluye la contraseña temporal (mostrar UNA sola vez). */
-export interface ClinicaCreateResult {
+/**
+ * Resultado del alta: incluye la contraseña temporal (mostrar UNA sola vez).
+ * DERIVADO de `ClinicaCreateOutput`; se estrecha `tenant` a nuestro ClinicaPlat
+ * (que a su vez estrecha `status`).
+ */
+export type ClinicaCreateResult = Omit<Schemas['ClinicaCreateOutput'], 'tenant'> & {
   tenant: ClinicaPlat
-  owner_email: string
-  temporary_password: string
 }
 
-/** Un miembro de la clínica (dentro de la ficha). */
-export interface ClinicaMember {
-  id: string
-  full_name: string
-  email: string
-  role: string
-  role_display: string
-  is_active: boolean
-}
+/**
+ * Un miembro de la clínica (dentro de la ficha).
+ * DERIVADO de `ClinicaMemberOutput` (calza 1:1).
+ */
+export type ClinicaMember = Schemas['ClinicaMemberOutput']
 
-/** Un evento del log de auditoría cross-tenant (GET /plataforma/auditoria/). */
-export interface AuditoriaEvento {
-  id: string
-  created_at: string // ISO
-  action: string
-  action_display: string
-  actor_email: string | null
+/**
+ * Un evento del log de auditoría cross-tenant (GET /plataforma/auditoria/).
+ * DERIVADO de `AuditLogOutput`.
+ *
+ * DISCREPANCIA de contrato detectada (ver reporte): el frontend asumía a mano
+ * `actor_role: string | null` y `resource_type: string | null`, pero el esquema
+ * los declara como `string` NO nullable (el serializer usa
+ * `CharField(read_only=True)` sin `allow_null=True`, aunque el modelo AuditLog
+ * SÍ permite null en esas columnas). Se conserva el comportamiento previo del
+ * frontend (los trata como nullable) estrechándolos localmente a `| null`, para
+ * no romper el manejo defensivo existente. `metadata` se estrecha de `unknown`
+ * (JSONField) al `Record<string, unknown>` que la UI ya esperaba.
+ */
+export type AuditoriaEvento = Omit<
+  Schemas['AuditLogOutput'],
+  'actor_role' | 'resource_type' | 'metadata'
+> & {
   actor_role: string | null
-  tenant_id: string | null
-  tenant_name: string | null
   resource_type: string | null
-  resource_id: string | null
-  description: string
-  ip_address: string | null
   metadata: Record<string, unknown>
 }
 
@@ -189,18 +219,11 @@ export const ACCIONES_AUDITORIA: { value: string; label: string }[] = [
 
 /* ── Suscripciones (Fase 3) ─────────────────────────────────────────────── */
 
-/** Un plan comercial de la plataforma (GET /plataforma/planes/; array SIN paginar). */
-export interface PlanPlataforma {
-  id: string
-  slug: string
-  name: string
-  description: string
-  price_monthly: string // decimal como string, p. ej. "1500.00"
-  is_featured: boolean
-  features: string[]
-  is_active: boolean
-  order: number
-}
+/**
+ * Un plan comercial de la plataforma (GET /plataforma/planes/; array SIN paginar).
+ * DERIVADO de `PlanOutput` (calza 1:1; price_monthly es decimal como string).
+ */
+export type PlanPlataforma = Schemas['PlanOutput']
 
 /**
  * Cuerpo para crear/editar un plan (POST /plataforma/planes/ y
@@ -236,19 +259,19 @@ export const ALERTA_SUSCRIPCION: Record<AlertaSuscripcion, { label: string; badg
   periodo_por_vencer: { label: 'Periodo por vencer', badge: 'badge-warning' },
 }
 
-/** Una clínica con su plan (item de GET /plataforma/suscripciones/). */
-export interface SuscripcionRow {
-  tenant_id: string
-  tenant_name: string
-  tenant_slug: string
+/**
+ * Una clínica con su plan (item de GET /plataforma/suscripciones/).
+ * DERIVADO de `SubscriptionRowOutput`. Se estrechan a enums los campos que el
+ * backend documenta como string genérico pero que la UI indexa/compara:
+ * `tenant_status` (EstadoClinica), `billing_cycle` (BillingCycle) y `alerta`
+ * (AlertaSuscripcion, indexa ALERTA_SUSCRIPCION[…]).
+ */
+export type SuscripcionRow = Omit<
+  Schemas['SubscriptionRowOutput'],
+  'tenant_status' | 'billing_cycle' | 'alerta'
+> & {
   tenant_status: EstadoClinica
-  trial_ends_at: string | null // ISO
-  plan_id: string | null
-  plan_name: string | null
-  plan_slug: string | null
   billing_cycle: BillingCycle | null
-  current_period_end: string | null // YYYY-MM-DD
-  plan_price_monthly: string | null
   alerta: AlertaSuscripcion | null
 }
 
@@ -261,19 +284,12 @@ export interface SuscripcionesFiltros {
   page_size?: number
 }
 
-/** Respuesta de GET /plataforma/suscripciones/resumen/. */
-export interface SuscripcionesResumen {
-  total_clinicas: number
-  sin_plan: number
-  por_plan: { plan_id: string; plan_name: string; count: number }[]
-  alertas: {
-    trial_vencido: number
-    trial_por_vencer: number
-    periodo_vencido: number
-    periodo_por_vencer: number
-  }
-  mrr_estimado: string // decimal como string
-}
+/**
+ * Respuesta de GET /plataforma/suscripciones/resumen/.
+ * DERIVADO de `SubscripcionesResumenOutput` (calza 1:1; incluye los sub-objetos
+ * `por_plan` y `alertas` derivados de sus propios componentes).
+ */
+export type SuscripcionesResumen = Schemas['SubscripcionesResumenOutput']
 
 /** Cuerpo de POST /plataforma/clinicas/<tenant_id>/suscripcion/. */
 export interface SuscripcionAsignarInput {
@@ -285,51 +301,48 @@ export interface SuscripcionAsignarInput {
 /** Estado de salud de un servicio o del sistema completo. */
 export type SistemaEstado = 'operational' | 'degraded' | 'down'
 
-/** Un servicio monitoreado (PostgreSQL, Redis, worker Celery…). */
-export interface SistemaServicio {
-  key: string
-  label: string
+/**
+ * Un servicio monitoreado (PostgreSQL, Redis, worker Celery…).
+ * DERIVADO de `SystemServiceOutput`; se estrecha `status` a SistemaEstado.
+ */
+export type SistemaServicio = Omit<Schemas['SystemServiceOutput'], 'status'> & {
   status: SistemaEstado
-  latency_ms: number | null
-  detail: string | null
 }
 
-/** Versión desplegada del backend. */
-export interface SistemaVersion {
-  commit: string | null
-  django: string
-  python: string
-  environment: string
-}
+/**
+ * Versión desplegada del backend.
+ * DERIVADO de `SystemVersionOutput` (calza 1:1).
+ */
+export type SistemaVersion = Schemas['SystemVersionOutput']
 
-/** Estado de la cola de PDFs (Celery). */
-export interface SistemaPdfQueue {
-  pending: number
-  processing: number
-  failed_24h: number
-}
+/**
+ * Estado de la cola de PDFs (Celery).
+ * DERIVADO de `SystemPdfQueueOutput` (calza 1:1).
+ */
+export type SistemaPdfQueue = Schemas['SystemPdfQueueOutput']
 
-/** Respuesta de GET /plataforma/sistema/ — salud del sistema (super_admin / engineering). */
-export interface SistemaSalud {
-  generated_at: string // ISO
+/**
+ * Respuesta de GET /plataforma/sistema/ — salud del sistema (super_admin / engineering).
+ * DERIVADO de `SystemHealthOutput`; se estrechan `overall_status` a
+ * SistemaEstado y `services` a nuestro SistemaServicio (que estrecha su status).
+ */
+export type SistemaSalud = Omit<
+  Schemas['SystemHealthOutput'],
+  'overall_status' | 'services'
+> & {
   overall_status: SistemaEstado
   services: SistemaServicio[]
-  version: SistemaVersion
-  pdf_queue: SistemaPdfQueue
 }
 
-/** Ficha de detalle de una clínica. */
-export interface ClinicaDetail {
-  id: string
-  name: string
-  slug: string
+/**
+ * Ficha de detalle de una clínica.
+ * DERIVADO de `ClinicaDetailOutput`; se estrecha `status` a EstadoClinica y
+ * `members` a nuestro ClinicaMember.
+ */
+export type ClinicaDetail = Omit<
+  Schemas['ClinicaDetailOutput'],
+  'status' | 'members'
+> & {
   status: EstadoClinica
-  status_display: string
-  trial_ends_at: string | null
-  created_at: string
-  member_count: number
-  patient_count: number
-  appointment_count: number
-  ultima_actividad: string | null
   members: ClinicaMember[]
 }

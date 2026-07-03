@@ -322,6 +322,15 @@ class AuditLog(TenantAwareModel):
         db_table = "audit_logs"
         ordering = ["-created_at"]
         indexes = [
+            # Sin prefijo de tenant: soporta el orden global "-created_at" que
+            # usa el endpoint cross-tenant /plataforma/auditoria/ (selectors de
+            # apps/plataforma), que consulta AuditLog.all_objects sin filtrar
+            # por tenant. Los demás índices de esta lista llevan tenant como
+            # prefijo y no sirven para ese acceso (seq scan con volumen).
+            models.Index(
+                fields=["-created_at"],
+                name="audit_created_idx",
+            ),
             models.Index(
                 fields=["tenant", "created_at"],
                 name="audit_tenant_created_idx",

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-// Usuario E2E dedicado, creado por `manage.py seed_e2e_user` (rol owner, clinica-demo).
+// Usuario E2E dedicado, creado por `manage.py seed_e2e_user` (rol owner, tenant demo).
 const DEMO_EMAIL = 'e2e@maily.local'
 const DEMO_PASSWORD = 'Demo1234!'
 

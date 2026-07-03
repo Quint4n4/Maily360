@@ -3,8 +3,14 @@
  *
  * Estos tipos reflejan EXACTAMENTE los serializers del backend
  * (apps/authn/serializers.py). Si el backend cambia el contrato, se actualiza
- * aquí. A futuro pueden autogenerarse desde el esquema OpenAPI (drf-spectacular)
- * con openapi-typescript; por ahora se mantienen a mano y acotados.
+ * aquí.
+ *
+ * PIPELINE OPENAPI (Fase 5): ya existe generación de tipos desde el esquema
+ * OpenAPI (drf-spectacular → openapi-typescript). Ver `openapi/README.md` y
+ * `src/types/openapi.d.ts`. La ADOPCIÓN es gradual: el portal de plataforma
+ * (`src/types/plataforma.ts`) ya deriva sus tipos de salida del esquema; el
+ * resto de dominios de este archivo se mantiene a mano por ahora y se migrará
+ * endpoint por endpoint.
  */
 
 import type { ClinicRole } from '../auth/permisos'

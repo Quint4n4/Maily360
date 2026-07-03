@@ -10,10 +10,11 @@
 
 **Requisitos:**
 1. El **backend** corriendo (Docker, `:8000`) — el proxy de Vite reenvía `/api` ahí.
-2. Datos demo + usuario E2E sembrados (una sola vez):
+2. Datos demo + usuarios E2E sembrados (una sola vez):
    ```bash
-   docker compose exec backend python manage.py seed_finanzas    # crea clinica-demo
-   docker compose exec backend python manage.py seed_e2e_user    # crea e2e@maily.local
+   docker compose exec backend python manage.py seed_finanzas             # crea/usa el tenant demo
+   docker compose exec backend python manage.py seed_e2e_user             # crea e2e@maily.local
+   docker compose exec backend python manage.py seed_e2e_user --platform  # + e2e-admin@maily.local (staff)
    ```
 3. Playwright levanta el **frontend** solo (`npm run dev`); si ya corre, lo reusa.
 
@@ -32,6 +33,17 @@ npx playwright show-report  # reporte HTML de la última corrida
 - Login **exitoso** entra al sistema (front + back real).
 - Credenciales inválidas muestran error y no entra (401).
 
+`e2e/plataforma.spec.ts` (panel interno de Maily, `/plataforma/*`):
+- Login del staff → dashboard con métricas y actividad reciente.
+- Alta de clínica (modal "Nueva clínica"), captura de la contraseña temporal
+  y verificación en el listado.
+- La clínica recién creada aparece en Auditoría.
+- Suscripciones: los 3 planes reales (Básico/Pro/Premium) cargan y se puede
+  asignar un plan a la clínica creada.
+- Flujo de oro completo: logout del staff → login del dueño con la contraseña
+  temporal → redirect forzado a `/cambiar-contrasena` → cambio de contraseña
+  → aterriza en la app de clínica.
+
 ## Cómo agregar más flujos
 
 Crea un archivo `e2e/<flujo>.spec.ts`. Para flujos autenticados, primero haz login
@@ -43,10 +55,15 @@ Crea un archivo `e2e/<flujo>.spec.ts`. Para flujos autenticados, primero haz log
 Selectores recomendados (estables): `getByRole`, `getByPlaceholder`, `getByText`.
 Evitar selectores por clases de Tailwind (cambian).
 
-## Usuario de pruebas
+## Usuarios de pruebas
 
-`seed_e2e_user` crea **`e2e@maily.local` / `Demo1234!`** (rol owner en `clinica-demo`),
+`seed_e2e_user` crea **`e2e@maily.local` / `Demo1234!`** (rol owner en el tenant demo:
+usa `clinica-demo` o `demo`, el que exista; si ninguno existe toma el primer tenant),
 dedicado a E2E — no toca usuarios reales. Es idempotente; re-córrelo si hace falta.
+
+`seed_e2e_user --platform` además crea **`e2e-admin@maily.local` / `Demo1234!`**
+(`is_platform_staff=True`, `platform_role=super_admin`, `must_change_password=False`),
+usado por `plataforma.spec.ts` para entrar al panel interno. También idempotente.
 
 ## Pendiente (futuro)
 

@@ -1,0 +1,4264 @@
+openapi: 3.0.3
+info:
+  title: Maily Soft API
+  version: 1.0.0
+  description: API REST para la plataforma de gestión clínica Maily Soft
+paths:
+  /api/v1/agenda/citas/:
+    get:
+      operationId: v1_agenda_citas_retrieve
+      description: |-
+        Lista paginada de citas del tenant con filtros opcionales.
+
+        Query params:
+            doctor_id:      UUID del médico.
+            patient_id:     UUID del paciente.
+            consultorio_id: UUID del consultorio.
+            status:         Estado de la cita (scheduled|confirmed|arrived|...).
+            date_from:      ISO datetime UTC inicio de rango.
+            date_to:        ISO datetime UTC fin de rango.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_agenda_citas_create
+      description: Crea una cita nueva en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/citas/{appointment_id}/:
+    get:
+      operationId: v1_agenda_citas_retrieve_2
+      description: Retorna el detalle de una cita.
+      parameters:
+      - in: path
+        name: appointment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_agenda_citas_partial_update
+      description: |-
+        Actualización parcial de campos editables (reason, notes, specialty).
+
+        NO acepta status (use /estado/), ni horario (use /reagendar/).
+      parameters:
+      - in: path
+        name: appointment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_agenda_citas_destroy
+      description: Cancela una cita. NO la borra — llama appointment_change_status(CANCELLED).
+      parameters:
+      - in: path
+        name: appointment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/agenda/citas/{appointment_id}/estado/:
+    post:
+      operationId: v1_agenda_citas_estado_create
+      description: Cambia el estado de una cita validando la transición.
+      parameters:
+      - in: path
+        name: appointment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/citas/{appointment_id}/notas/:
+    get:
+      operationId: v1_agenda_citas_notas_retrieve
+      description: Lista todas las notas del hilo de una cita, ordenadas por created_at
+        ASC.
+      parameters:
+      - in: path
+        name: appointment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_agenda_citas_notas_create
+      description: Agrega una nota al hilo de una cita.
+      parameters:
+      - in: path
+        name: appointment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/citas/{appointment_id}/reactivar/:
+    post:
+      operationId: v1_agenda_citas_reactivar_create
+      description: |-
+        POST /api/v1/agenda/citas/<appointment_id>/reactivar/
+
+        Reactiva una cita CANCELADA al mismo horario (vuelve a 'Agendada').
+        Revalida anti-empalme; si el hueco ya está ocupado, 400.
+      parameters:
+      - in: path
+        name: appointment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/citas/{appointment_id}/reagendar/:
+    post:
+      operationId: v1_agenda_citas_reagendar_create
+      description: Reagenda una cita (nuevo horario y opcionalmente nuevo consultorio).
+      parameters:
+      - in: path
+        name: appointment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/citas/serie/:
+    post:
+      operationId: v1_agenda_citas_serie_create
+      description: Crea la serie y devuelve {series_id, created[], skipped[]}.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/config/:
+    get:
+      operationId: v1_agenda_config_retrieve
+      description: Retorna la configuración de agenda del tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_agenda_config_partial_update
+      description: Actualiza la configuración de agenda del tenant.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/disponibilidad/:
+    get:
+      operationId: v1_agenda_disponibilidad_retrieve
+      description: 'Devuelve {"busy": [{"start": iso, "end": iso}, ...]}.'
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/eventos/:
+    get:
+      operationId: v1_agenda_eventos_retrieve
+      description: Lista de eventos del tenant que solapan el rango [date_from, date_to].
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_agenda_eventos_create
+      description: Crea un evento (reunión o bloqueo) en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/eventos/{block_id}/:
+    patch:
+      operationId: v1_agenda_eventos_partial_update
+      description: |-
+        PATCH  /api/v1/agenda/eventos/<id>/  — edita un evento (título, fecha/hora, notas).
+        DELETE /api/v1/agenda/eventos/<id>/  — elimina un evento de agenda.
+      parameters:
+      - in: path
+        name: block_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_agenda_eventos_destroy
+      description: |-
+        PATCH  /api/v1/agenda/eventos/<id>/  — edita un evento (título, fecha/hora, notas).
+        DELETE /api/v1/agenda/eventos/<id>/  — elimina un evento de agenda.
+      parameters:
+      - in: path
+        name: block_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/agenda/eventos/{block_id}/notas/:
+    get:
+      operationId: v1_agenda_eventos_notas_retrieve
+      description: Lista todas las notas del hilo de un evento, ordenadas por created_at
+        ASC.
+      parameters:
+      - in: path
+        name: block_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_agenda_eventos_notas_create
+      description: Agrega una nota al hilo de un evento de agenda.
+      parameters:
+      - in: path
+        name: block_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/notas/{note_id}/:
+    delete:
+      operationId: v1_agenda_notas_destroy
+      description: Soft-delete de una nota del hilo de agenda.
+      parameters:
+      - in: path
+        name: note_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/agenda/tipos-cita/:
+    get:
+      operationId: v1_agenda_tipos_cita_retrieve
+      description: Lista de tipos de cita del tenant (todos si only_active=false).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_agenda_tipos_cita_create
+      description: Crea un tipo de cita en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/agenda/tipos-cita/{type_id}/:
+    patch:
+      operationId: v1_agenda_tipos_cita_partial_update
+      description: |-
+        PATCH  /api/v1/agenda/tipos-cita/<id>/  — actualización parcial.
+        DELETE /api/v1/agenda/tipos-cita/<id>/  — desactivación (soft).
+      parameters:
+      - in: path
+        name: type_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_agenda_tipos_cita_destroy
+      description: |-
+        PATCH  /api/v1/agenda/tipos-cita/<id>/  — actualización parcial.
+        DELETE /api/v1/agenda/tipos-cita/<id>/  — desactivación (soft).
+      parameters:
+      - in: path
+        name: type_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/audit/logs/:
+    get:
+      operationId: v1_audit_logs_retrieve
+      description: Devuelve la bitácora paginada del tenant activo.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/change-password/:
+    post:
+      operationId: v1_auth_change_password_create
+      description: Valida la contraseña actual, aplica la nueva y rota la cookie de
+        sesión.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      description: Delega a SimpleJWT; en éxito mueve el refresh a cookie y audita.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: Invalida el refresh token y elimina la cookie de sesión.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/refresh/:
+    post:
+      operationId: v1_auth_refresh_create
+      description: Lee la cookie de refresh, rota si aplica, devuelve {access}.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/verify/:
+    post:
+      operationId: v1_auth_verify_create
+      description: |-
+        Takes a token and indicates if it is valid.  This view provides no
+        information about a token's fitness for a particular use.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+        required: true
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/categorias/:
+    get:
+      operationId: v1_clinica_categorias_retrieve
+      description: Lista paginada de categorías activas del tenant.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_clinica_categorias_create
+      description: Crea una categoría de paciente en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/categorias/{category_id}/:
+    delete:
+      operationId: v1_clinica_categorias_destroy
+      description: DELETE /api/v1/clinica/categorias/<id>/  — baja lógica de una categoría.
+      parameters:
+      - in: path
+        name: category_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/clinica/configuracion/:
+    get:
+      operationId: v1_clinica_configuracion_retrieve
+      description: Retorna la configuración actual de la clínica o 204 si aún no existe.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_clinica_configuracion_update
+      description: |-
+        Crea o actualiza la configuración de la clínica (upsert parcial).
+
+        Solo actualiza los campos presentes en el payload.
+        Imágenes solo se reemplazan si se envían en el request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/credenciales/:
+    get:
+      operationId: v1_clinica_credenciales_retrieve
+      description: |-
+        GET /api/v1/clinica/credenciales/  — bandeja de validación (todo el tenant).
+
+        Lista las credenciales de TODOS los médicos de la clínica para que el
+        administrador las valide. Filtro opcional ?status=pendiente|validada|rechazada.
+        Solo owner/admin (un médico ve solo las suyas en /doctores/<id>/credenciales/).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/credenciales/{credential_id}/:
+    patch:
+      operationId: v1_clinica_credenciales_partial_update
+      description: Edita (parcial) una credencial del médico, incluido su logo (multipart).
+      parameters:
+      - in: path
+        name: credential_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_clinica_credenciales_destroy
+      description: Da de baja (is_active=False) una credencial del médico.
+      parameters:
+      - in: path
+        name: credential_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/clinica/credenciales/{credential_id}/validar/:
+    patch:
+      operationId: v1_clinica_credenciales_validar_partial_update
+      description: |-
+        PATCH /api/v1/clinica/credenciales/<credential_id>/validar/  — valida o rechaza.
+
+        Acción administrativa (solo owner/admin): status='validada'|'rechazada' + note.
+        Solo las credenciales validadas aparecen en la receta.
+      parameters:
+      - in: path
+        name: credential_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/doctores/{doctor_id}/credenciales/:
+    get:
+      operationId: v1_clinica_doctores_credenciales_retrieve
+      description: Lista las credenciales activas del médico.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_clinica_doctores_credenciales_create
+      description: Agrega una credencial académica al médico.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/doctores/{doctor_id}/perfil/:
+    patch:
+      operationId: v1_clinica_doctores_perfil_partial_update
+      description: Actualiza sello, foto o cédulas adicionales del médico.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/doctores/{doctor_id}/universidades/:
+    get:
+      operationId: v1_clinica_doctores_universidades_retrieve
+      description: Lista las universidades del médico.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_clinica_doctores_universidades_create
+      description: Agrega un logo de universidad al médico.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/plantillas/:
+    get:
+      operationId: v1_clinica_plantillas_retrieve
+      description: |-
+        Lista paginada de plantillas activas del tenant.
+
+        Query param `kind` filtra por tipo (recipe/document/consent).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_clinica_plantillas_create
+      description: Crea una plantilla clínica en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/plantillas/{template_id}/:
+    get:
+      operationId: v1_clinica_plantillas_retrieve_2
+      description: |-
+        GET    /api/v1/clinica/plantillas/<id>/  — detalle de una plantilla.
+        PATCH  /api/v1/clinica/plantillas/<id>/  — actualización parcial.
+        DELETE /api/v1/clinica/plantillas/<id>/  — baja lógica (is_active=False).
+      parameters:
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_clinica_plantillas_partial_update
+      description: |-
+        GET    /api/v1/clinica/plantillas/<id>/  — detalle de una plantilla.
+        PATCH  /api/v1/clinica/plantillas/<id>/  — actualización parcial.
+        DELETE /api/v1/clinica/plantillas/<id>/  — baja lógica (is_active=False).
+      parameters:
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_clinica_plantillas_destroy
+      description: |-
+        GET    /api/v1/clinica/plantillas/<id>/  — detalle de una plantilla.
+        PATCH  /api/v1/clinica/plantillas/<id>/  — actualización parcial.
+        DELETE /api/v1/clinica/plantillas/<id>/  — baja lógica (is_active=False).
+      parameters:
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/clinica/universidades/{university_id}/:
+    delete:
+      operationId: v1_clinica_universidades_destroy
+      description: Elimina físicamente el logo de universidad.
+      parameters:
+      - in: path
+        name: university_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/expediente/{patient_id}/alergias/:
+    get:
+      operationId: v1_expediente_alergias_retrieve
+      description: Lista las alergias del paciente (vigentes por defecto).
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_alergias_create
+      description: Registra una alergia nueva para el paciente.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/diagnosticos/:
+    get:
+      operationId: v1_expediente_diagnosticos_retrieve
+      description: |-
+        Lista diagnósticos del paciente.
+
+        ALTO-2: registra DIAGNOSIS_READ en AuditLog (NOM-024). Si audit_record
+        devuelve None → logger.critical pero el acceso continúa (mismo trade-off
+        que MedicalHistoryApi.get — disponibilidad clínica > registro estricto).
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_diagnosticos_create
+      description: Crea un diagnóstico para el paciente.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/evoluciones/:
+    get:
+      operationId: v1_expediente_evoluciones_retrieve
+      description: |-
+        Lista las notas de evolución del paciente (-created_at), paginadas.
+
+        Registra EVOLUTION_READ en la bitácora de auditoría (NOM-024).
+        Fallo de bitácora → logger.critical, el acceso continúa.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_evoluciones_create
+      description: |-
+        Crea una nota de evolución inmutable (D-EC-1, D-EC-2).
+
+        Resuelve appointment, doctor y vital_signs con validación anti-IDOR.
+        Inyecta active_role en el usuario para la regla del médico en el service.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/historia/:
+    get:
+      operationId: v1_expediente_historia_retrieve
+      description: |-
+        Devuelve la HC del paciente.
+
+        Si el paciente no existe o es de otro tenant → 404 (anti-IDOR).
+        Si no tiene HC aún → 200 con documento vacío.
+        Si tiene HC → 200 con la HC serializada.
+
+        Registra MEDICAL_HISTORY_READ en AuditLog (NOM-024).
+
+        ALTO-1 — trade-off disponibilidad vs registro estricto (NOM-024):
+        Si audit_record devuelve None (falla interna de la bitácora), el acceso
+        NO se deniega: un médico en una urgencia no puede quedar bloqueado por
+        un fallo de log. Sin embargo, el fallo se eleva a logger.critical para que
+        aparezca en alertas de operaciones y pueda investigarse.
+        Si en el futuro el equipo decide denegar el acceso cuando la bitácora falla,
+        basta con descartar la respuesta y devolver:
+            return Response({"detail": "Servicio de auditoría no disponible."},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_expediente_historia_update
+      description: |-
+        Crea o actualiza la HC del paciente (upsert).
+
+        Si el paciente no existe o es de otro tenant → 404 (anti-IDOR).
+        Valida entrada estricta (D-EC-7). Delega upsert al service.
+        Devuelve 200 con la HC resultante.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/indicaciones-enfermeria/:
+    get:
+      operationId: v1_expediente_indicaciones_enfermeria_retrieve
+      description: |-
+        Lista las indicaciones de enfermería del paciente (máx. últimas 20).
+
+        Responde 404 si el paciente no existe o es de otro tenant (anti-IDOR).
+        Responde 200 con lista (puede ser [] si no hay indicaciones aún).
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/libro/:
+    get:
+      operationId: v1_expediente_libro_retrieve
+      description: Arma y devuelve el libro clínico del paciente (paginado).
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/libro/pdf/:
+    get:
+      operationId: v1_expediente_libro_pdf_retrieve
+      description: Encola la generación del PDF del libro clínico.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/recetas/:
+    get:
+      operationId: v1_expediente_recetas_retrieve
+      description: Lista el historial de recetas del paciente, paginado.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_recetas_create
+      description: Emite una receta médica nueva para el paciente.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/signos/:
+    get:
+      operationId: v1_expediente_signos_retrieve
+      description: |-
+        Lista las tomas de signos vitales del paciente (-measured_at), paginadas.
+
+        MEDIO-2: registra VITALSIGNS_READ en la bitácora de auditoría (NOM-024).
+        MEDIO-3: aplica paginación con envoltura {count, next, previous, results}.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_signos_create
+      description: |-
+        Registra una toma nueva de signos vitales (append-only).
+
+        ALTO-1: cualquier fallo al resolver appointment_id (inexistente, otro
+        tenant, otro paciente) devuelve siempre 404 con el mismo mensaje.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/signos/series/:
+    get:
+      operationId: v1_expediente_signos_series_retrieve
+      description: |-
+        Devuelve las series temporales de todos los parámetros del paciente.
+
+        MEDIO-2: registra VITALSIGNS_READ en la bitácora de auditoría (NOM-024).
+        MEDIO-3: acepta ?since=<YYYY-MM-DD> para limitar el rango.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/alergias/{allergy_id}/:
+    delete:
+      operationId: v1_expediente_alergias_destroy
+      description: Marca la alergia como resuelta (baja lógica, sin borrado físico).
+      parameters:
+      - in: path
+        name: allergy_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/expediente/diagnosticos/{diagnosis_id}/resolver/:
+    post:
+      operationId: v1_expediente_diagnosticos_resolver_create
+      description: Marca el diagnóstico como resuelto (baja lógica).
+      parameters:
+      - in: path
+        name: diagnosis_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/evoluciones/{evolution_id}/addendum/:
+    post:
+      operationId: v1_expediente_evoluciones_addendum_create
+      description: Agrega un addendum a la nota de evolución indicada.
+      parameters:
+      - in: path
+        name: evolution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/evoluciones/{evolution_id}/imagenes/:
+    get:
+      operationId: v1_expediente_evoluciones_imagenes_retrieve
+      description: Lista las imágenes activas de la nota de evolución.
+      parameters:
+      - in: path
+        name: evolution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_evoluciones_imagenes_create
+      description: |-
+        Sube una imagen a la nota de evolución (multipart/form-data).
+
+        El campo 'image' debe ser un archivo binario JPEG, PNG o WEBP.
+        La validación de contenido real la hace validate_evolution_image() en el
+        service (Pillow). El serializer aquí solo verifica que el campo exista.
+      parameters:
+      - in: path
+        name: evolution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/imagenes/{image_id}/:
+    delete:
+      operationId: v1_expediente_imagenes_destroy
+      description: Baja lógica de la imagen (sin borrado físico, D-EC-5).
+      parameters:
+      - in: path
+        name: image_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/expediente/preguntas-hc/:
+    get:
+      operationId: v1_expediente_preguntas_hc_retrieve
+      description: Lista las preguntas extra de la clínica (activas por defecto).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_preguntas_hc_create
+      description: Crea una pregunta extra para el formulario de HC de la clínica.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/preguntas-hc/{question_id}/:
+    patch:
+      operationId: v1_expediente_preguntas_hc_partial_update
+      description: Edita campos mutables de la pregunta (label, field_type, options,
+        section, order, is_required).
+      parameters:
+      - in: path
+        name: question_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_expediente_preguntas_hc_destroy
+      description: Desactiva la pregunta (baja lógica — D-EC-5, idempotente).
+      parameters:
+      - in: path
+        name: question_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finanzas/cargos/:
+    get:
+      operationId: v1_finanzas_cargos_retrieve
+      description: |-
+        GET  /api/v1/finanzas/cargos/ — lista de cargos.
+        POST /api/v1/finanzas/cargos/ — crea un cargo (owner/admin/finance).
+
+        Permisos:
+            GET  → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs (D-2).
+            POST → FINANCE_CORE_ROLES (owner/admin/finance).
+
+        Filtros GET soportados:
+            ?patient_id=<uuid>    — cargos de un paciente.
+            ?status=<str>         — pending | partial | paid | cancelled.
+            ?appointment=<uuid>   — cargos ligados a una cita concreta (para el libro).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_finanzas_cargos_create
+      description: |-
+        GET  /api/v1/finanzas/cargos/ — lista de cargos.
+        POST /api/v1/finanzas/cargos/ — crea un cargo (owner/admin/finance).
+
+        Permisos:
+            GET  → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs (D-2).
+            POST → FINANCE_CORE_ROLES (owner/admin/finance).
+
+        Filtros GET soportados:
+            ?patient_id=<uuid>    — cargos de un paciente.
+            ?status=<str>         — pending | partial | paid | cancelled.
+            ?appointment=<uuid>   — cargos ligados a una cita concreta (para el libro).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cargos/{charge_id}/:
+    get:
+      operationId: v1_finanzas_cargos_retrieve_2
+      description: |-
+        GET    /api/v1/finanzas/cargos/<uuid>/  — detalle.
+        DELETE /api/v1/finanzas/cargos/<uuid>/  — cancela el cargo.
+      parameters:
+      - in: path
+        name: charge_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_finanzas_cargos_destroy
+      description: |-
+        GET    /api/v1/finanzas/cargos/<uuid>/  — detalle.
+        DELETE /api/v1/finanzas/cargos/<uuid>/  — cancela el cargo.
+      parameters:
+      - in: path
+        name: charge_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finanzas/cfdi/:
+    get:
+      operationId: v1_finanzas_cfdi_retrieve
+      description: |-
+        GET  /api/v1/finanzas/cfdi/ — lista de comprobantes.
+        POST /api/v1/finanzas/cfdi/ — emite (timbra) un CFDI desde un pago.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_finanzas_cfdi_create
+      description: |-
+        GET  /api/v1/finanzas/cfdi/ — lista de comprobantes.
+        POST /api/v1/finanzas/cfdi/ — emite (timbra) un CFDI desde un pago.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cfdi/{cfdi_id}/:
+    get:
+      operationId: v1_finanzas_cfdi_retrieve_2
+      description: GET /api/v1/finanzas/cfdi/<uuid>/ — detalle de un comprobante.
+      parameters:
+      - in: path
+        name: cfdi_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cfdi/{cfdi_id}/cancelar/:
+    post:
+      operationId: v1_finanzas_cfdi_cancelar_create
+      description: POST /api/v1/finanzas/cfdi/<uuid>/cancelar/ — cancela un comprobante.
+      parameters:
+      - in: path
+        name: cfdi_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cierre-diario/:
+    get:
+      operationId: v1_finanzas_cierre_diario_retrieve
+      description: |-
+        GET /api/v1/finanzas/cierre-diario/ — cierre de caja del día.
+
+        Parámetros:
+            date — YYYY-MM-DD (default: hoy).
+
+        Devuelve producción, cobranza, ajustes, desglose por método y lista de
+        movimientos del día (cargos + pagos) ordenados cronológicamente.
+
+        Permiso: FinanceDeskPermission → FINANCE_DESK_ROLES (owner, admin, finance, reception).
+        Reception puede consultar el cierre de caja propio del día; no puede ver el
+        panel analítico (DashboardApi / PeriodReportApi).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/conceptos/:
+    get:
+      operationId: v1_finanzas_conceptos_retrieve
+      description: |-
+        GET  /api/v1/finanzas/conceptos/ — lista de conceptos cobrables.
+        POST /api/v1/finanzas/conceptos/ — crea un concepto (owner/admin).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_finanzas_conceptos_create
+      description: |-
+        GET  /api/v1/finanzas/conceptos/ — lista de conceptos cobrables.
+        POST /api/v1/finanzas/conceptos/ — crea un concepto (owner/admin).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/conceptos/{concept_id}/:
+    get:
+      operationId: v1_finanzas_conceptos_retrieve_2
+      description: GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+      parameters:
+      - in: path
+        name: concept_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_finanzas_conceptos_partial_update
+      description: GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+      parameters:
+      - in: path
+        name: concept_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_finanzas_conceptos_destroy
+      description: GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+      parameters:
+      - in: path
+        name: concept_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/finanzas/config/:
+    get:
+      operationId: v1_finanzas_config_retrieve
+      description: GET/PATCH /api/v1/finanzas/config/ — datos fiscales del emisor
+        (owner/admin).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_finanzas_config_partial_update
+      description: GET/PATCH /api/v1/finanzas/config/ — datos fiscales del emisor
+        (owner/admin).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cotizaciones/:
+    get:
+      operationId: v1_finanzas_cotizaciones_retrieve
+      description: |-
+        GET  /api/v1/finanzas/cotizaciones/ — lista de cotizaciones.
+        POST /api/v1/finanzas/cotizaciones/ — crea una cotización (borrador).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_finanzas_cotizaciones_create
+      description: |-
+        GET  /api/v1/finanzas/cotizaciones/ — lista de cotizaciones.
+        POST /api/v1/finanzas/cotizaciones/ — crea una cotización (borrador).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cotizaciones/{quote_id}/:
+    get:
+      operationId: v1_finanzas_cotizaciones_retrieve_2
+      description: |-
+        GET  /api/v1/finanzas/cotizaciones/<uuid>/  — detalle.
+        PATCH /api/v1/finanzas/cotizaciones/<uuid>/  — rechazar/vencer (status).
+      parameters:
+      - in: path
+        name: quote_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_finanzas_cotizaciones_partial_update
+      description: |-
+        GET  /api/v1/finanzas/cotizaciones/<uuid>/  — detalle.
+        PATCH /api/v1/finanzas/cotizaciones/<uuid>/  — rechazar/vencer (status).
+      parameters:
+      - in: path
+        name: quote_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cotizaciones/{quote_id}/aceptar/:
+    post:
+      operationId: v1_finanzas_cotizaciones_aceptar_create
+      description: POST /api/v1/finanzas/cotizaciones/<uuid>/aceptar/ — acepta y genera
+        cargos.
+      parameters:
+      - in: path
+        name: quote_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cotizaciones/{quote_id}/enviar/:
+    post:
+      operationId: v1_finanzas_cotizaciones_enviar_create
+      description: POST /api/v1/finanzas/cotizaciones/<uuid>/enviar/ — marca como
+        enviada.
+      parameters:
+      - in: path
+        name: quote_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/cotizaciones/{quote_id}/pdf/:
+    get:
+      operationId: v1_finanzas_cotizaciones_pdf_retrieve
+      description: |-
+        GET /api/v1/finanzas/cotizaciones/<uuid>/pdf/ — encola el PDF de la cotización.
+
+        El PDF se genera en SEGUNDO PLANO (Celery, infra apps.pdfs) para no bloquear los
+        workers de la API (riesgo P0). Devuelve 202 {job_id, status}; el frontend hace
+        polling de GET /pdfs/job/<job_id>/ y descarga con .../file/ al estar "done".
+
+        La cotización es MUTABLE (se edita), así que NO se cachea (cache_key="").
+        Permiso QuotePermission. Anti-IDOR por tenant (404).
+      parameters:
+      - in: path
+        name: quote_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/dashboard/:
+    get:
+      operationId: v1_finanzas_dashboard_retrieve
+      description: GET /api/v1/finanzas/dashboard/ — KPIs y series para las gráficas.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/estado-cuenta/{patient_id}/:
+    get:
+      operationId: v1_finanzas_estado_cuenta_retrieve
+      description: |-
+        GET /api/v1/finanzas/estado-cuenta/<patient_id>/ — estado de cuenta del paciente.
+
+        Permisos:
+            GET → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs (D-2).
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/pagos/:
+    get:
+      operationId: v1_finanzas_pagos_retrieve
+      description: |-
+        GET  /api/v1/finanzas/pagos/ — lista de pagos.
+        POST /api/v1/finanzas/pagos/ — registra un pago (caja: incluye recepción).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_finanzas_pagos_create
+      description: |-
+        GET  /api/v1/finanzas/pagos/ — lista de pagos.
+        POST /api/v1/finanzas/pagos/ — registra un pago (caja: incluye recepción).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/pagos/{payment_id}/:
+    get:
+      operationId: v1_finanzas_pagos_retrieve_2
+      description: GET /api/v1/finanzas/pagos/<uuid>/ — detalle de un pago.
+      parameters:
+      - in: path
+        name: payment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/reporte/:
+    get:
+      operationId: v1_finanzas_reporte_retrieve
+      description: |-
+        GET /api/v1/finanzas/reporte/ — dataset completo para el reporte de periodo.
+
+        Parámetros:
+            date_from   — YYYY-MM-DD (requerido; se usa hoy - 30 días si falta).
+            date_to     — YYYY-MM-DD (requerido; se usa hoy si falta).
+            group       — day | week | month (default: day).
+
+        Devuelve el dict de finance_period_report: KPIs del periodo, comparativa con el
+        anterior, series temporales, desglose por método/servicio/doctor y A/R aging.
+
+        Permiso: FinanceDashboardPermission (GET → owner, admin, finance, readonly).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/reporte/pdf/:
+    get:
+      operationId: v1_finanzas_reporte_pdf_retrieve
+      description: |-
+        GET /api/v1/finanzas/reporte/pdf/ — PDF del reporte de periodo.
+
+        Mismo rango que PeriodReportApi (date_from / date_to). Devuelve el PDF
+        con Content-Disposition: inline para abrir en el navegador.
+
+        Permiso: FinanceDashboardPermission (owner, admin, finance, readonly).
+        Auth: Bearer token (el endpoint NO es público — el PDF contiene datos financieros).
+
+        Seguridad:
+            - WeasyPrint usa _secure_fetcher: solo data URIs (bloquea LFI/SSRF).
+            - X-Frame-Options: DENY, X-Content-Type-Options: nosniff.
+            - Si la generación falla, devuelve 500 con mensaje genérico.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/retencion/:
+    get:
+      operationId: v1_finanzas_retencion_retrieve
+      description: |-
+        GET /api/v1/finanzas/retencion/ — panel de analítica de retención RFM.
+
+        Calcula en VIVO (sin tabla intermedia) la segmentación RFM de todos los
+        pacientes del tenant. No modifica ningún registro (solo lectura).
+
+        Decisión D-7 (plan §3): solo visualización. El sistema identifica y lista
+        los segmentos en riesgo / perdidos para que la clínica los contacte de forma
+        manual. NO se envía ninguna campaña automática.
+
+        Segmentos devueltos en ``segments``:
+          - nuevo      : 1.ª cita atendida en los últimos 90 días.
+          - vip        : top 20% gasto 12m + recencia <6m + ≥2 visitas/año.
+          - frecuente  : ≥2 visitas/año + recencia <6m.
+          - en_riesgo  : antes regular (≥2 visitas en el año previo) pero sin
+                         visita en los últimos 150 días.
+          - perdido    : sin ninguna visita atendida en los últimos 365 días.
+          - ocasional  : el resto.
+
+        Listas accionables:
+          - ``at_risk_list`` / ``lost_list``: hasta 500 registros (cap documentado)
+            con nombre, teléfono, email, última visita y gasto 12m.
+          - ``total_at_risk`` / ``total_lost``: total real (puede superar el cap).
+          - ``truncated``: True si alguna lista fue recortada.
+
+        Métricas:
+          - ``retention_rate``       : pacientes vistos 12m / pacientes vistos 12-24m previos.
+          - ``avg_ticket``           : pago promedio de los últimos 12 meses.
+          - ``no_show_rate``         : tasa de inasistencias (NO_SHOW / (NO_SHOW + ATTENDED)).
+          - ``pct_with_future_appt`` : % de pacientes activos con cita futura agendada.
+
+        Permiso: RetentionPermission → owner, admin, finance, readonly.
+        Recepción, médicos y enfermería NO acceden (analítica de dirección).
+
+        El endpoint puede tardar >200ms en clínicas grandes (aggregación sobre citas
+        históricas). En v2 se añadirá caché de 1h o tarea Celery periódica.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/me/:
+    get:
+      operationId: v1_me_retrieve
+      description: Retorna el perfil del usuario autenticado.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/miembros/:
+    get:
+      operationId: v1_miembros_retrieve
+      description: Lista de miembros del tenant (sin paginar — son pocos).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_miembros_create
+      description: Crea un miembro en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/miembros/{membership_id}/:
+    patch:
+      operationId: v1_miembros_partial_update
+      description: Actualiza rol y/o estado de bloqueo de un miembro.
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/miembros/{membership_id}/avatar/:
+    post:
+      operationId: v1_miembros_avatar_create
+      description: Sube o reemplaza la foto del miembro.
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_miembros_avatar_destroy
+      description: Elimina la foto del miembro.
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/notas/:
+    get:
+      operationId: v1_notas_retrieve
+      description: |-
+        Lista paginada de notas visibles para el usuario autenticado.
+
+        Query params:
+            is_task: bool — filtrar solo tareas (true) o solo notas (false).
+            done:    bool — filtrar por estado done/pendiente.
+            scope:   str  — filtrar por scope (aún no en selector; se aplica en query param).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_notas_create
+      description: Crea una nueva nota o tarea.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notas/{note_id}/:
+    patch:
+      operationId: v1_notas_partial_update
+      description: |-
+        Actualización parcial de campos editables.
+
+        No acepta 'done' (use /notas/<id>/done/).
+      parameters:
+      - in: path
+        name: note_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_notas_destroy
+      description: Borra una nota (soft-delete).
+      parameters:
+      - in: path
+        name: note_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/notas/{note_id}/done/:
+    post:
+      operationId: v1_notas_done_create
+      description: Alterna el estado done/pendiente de una tarea (is_task=True).
+      parameters:
+      - in: path
+        name: note_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notas/recordatorios/:
+    get:
+      operationId: v1_notas_recordatorios_retrieve
+      description: |-
+        Lista notas con recordatorio en el rango [date_from, date_to).
+
+        Query params:
+            date_from: ISO datetime UTC (requerido).
+            date_to:   ISO datetime UTC (requerido).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notificaciones/:
+    get:
+      operationId: v1_notificaciones_retrieve
+      description: Lista paginada de notificaciones del usuario, más recientes primero.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notificaciones/{notification_id}/leida/:
+    post:
+      operationId: v1_notificaciones_leida_create
+      description: Marca la notificación como leída (idempotente).
+      parameters:
+      - in: path
+        name: notification_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notificaciones/conteo/:
+    get:
+      operationId: v1_notificaciones_conteo_retrieve
+      description: 'Devuelve {"unread": N}.'
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notificaciones/leidas/:
+    post:
+      operationId: v1_notificaciones_leidas_create
+      description: 'Marca todas las no leídas del usuario como leídas. Devuelve {"updated":
+        N}.'
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/pacientes/:
+    get:
+      operationId: v1_pacientes_retrieve
+      description: Lista paginada de pacientes activos del tenant actual, con filtros
+        y segmentos.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_pacientes_create
+      description: Crea un nuevo paciente en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/pacientes/{patient_id}/:
+    get:
+      operationId: v1_pacientes_retrieve_2
+      description: Retorna el detalle de un paciente. Registra PATIENT_READ en la
+        bitácora (NOM-024).
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_pacientes_partial_update
+      description: Actualización parcial de un paciente.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_pacientes_destroy
+      description: Desactiva (soft) un paciente. No lo borra de la base de datos.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/pacientes/{patient_id}/avatar/:
+    post:
+      operationId: v1_pacientes_avatar_create
+      description: Sube o reemplaza la foto del paciente.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_pacientes_avatar_destroy
+      description: Elimina la foto del paciente.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/pacientes/{patient_id}/clasificacion/:
+    post:
+      operationId: v1_pacientes_clasificacion_create
+      description: Clasifica un paciente actualizando is_favorite y/o is_vip.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/pacientes/rapido/:
+    post:
+      operationId: v1_pacientes_rapido_create
+      description: Crea un expediente provisional en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/pdfs/job/{job_id}/:
+    get:
+      operationId: v1_pdfs_job_retrieve
+      description: Retorna el estado del trabajo de PDF.
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/pdfs/job/{job_id}/file/:
+    get:
+      operationId: v1_pdfs_job_file_retrieve
+      description: Devuelve el PDF del job si está listo.
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/personal/consultorios/:
+    get:
+      operationId: v1_personal_consultorios_retrieve
+      description: Lista paginada de consultorios del tenant actual.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_personal_consultorios_create
+      description: Crea un consultorio en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/personal/consultorios/{consultorio_id}/:
+    get:
+      operationId: v1_personal_consultorios_retrieve_2
+      description: |-
+        GET    /api/v1/personal/consultorios/<uuid:consultorio_id>/  — detalle.
+        PATCH  /api/v1/personal/consultorios/<uuid:consultorio_id>/  — actualización parcial.
+        DELETE /api/v1/personal/consultorios/<uuid:consultorio_id>/  — desactivación (soft).
+      parameters:
+      - in: path
+        name: consultorio_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_personal_consultorios_partial_update
+      description: |-
+        GET    /api/v1/personal/consultorios/<uuid:consultorio_id>/  — detalle.
+        PATCH  /api/v1/personal/consultorios/<uuid:consultorio_id>/  — actualización parcial.
+        DELETE /api/v1/personal/consultorios/<uuid:consultorio_id>/  — desactivación (soft).
+      parameters:
+      - in: path
+        name: consultorio_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_personal_consultorios_destroy
+      description: |-
+        GET    /api/v1/personal/consultorios/<uuid:consultorio_id>/  — detalle.
+        PATCH  /api/v1/personal/consultorios/<uuid:consultorio_id>/  — actualización parcial.
+        DELETE /api/v1/personal/consultorios/<uuid:consultorio_id>/  — desactivación (soft).
+      parameters:
+      - in: path
+        name: consultorio_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/personal/doctores/:
+    get:
+      operationId: v1_personal_doctores_retrieve
+      description: Lista paginada de doctores activos del tenant actual.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_personal_doctores_create
+      description: Crea un perfil de médico en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/personal/doctores/{doctor_id}/:
+    get:
+      operationId: v1_personal_doctores_retrieve_2
+      description: |-
+        GET    /api/v1/personal/doctores/<uuid:doctor_id>/  — detalle de un médico.
+        PATCH  /api/v1/personal/doctores/<uuid:doctor_id>/  — actualización parcial.
+        DELETE /api/v1/personal/doctores/<uuid:doctor_id>/  — desactivación (soft).
+
+        El campo `consultorio_ids` en PATCH es opcional: si se provee, llama a
+        doctor_set_consultorios para reemplazar la lista completa de consultorios
+        asignados al médico. Una lista vacía [] elimina todas las restricciones.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_personal_doctores_partial_update
+      description: |-
+        GET    /api/v1/personal/doctores/<uuid:doctor_id>/  — detalle de un médico.
+        PATCH  /api/v1/personal/doctores/<uuid:doctor_id>/  — actualización parcial.
+        DELETE /api/v1/personal/doctores/<uuid:doctor_id>/  — desactivación (soft).
+
+        El campo `consultorio_ids` en PATCH es opcional: si se provee, llama a
+        doctor_set_consultorios para reemplazar la lista completa de consultorios
+        asignados al médico. Una lista vacía [] elimina todas las restricciones.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_personal_doctores_destroy
+      description: |-
+        GET    /api/v1/personal/doctores/<uuid:doctor_id>/  — detalle de un médico.
+        PATCH  /api/v1/personal/doctores/<uuid:doctor_id>/  — actualización parcial.
+        DELETE /api/v1/personal/doctores/<uuid:doctor_id>/  — desactivación (soft).
+
+        El campo `consultorio_ids` en PATCH es opcional: si se provee, llama a
+        doctor_set_consultorios para reemplazar la lista completa de consultorios
+        asignados al médico. Una lista vacía [] elimina todas las restricciones.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/personal/doctores/{doctor_id}/horarios/:
+    get:
+      operationId: v1_personal_doctores_horarios_retrieve
+      description: Lista los horarios activos del médico indicado.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_personal_doctores_horarios_create
+      description: Crea un bloque de horario para el médico indicado.
+      parameters:
+      - in: path
+        name: doctor_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/personal/horarios/{schedule_id}/:
+    delete:
+      operationId: v1_personal_horarios_destroy
+      description: Desactiva (soft) un bloque de horario.
+      parameters:
+      - in: path
+        name: schedule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/plataforma/auditoria/:
+    get:
+      operationId: plataforma_auditoria_list
+      description: |-
+        Lista la bitácora de auditoría con filtros opcionales.
+
+        Query params (todos opcionales): tenant_id, action, actor_id,
+        date_from, date_to (datetime ISO), search.
+        Valores con formato inválido (UUID/fecha) devuelven 400.
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+          maxLength: 40
+      - in: query
+        name: actor_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: search
+        schema:
+          type: string
+          maxLength: 200
+      - in: query
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogOutput'
+          description: ''
+  /api/v1/plataforma/clinicas/:
+    get:
+      operationId: plataforma_clinicas_list
+      description: Lista todas las clínicas con member_count y patient_count.
+      parameters:
+      - in: query
+        name: search
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClinicaOutput'
+          description: ''
+    post:
+      operationId: plataforma_clinicas_create
+      description: |-
+        Crea una clínica nueva con su dueño y datos semilla.
+
+        SEGURIDAD: devuelve la contraseña temporal en la respuesta.
+        El frontend DEBE mostrarla exactamente una vez.
+      tags:
+      - plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicaCreateInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClinicaCreateInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClinicaCreateInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicaCreateOutput'
+          description: ''
+  /api/v1/plataforma/clinicas/{tenant_id}/:
+    get:
+      operationId: plataforma_clinicas_retrieve
+      description: Devuelve la ficha de detalle de la clínica indicada.
+      parameters:
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicaDetailOutput'
+          description: ''
+  /api/v1/plataforma/clinicas/{tenant_id}/estado/:
+    post:
+      operationId: plataforma_clinicas_estado_create
+      description: Cambia el estado de la clínica indicada.
+      parameters:
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicaEstadoInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClinicaEstadoInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClinicaEstadoInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicaOutput'
+          description: ''
+  /api/v1/plataforma/clinicas/{tenant_id}/suscripcion/:
+    post:
+      operationId: plataforma_clinicas_suscripcion_create
+      description: Crea o actualiza la suscripción de la clínica indicada.
+      parameters:
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantSubscriptionInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TenantSubscriptionInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TenantSubscriptionInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionRowOutput'
+          description: ''
+  /api/v1/plataforma/metricas/:
+    get:
+      operationId: plataforma_metricas_retrieve
+      description: Devuelve conteos globales de clínicas, usuarios y pacientes.
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardMetricsOutput'
+          description: ''
+  /api/v1/plataforma/planes/:
+    get:
+      operationId: plataforma_planes_list
+      description: Lista todos los planes (activos e inactivos) ordenados por `order`.
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlanOutput'
+          description: ''
+    post:
+      operationId: plataforma_planes_create
+      description: Crea un plan nuevo en el catálogo. Solo super_admin.
+      tags:
+      - plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanCreateInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlanCreateInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlanCreateInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanOutput'
+          description: ''
+  /api/v1/plataforma/planes/{plan_id}/:
+    patch:
+      operationId: plataforma_planes_partial_update
+      description: Actualiza un subconjunto de campos del plan indicado.
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanUpdateInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanUpdateInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPlanUpdateInputRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanOutput'
+          description: ''
+  /api/v1/plataforma/sistema/:
+    get:
+      operationId: plataforma_sistema_retrieve
+      description: Devuelve el snapshot de salud del sistema (contrato fijo con el
+        frontend).
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemHealthOutput'
+          description: ''
+  /api/v1/plataforma/suscripciones/:
+    get:
+      operationId: plataforma_suscripciones_list
+      description: Lista todas las clínicas con su suscripción (o sin ella) y su alerta.
+      parameters:
+      - in: query
+        name: alerta
+        schema:
+          enum:
+          - vencidas
+          - por_vencer
+          - ''
+          type: string
+        description: |-
+          'vencidas' = solo alertas vencidas. 'por_vencer' = solo por vencer.
+
+          * `vencidas` - vencidas
+          * `por_vencer` - por_vencer
+      - in: query
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: search
+        schema:
+          type: string
+          maxLength: 200
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubscriptionRowOutput'
+          description: ''
+  /api/v1/plataforma/suscripciones/resumen/:
+    get:
+      operationId: plataforma_suscripciones_resumen_retrieve
+      description: Devuelve el resumen agregado para el panel de suscripciones.
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscripcionesResumenOutput'
+          description: ''
+  /api/v1/plataforma/usuarios/:
+    get:
+      operationId: plataforma_usuarios_list
+      description: Lista todos los usuarios con is_platform_staff=True.
+      parameters:
+      - in: query
+        name: search
+        schema:
+          type: string
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformStaffOutput'
+          description: ''
+    post:
+      operationId: plataforma_usuarios_create
+      description: |-
+        Crea un usuario nuevo del equipo de plataforma con contraseña temporal.
+
+        SEGURIDAD: devuelve la contraseña temporal en la respuesta. El
+        frontend DEBE mostrarla exactamente una vez (mismo patrón que el alta
+        de clínica).
+
+        SEGURIDAD (anti-enumeración): el pre-check de platform_staff_create()
+        solo detecta correos YA registrados como cuenta de plataforma (mensaje
+        específico "Ya existe una cuenta de plataforma..."). Si el correo
+        pertenece a un usuario de CLÍNICA, el pre-check lo deja pasar y el
+        INSERT falla por el UniqueConstraint de email a nivel User —eso llega
+        aquí como IntegrityError. En ese caso respondemos con un mensaje
+        GENÉRICO que no confirma ni niega que la cuenta exista, para no
+        filtrar (a un super_admin del panel de plataforma) que un correo
+        arbitrario ya está en uso por una clínica de otro tenant.
+      tags:
+      - plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffCreateInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StaffCreateInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StaffCreateInputRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffCreateOutput'
+          description: ''
+  /api/v1/plataforma/usuarios/{user_id}/:
+    patch:
+      operationId: plataforma_usuarios_partial_update
+      description: Actualiza un subconjunto de campos del usuario de plataforma indicado.
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStaffUpdateInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStaffUpdateInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStaffUpdateInputRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformStaffOutput'
+          description: ''
+  /api/v1/plataforma/usuarios/{user_id}/reset-password/:
+    post:
+      operationId: plataforma_usuarios_reset_password_create
+      description: |-
+        Genera y asigna una contraseña temporal nueva para el usuario indicado.
+
+        SEGURIDAD: devuelve la contraseña temporal en la respuesta. El
+        frontend DEBE mostrarla exactamente una vez.
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - plataforma
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffPasswordResetOutput'
+          description: ''
+  /api/v1/recetas/{prescription_id}/:
+    get:
+      operationId: v1_recetas_retrieve
+      description: Detalle completo de la receta.
+      parameters:
+      - in: path
+        name: prescription_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/recetas/{prescription_id}/anular/:
+    post:
+      operationId: v1_recetas_anular_create
+      description: Anula la receta médica.
+      parameters:
+      - in: path
+        name: prescription_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/recetas/{prescription_id}/pdf/:
+    get:
+      operationId: v1_recetas_pdf_retrieve
+      description: Encola (o reusa del caché) la generación del PDF de la receta.
+      parameters:
+      - in: path
+        name: prescription_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/recetas/formatos/:
+    get:
+      operationId: v1_recetas_formatos_retrieve
+      description: Lista los formatos activos del tenant.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_recetas_formatos_create
+      description: Crea un nuevo formato de receta.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/recetas/formatos/{format_id}/:
+    get:
+      operationId: v1_recetas_formatos_retrieve_2
+      description: Detalle del formato.
+      parameters:
+      - in: path
+        name: format_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_recetas_formatos_partial_update
+      description: Actualiza parcialmente un formato de receta.
+      parameters:
+      - in: path
+        name: format_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_recetas_formatos_destroy
+      description: Baja lógica de un formato de receta.
+      parameters:
+      - in: path
+        name: format_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/recetas/medicamentos/:
+    post:
+      operationId: v1_recetas_medicamentos_create
+      description: |-
+        POST /api/v1/recetas/medicamentos/
+
+        Crea un medicamento custom para el tenant activo.
+        Solo owner, admin y doctor pueden crear (MedicationPermission).
+
+        Cuerpo:
+            generic_name  (requerido)
+            form          (requerido, choices de MedicationForm)
+            commercial_name (opcional)
+            concentration   (opcional)
+            presentation    (opcional)
+
+        Respuesta 201: Medication recién creado.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/recetas/medicamentos/buscar/:
+    get:
+      operationId: v1_recetas_medicamentos_buscar_retrieve
+      description: |-
+        GET /api/v1/recetas/medicamentos/buscar/?q=<texto>
+
+        Autocompletado de medicamentos. Une catálogo global + custom del tenant.
+        Requiere ?q= con al menos 1 carácter (si q vacío devuelve []).
+
+        Parámetros:
+            q:     Texto de búsqueda (icontains en generic_name y commercial_name).
+            limit: Número máximo de resultados (default=25, máx=50).
+
+        Respuesta 200:
+            Lista de medicamentos con `source` = "global" | "custom".
+
+        Auditoría (B1.1 audit M2 — exclusión deliberada):
+            El autocompletado NO se registra en AuditLog. Buscar en un catálogo de
+            medicamentos no es acceso al expediente de un paciente (los READ clínicos
+            —historia, signos, evolución, diagnósticos— sí se auditan en `apps/expediente`).
+            Auditar cada tecleo del buscador inflaría el log sin valor forense. La
+            trazabilidad clínica recae sobre la RECETA (PRESCRIPTION_CREATE/READ/CANCEL,
+            sub-fase B1.2) y sobre el alta de medicamentos custom (MEDICATION_CREATE).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/recetas/pdf-job/{job_id}/:
+    get:
+      operationId: v1_recetas_pdf_job_retrieve
+      description: Retorna el estado del trabajo de PDF.
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/recetas/pdf-job/{job_id}/file/:
+    get:
+      operationId: v1_recetas_pdf_job_file_retrieve
+      description: Devuelve el PDF del trabajo si está listo.
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/verificar-receta/{prescription_id}/:
+    get:
+      operationId: v1_verificar_receta_retrieve
+      description: Verifica autenticidad de la receta y devuelve datos mínimos no
+        sensibles.
+      parameters:
+      - in: path
+        name: prescription_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    AuditLogOutput:
+      type: object
+      description: Serializer de salida para un registro de AuditLog en el panel de
+        plataforma.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        action:
+          type: string
+          readOnly: true
+        action_display:
+          type: string
+          description: Devuelve el label legible de la acción.
+          readOnly: true
+        actor_email:
+          type: string
+          nullable: true
+          description: Email del actor, o None si el evento es anónimo o el usuario
+            se borró.
+          readOnly: true
+        actor_role:
+          type: string
+          readOnly: true
+        tenant_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        tenant_name:
+          type: string
+          nullable: true
+          description: Nombre de la clínica, o None si el evento es global (sin tenant).
+          readOnly: true
+        resource_type:
+          type: string
+          readOnly: true
+        resource_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        description:
+          type: string
+          readOnly: true
+        ip_address:
+          type: string
+          readOnly: true
+          nullable: true
+        metadata:
+          readOnly: true
+      required:
+      - action
+      - action_display
+      - actor_email
+      - actor_role
+      - created_at
+      - description
+      - id
+      - ip_address
+      - metadata
+      - resource_id
+      - resource_type
+      - tenant_id
+      - tenant_name
+    BillingCycleEnum:
+      enum:
+      - monthly
+      - annual
+      type: string
+      description: |-
+        * `monthly` - monthly
+        * `annual` - annual
+    ClinicaCreateInputRequest:
+      type: object
+      description: Input para POST /api/v1/plataforma/clinicas/.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Nombre comercial de la clínica.
+          maxLength: 200
+        owner_email:
+          type: string
+          format: email
+          minLength: 1
+          description: Correo del dueño. Será su usuario de acceso a la plataforma.
+        owner_first_name:
+          type: string
+          minLength: 1
+          description: Nombre(s) del dueño.
+          maxLength: 150
+        owner_last_name:
+          type: string
+          minLength: 1
+          description: Apellidos del dueño.
+          maxLength: 150
+        timezone:
+          type: string
+          minLength: 1
+          default: America/Mexico_City
+          description: 'Zona horaria IANA de la clínica (ej: ''America/Monterrey'').'
+          maxLength: 64
+        trial_days:
+          type: integer
+          maximum: 365
+          minimum: 1
+          default: 60
+          description: Duración del periodo de prueba en días. Mínimo 1, máximo 365.
+      required:
+      - name
+      - owner_email
+      - owner_first_name
+      - owner_last_name
+    ClinicaCreateOutput:
+      type: object
+      description: |-
+        Salida para POST /api/v1/plataforma/clinicas/.
+
+        SEGURIDAD: temporary_password SOLO se devuelve en esta respuesta.
+        El frontend debe mostrarlo exactamente una vez y no persistirlo.
+        Esta contraseña no aparece en ningún log ni auditoría.
+      properties:
+        tenant:
+          allOf:
+          - $ref: '#/components/schemas/ClinicaOutput'
+          readOnly: true
+        owner_email:
+          type: string
+          format: email
+          readOnly: true
+        temporary_password:
+          type: string
+          readOnly: true
+      required:
+      - owner_email
+      - temporary_password
+      - tenant
+    ClinicaDetailOutput:
+      type: object
+      description: Ficha de detalle de una clínica para el panel interno de plataforma.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        status:
+          type: string
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        trial_ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        member_count:
+          type: integer
+          readOnly: true
+        patient_count:
+          type: integer
+          readOnly: true
+        appointment_count:
+          type: integer
+          readOnly: true
+        ultima_actividad:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClinicaMemberOutput'
+          readOnly: true
+      required:
+      - appointment_count
+      - created_at
+      - id
+      - member_count
+      - members
+      - name
+      - patient_count
+      - slug
+      - status
+      - status_display
+      - trial_ends_at
+      - ultima_actividad
+    ClinicaEstadoInputRequest:
+      type: object
+      description: Input para POST /api/v1/plataforma/clinicas/<id>/estado/.
+      properties:
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          description: |-
+            Estado destino: 'active' (reactivar) o 'suspended' (suspender). No se puede asignar 'trial' desde la plataforma.
+
+            * `active` - active
+            * `suspended` - suspended
+      required:
+      - status
+    ClinicaMemberOutput:
+      type: object
+      description: Miembro de una clínica dentro de la ficha de detalle.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        role:
+          type: string
+          readOnly: true
+        role_display:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+      required:
+      - email
+      - full_name
+      - id
+      - is_active
+      - role
+      - role_display
+    ClinicaOutput:
+      type: object
+      description: Serializer de salida para una clínica (Tenant) con conteos anotados.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        status:
+          type: string
+          readOnly: true
+        status_display:
+          type: string
+          description: Devuelve el label legible del estado.
+          readOnly: true
+        trial_ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        member_count:
+          type: integer
+          readOnly: true
+          default: 0
+        patient_count:
+          type: integer
+          readOnly: true
+          default: 0
+      required:
+      - created_at
+      - id
+      - member_count
+      - name
+      - patient_count
+      - slug
+      - status
+      - status_display
+      - trial_ends_at
+    DashboardMetricsOutput:
+      type: object
+      description: Serializer de salida para las métricas del dashboard de plataforma.
+      properties:
+        total_clinicas:
+          type: integer
+          readOnly: true
+        clinicas_por_estado:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+        total_usuarios:
+          type: integer
+          readOnly: true
+        total_platform_staff:
+          type: integer
+          readOnly: true
+        total_pacientes:
+          type: integer
+          readOnly: true
+        ultimas_clinicas:
+          type: array
+          items:
+            $ref: '#/components/schemas/UltimaClinicaOutput'
+          readOnly: true
+      required:
+      - clinicas_por_estado
+      - total_clinicas
+      - total_pacientes
+      - total_platform_staff
+      - total_usuarios
+      - ultimas_clinicas
+    PatchedPlanUpdateInputRequest:
+      type: object
+      description: |-
+        Input para PATCH /api/v1/plataforma/planes/<plan_id>/.
+
+        Todos los campos son opcionales (PATCH parcial): solo se envían los que
+        se quieren cambiar. `slug` NO aparece aquí — es inmutable, lo aplica
+        `_PLAN_IMMUTABLE_FIELDS` en el servicio `plan_update`.
+
+        EXCEPCIÓN EXPLÍCITA a la regla general de "is_active nunca en el
+        InputSerializer de un PATCH genérico": Plan es el caso documentado en el
+        encargo (ver docstring de `plan_update` en apps/plataforma/services.py) —
+        no tiene borrado físico (PROTECT desde TenantSubscription) y el dueño
+        pidió un único flujo de edición sin endpoint separado de
+        activar/desactivar.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 2000
+        price_monthly:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        is_featured:
+          type: boolean
+        features:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+          maxItems: 50
+        is_active:
+          type: boolean
+        order:
+          type: integer
+    PatchedStaffUpdateInputRequest:
+      type: object
+      description: |-
+        Input para PATCH /api/v1/plataforma/usuarios/<user_id>/.
+
+        Todos los campos son opcionales (PATCH parcial). La regla de "no puedes
+        cambiar tu propio platform_role/is_active" la valida el SERVICIO
+        (platform_staff_update), no este serializer — el serializer no conoce
+        quién es el actor.
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        platform_role:
+          $ref: '#/components/schemas/PlatformRoleEnum'
+        is_active:
+          type: boolean
+    PlanCreateInputRequest:
+      type: object
+      description: |-
+        Input para POST /api/v1/plataforma/planes/.
+
+        NO incluye `slug` (se genera en el servicio a partir de `name`) ni
+        `is_active` como excepción distinta a la de PATCH: aquí SÍ se permite
+        porque es la creación del recurso (no un update de un flag de estado
+        sobre un objeto ya existente); el dueño puede querer dar de alta un plan
+        ya desactivado (ej. mientras prepara su lanzamiento).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Nombre comercial del plan.
+          maxLength: 100
+        price_monthly:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          description: Precio mensual en MXN. No puede ser negativo.
+        description:
+          type: string
+          default: ''
+          description: 'Descripción comercial breve (máx. 2000). Default: cadena vacía.'
+          maxLength: 2000
+        is_featured:
+          type: boolean
+          default: false
+          description: Si el plan aparece destacado en la vitrina.
+        features:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+          nullable: true
+          description: Lista de strings no vacíos con las características incluidas
+            (máx. 50).
+          maxItems: 50
+        is_active:
+          type: boolean
+          default: true
+          description: Si el plan queda activo/asignable desde su creación.
+        order:
+          type: integer
+          nullable: true
+          description: Orden de despliegue. Si se omite, se asigna al final del catálogo.
+      required:
+      - name
+      - price_monthly
+    PlanOutput:
+      type: object
+      description: |-
+        Serializer de salida para un Plan del catálogo.
+
+        Contrato fijo con el frontend (docs/design/plataforma-fases-plan.md, Fase 3):
+        GET /api/v1/plataforma/planes/ → lista SIN paginar, ordenada por `order`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        price_monthly:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        is_featured:
+          type: boolean
+          readOnly: true
+        features:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        order:
+          type: integer
+          readOnly: true
+      required:
+      - description
+      - features
+      - id
+      - is_active
+      - is_featured
+      - name
+      - order
+      - price_monthly
+      - slug
+    PlatformRoleEnum:
+      enum:
+      - super_admin
+      - sales
+      - engineering
+      type: string
+      description: |-
+        * `super_admin` - Súper Admin
+        * `sales` - Ventas / Éxito de Cliente
+        * `engineering` - Ingeniería
+    PlatformStaffOutput:
+      type: object
+      description: |-
+        Serializer de salida para un usuario del equipo de plataforma.
+
+        Contrato fijo con el frontend (Fase 4): incluye first_name/last_name
+        (además de full_name, que ya se consumía) para que el formulario de
+        edición pueda precargar los campos por separado.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        platform_role:
+          type: string
+          readOnly: true
+        platform_role_display:
+          type: string
+          description: Devuelve el label legible del platform_role.
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+      required:
+      - email
+      - first_name
+      - full_name
+      - id
+      - is_active
+      - last_name
+      - platform_role
+      - platform_role_display
+    StaffCreateInputRequest:
+      type: object
+      description: Input para POST /api/v1/plataforma/usuarios/.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: Correo del nuevo miembro del equipo (será su login).
+        first_name:
+          type: string
+          minLength: 1
+          description: Nombre(s).
+          maxLength: 150
+        last_name:
+          type: string
+          minLength: 1
+          description: Apellidos.
+          maxLength: 150
+        platform_role:
+          allOf:
+          - $ref: '#/components/schemas/PlatformRoleEnum'
+          description: |-
+            Rol dentro del equipo de plataforma.
+
+            * `super_admin` - Súper Admin
+            * `sales` - Ventas / Éxito de Cliente
+            * `engineering` - Ingeniería
+      required:
+      - email
+      - first_name
+      - last_name
+      - platform_role
+    StaffCreateOutput:
+      type: object
+      description: |-
+        Salida para POST /api/v1/plataforma/usuarios/.
+
+        SEGURIDAD: temporary_password SOLO se devuelve en esta respuesta. Mismo
+        patrón que ClinicaCreateOutputSerializer (alta de clínica): el frontend
+        debe mostrarla exactamente una vez y no persistirla.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        platform_role:
+          type: string
+          readOnly: true
+        platform_role_display:
+          type: string
+          description: Devuelve el label legible del platform_role.
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        temporary_password:
+          type: string
+          readOnly: true
+      required:
+      - email
+      - first_name
+      - full_name
+      - id
+      - is_active
+      - last_name
+      - platform_role
+      - platform_role_display
+      - temporary_password
+    StaffPasswordResetOutput:
+      type: object
+      description: Salida para POST /api/v1/plataforma/usuarios/<user_id>/reset-password/.
+      properties:
+        temporary_password:
+          type: string
+          readOnly: true
+      required:
+      - temporary_password
+    StatusEnum:
+      enum:
+      - active
+      - suspended
+      type: string
+      description: |-
+        * `active` - active
+        * `suspended` - suspended
+    SubscripcionesAlertasOutput:
+      type: object
+      description: Conteos de alertas de vencimiento para el resumen del panel.
+      properties:
+        trial_vencido:
+          type: integer
+          readOnly: true
+        trial_por_vencer:
+          type: integer
+          readOnly: true
+        periodo_vencido:
+          type: integer
+          readOnly: true
+        periodo_por_vencer:
+          type: integer
+          readOnly: true
+      required:
+      - periodo_por_vencer
+      - periodo_vencido
+      - trial_por_vencer
+      - trial_vencido
+    SubscripcionesPorPlanOutput:
+      type: object
+      description: Conteo de suscripciones agrupado por plan.
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan_name:
+          type: string
+          readOnly: true
+        count:
+          type: integer
+          readOnly: true
+      required:
+      - count
+      - plan_id
+      - plan_name
+    SubscripcionesResumenOutput:
+      type: object
+      description: Serializer de salida para GET /api/v1/plataforma/suscripciones/resumen/.
+      properties:
+        total_clinicas:
+          type: integer
+          readOnly: true
+        sin_plan:
+          type: integer
+          readOnly: true
+        por_plan:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubscripcionesPorPlanOutput'
+          readOnly: true
+        alertas:
+          allOf:
+          - $ref: '#/components/schemas/SubscripcionesAlertasOutput'
+          readOnly: true
+        mrr_estimado:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+      required:
+      - alertas
+      - mrr_estimado
+      - por_plan
+      - sin_plan
+      - total_clinicas
+    SubscriptionRowOutput:
+      type: object
+      description: |-
+        Serializer de salida para una fila del listado de suscripciones.
+
+        Contrato fijo con el frontend: una fila por Tenant (con o sin
+        TenantSubscription). Los campos de plan/suscripción son `allow_null`
+        porque el tenant puede no tener suscripción asignada todavía.
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        tenant_name:
+          type: string
+          readOnly: true
+        tenant_slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        tenant_status:
+          type: string
+          readOnly: true
+        trial_ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        plan_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        plan_name:
+          type: string
+          readOnly: true
+          nullable: true
+        plan_slug:
+          type: string
+          readOnly: true
+          nullable: true
+        billing_cycle:
+          type: string
+          readOnly: true
+          nullable: true
+        current_period_end:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        plan_price_monthly:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        alerta:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - alerta
+      - billing_cycle
+      - current_period_end
+      - plan_id
+      - plan_name
+      - plan_price_monthly
+      - plan_slug
+      - tenant_id
+      - tenant_name
+      - tenant_slug
+      - tenant_status
+      - trial_ends_at
+    SystemHealthOutput:
+      type: object
+      description: |-
+        Serializer de salida para GET /api/v1/plataforma/sistema/.
+
+        Contrato fijado con el frontend (docs/design/plataforma-fases-plan.md,
+        Fase 2 — "Sistema" con salud real): NO modificar las llaves sin coordinar
+        el cambio con el frontend.
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        overall_status:
+          type: string
+          readOnly: true
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemServiceOutput'
+          readOnly: true
+        version:
+          allOf:
+          - $ref: '#/components/schemas/SystemVersionOutput'
+          readOnly: true
+        pdf_queue:
+          allOf:
+          - $ref: '#/components/schemas/SystemPdfQueueOutput'
+          readOnly: true
+      required:
+      - generated_at
+      - overall_status
+      - pdf_queue
+      - services
+      - version
+    SystemPdfQueueOutput:
+      type: object
+      description: Serializer de salida para los conteos de la cola de generación
+        de PDFs.
+      properties:
+        pending:
+          type: integer
+          readOnly: true
+        processing:
+          type: integer
+          readOnly: true
+        failed_24h:
+          type: integer
+          readOnly: true
+      required:
+      - failed_24h
+      - pending
+      - processing
+    SystemServiceOutput:
+      type: object
+      description: Serializer de salida para el estado de un servicio individual (BD/Redis/Celery).
+      properties:
+        key:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        latency_ms:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        detail:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - detail
+      - key
+      - label
+      - latency_ms
+      - status
+    SystemVersionOutput:
+      type: object
+      description: Serializer de salida para el bloque de versión/commit/entorno.
+      properties:
+        commit:
+          type: string
+          readOnly: true
+          nullable: true
+        django:
+          type: string
+          readOnly: true
+        python:
+          type: string
+          readOnly: true
+        environment:
+          type: string
+          readOnly: true
+      required:
+      - commit
+      - django
+      - environment
+      - python
+    TenantSubscriptionInputRequest:
+      type: object
+      description: |-
+        Input para POST /api/v1/plataforma/clinicas/<tenant_id>/suscripcion/.
+
+        Los 3 campos son obligatorios (decisión del encargo: sin defaults, la
+        plataforma siempre elige explícitamente plan + ciclo + vigencia).
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+          description: UUID del plan a asignar.
+        billing_cycle:
+          allOf:
+          - $ref: '#/components/schemas/BillingCycleEnum'
+          description: |-
+            Ciclo de facturación: 'monthly' o 'annual'.
+
+            * `monthly` - monthly
+            * `annual` - annual
+        current_period_end:
+          type: string
+          format: date
+          description: Fecha de fin del periodo de facturación. Debe ser futura.
+      required:
+      - billing_cycle
+      - current_period_end
+      - plan_id
+    TokenObtainPair:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+    TokenObtainPairRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+      required:
+      - access
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - refresh
+    TokenVerifyRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - token
+    UltimaClinicaOutput:
+      type: object
+      description: Serializer de salida para el resumen de las últimas clínicas.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - status
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "types:api": "openapi-typescript ./openapi/schema.yml -o ./src/types/openapi.d.ts"
   },
   "dependencies": {
     "@sentry/react": "^10.62.0",
@@ -31,6 +32,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
     "eslint": "^9.7.0",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",

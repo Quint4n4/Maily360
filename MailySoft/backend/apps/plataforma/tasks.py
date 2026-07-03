@@ -24,6 +24,14 @@ CONTEXTO DE TENANT EN CELERY:
     hay TenantManager que resolver ni GUC que setear: se consultan con el
     Manager estándar (`Tenant.objects`, `TenantSubscription.objects`)
     directamente, igual que en los selectors de plataforma.
+
+PERFORMANCE (reviewer, Fase 3):
+    El UPDATE de las columnas *_notified_at se acumula en una lista y se
+    aplica con un único bulk_update() por función, en vez de un save() fila
+    por fila. bulk_update() NO dispara auto_now, así que updated_at se
+    setea a mano con el mismo `reference_now` usado para el marcado de
+    idempotencia. audit_record() se queda dentro del loop a propósito: cada
+    vencimiento sigue generando su propio evento de auditoría individual.
 """
 
 import logging
@@ -64,14 +72,22 @@ def _avisar_trials_vencidos() -> int:
     marcado ANTES del trial_ends_at actual (cubre el caso de una extensión de
     trial: se movió trial_ends_at hacia adelante después del último aviso,
     así que si vuelve a vencer debe poder avisar de nuevo).
+
+    Performance: el audit_record() se queda dentro del loop (un evento de
+    auditoría por vencimiento), pero el UPDATE de trial_expired_notified_at
+    se acumula y se aplica con un único bulk_update() al final en vez de un
+    save() por fila. bulk_update() NO dispara auto_now, así que updated_at
+    se setea a mano con el mismo reference_now usado para el marcado.
     """
     reference_now = now()
-    candidatos = Tenant.objects.filter(
-        status=Tenant.Status.TRIAL,
-        trial_ends_at__lt=reference_now,
+    candidatos = list(
+        Tenant.objects.filter(
+            status=Tenant.Status.TRIAL,
+            trial_ends_at__lt=reference_now,
+        )
     )
 
-    avisados = 0
+    pendientes: list[Tenant] = []
     for tenant in candidatos:
         if (
             tenant.trial_expired_notified_at is not None
@@ -98,10 +114,13 @@ def _avisar_trials_vencidos() -> int:
             },
         )
         tenant.trial_expired_notified_at = reference_now
-        tenant.save(update_fields=["trial_expired_notified_at", "updated_at"])
-        avisados += 1
+        tenant.updated_at = reference_now
+        pendientes.append(tenant)
 
-    return avisados
+    if pendientes:
+        Tenant.objects.bulk_update(pendientes, ["trial_expired_notified_at", "updated_at"])
+
+    return len(pendientes)
 
 
 def _avisar_periodos_vencidos() -> int:
@@ -109,20 +128,26 @@ def _avisar_periodos_vencidos() -> int:
 
     Misma lógica de idempotencia que los trials, pero comparando fechas
     (current_period_end es DateField) en vez de datetimes.
+
+    Performance: mismo patrón que _avisar_trials_vencidos — audit_record()
+    dentro del loop (un evento por vencimiento) y el UPDATE de
+    period_expired_notified_at acumulado en un único bulk_update() al final.
+    bulk_update() NO dispara auto_now: updated_at se setea a mano.
     """
     reference_now = now()
     today = reference_now.date()
 
-    candidatos = TenantSubscription.objects.select_related("tenant", "plan").filter(
-        current_period_end__lt=today,
+    candidatos = list(
+        TenantSubscription.objects.select_related("tenant", "plan").filter(
+            current_period_end__lt=today,
+        )
     )
 
-    avisados = 0
+    pendientes: list[TenantSubscription] = []
     for subscription in candidatos:
         if (
             subscription.period_expired_notified_at is not None
-            and subscription.period_expired_notified_at.date()
-            >= subscription.current_period_end
+            and subscription.period_expired_notified_at.date() >= subscription.current_period_end
         ):
             continue  # ya avisado para este vencimiento concreto
 
@@ -148,7 +173,12 @@ def _avisar_periodos_vencidos() -> int:
             },
         )
         subscription.period_expired_notified_at = reference_now
-        subscription.save(update_fields=["period_expired_notified_at", "updated_at"])
-        avisados += 1
+        subscription.updated_at = reference_now
+        pendientes.append(subscription)
 
-    return avisados
+    if pendientes:
+        TenantSubscription.objects.bulk_update(
+            pendientes, ["period_expired_notified_at", "updated_at"]
+        )
+
+    return len(pendientes)

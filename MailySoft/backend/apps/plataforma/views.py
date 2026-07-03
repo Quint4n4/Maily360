@@ -35,6 +35,7 @@ import uuid as _uuid_module
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -183,6 +184,11 @@ class PlatformMetricasApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformMetricsPermission]
 
+    @extend_schema(
+        operation_id="plataforma_metricas_retrieve",
+        responses=DashboardMetricsOutputSerializer,
+        tags=["plataforma"],
+    )
     def get(self, request: Request) -> Response:
         """Devuelve conteos globales de clínicas, usuarios y pacientes."""
         metrics = platform_dashboard_metrics()
@@ -220,6 +226,15 @@ class PlatformClinicasListApi(PlatformAPIView):
         # GET, HEAD, OPTIONS
         return [IsAuthenticated(), PlatformClinicReadPermission()]
 
+    @extend_schema(
+        operation_id="plataforma_clinicas_list",
+        parameters=[
+            OpenApiParameter("search", str, required=False),
+            OpenApiParameter("status", str, required=False),
+        ],
+        responses=ClinicaOutputSerializer(many=True),
+        tags=["plataforma"],
+    )
     def get(self, request: Request) -> Response:
         """Lista todas las clínicas con member_count y patient_count."""
         search: str = request.query_params.get("search", "")
@@ -236,6 +251,12 @@ class PlatformClinicasListApi(PlatformAPIView):
         serializer = ClinicaOutputSerializer(qs, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        operation_id="plataforma_clinicas_create",
+        request=ClinicaCreateInputSerializer,
+        responses={201: ClinicaCreateOutputSerializer},
+        tags=["plataforma"],
+    )
     def post(self, request: Request) -> Response:
         """Crea una clínica nueva con su dueño y datos semilla.
 
@@ -302,6 +323,11 @@ class PlatformClinicaDetailApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformClinicReadPermission]
 
+    @extend_schema(
+        operation_id="plataforma_clinicas_retrieve",
+        responses=ClinicaDetailOutputSerializer,
+        tags=["plataforma"],
+    )
     def get(self, request: Request, tenant_id: _uuid_module.UUID) -> Response:
         """Devuelve la ficha de detalle de la clínica indicada."""
         try:
@@ -328,6 +354,12 @@ class PlatformClinicaEstadoApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformClinicWritePermission]
 
+    @extend_schema(
+        operation_id="plataforma_clinicas_estado_create",
+        request=ClinicaEstadoInputSerializer,
+        responses=ClinicaOutputSerializer,
+        tags=["plataforma"],
+    )
     def post(self, request: Request, tenant_id: _uuid_module.UUID) -> Response:
         """Cambia el estado de la clínica indicada."""
         try:
@@ -379,6 +411,12 @@ class PlatformUsuariosListApi(PlatformAPIView):
         # GET, HEAD, OPTIONS
         return [IsAuthenticated(), PlatformStaffListPermission()]
 
+    @extend_schema(
+        operation_id="plataforma_usuarios_list",
+        parameters=[OpenApiParameter("search", str, required=False)],
+        responses=PlatformStaffOutputSerializer(many=True),
+        tags=["plataforma"],
+    )
     def get(self, request: Request) -> Response:
         """Lista todos los usuarios con is_platform_staff=True."""
         search: str = request.query_params.get("search", "")
@@ -394,6 +432,12 @@ class PlatformUsuariosListApi(PlatformAPIView):
         serializer = PlatformStaffOutputSerializer(qs, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        operation_id="plataforma_usuarios_create",
+        request=StaffCreateInputSerializer,
+        responses={201: StaffCreateOutputSerializer},
+        tags=["plataforma"],
+    )
     def post(self, request: Request) -> Response:
         """Crea un usuario nuevo del equipo de plataforma con contraseña temporal.
 
@@ -471,6 +515,12 @@ class PlatformStaffDetailApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformStaffWritePermission]
 
+    @extend_schema(
+        operation_id="plataforma_usuarios_partial_update",
+        request=StaffUpdateInputSerializer,
+        responses=PlatformStaffOutputSerializer,
+        tags=["plataforma"],
+    )
     def patch(self, request: Request, user_id: _uuid_module.UUID) -> Response:
         """Actualiza un subconjunto de campos del usuario de plataforma indicado."""
         try:
@@ -515,6 +565,12 @@ class PlatformStaffPasswordResetApi(PlatformAPIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "auth_password_change"
 
+    @extend_schema(
+        operation_id="plataforma_usuarios_reset_password_create",
+        request=None,
+        responses=StaffPasswordResetOutputSerializer,
+        tags=["plataforma"],
+    )
     def post(self, request: Request, user_id: _uuid_module.UUID) -> Response:
         """Genera y asigna una contraseña temporal nueva para el usuario indicado.
 
@@ -561,6 +617,12 @@ class PlatformAuditoriaListApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformAuditPermission]
 
+    @extend_schema(
+        operation_id="plataforma_auditoria_list",
+        parameters=[AuditoriaQueryInputSerializer],
+        responses=AuditLogOutputSerializer(many=True),
+        tags=["plataforma"],
+    )
     def get(self, request: Request) -> Response:
         """Lista la bitácora de auditoría con filtros opcionales.
 
@@ -608,6 +670,11 @@ class PlatformSistemaApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformSystemPermission]
 
+    @extend_schema(
+        operation_id="plataforma_sistema_retrieve",
+        responses=SystemHealthOutputSerializer,
+        tags=["plataforma"],
+    )
     def get(self, request: Request) -> Response:
         """Devuelve el snapshot de salud del sistema (contrato fijo con el frontend)."""
         health = system_health_get()
@@ -642,11 +709,22 @@ class PlatformPlanesListApi(PlatformAPIView):
         # GET, HEAD, OPTIONS
         return [IsAuthenticated(), PlatformSubscriptionPermission()]
 
+    @extend_schema(
+        operation_id="plataforma_planes_list",
+        responses=PlanOutputSerializer(many=True),
+        tags=["plataforma"],
+    )
     def get(self, request: Request) -> Response:
         """Lista todos los planes (activos e inactivos) ordenados por `order`."""
         qs = platform_plan_list()
         return Response(PlanOutputSerializer(qs, many=True).data)
 
+    @extend_schema(
+        operation_id="plataforma_planes_create",
+        request=PlanCreateInputSerializer,
+        responses={201: PlanOutputSerializer},
+        tags=["plataforma"],
+    )
     def post(self, request: Request) -> Response:
         """Crea un plan nuevo en el catálogo. Solo super_admin."""
         s = PlanCreateInputSerializer(data=request.data)
@@ -692,6 +770,12 @@ class PlatformPlanDetailApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformPlanWritePermission]
 
+    @extend_schema(
+        operation_id="plataforma_planes_partial_update",
+        request=PlanUpdateInputSerializer,
+        responses=PlanOutputSerializer,
+        tags=["plataforma"],
+    )
     def patch(self, request: Request, plan_id: _uuid_module.UUID) -> Response:
         """Actualiza un subconjunto de campos del plan indicado."""
         try:
@@ -730,6 +814,12 @@ class PlatformSuscripcionesListApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformSubscriptionPermission]
 
+    @extend_schema(
+        operation_id="plataforma_suscripciones_list",
+        parameters=[SubscripcionesQueryInputSerializer],
+        responses=SubscriptionRowOutputSerializer(many=True),
+        tags=["plataforma"],
+    )
     def get(self, request: Request) -> Response:
         """Lista todas las clínicas con su suscripción (o sin ella) y su alerta."""
         query = SubscripcionesQueryInputSerializer(data=request.query_params)
@@ -765,6 +855,11 @@ class PlatformSuscripcionesResumenApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformSubscriptionPermission]
 
+    @extend_schema(
+        operation_id="plataforma_suscripciones_resumen_retrieve",
+        responses=SubscripcionesResumenOutputSerializer,
+        tags=["plataforma"],
+    )
     def get(self, request: Request) -> Response:
         """Devuelve el resumen agregado para el panel de suscripciones."""
         resumen = platform_subscriptions_resumen()
@@ -784,6 +879,12 @@ class PlatformClinicaSuscripcionApi(PlatformAPIView):
 
     permission_classes = [IsAuthenticated, PlatformSubscriptionPermission]
 
+    @extend_schema(
+        operation_id="plataforma_clinicas_suscripcion_create",
+        request=TenantSubscriptionInputSerializer,
+        responses=SubscriptionRowOutputSerializer,
+        tags=["plataforma"],
+    )
     def post(self, request: Request, tenant_id: _uuid_module.UUID) -> Response:
         """Crea o actualiza la suscripción de la clínica indicada."""
         try:

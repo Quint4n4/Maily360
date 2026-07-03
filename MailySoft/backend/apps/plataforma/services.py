@@ -39,7 +39,11 @@ from apps.audit.models import ActionType
 from apps.audit.services import audit_record
 from apps.authn.models import User
 from apps.clinica.services import seed_system_patient_categories
-from apps.core.permissions import _PLATFORM_ROLES_SUPER_ADMIN_ONLY
+from apps.core.permissions import (
+    _PLATFORM_ROLES_MANAGE_CLINICS,
+    _PLATFORM_ROLES_SUBSCRIPTION,
+    _PLATFORM_ROLES_SUPER_ADMIN_ONLY,
+)
 from apps.core.tenant_context import clear_current_tenant, set_current_tenant
 from apps.personal.services import consultorio_create
 from apps.plataforma.selectors import plan_get, platform_staff_get
@@ -55,12 +59,6 @@ logger = logging.getLogger("apps.plataforma.services")
 # que se asigna al crear la clínica).
 _ALLOWED_TARGET_STATUSES: frozenset[str] = frozenset(
     {Tenant.Status.ACTIVE, Tenant.Status.SUSPENDED}
-)
-
-# Roles de plataforma autorizados a cambiar el estado de una clínica.
-# Espejo de _PLATFORM_ROLES_MANAGE_CLINICS en apps/core/permissions.py.
-_ALLOWED_ACTOR_ROLES: frozenset[str] = frozenset(
-    {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.SALES}
 )
 
 # ---------------------------------------------------------------------------
@@ -216,7 +214,7 @@ def tenant_and_owner_create(
     """
     if not getattr(actor, "is_platform_staff", False):
         raise ValidationError("Solo el staff de plataforma puede crear clínicas.")
-    if getattr(actor, "platform_role", "") not in _ALLOWED_ACTOR_ROLES:
+    if getattr(actor, "platform_role", "") not in _PLATFORM_ROLES_MANAGE_CLINICS:
         raise ValidationError(
             f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
             "no autorizado para crear clínicas."
@@ -351,7 +349,7 @@ def tenant_set_status(
     """
     if not getattr(actor, "is_platform_staff", False):
         raise ValidationError("Solo el staff de plataforma puede cambiar el estado de una clínica.")
-    if getattr(actor, "platform_role", "") not in _ALLOWED_ACTOR_ROLES:
+    if getattr(actor, "platform_role", "") not in _PLATFORM_ROLES_MANAGE_CLINICS:
         raise ValidationError(
             f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
             "no autorizado para cambiar el estado de una clínica."
@@ -433,7 +431,7 @@ def tenant_subscription_set(
     """
     if not getattr(actor, "is_platform_staff", False):
         raise ValidationError("Solo el staff de plataforma puede gestionar suscripciones.")
-    if getattr(actor, "platform_role", "") not in _ALLOWED_ACTOR_ROLES:
+    if getattr(actor, "platform_role", "") not in _PLATFORM_ROLES_SUBSCRIPTION:
         raise ValidationError(
             f"Rol de plataforma '{getattr(actor, 'platform_role', '')}' "
             "no autorizado para gestionar suscripciones."
@@ -565,11 +563,10 @@ def _validar_actor_plan_write(actor: User) -> None:
     apps.core.permissions — NO se duplica el frozenset aquí). La vista ya
     exige ese permiso, pero el service puede invocarse desde management
     commands/seeds/Celery sin pasar por HTTP, así que se revalida — mismo
-    patrón que _ALLOWED_ACTOR_ROLES en tenant_and_owner_create /
-    tenant_subscription_set (esos dos SÍ mantienen su propio frozenset
-    porque su conjunto de roles, super_admin+sales, no coincide con ningún
-    otro permiso existente; aquí el conjunto es idéntico al de
-    PlatformStaffListPermission, así que reutilizar es lo correcto).
+    patrón que tenant_and_owner_create / tenant_set_status (importan
+    _PLATFORM_ROLES_MANAGE_CLINICS) y tenant_subscription_set (importa
+    _PLATFORM_ROLES_SUBSCRIPTION): todos reutilizan la constante de
+    apps.core.permissions en vez de declarar un frozenset local duplicado.
 
     Raises:
         ValidationError: actor no es staff de plataforma o su platform_role

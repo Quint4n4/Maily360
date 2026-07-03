@@ -945,14 +945,14 @@ _PLATFORM_ROLES_SYSTEM: frozenset[str] = frozenset(
 _PLATFORM_ROLES_SUBSCRIPTION: frozenset[str] = frozenset(
     {User.PlatformRole.SUPER_ADMIN, User.PlatformRole.SALES}
 )
-# Nota (security review, Fase 3.1): esta es la fuente única de verdad para
-# "solo super_admin" en el panel de plataforma. PlatformStaffListPermission
-# (arriba) declara su propio frozenset local _PLATFORM_ROLES_SUPER_ADMIN_ONLY
-# con el mismo contenido — se deja así (fuera de alcance de esta tarea) pero
-# CUALQUIER permiso NUEVO que necesite "solo super_admin" debe reutilizar
-# _PLATFORM_ROLES_SUPER_ADMIN_ONLY en vez de declarar otro frozenset duplicado.
-# Pendiente de refactor (no bloqueante): migrar PlatformStaffListPermission
-# para que también reutilice esta misma constante.
+# Nota (security review, Fase 3.1 / seguimiento Fase 3): esta es la fuente
+# única de verdad para "solo super_admin" en el panel de plataforma.
+# PlatformStaffListPermission (abajo) reutiliza directamente
+# _PLATFORM_ROLES_SUPER_ADMIN_ONLY (sin frozenset local propio), igual que
+# apps.plataforma.services._validar_actor_plan_write y
+# apps.plataforma.services._validar_actor_staff_write. CUALQUIER permiso o
+# service NUEVO que necesite "solo super_admin" debe importar esta misma
+# constante en vez de declarar otro frozenset duplicado.
 
 
 class RetentionPermission(HasClinicRole):
