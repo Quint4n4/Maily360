@@ -23,7 +23,11 @@ def user_active_memberships(*, user: User) -> QuerySet[TenantMembership]:
 
     Una membresía se considera activa si cumple TODAS las condiciones:
     - is_active = True (el acceso no ha sido suspendido)
-    - tenant__status = "active" (la clínica está activa, no en trial o suspendida)
+    - tenant__status IN ("active", "trial") (ambos tienen acceso completo; solo
+      "suspended" bloquea). DEBE coincidir con resolve_membership_for_user, que
+      resuelve el tenant/rol activo del /me/ con el mismo criterio: si aquí se
+      excluía "trial", el dueño de una clínica en periodo de prueba obtenía
+      active_role=None y la UI lo degradaba a "Solo lectura" (bug 2026-07-03).
     - deleted_at IS NULL (la membresía no ha sido borrada lógicamente)
     - tenant__deleted_at IS NULL (la clínica no ha sido borrada lógicamente)
 
@@ -49,7 +53,7 @@ def user_active_memberships(*, user: User) -> QuerySet[TenantMembership]:
             user=user,
             is_active=True,
             deleted_at__isnull=True,
-            tenant__status="active",
+            tenant__status__in=["active", "trial"],
             tenant__deleted_at__isnull=True,
         )
         .select_related("tenant")
