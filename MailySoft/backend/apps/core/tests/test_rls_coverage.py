@@ -156,6 +156,48 @@ class TestRlsCoverage:
             "apps/expediente/migrations/0005_rls_with_check.py."
         )
 
+    def test_with_check_incluye_el_fallback_sin_tenant(self) -> None:
+        """El WITH CHECK debe incluir `current_tenant_id() IS NULL`, igual que el USING.
+
+        Un WITH CHECK ESTRICTO (`tenant_id = current_tenant_id()`, sin el
+        `OR ... IS NULL`) rechaza los INSERT hechos SIN tenant en el GUC:
+        alta de clínica (PlatformAPIView cross-tenant), tareas Celery, seeds y
+        migraciones de datos. Con un rol superuser el defecto queda oculto (RLS
+        no aplica); con el rol de aplicación NOSUPERUSER el INSERT explota con
+        "new row violates row-level security policy" (bug 2026-07-03, alta de
+        clínica en producción; corregido en clinica/0013_rls_with_check_null_fallback).
+
+        Nota: no se puede validar funcionalmente aquí porque la suite corre con
+        un rol superuser (exento de RLS); por eso se inspecciona la expresión de
+        la policy en pg_policies.
+        """
+        tables = _tenant_aware_table_names()
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT tablename, with_check
+                FROM pg_policies
+                WHERE schemaname = 'public'
+                  AND tablename = ANY(%s)
+                  AND cmd IN ('ALL', 'INSERT')
+                  AND with_check IS NOT NULL;
+                """,
+                [tables],
+            )
+            rows = cursor.fetchall()
+
+        estrictas = sorted(
+            {table for table, with_check in rows if "is null" not in (with_check or "").lower()}
+        )
+        assert not estrictas, (
+            "Policies cuyo WITH CHECK es estricto y NO incluye el fallback "
+            f"'current_tenant_id() IS NULL': {estrictas}. Rompen los INSERT sin "
+            "tenant en el GUC (portal, Celery, seeds) con un rol NOSUPERUSER. "
+            "Agrega `OR current_tenant_id() IS NULL` al WITH CHECK con ALTER "
+            "POLICY, como clinica/0013_rls_with_check_null_fallback.py."
+        )
+
     def test_las_4_tablas_de_la_brecha_2026_06_25_tienen_rls(self) -> None:
         """Regresión explícita de la brecha encontrada en la auditoría del 2026-06-25.
 
