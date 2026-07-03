@@ -9,6 +9,7 @@ Uso:
     is_tenant_context_active()            # en el manager, distingue request de Celery/migraciones
     resolve_membership_for_user(user)     # resuelve la TenantMembership activa del usuario
     resolve_tenant_for_user(user)         # helper reutilizable (middleware + TenantAPIView)
+    apply_tenant_guc(tenant_id)           # fija el GUC de RLS en Postgres (modo session/local)
 
 Distinción importante (FIX-2):
     - Fuera de request (Celery, management commands, migraciones):
@@ -29,11 +30,45 @@ Estados de tenant permitidos (FIX-C):
     trial     → acceso completo (modelo de negocio: 2 meses de prueba gratis).
     active    → acceso completo (suscripción activa).
     suspended → bloqueado (impago u otras razones administrativas).
+
+Modo del GUC de RLS — session vs. local (pgbouncer, ver ADR-0003 y
+docs/design/pgbouncer-rls-escalabilidad.md):
+    apply_tenant_guc() es el ÚNICO punto que ejecuta `set_config('app.current_tenant_id', ...)`
+    contra PostgreSQL. Los dos lugares que fijan el tenant activo de un request
+    (TenantMiddleware para sesión Django/admin y TenantAPIView.check_permissions
+    para JWT) delegan en esta función — así el modo (session/local) se controla
+    en un solo sitio con el setting DB_TENANT_GUC_MODE.
+
+    - "session" (default, settings.DB_TENANT_GUC_MODE == "session"):
+      set_config(..., is_local=False). El GUC vive a nivel de sesión/conexión
+      (igual que el comportamiento histórico, sin cambios). Requiere que el
+      middleware limpie el GUC en el finally (ya lo hace) para que no se filtre
+      a la siguiente petición que reutilice la conexión.
+
+    - "local" (settings.DB_TENANT_GUC_MODE == "local", para pgbouncer en modo
+      transacción): set_config(..., is_local=True) = SET LOCAL. El GUC vive
+      SOLO dentro de la transacción de base de datos abierta en ese momento y
+      se borra automáticamente al hacer COMMIT o ROLLBACK — no hace falta (ni
+      sirve) limpiarlo explícitamente. Para que esto funcione, TODO el request
+      debe correr dentro de una transacción abierta ANTES de llamar a
+      apply_tenant_guc(): TenantMiddleware envuelve get_response(request) en
+      transaction.atomic() cuando este modo está activo (ver middleware.py).
+      Si se llamara apply_tenant_guc() en modo "local" FUERA de una
+      transacción, el SET LOCAL no tendría ningún efecto persistente: el GUC
+      quedaría vacío y las políticas RLS caerían en su fallback
+      `current_tenant_id() IS NULL`, que ABRE acceso cross-tenant — el
+      escenario opuesto al buscado. Por eso el modo "local" NUNCA debe
+      activarse sin haber verificado que las vistas corren dentro de la
+      transacción del middleware.
 """
 
 import logging
 import threading
 from typing import TYPE_CHECKING, Optional
+from uuid import UUID
+
+from django.conf import settings
+from django.db import connection
 
 if TYPE_CHECKING:
     from django.contrib.auth.base_user import AbstractBaseUser
@@ -184,3 +219,51 @@ def resolve_tenant_for_user(user: Optional["AbstractBaseUser"]) -> Optional["Ten
     """
     membership = resolve_membership_for_user(user)
     return membership.tenant if membership is not None else None
+
+
+def apply_tenant_guc(tenant_id: UUID | None) -> None:
+    """Fija el GUC `app.current_tenant_id` en PostgreSQL para las políticas RLS.
+
+    ÚNICO punto del código que ejecuta `set_config('app.current_tenant_id', ...)`.
+    Tanto TenantMiddleware (sesión Django) como TenantAPIView.check_permissions
+    (JWT) llaman a esta función en lugar de ejecutar el SQL directamente, de
+    modo que el modo (session/local) se controla desde un solo lugar.
+
+    Comportamiento según settings.DB_TENANT_GUC_MODE:
+        "session" (default): set_config(..., is_local=False) — nivel sesión,
+            idéntico al comportamiento histórico. No hace nada si tenant_id
+            es None (igual que antes: la limpieza corre aparte en el finally
+            del middleware con clear_tenant_guc()).
+        "local": set_config(..., is_local=True) — SET LOCAL, nivel transacción.
+            Requiere que ya exista una transacción abierta (ver docstring del
+            módulo). Tampoco hace nada si tenant_id es None.
+
+    Args:
+        tenant_id: UUID del tenant a fijar, o None (no ejecuta ningún SQL).
+    """
+    if tenant_id is None:
+        return
+    is_local = settings.DB_TENANT_GUC_MODE == "local"
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT set_config('app.current_tenant_id', %s, %s)",
+            [str(tenant_id), is_local],
+        )
+
+
+def clear_tenant_guc() -> None:
+    """Limpia el GUC `app.current_tenant_id` a nivel de sesión/conexión.
+
+    Solo tiene efecto (y solo se necesita) en modo "session": borra la marca
+    de tenant de la conexión reciclada por CONN_MAX_AGE para que la siguiente
+    petición que la reutilice no herede el tenant de esta. Se llama SIEMPRE
+    desde el finally de TenantMiddleware, en ambos modos, por dos razones:
+      1. En modo "session" es la limpieza que evita la fuga entre requests
+         dentro de la misma conexión persistente (comportamiento actual).
+      2. En modo "local" es inofensiva: is_local=False sobre una conexión cuya
+         transacción ya hizo COMMIT/ROLLBACK simplemente deja el GUC de sesión
+         en '' (ya estaba vacío porque SET LOCAL nunca escribe a nivel de
+         sesión) — un no-op de cinturón y tirantes.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT set_config('app.current_tenant_id', '', false)")

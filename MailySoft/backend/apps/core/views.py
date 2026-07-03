@@ -28,11 +28,18 @@ Diseño (FIX-A):
                 request.active_role = role
                 set_current_tenant(tenant)
                 set_tenant_context_active(True)
-                set_config('app.current_tenant_id', ..., false) si tenant no es None
+                apply_tenant_guc(tenant.id) si tenant no es None
+                    (set_config con is_local=False en modo "session" —
+                    default— o is_local=True/SET LOCAL en modo "local";
+                    ver apps/core/tenant_context.py y
+                    docs/design/pgbouncer-rls-escalabilidad.md)
                 super().check_permissions(request)  ← evalúa permission_classes
             check_throttles()
         → handler (get/post/patch/delete)
         → middleware.finally: clear_current_tenant() + limpiar GUC
+          (en modo "local" el GUC ya desapareció solo al hacer commit/rollback
+          de la transaction.atomic() que TenantMiddleware abrió alrededor de
+          get_response(); la limpieza del finally es cinturón y tirantes)
 
 Nota sobre platform staff sin membresía:
     Un usuario con is_platform_staff=True pero sin TenantMembership tendrá
@@ -41,15 +48,14 @@ Nota sobre platform staff sin membresía:
     plataforma opera vía el admin de Django, no vía la API de clínica.
 """
 
-
 import uuid as _uuid_module
 
-from django.db import connection
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.core.tenant_context import (
+    apply_tenant_guc,
     resolve_membership_for_user,
     set_current_tenant,
     set_request_context,
@@ -159,14 +165,12 @@ class TenantAPIView(APIView):
 
         # Propagar a PostgreSQL para que la política RLS use el tenant correcto.
         # Solo cuando hay tenant: evita la query si el usuario no tiene membresía.
-        # is_local=false: nivel sesión/conexión, no desaparece entre sentencias
-        # en modo autocommit con CONN_MAX_AGE>0 (FIX-A1).
+        # apply_tenant_guc() decide session (FIX-A1, nivel sesión/conexión) vs.
+        # local (SET LOCAL, requiere la transacción abierta por TenantMiddleware
+        # en modo "local") según settings.DB_TENANT_GUC_MODE — ver su docstring
+        # en apps/core/tenant_context.py.
         if tenant is not None:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT set_config('app.current_tenant_id', %s, false)",
-                    [str(tenant.id)],
-                )
+            apply_tenant_guc(tenant.id)
 
         # Poblar el contexto de request HTTP (ip/user_agent/request_id) en thread-local.
         # El helper audit_record() lo consume sin acoplar los services a HTTP.

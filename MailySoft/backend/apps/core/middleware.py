@@ -10,15 +10,25 @@ IMPORTANTE — arquitectura de resolución de tenant (FIX-A2):
   de que todo el middleware ya se ejecutó. En ese punto request.user aún es
   AnonymousUser cuando este middleware corre.
 
-  Este middleware cumple dos roles:
+  Este middleware cumple tres roles:
   1. Para sesión de Django (admin): resuelve el tenant desde request.user de
      Django (que sí está poblado por AuthenticationMiddleware de sesión).
   2. Para TODA petición: limpia el GUC de PostgreSQL en el finally, garantizando
      que la variable app.current_tenant_id no se filtre a la siguiente petición
      que reutilice la misma conexión (FIX-A1).
+  3. Modo "local" del GUC (settings.DB_TENANT_GUC_MODE, ver pgbouncer-rls-
+     escalabilidad.md): envuelve TODA la petición (incluido el path JWT que
+     resuelve tenant más adelante, en TenantAPIView) en transaction.atomic(),
+     porque SET LOCAL solo tiene efecto dentro de una transacción abierta.
+     En modo "session" (default) el comportamiento es EXACTAMENTE el de
+     siempre — no se abre ninguna transacción extra.
 
   La resolución de tenant para peticiones JWT ocurre en:
   apps/core/views.py → TenantAPIView.check_permissions()
+  Ambos puntos (este middleware y TenantAPIView) fijan el GUC llamando al
+  mismo helper apps.core.tenant_context.apply_tenant_guc(), que es el único
+  lugar que decide session vs. local. Así el modo se controla en un solo
+  sitio aunque el fijado siga ocurriendo en dos puntos del request.
 
   Estados de tenant (FIX-C):
   resolve_tenant_for_user → resolve_membership_for_user filtra
@@ -27,14 +37,17 @@ IMPORTANTE — arquitectura de resolución de tenant (FIX-A2):
   suspended → bloqueado; trial y active → acceso permitido.
 """
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
-from django.db import connection
+from django.conf import settings
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 
 from apps.core.tenant_context import (
+    apply_tenant_guc,
     clear_current_tenant,
     clear_request_context,
+    clear_tenant_guc,
     resolve_tenant_for_user,
     set_current_tenant,
     set_tenant_context_active,
@@ -62,26 +75,39 @@ class TenantMiddleware:
         tenant = resolve_tenant_for_user(user) if user is not None else None
         set_current_tenant(tenant)
 
-        # FIX-A1: propagar el tenant a la sesión de PostgreSQL para que RLS funcione.
-        # is_local=False (nivel sesión/conexión) para que persista en modo autocommit
-        # con CONN_MAX_AGE>0. La limpieza en el finally garantiza que no se filtre
-        # a la siguiente petición que reutilice esta conexión.
-        if tenant is not None:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT set_config('app.current_tenant_id', %s, false)",
-                    [str(tenant.id)],
-                )
+        # FIX-A1: propagar el tenant a la sesión/transacción de PostgreSQL para
+        # que RLS funcione. apply_tenant_guc() decide session vs. local según
+        # settings.DB_TENANT_GUC_MODE (ver docstring del módulo y de la función).
+        #
+        # CRÍTICO: en modo "local" el SET LOCAL solo tiene efecto DENTRO de la
+        # transacción; por eso apply_tenant_guc() se llama dentro de _dispatch(),
+        # ya con el atomic() abierto. Fijarlo antes (en autocommit real) lo
+        # perdería de inmediato y el fallback `current_tenant_id() IS NULL`
+        # abriría acceso cross-tenant en el path de sesión Django (/admin).
+        def _dispatch() -> HttpResponse:
+            if tenant is not None:
+                apply_tenant_guc(tenant.id)
+            return self.get_response(request)
 
         try:
-            return self.get_response(request)
+            if settings.DB_TENANT_GUC_MODE == "local":
+                # Modo "local": envolver TODA la petición (incluida la
+                # resolución de tenant JWT que ocurre más adelante, dentro de
+                # get_response, en TenantAPIView.check_permissions) en una
+                # única transacción. SET LOCAL solo vive dentro de ella; al
+                # salir de este bloque (commit normal o rollback en excepción
+                # no capturada) el GUC desaparece solo — no hace falta
+                # limpiarlo a mano como en modo "session".
+                with transaction.atomic():
+                    return _dispatch()
+            return _dispatch()
         finally:
-            # SIEMPRE limpiar thread-local Y el GUC en la conexión de Postgres.
-            # El GUC se limpia con string vacío (is_local=false) para que la
-            # próxima petición que reutilice esta conexión vea NULL, no el tenant
-            # del request anterior (FIX-A1).
+            # SIEMPRE limpiar thread-local. El GUC de sesión también se limpia
+            # aquí en ambos modos (ver clear_tenant_guc(): en modo "local" es
+            # un no-op de cinturón y tirantes, la limpieza real ya la hizo el
+            # COMMIT/ROLLBACK de la transacción al salir del bloque `with` de
+            # arriba).
             clear_current_tenant()
             clear_request_context()
             set_tenant_context_active(False)
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT set_config('app.current_tenant_id', '', false)")
+            clear_tenant_guc()

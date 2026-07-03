@@ -10,6 +10,7 @@ from pathlib import Path
 
 import environ
 from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
 
 # ---------------------------------------------------------------------------
 # Rutas
@@ -149,6 +150,40 @@ DATABASES["default"]["OPTIONS"] = {
 }
 
 DEFAULT_AUTO_FIELD: str = "django.db.models.BigAutoField"
+
+# ---------------------------------------------------------------------------
+# GUC de tenant para RLS — modo sesión (default) vs. modo local (pgbouncer)
+# ---------------------------------------------------------------------------
+#
+# DB_TENANT_GUC_MODE controla CÓMO se fija el GUC `app.current_tenant_id` que
+# usan las políticas RLS de PostgreSQL (ver apps/core/tenant_context.py →
+# apply_tenant_guc(), apps/core/middleware.py, apps/core/views.py).
+#
+#   "session" (DEFAULT — comportamiento actual, sin cambios):
+#       set_config(..., false) → el GUC vive a nivel de SESIÓN/conexión.
+#       Persiste durante todo CONN_MAX_AGE. Es seguro HOY porque cada
+#       conexión real de Postgres pertenece a un solo worker/hilo de Django
+#       (no hay pgbouncer en modo transacción reciclando conexiones entre
+#       requests de distintos tenants).
+#
+#   "local" (para cuando se despliegue pgbouncer en modo transacción):
+#       set_config(..., true) → SET LOCAL, el GUC vive SOLO dentro de la
+#       transacción de base de datos actual y se borra solo al hacer
+#       COMMIT/ROLLBACK. Requiere que el request completo corra DENTRO de una
+#       transacción (ver TenantMiddleware, que envuelve get_response() en
+#       transaction.atomic() cuando este modo está activo). Sin esa
+#       transacción, SET LOCAL no tiene ningún efecto persistente y el GUC
+#       quedaría vacío, activando el fallback `current_tenant_id() IS NULL`
+#       de las políticas RLS — el escenario CONTRARIO al deseado (abriría
+#       acceso cross-tenant en vez de cerrarlo). Ver
+#       docs/design/pgbouncer-rls-escalabilidad.md antes de activar en prod.
+#
+# Ver el checklist de activación en docs/design/pgbouncer-rls-escalabilidad.md.
+DB_TENANT_GUC_MODE: str = env("DB_TENANT_GUC_MODE", default="session")
+if DB_TENANT_GUC_MODE not in ("session", "local"):
+    raise ImproperlyConfigured(
+        f"DB_TENANT_GUC_MODE debe ser 'session' o 'local', recibido: {DB_TENANT_GUC_MODE!r}"
+    )
 
 # ---------------------------------------------------------------------------
 # Cache (Redis)

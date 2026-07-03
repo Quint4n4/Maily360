@@ -201,20 +201,64 @@ Pedido del dueño: poder agregar y editar los planes desde el portal.
       2000 chars en descripción, máx. 50 características, excepción específica
       en test, test renombrado).
 
-### Fase 4 — Gestión del equipo de plataforma y cuentas
+### Fase 4 — Gestión del equipo de plataforma y cuentas — ✅ HECHA (2026-07-02)
 
-- Alta/edición/desactivación de staff de Maily desde el portal (solo super_admin),
-  con contraseña temporal igual que las clínicas.
-- Forzar cambio de contraseña temporal en primer login (dueños de clínica y staff).
-- (Opcional, evaluar riesgos) Impersonación "entrar como la clínica" para soporte,
-  SIEMPRE auditada y con banner visible — se decide con el dueño antes de construir.
+- [x] Alta/edición/desactivación de staff (SOLO super_admin, `PlatformStaffWritePermission`):
+      contraseña temporal criptográfica mostrada una vez, anti-lockout (nadie se
+      auto-desactiva/degrada; protegido el ÚLTIMO super_admin activo), reset de
+      contraseña con invalidación real de refresh tokens (token_blacklist, test
+      de regresión e2e), 404 uniforme para usuarios de clínica y pre-check de
+      email acotado al namespace de plataforma (sin enumeración). Auditoría
+      STAFF_CREATE/UPDATE/PASSWORD_RESET sin contraseñas.
+- [x] Cambio de contraseña forzado en primer login (staff y dueños de clínica):
+      `User.must_change_password` + `POST /auth/change-password/` (rota la cookie
+      de refresh propia para no matar la sesión) + enforcement central en
+      TenantAPIView/PlatformAPIView (403 `password_change_required` en TODO
+      endpoint de negocio; authn exento por diseño; seeds demo/E2E en False).
+      Throttle dedicado 10/min en change-password y reset-password (hallazgo
+      ALTO de la auditoría de este ciclo, corregido).
+- [x] Frontend: StaffFormModal, acciones por fila en UsuariosPage (fila propia
+      protegida), pantalla /cambiar-contrasena con redirección forzada central
+      (clínica y portal) + listener del 403 en el cliente http.
+- [x] 72 tests nuevos; revisión APROBADA; auditoría de seguridad con ALTO/MEDIO
+      corregidos en el mismo commit.
+- [ ] (Sigue opcional) Impersonación "entrar como la clínica" para soporte,
+      SIEMPRE auditada y con banner visible — pendiente de decisión del dueño.
 
-### Fase 5 — Calidad continua del portal
+### Fase 5 — Calidad continua del portal — ✅ HECHA (2026-07-03)
 
-- Tipos del frontend generados con drf-spectacular + openapi-typescript.
-- E2E Playwright del portal (login staff → dashboard → alta clínica → auditoría).
+Hecha en tres olas, cada una con su verificación:
+
+- [x] **Seguimientos técnicos** acumulados de fases previas: índice global
+      `-created_at` en AuditLog (consultas cross-tenant del panel), roles de
+      plataforma unificados en una sola fuente (sin frozensets duplicados),
+      tarea de avisos con `bulk_update` en vez de `save()` por fila.
+- [x] **E2E Playwright del portal** (`web-soft/e2e/plataforma.spec.ts`, 9 pruebas
+      verdes): login staff → dashboard → alta de clínica (captura de contraseña
+      temporal) → auditoría → asignación de plan → permisos por rol → flujo de oro
+      del cambio de contraseña forzado. Seed `seed_e2e_user --platform`.
+- [x] **Tipos generados desde OpenAPI**: pipeline drf-spectacular →
+      openapi-typescript (schema en `web-soft/openapi/schema.yml`, script
+      `npm run types:api`, `src/types/openapi.d.ts`); 13 vistas de plataforma
+      anotadas con `@extend_schema`; los tipos de salida del portal derivan del
+      schema. Los inputs de formularios quedan a mano (documentado).
+- [x] **Preparación pgbouncer (`SET LOCAL`)** — el P0 de escalabilidad, hecho con
+      MÍNIMO RIESGO: feature flag `DB_TENANT_GUC_MODE` (`session` default = 100%
+      el comportamiento actual / `local` = SET LOCAL en transacción por request
+      para pool de pgbouncer). Un único punto de fijado del GUC (`apply_tenant_guc`),
+      atomic condicional en el middleware, 16 tests incluyendo el de no-fuga
+      (SET LOCAL no sobrevive al commit). Suite completa verde en modo default.
+      **NO activado** — el código queda listo; ver checklist en
+      `pgbouncer-rls-escalabilidad.md` para activarlo (rol NOSUPERUSER, flag a
+      `local`, carga con pgbouncer real, despliegue).
+
+Hallazgos abiertos que dejó esta fase (fuera de alcance, anotados para seguimiento):
+- **Rol de conexión SUPERUSER en dev/test**: Postgres exime a superusers de RLS
+  aun con FORCE. Verificar que el rol de PRODUCCIÓN (Railway) sea NOSUPERUSER para
+  que RLS funcione como segunda barrera real. **Importante antes de escalar.**
+- `apps/agenda/reminders.py` encola con `apply_async` sin `transaction.on_commit`
+  (a diferencia de pdfs/recetas); alinear antes de activar el modo `local`.
 - Pulido móvil pendiente del plan responsive (Fases 3-5 de `project responsive`).
-- Carga: revisar pgbouncer/`SET LOCAL` si no se hizo en Fase 0, antes de sumar clínicas.
 
 ## 4. Orden y dependencias
 
