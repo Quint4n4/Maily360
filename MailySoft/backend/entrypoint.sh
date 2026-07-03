@@ -54,7 +54,17 @@ print('PostgreSQL listo')
 # ---------------------------------------------------------------------------
 run_migrations() {
     log_info "Ejecutando migraciones..."
-    python manage.py migrate --noinput
+    # Las migraciones crean/alteran tablas y políticas RLS: requieren un rol con
+    # privilegios de DDL (superuser/owner). Si la app del día a día se conecta con
+    # un rol NOSUPERUSER (para que RLS aplique como segunda barrera), ese rol NO
+    # puede migrar. MIGRATION_DATABASE_URL permite usar el rol privilegiado SOLO
+    # aquí. Si no se define, se usa DATABASE_URL (comportamiento actual, local).
+    if [[ -n "${MIGRATION_DATABASE_URL:-}" ]]; then
+        log_info "Usando MIGRATION_DATABASE_URL (rol con privilegios de DDL)."
+        DATABASE_URL="$MIGRATION_DATABASE_URL" python manage.py migrate --noinput
+    else
+        python manage.py migrate --noinput
+    fi
     log_info "Migraciones completadas"
 }
 
