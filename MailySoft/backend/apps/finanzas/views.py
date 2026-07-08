@@ -19,7 +19,7 @@ import datetime
 import logging
 import uuid
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers, status
@@ -37,11 +37,11 @@ from apps.core.permissions import (
     FinanceConfigPermission,
     FinanceDashboardPermission,
     FinancePaymentPermission,
-    FinanceQuotePermission,
     HasClinicRole,
     PatientStatementPermission,
     QuotePermission,
     RetentionPermission,
+    TreatmentPackagePermission,
 )
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
@@ -52,6 +52,7 @@ from apps.finanzas.models import (
     Payment,
     Quote,
     ServiceConcept,
+    TreatmentPackage,
 )
 from apps.finanzas.serializers import (
     CfdiDocumentOutputSerializer,
@@ -60,6 +61,8 @@ from apps.finanzas.serializers import (
     PaymentOutputSerializer,
     QuoteOutputSerializer,
     ServiceConceptOutputSerializer,
+    TreatmentPackageListItemSerializer,
+    TreatmentPackageOutputSerializer,
 )
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
@@ -101,7 +104,7 @@ _NO_TENANT = Response(
 )
 
 
-def _parse_date(value: Optional[str]) -> Optional[datetime.date]:
+def _parse_date(value: str | None) -> datetime.date | None:
     """Parsea YYYY-MM-DD a date, o None si vacío."""
     if not value:
         return None
@@ -126,7 +129,9 @@ class ConceptListCreateApi(TenantAPIView):
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=160)
         description = serializers.CharField(default="", allow_blank=True)
-        base_price = serializers.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+        base_price = serializers.DecimalField(
+            max_digits=12, decimal_places=2, default=Decimal("0.00")
+        )
         sat_product_key = serializers.CharField(max_length=10, default="", allow_blank=True)
         sat_unit_key = serializers.CharField(max_length=10, default="E48", allow_blank=True)
 
@@ -161,9 +166,7 @@ class ConceptDetailApi(TenantAPIView):
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=160, required=False)
         description = serializers.CharField(required=False, allow_blank=True)
-        base_price = serializers.DecimalField(
-            max_digits=12, decimal_places=2, required=False
-        )
+        base_price = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
         sat_product_key = serializers.CharField(max_length=10, required=False, allow_blank=True)
         sat_unit_key = serializers.CharField(max_length=10, required=False, allow_blank=True)
         # Toggle de estado: se maneja por separado (reactivar/desactivar), no como campo editable.
@@ -205,9 +208,7 @@ class ConceptDetailApi(TenantAPIView):
                 else:
                     concept = services.concept_deactivate(concept=concept, user=request.user)
             if data:
-                concept = services.concept_update(
-                    concept=concept, user=request.user, **data
-                )
+                concept = services.concept_update(concept=concept, user=request.user, **data)
         except DjangoValidationError as exc:
             return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ServiceConceptOutputSerializer(concept).data)
@@ -265,6 +266,123 @@ class FiscalConfigApi(TenantAPIView):
 
 
 # ===========================================================================
+# Paquetes de tratamientos (catálogo reutilizable — Fase 3, Calendarización)
+# ===========================================================================
+
+
+class PackageListCreateApi(TenantAPIView):
+    """GET  /api/v1/finanzas/paquetes/ — catálogo de paquetes de tratamientos.
+    POST /api/v1/finanzas/paquetes/ — crea un paquete (owner/admin).
+
+    Cada item de entrada: {concept_id, sessions?, order?}. La forma exacta
+    de cada línea se valida en el service (mismo patrón que Cotizaciones /
+    Calendarización: `items` llega como lista de dicts libres).
+    """
+
+    permission_classes = [IsAuthenticated, TreatmentPackagePermission]
+
+    class InputSerializer(serializers.Serializer):
+        name = serializers.CharField(max_length=160)
+        description = serializers.CharField(default="", allow_blank=True)
+        is_active = serializers.BooleanField(default=True)
+        items = serializers.ListField(child=serializers.DictField(), allow_empty=False)
+
+    def get(self, request: Request) -> Response:
+        only_active = request.query_params.get("only_active", "true").lower() != "false"
+        qs = selectors.package_list(only_active=only_active)
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        return paginator.get_paginated_response(
+            TreatmentPackageListItemSerializer(page, many=True).data
+        )
+
+    def post(self, request: Request) -> Response:
+        tenant = _require_tenant()
+        if tenant is None:
+            return _NO_TENANT
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        try:
+            package = services.package_create(tenant=tenant, user=request.user, **s.validated_data)
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            TreatmentPackageOutputSerializer(package).data, status=status.HTTP_201_CREATED
+        )
+
+
+class PackageDetailApi(TenantAPIView):
+    """GET    /api/v1/finanzas/paquetes/<uuid>/ — detalle.
+    PATCH  /api/v1/finanzas/paquetes/<uuid>/ — reemplaza (items opcional).
+    DELETE /api/v1/finanzas/paquetes/<uuid>/ — baja lógica.
+
+    PATCH es un REEMPLAZO del paquete (no un patch parcial de campos sueltos):
+    `name`/`description`/`is_active` siempre se reescriben con lo enviado.
+    Si `items` se omite, se conservan los items actuales tal cual (se
+    reenvían al service para no perderlos, ya que `package_replace` siempre
+    borra y recrea).
+    """
+
+    permission_classes = [IsAuthenticated, TreatmentPackagePermission]
+
+    class InputSerializer(serializers.Serializer):
+        name = serializers.CharField(max_length=160)
+        description = serializers.CharField(default="", allow_blank=True)
+        is_active = serializers.BooleanField(default=True)
+        items = serializers.ListField(child=serializers.DictField(), required=False)
+
+    def _get_or_404(
+        self, package_id: uuid.UUID
+    ) -> "tuple[TreatmentPackage | None, Response | None]":
+        try:
+            return selectors.package_get(package_id=package_id), None
+        except TreatmentPackage.DoesNotExist:
+            return None, Response(
+                {"detail": "Paquete no encontrado."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+    def get(self, request: Request, package_id: uuid.UUID) -> Response:
+        package, err = self._get_or_404(package_id)
+        if err is not None:
+            return err
+        return Response(TreatmentPackageOutputSerializer(package).data)
+
+    def patch(self, request: Request, package_id: uuid.UUID) -> Response:
+        package, err = self._get_or_404(package_id)
+        if err is not None:
+            return err
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        data = dict(s.validated_data)
+        items = data.pop("items", None)
+        if items is None:
+            # No se enviaron items nuevos: conserva los actuales (el service
+            # siempre borra y recrea, así que hay que reenviarlos tal cual).
+            items = [
+                {
+                    "concept_id": str(item.service_concept_id),
+                    "sessions": item.sessions,
+                    "order": item.order,
+                }
+                for item in package.items.all()
+            ]
+        try:
+            package = services.package_replace(
+                package=package, user=request.user, items=items, **data
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(TreatmentPackageOutputSerializer(package).data)
+
+    def delete(self, request: Request, package_id: uuid.UUID) -> Response:
+        package, err = self._get_or_404(package_id)
+        if err is not None:
+            return err
+        services.package_delete(package=package, user=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ===========================================================================
 # Cotizaciones
 # ===========================================================================
 
@@ -279,9 +397,15 @@ class QuoteListCreateApi(TenantAPIView):
     class ItemSerializer(serializers.Serializer):
         concept_id = serializers.UUIDField(required=False, allow_null=True)
         description = serializers.CharField(max_length=200, required=False, allow_blank=True)
-        quantity = serializers.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1.00"))
-        unit_price = serializers.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-        discount = serializers.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+        quantity = serializers.DecimalField(
+            max_digits=10, decimal_places=2, default=Decimal("1.00")
+        )
+        unit_price = serializers.DecimalField(
+            max_digits=12, decimal_places=2, default=Decimal("0.00")
+        )
+        discount = serializers.DecimalField(
+            max_digits=12, decimal_places=2, default=Decimal("0.00")
+        )
 
     class InputSerializer(serializers.Serializer):
         patient_id = serializers.UUIDField()
@@ -297,9 +421,7 @@ class QuoteListCreateApi(TenantAPIView):
         )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
-        return paginator.get_paginated_response(
-            QuoteOutputSerializer(page, many=True).data
-        )
+        return paginator.get_paginated_response(QuoteOutputSerializer(page, many=True).data)
 
     def post(self, request: Request) -> Response:
         tenant = _require_tenant()
@@ -310,9 +432,7 @@ class QuoteListCreateApi(TenantAPIView):
         try:
             patient = patient_get(patient_id=s.validated_data["patient_id"])
         except Patient.DoesNotExist:
-            return Response(
-                {"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         try:
             quote = services.quote_create(
                 tenant=tenant,
@@ -335,9 +455,7 @@ class QuoteDetailApi(TenantAPIView):
     permission_classes = [IsAuthenticated, QuotePermission]
 
     class InputSerializer(serializers.Serializer):
-        status = serializers.ChoiceField(
-            choices=[Quote.Status.REJECTED, Quote.Status.EXPIRED]
-        )
+        status = serializers.ChoiceField(choices=[Quote.Status.REJECTED, Quote.Status.EXPIRED])
 
     def _get_or_404(self, quote_id: uuid.UUID) -> "tuple[Quote | None, Response | None]":
         try:
@@ -474,7 +592,7 @@ class ChargeListCreateApi(TenantAPIView):
 
     def get(self, request: Request) -> Response:
         raw_appointment = request.query_params.get("appointment") or None
-        appointment_id: Optional[uuid.UUID] = None
+        appointment_id: uuid.UUID | None = None
         if raw_appointment:
             try:
                 appointment_id = uuid.UUID(raw_appointment)
@@ -490,9 +608,7 @@ class ChargeListCreateApi(TenantAPIView):
         )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
-        return paginator.get_paginated_response(
-            ChargeOutputSerializer(page, many=True).data
-        )
+        return paginator.get_paginated_response(ChargeOutputSerializer(page, many=True).data)
 
     def post(self, request: Request) -> Response:
         tenant = _require_tenant()
@@ -503,9 +619,7 @@ class ChargeListCreateApi(TenantAPIView):
         try:
             patient = patient_get(patient_id=s.validated_data["patient_id"])
         except Patient.DoesNotExist:
-            return Response(
-                {"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
         concept = None
         concept_id = s.validated_data.get("concept_id")
@@ -578,7 +692,9 @@ class PaymentListCreateApi(TenantAPIView):
     class InputSerializer(serializers.Serializer):
         patient_id = serializers.UUIDField()
         amount = serializers.DecimalField(max_digits=12, decimal_places=2)
-        method = serializers.ChoiceField(choices=Payment.Method.choices, default=Payment.Method.CASH)
+        method = serializers.ChoiceField(
+            choices=Payment.Method.choices, default=Payment.Method.CASH
+        )
         reference = serializers.CharField(max_length=120, default="", allow_blank=True)
         notes = serializers.CharField(default="", allow_blank=True)
         allocations = serializers.ListField(
@@ -592,9 +708,7 @@ class PaymentListCreateApi(TenantAPIView):
         )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
-        return paginator.get_paginated_response(
-            PaymentOutputSerializer(page, many=True).data
-        )
+        return paginator.get_paginated_response(PaymentOutputSerializer(page, many=True).data)
 
     def post(self, request: Request) -> Response:
         tenant = _require_tenant()
@@ -605,9 +719,7 @@ class PaymentListCreateApi(TenantAPIView):
         try:
             patient = patient_get(patient_id=s.validated_data["patient_id"])
         except Patient.DoesNotExist:
-            return Response(
-                {"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         try:
             payment = services.payment_register(
                 tenant=tenant,
@@ -633,9 +745,7 @@ class PaymentDetailApi(TenantAPIView):
         try:
             payment = selectors.payment_get(payment_id=payment_id)
         except Payment.DoesNotExist:
-            return Response(
-                {"detail": "Pago no encontrado."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Pago no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         return Response(PaymentOutputSerializer(payment).data)
 
 
@@ -668,9 +778,7 @@ class CfdiListCreateApi(TenantAPIView):
         )
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
-        return paginator.get_paginated_response(
-            CfdiDocumentOutputSerializer(page, many=True).data
-        )
+        return paginator.get_paginated_response(CfdiDocumentOutputSerializer(page, many=True).data)
 
     def post(self, request: Request) -> Response:
         tenant = _require_tenant()
@@ -681,20 +789,14 @@ class CfdiListCreateApi(TenantAPIView):
         try:
             payment = selectors.payment_get(payment_id=s.validated_data["payment_id"])
         except Payment.DoesNotExist:
-            return Response(
-                {"detail": "Pago no encontrado."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Pago no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         data = dict(s.validated_data)
         data.pop("payment_id")
         try:
-            cfdi = services.cfdi_issue(
-                tenant=tenant, user=request.user, payment=payment, **data
-            )
+            cfdi = services.cfdi_issue(tenant=tenant, user=request.user, payment=payment, **data)
         except DjangoValidationError as exc:
             return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(
-            CfdiDocumentOutputSerializer(cfdi).data, status=status.HTTP_201_CREATED
-        )
+        return Response(CfdiDocumentOutputSerializer(cfdi).data, status=status.HTTP_201_CREATED)
 
 
 class CfdiDetailApi(TenantAPIView):
@@ -706,9 +808,7 @@ class CfdiDetailApi(TenantAPIView):
         try:
             cfdi = selectors.cfdi_get(cfdi_id=cfdi_id)
         except CfdiDocument.DoesNotExist:
-            return Response(
-                {"detail": "CFDI no encontrado."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "CFDI no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         return Response(CfdiDocumentOutputSerializer(cfdi).data)
 
 
@@ -724,9 +824,7 @@ class CfdiCancelApi(TenantAPIView):
         try:
             cfdi = selectors.cfdi_get(cfdi_id=cfdi_id)
         except CfdiDocument.DoesNotExist:
-            return Response(
-                {"detail": "CFDI no encontrado."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "CFDI no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         s = self.InputSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         try:
@@ -756,9 +854,7 @@ class AccountStatementApi(TenantAPIView):
         try:
             patient = patient_get(patient_id=patient_id)
         except Patient.DoesNotExist:
-            return Response(
-                {"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         statement = selectors.account_statement_build(
             patient_id=patient_id,
             date_from=_parse_date(request.query_params.get("date_from")),

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ScrollText, ChevronDown, LogOut, User, Building2, Briefcase } from 'lucide-react'
+import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ScrollText, Package, ChevronDown, LogOut, User, Building2, Briefcase } from 'lucide-react'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
 import { Modulo, accesoModulo, puedeAccederConsultorio, ROLE_LABEL } from '../auth/permisos'
@@ -8,7 +8,8 @@ import CampanaNotificaciones from './CampanaNotificaciones'
 import BottomNav from './BottomNav'
 
 interface TopbarProps {
-  active?: Modulo
+  /** Módulo activo del menú, o 'paquetes' (página propia fuera de la matriz de módulos). */
+  active?: Modulo | 'paquetes'
 }
 
 const NAV: { key: Modulo; label: string; icon: typeof BarChart3 }[] = [
@@ -28,6 +29,8 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
   const [cerrando, setCerrando] = useState(false)
 
   const visibles = NAV.filter(n => accesoModulo(role, n.key))
+  // Paquetes: página propia (no es Modulo del menú). Solo owner/admin la gestionan.
+  const puedeVerPaquetes = role === 'owner' || role === 'admin'
 
   const cerrarSesion = async () => {
     if (cerrando) return
@@ -69,6 +72,19 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
               </button>
             )
           })}
+          {puedeVerPaquetes && (
+            <button
+              onClick={() => navigate('/paquetes')}
+              className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors"
+              style={{
+                background: active === 'paquetes' ? 'rgba(201,162,39,0.14)' : 'transparent',
+                color: active === 'paquetes' ? '#C9A227' : '#7A756C',
+              }}
+            >
+              <Package className="w-5 h-5" />
+              <span className="text-xs font-medium">Paquetes</span>
+            </button>
+          )}
         </nav>
       </div>
 

@@ -103,6 +103,13 @@ class TestConceptPermissions:
         with _tenant_context(tenant):
             assert client.get(CONCEPTS_URL).status_code == 200
 
+    def test_doctor_can_list_concepts(self, db: None) -> None:
+        """El médico lee el catálogo para armar cotizaciones y calendarizaciones."""
+        tenant = TenantFactory()
+        client = _member_client(tenant, "doctor")
+        with _tenant_context(tenant):
+            assert client.get(CONCEPTS_URL).status_code == 200
+
     def test_finance_cannot_create_concept(self, db: None) -> None:
         """El catálogo es administrativo: finance no crea conceptos (solo owner/admin)."""
         tenant = TenantFactory()

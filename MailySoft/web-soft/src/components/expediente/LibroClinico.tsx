@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react'
 import {
   BookOpen, Printer, FileText, Layers, Loader2, AlertTriangle,
   Building2, User, Stethoscope, Activity, ClipboardCheck, Pill, Image as ImageIcon,
-  MessageSquare, BadgeCheck, X,
+  MessageSquare, BadgeCheck, X, FileHeart,
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type {
@@ -43,6 +43,8 @@ import { edad } from '../../lib/paciente'
 import { SISTEMA_LABEL } from './ui'
 import EstadoCuentaVisita from './EstadoCuentaVisita'
 import VisorPdf from '../VisorPdf'
+import ResumenClinicoModal from './ResumenClinicoModal'
+import { useRole } from '../../auth/RoleContext'
 
 // ── Constantes de marca / SOAP ────────────────────────────────────────────────
 
@@ -704,6 +706,9 @@ function CapituloPage({
   verEstadoCuenta: boolean
 }) {
   const [ampliada, setAmpliada] = useState<EvolutionImage | null>(null)
+  const { role } = useRole()
+  const puedeResumen = role === 'owner' || role === 'admin' || role === 'doctor'
+  const [resumenAbierto, setResumenAbierto] = useState(false)
 
   const planTexto = [
     capitulo.plan.tratamiento && `Tratamiento: ${capitulo.plan.tratamiento}`,
@@ -727,7 +732,26 @@ function CapituloPage({
           </h2>
           <p className="text-sm text-gray-500">{capitulo.doctor.full_name}</p>
         </div>
+        {puedeResumen && (
+          <button
+            type="button"
+            onClick={() => setResumenAbierto(true)}
+            className="inline-flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:brightness-110"
+            style={{ background: ORO, boxShadow: '0 3px 10px rgba(201,162,39,0.35)' }}
+            title="Genera el resumen que se entrega al paciente"
+          >
+            <FileHeart className="w-4 h-4" /> Resumen clínico
+          </button>
+        )}
       </div>
+
+      {resumenAbierto && (
+        <ResumenClinicoModal
+          evolutionId={capitulo.id}
+          patientId={patientId}
+          onClose={() => setResumenAbierto(false)}
+        />
+      )}
 
       {/* Signos de enfermería */}
       {capitulo.signos && <SignosEnfermeria signos={capitulo.signos} />}

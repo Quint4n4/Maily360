@@ -13,7 +13,13 @@ import factory
 from django.utils import timezone
 from factory.django import DjangoModelFactory
 
-from apps.agenda.models import AgendaBlock, AgendaItemNote, Appointment, AppointmentReminder, TenantAgendaConfig
+from apps.agenda.models import (
+    AgendaBlock,
+    AgendaItemNote,
+    Appointment,
+    AppointmentReminder,
+    TenantAgendaConfig,
+)
 from apps.audit.models import ActionType, AuditLog
 from apps.authn.models import User
 from apps.clinica.models import (
@@ -43,8 +49,12 @@ from apps.finanzas.models import (
     Quote,
     QuoteItem,
     ServiceConcept,
+    TreatmentPackage,
+    TreatmentPackageItem,
 )
 from apps.notas.models import Note, NoteScope
+from apps.pacientes.models import Patient
+from apps.personal.models import Consultorio, Doctor, DoctorSchedule
 from apps.recetas.models import (
     GlobalMedication,
     ItemKind,
@@ -55,8 +65,6 @@ from apps.recetas.models import (
     PrescriptionItem,
     PrescriptionStatus,
 )
-from apps.pacientes.models import Patient
-from apps.personal.models import Consultorio, Doctor, DoctorSchedule
 from apps.tenancy.models import Plan, Tenant, TenantMembership, TenantSubscription
 
 
@@ -283,25 +291,19 @@ class AppointmentFactory(DjangoModelFactory):
     created_by = factory.LazyAttribute(lambda obj: obj.doctor.created_by)
 
     # Paciente del MISMO tenant que el doctor
-    patient = factory.LazyAttribute(
-        lambda obj: PatientFactory(tenant=obj.doctor.tenant)
-    )
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.doctor.tenant))
 
     # Consultorio del MISMO tenant (opcional — None para telemedicina)
-    consultorio = factory.LazyAttribute(
-        lambda obj: ConsultorioFactory(tenant=obj.doctor.tenant)
-    )
+    consultorio = factory.LazyAttribute(lambda obj: ConsultorioFactory(tenant=obj.doctor.tenant))
 
     # Horario: en el futuro, separado 1 hora por índice para evitar solapamiento
     # entre citas del mismo doctor creadas en el mismo test.
     # Si necesitas horarios distintos, pasa starts_at explícito.
     starts_at = factory.Sequence(
-        lambda n: datetime.datetime(2030, 1, 1, 8, 0, 0, tzinfo=datetime.timezone.utc)
+        lambda n: datetime.datetime(2030, 1, 1, 8, 0, 0, tzinfo=datetime.UTC)
         + datetime.timedelta(hours=n)
     )
-    ends_at = factory.LazyAttribute(
-        lambda obj: obj.starts_at + datetime.timedelta(minutes=30)
-    )
+    ends_at = factory.LazyAttribute(lambda obj: obj.starts_at + datetime.timedelta(minutes=30))
     status = Appointment.Status.SCHEDULED
     reason = factory.Sequence(lambda n: f"Consulta de seguimiento #{n}")
     specialty = ""
@@ -389,12 +391,10 @@ class AgendaBlockFactory(DjangoModelFactory):
     doctor = None
     consultorio = None
     starts_at = factory.Sequence(
-        lambda n: datetime.datetime(2030, 6, 1, 8, 0, 0, tzinfo=datetime.timezone.utc)
+        lambda n: datetime.datetime(2030, 6, 1, 8, 0, 0, tzinfo=datetime.UTC)
         + datetime.timedelta(hours=n * 2)
     )
-    ends_at = factory.LazyAttribute(
-        lambda obj: obj.starts_at + datetime.timedelta(hours=1)
-    )
+    ends_at = factory.LazyAttribute(lambda obj: obj.starts_at + datetime.timedelta(hours=1))
     all_day = False
     notes = ""
 
@@ -405,7 +405,9 @@ class AgendaItemNoteFactory(DjangoModelFactory):
     class Meta:
         model = AgendaItemNote
 
-    tenant = factory.LazyAttribute(lambda obj: obj.appointment.tenant if obj.appointment else obj.agenda_block.tenant)
+    tenant = factory.LazyAttribute(
+        lambda obj: obj.appointment.tenant if obj.appointment else obj.agenda_block.tenant
+    )
     created_by = factory.SubFactory(UserFactory)
     author = factory.LazyAttribute(lambda obj: obj.created_by)
     appointment = factory.SubFactory(AppointmentFactory)
@@ -521,9 +523,7 @@ class AuditLogFactory(DjangoModelFactory):
     actor_role = "owner"
     action = ActionType.PATIENT_READ
     resource_type = "Patient"
-    resource_id = factory.LazyFunction(
-        lambda: __import__("uuid").uuid4()
-    )
+    resource_id = factory.LazyFunction(lambda: __import__("uuid").uuid4())
     resource_repr = factory.Sequence(lambda n: f"Paciente #{n}")
     description = ""
     ip_address = None
@@ -556,9 +556,7 @@ class EvolutionNoteFactory(DjangoModelFactory):
     created_by = factory.LazyAttribute(lambda obj: obj.doctor.created_by)
 
     # Paciente del MISMO tenant que el doctor.
-    patient = factory.LazyAttribute(
-        lambda obj: PatientFactory(tenant=obj.doctor.tenant)
-    )
+    patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.doctor.tenant))
 
     # Cita del mismo tenant, paciente y doctor, en estado ATTENDED (D-EC-2).
     appointment = factory.LazyAttribute(
@@ -739,9 +737,7 @@ class PrescriptionFactory(DjangoModelFactory):
     tenant = factory.SubFactory(TenantFactory)
     created_by = factory.LazyAttribute(lambda obj: obj.doctor.membership.user)
     patient = factory.LazyAttribute(lambda obj: PatientFactory(tenant=obj.tenant))
-    doctor = factory.LazyAttribute(
-        lambda obj: DoctorFactory(tenant=obj.tenant)
-    )
+    doctor = factory.LazyAttribute(lambda obj: DoctorFactory(tenant=obj.tenant))
     folio = factory.Sequence(lambda n: n + 1)
     status = PrescriptionStatus.ACTIVE
     diagnosis = ""
@@ -873,6 +869,35 @@ class ServiceConceptFactory(DjangoModelFactory):
     sat_product_key = "85121600"
     sat_unit_key = "E48"
     is_active = True
+
+
+class TreatmentPackageFactory(DjangoModelFactory):
+    """Paquete reutilizable de tratamientos del catálogo de un tenant."""
+
+    class Meta:
+        model = TreatmentPackage
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Paquete {n}")
+    description = ""
+    is_active = True
+
+
+class TreatmentPackageItemFactory(DjangoModelFactory):
+    """Línea de un paquete de tratamientos. Hereda tenant del paquete."""
+
+    class Meta:
+        model = TreatmentPackageItem
+
+    package = factory.SubFactory(TreatmentPackageFactory)
+    tenant = factory.LazyAttribute(lambda obj: obj.package.tenant)
+    created_by = None
+    service_concept = factory.LazyAttribute(
+        lambda obj: ServiceConceptFactory(tenant=obj.package.tenant)
+    )
+    sessions = 1
+    order = 0
 
 
 class ClinicFiscalConfigFactory(DjangoModelFactory):

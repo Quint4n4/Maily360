@@ -13,6 +13,7 @@ import {
   createEvolutionNote,
   createHistoryQuestion,
   createVitalSigns,
+  crearResumenClinico,
   deleteEvolutionImage,
   deleteHistoryQuestion,
   getEvolutionImages,
@@ -20,11 +21,13 @@ import {
   getNursingInstructions,
   getPatientBook,
   getPatientBookPdf,
+  getResumenBorrador,
   getVitalSignsSeries,
   listAllergies,
   listDiagnoses,
   listEvolutionNotes,
   listHistoryQuestions,
+  listResumenesClinicos,
   listVitalSigns,
   resolveAllergy,
   resolveDiagnosis,
@@ -41,6 +44,7 @@ import type {
   MedicalHistoryInput,
   MedicalHistoryQuestionInput,
   MedicalHistoryQuestionUpdateInput,
+  ResumenSecciones,
   VitalSignsInput,
 } from '../types/expediente'
 
@@ -64,6 +68,11 @@ export const expedienteKeys = {
     ['expediente', patientId, 'diagnosticos', onlyActive] as const,
   libro: (patientId: string, page: number) =>
     ['expediente', patientId, 'libro', page] as const,
+  /** Borrador del resumen clínico de una evolución (cuelga de la evolución). */
+  resumenBorrador: (evolutionId: string) =>
+    ['expediente', 'evolucion', evolutionId, 'resumen-borrador'] as const,
+  /** Constancias de resumen clínico de un paciente. */
+  resumenes: (patientId: string) => ['expediente', patientId, 'resumenes'] as const,
 }
 
 // ── A1 — Alergias ───────────────────────────────────────────────────────────
@@ -332,5 +341,42 @@ export function useOpenPatientBookPdf() {
       }
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     },
+  })
+}
+
+// ── Resumen Clínico ────────────────────────────────────────────────────────────
+
+/**
+ * Borrador del resumen clínico de una evolución (encabezado + secciones
+ * auto-rellenadas). `enabled` para cargarlo solo cuando el modal está abierto.
+ */
+export function useResumenBorrador(evolutionId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: expedienteKeys.resumenBorrador(evolutionId ?? ''),
+    queryFn: () => getResumenBorrador(evolutionId as string),
+    enabled: !!evolutionId && enabled,
+  })
+}
+
+/**
+ * Guarda la constancia de resumen clínico con el texto editado. Invalida la
+ * lista de resúmenes del paciente. Devuelve el registro (con su id) para el PDF.
+ */
+export function useCrearResumen(evolutionId: string, patientId?: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (secciones: ResumenSecciones) => crearResumenClinico(evolutionId, secciones),
+    onSuccess: () => {
+      if (patientId) qc.invalidateQueries({ queryKey: expedienteKeys.resumenes(patientId) })
+    },
+  })
+}
+
+/** Constancias de resumen clínico del paciente (paginado → usar .results). */
+export function useResumenesClinicos(patientId: string | null) {
+  return useQuery({
+    queryKey: expedienteKeys.resumenes(patientId ?? ''),
+    queryFn: () => listResumenesClinicos(patientId as string),
+    enabled: !!patientId,
   })
 }

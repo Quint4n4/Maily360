@@ -9,11 +9,30 @@ class ExpedienteConfig(AppConfig):
     verbose_name = "Expediente Clínico"
 
     def ready(self) -> None:
-        """Registra el generador del PDF del libro clínico (kind "book")."""
-        from apps.core.permissions import EvolutionPermission  # noqa: PLC0415
-        from apps.expediente.pdf_jobs import build_book_pdf  # noqa: PLC0415
+        """Registra los generadores de PDF del expediente.
+
+        Kinds: "book", "resumen_clinico", "treatment_plan".
+        """
+        from apps.core.permissions import (  # noqa: PLC0415
+            ClinicalSummaryPermission,
+            EvolutionPermission,
+            TreatmentPlanPermission,
+        )
+        from apps.expediente.pdf_jobs import (  # noqa: PLC0415
+            build_book_pdf,
+            build_resumen_clinico_pdf,
+            build_treatment_plan_pdf,
+        )
         from apps.pdfs.registry import register_pdf_kind  # noqa: PLC0415
 
+        register_pdf_kind("book", builder=build_book_pdf, permission=EvolutionPermission)
         register_pdf_kind(
-            "book", builder=build_book_pdf, permission=EvolutionPermission
+            "resumen_clinico",
+            builder=build_resumen_clinico_pdf,
+            permission=ClinicalSummaryPermission,
+        )
+        register_pdf_kind(
+            "treatment_plan",
+            builder=build_treatment_plan_pdf,
+            permission=TreatmentPlanPermission,
         )

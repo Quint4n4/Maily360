@@ -44,20 +44,23 @@ Funciones públicas (Libro Clínico — Fase 3):
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from django.core.paginator import InvalidPage, Paginator
-from django.db.models import QuerySet
+from django.db.models import Prefetch, QuerySet
 
 from apps.expediente.models import (
     Addendum,
     Allergy,
+    ClinicalSummary,
     Diagnosis,
     DiagnosisStatus,
     EvolutionImage,
     EvolutionNote,
     MedicalHistory,
     MedicalHistoryQuestion,
+    TreatmentPlan,
+    TreatmentSession,
     VitalSignsRecord,
 )
 from apps.pacientes.models import Patient
@@ -113,9 +116,7 @@ def allergy_list(
 # ---------------------------------------------------------------------------
 
 
-def medical_history_get_for_patient(
-    *, patient: Patient
-) -> Optional[MedicalHistory]:
+def medical_history_get_for_patient(*, patient: Patient) -> MedicalHistory | None:
     """Retorna la historia clínica activa del paciente, o None si no existe aún.
 
     Usa el TenantManager (filtra por tenant del contexto activo + excluye
@@ -131,11 +132,7 @@ def medical_history_get_for_patient(
     Returns:
         Instancia de MedicalHistory, o None si el paciente aún no tiene HC.
     """
-    return (
-        MedicalHistory.objects.select_related("patient")
-        .filter(patient=patient)
-        .first()
-    )
+    return MedicalHistory.objects.select_related("patient").filter(patient=patient).first()
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +190,7 @@ _SERIES_MAX_RECORDS: int = 730
 def vital_signs_series(
     *,
     patient: Patient,
-    since: Optional[date] = None,
+    since: date | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Datos de series temporales para gráficas de tendencia.
 
@@ -232,27 +229,22 @@ def vital_signs_series(
 
     # Aplicar tope interno: tomar los _SERIES_MAX_RECORDS más recientes.
     # Se reordena a ASC en Python para que las series queden cronológicas.
-    qs = (
-        base_qs.order_by("-measured_at")[: _SERIES_MAX_RECORDS]
-        .values(
-            "measured_at",
-            "weight_kg",
-            "height_m",
-            "heart_rate",
-            "resp_rate",
-            "systolic",
-            "diastolic",
-            "temperature_c",
-            "oxygen_saturation",
-            "glucose",
-            "extra_params",
-        )
+    qs = base_qs.order_by("-measured_at")[:_SERIES_MAX_RECORDS].values(
+        "measured_at",
+        "weight_kg",
+        "height_m",
+        "heart_rate",
+        "resp_rate",
+        "systolic",
+        "diastolic",
+        "temperature_c",
+        "oxygen_saturation",
+        "glucose",
+        "extra_params",
     )
 
     # Inicializar las series con listas vacías.
-    series: dict[str, list[dict[str, Any]]] = {
-        field: [] for field in _SERIES_FIELDS
-    }
+    series: dict[str, list[dict[str, Any]]] = {field: [] for field in _SERIES_FIELDS}
     series["imc"] = []
     for key in _EXTRA_SERIES_KEYS:
         series[key] = []
@@ -368,9 +360,7 @@ def addendum_list(*, evolution: EvolutionNote) -> QuerySet[Addendum]:
         QuerySet[Addendum] ordenado por created_at (orden cronológico).
     """
     return (
-        Addendum.objects.select_related("author")
-        .filter(evolution=evolution)
-        .order_by("created_at")
+        Addendum.objects.select_related("author").filter(evolution=evolution).order_by("created_at")
     )
 
 
@@ -397,9 +387,7 @@ def diagnosis_get(*, diagnosis_id: uuid.UUID) -> Diagnosis:
     Raises:
         Diagnosis.DoesNotExist: si el diagnóstico no existe en el tenant activo.
     """
-    return Diagnosis.objects.select_related("patient", "evolution").get(
-        id=diagnosis_id
-    )
+    return Diagnosis.objects.select_related("patient", "evolution").get(id=diagnosis_id)
 
 
 def diagnosis_list(
@@ -420,9 +408,7 @@ def diagnosis_list(
     Returns:
         QuerySet[Diagnosis] ordenado por -created_at.
     """
-    qs: QuerySet[Diagnosis] = Diagnosis.objects.select_related(
-        "evolution"
-    ).filter(patient=patient)
+    qs: QuerySet[Diagnosis] = Diagnosis.objects.select_related("evolution").filter(patient=patient)
     if only_active:
         qs = qs.filter(status=DiagnosisStatus.ACTIVO)
     return qs.order_by("-created_at")
@@ -433,7 +419,7 @@ def diagnosis_list(
 # ---------------------------------------------------------------------------
 
 
-def vital_signs_latest(*, patient: Patient) -> Optional[VitalSignsRecord]:
+def vital_signs_latest(*, patient: Patient) -> VitalSignsRecord | None:
     """Retorna la toma de signos vitales más reciente del paciente, o None.
 
     Usa el TenantManager (filtra por tenant del contexto activo).
@@ -450,11 +436,7 @@ def vital_signs_latest(*, patient: Patient) -> Optional[VitalSignsRecord]:
     Returns:
         Instancia de VitalSignsRecord más reciente, o None.
     """
-    return (
-        VitalSignsRecord.objects.filter(patient=patient)
-        .order_by("-measured_at")
-        .first()
-    )
+    return VitalSignsRecord.objects.filter(patient=patient).order_by("-measured_at").first()
 
 
 def evolution_nursing_instructions_for_patient(
@@ -519,9 +501,7 @@ def evolution_image_get(*, image_id: uuid.UUID) -> EvolutionImage:
     Raises:
         EvolutionImage.DoesNotExist: si la imagen no existe en el tenant activo.
     """
-    return EvolutionImage.objects.select_related("evolution", "created_by").get(
-        id=image_id
-    )
+    return EvolutionImage.objects.select_related("evolution", "created_by").get(id=image_id)
 
 
 def evolution_images_list(*, evolution: EvolutionNote) -> "QuerySet[EvolutionImage]":
@@ -595,7 +575,7 @@ class PatientBook:
         *,
         patient: Patient,
         clinic_settings: Any,
-        medical_history: Optional[MedicalHistory],
+        medical_history: MedicalHistory | None,
         allergies: QuerySet[Allergy],
         capitulos_count: int,
         capitulos: list[EvolutionNote],
@@ -663,10 +643,11 @@ def book_build(
     Returns:
         PatientBook con todos los datos listos para serialización.
     """
+    from django.db.models import Prefetch  # noqa: PLC0415
+
     from apps.clinica.models import DoctorCredential  # noqa: PLC0415
     from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
     from apps.recetas.models import Prescription  # noqa: PLC0415
-    from django.db.models import Prefetch  # noqa: PLC0415
 
     # --- Cota de page_size (anti-DoS) ---
     page_size = min(max(1, page_size), BOOK_MAX_PAGE_SIZE)
@@ -700,9 +681,9 @@ def book_build(
             "images",
             Prefetch(
                 "prescriptions",
-                queryset=Prescription.objects.filter(
-                    deleted_at__isnull=True
-                ).prefetch_related("items"),
+                queryset=Prescription.objects.filter(deleted_at__isnull=True).prefetch_related(
+                    "items"
+                ),
             ),
             # Anti-N+1: precarga las cédulas validadas de cada médico autor.
             # Sin esto, BookDoctorSerializer.get_cedulas_validadas dispara una
@@ -754,9 +735,7 @@ def book_build(
 # ---------------------------------------------------------------------------
 
 
-def medical_history_question_get(
-    *, question_id: uuid.UUID
-) -> MedicalHistoryQuestion:
+def medical_history_question_get(*, question_id: uuid.UUID) -> MedicalHistoryQuestion:
     """Retorna una pregunta extra de HC por su UUID.
 
     Usa el TenantManager (filtra por tenant del contexto activo + excluye
@@ -778,9 +757,7 @@ def medical_history_question_get(
     return MedicalHistoryQuestion.objects.get(id=question_id)
 
 
-def medical_history_questions_list(
-    *, only_active: bool = True
-) -> QuerySet[MedicalHistoryQuestion]:
+def medical_history_questions_list(*, only_active: bool = True) -> QuerySet[MedicalHistoryQuestion]:
     """Retorna las preguntas extra de HC del tenant activo.
 
     Usa el TenantManager (filtra por tenant del contexto activo + excluye
@@ -827,10 +804,11 @@ def book_build_all(
         capitulos_count refleja el total real del paciente en todos los modos.
         page=1, total_pages=1, page_size=capitulos_count (convención para PDF).
     """
+    from django.db.models import Prefetch  # noqa: PLC0415
+
     from apps.clinica.models import DoctorCredential  # noqa: PLC0415
     from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
     from apps.recetas.models import Prescription  # noqa: PLC0415
-    from django.db.models import Prefetch  # noqa: PLC0415
 
     # Validar modo; fallback defensivo.
     _VALID_MODOS = {"completo", "hc", "ultimo"}
@@ -861,9 +839,9 @@ def book_build_all(
             "images",
             Prefetch(
                 "prescriptions",
-                queryset=Prescription.objects.filter(
-                    deleted_at__isnull=True
-                ).prefetch_related("items"),
+                queryset=Prescription.objects.filter(deleted_at__isnull=True).prefetch_related(
+                    "items"
+                ),
             ),
             # Anti-N+1: precarga las cédulas validadas de cada médico autor.
             # Sin esto, BookDoctorSerializer.get_cedulas_validadas dispara una
@@ -910,4 +888,168 @@ def book_build_all(
         page=1,
         total_pages=1,
         page_size=page_size_pdf,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ClinicalSummary selectors — Resumen Clínico por consulta
+# ---------------------------------------------------------------------------
+
+
+def clinical_summary_get(*, summary_id: uuid.UUID) -> ClinicalSummary:
+    """Retorna un resumen clínico por su UUID.
+
+    Usa el TenantManager (filtra por tenant del contexto activo).
+    Lanza ClinicalSummary.DoesNotExist si no existe o no pertenece al tenant
+    activo. Las vistas deben capturar DoesNotExist y devolver 404 (anti-IDOR).
+
+    Precarga patient, evolution (con doctor) y doctor (con membership) para
+    que el generador de PDF y el serializer de salida no disparen N+1.
+
+    Args:
+        summary_id: UUID del resumen clínico.
+
+    Returns:
+        Instancia de ClinicalSummary con relaciones precargadas.
+
+    Raises:
+        ClinicalSummary.DoesNotExist: si el resumen no existe en el tenant activo.
+    """
+    return ClinicalSummary.objects.select_related(
+        "patient",
+        "evolution",
+        "evolution__appointment",
+        "evolution__vital_signs",
+        "doctor",
+        "doctor__membership",
+        "doctor__membership__user",
+    ).get(id=summary_id)
+
+
+def clinical_summary_list(*, patient: Patient) -> QuerySet[ClinicalSummary]:
+    """Retorna el QuerySet de resúmenes clínicos del paciente, orden -created_at.
+
+    Filtra por tenant del contexto activo (TenantManager) y por patient en
+    defensa en profundidad. Precarga doctor/membership/user para el nombre
+    del médico en el listado, sin N+1.
+
+    Args:
+        patient: Paciente cuyos resúmenes se recuperan.
+
+    Returns:
+        QuerySet[ClinicalSummary] ordenado por -created_at (Meta.ordering).
+    """
+    return (
+        ClinicalSummary.objects.select_related(
+            "doctor", "doctor__membership", "doctor__membership__user"
+        )
+        .filter(patient=patient)
+        .order_by("-created_at")
+    )
+
+
+# ---------------------------------------------------------------------------
+# TreatmentPlan selectors — Calendarización de tratamientos (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+def treatment_plan_get(*, plan_id: uuid.UUID) -> TreatmentPlan:
+    """Retorna un esquema de calendarización de tratamientos por su UUID.
+
+    Usa el TenantManager (filtra por tenant del contexto activo). Lanza
+    TreatmentPlan.DoesNotExist si no existe o no pertenece al tenant activo.
+    Las vistas capturan DoesNotExist y devuelven 404 (anti-IDOR).
+
+    Precarga patient, doctor (con membership), consultorio, e
+    items→sessions→appointment (con doctor/consultorio de la cita) e
+    items→service_concept para que el detalle, el PDF y el cálculo del
+    total no disparen N+1 (Fase 4 — Calendarización: cada sesión puede
+    traer una cita real ligada).
+
+    Args:
+        plan_id: UUID del esquema de tratamientos.
+
+    Returns:
+        Instancia de TreatmentPlan con relaciones precargadas.
+
+    Raises:
+        TreatmentPlan.DoesNotExist: si el esquema no existe en el tenant activo.
+    """
+    sessions_qs = TreatmentSession.objects.select_related(
+        "appointment",
+        "appointment__doctor",
+        "appointment__doctor__membership",
+        "appointment__doctor__membership__user",
+        "appointment__consultorio",
+    ).order_by("number", "id")
+
+    return (
+        TreatmentPlan.objects.select_related(
+            "patient",
+            "doctor",
+            "doctor__membership",
+            "doctor__membership__user",
+            "consultorio",
+        )
+        .prefetch_related(
+            Prefetch("items__sessions", queryset=sessions_qs),
+            "items__service_concept",
+        )
+        .get(id=plan_id)
+    )
+
+
+def treatment_session_get(*, session_id: uuid.UUID) -> TreatmentSession:
+    """Retorna una TreatmentSession por su UUID (Fase 4 — Calendarización).
+
+    Usa el TenantManager (filtra por tenant del contexto activo — la sesión
+    hereda de TenantAwareModel, tiene su propio `tenant_id`). Lanza
+    TreatmentSession.DoesNotExist si no existe o no pertenece al tenant
+    activo. La vista captura DoesNotExist y devuelve 404 (anti-IDOR).
+
+    Precarga item→plan→patient (para resolver el paciente al agendar) y la
+    cita ligada (con doctor/consultorio) para que el endpoint de agendar/
+    desagendar no dispare N+1.
+
+    Args:
+        session_id: UUID de la sesión de tratamiento.
+
+    Returns:
+        Instancia de TreatmentSession con relaciones precargadas.
+
+    Raises:
+        TreatmentSession.DoesNotExist: si la sesión no existe en el tenant activo.
+    """
+    return TreatmentSession.objects.select_related(
+        "item",
+        "item__plan",
+        "item__plan__patient",
+        "appointment",
+        "appointment__doctor",
+        "appointment__doctor__membership",
+        "appointment__doctor__membership__user",
+        "appointment__consultorio",
+    ).get(id=session_id)
+
+
+def treatment_plan_list(*, patient: Patient) -> QuerySet[TreatmentPlan]:
+    """Retorna el QuerySet de esquemas de tratamientos del paciente, orden -created_at.
+
+    Filtra por tenant del contexto activo (TenantManager) y por patient en
+    defensa en profundidad. Precarga doctor/membership/user e items→sessions
+    para que el listado (total, sessions_count, applied_count) no dispare N+1.
+
+    Args:
+        patient: Paciente cuyos esquemas se recuperan.
+
+    Returns:
+        QuerySet[TreatmentPlan] ordenado por -created_at (Meta.ordering).
+    """
+    return (
+        TreatmentPlan.objects.select_related(
+            "doctor", "doctor__membership", "doctor__membership__user"
+        )
+        .prefetch_related("items__sessions")
+        .filter(patient=patient)
+        .order_by("-created_at")
     )

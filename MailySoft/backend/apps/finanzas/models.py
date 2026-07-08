@@ -286,6 +286,90 @@ class QuoteItem(TenantAwareModel):
 
 
 # ---------------------------------------------------------------------------
+# Paquetes de tratamientos (catálogo reutilizable — Fase 3, Calendarización)
+# ---------------------------------------------------------------------------
+
+
+class TreatmentPackage(TenantAwareModel):
+    """Paquete reutilizable de tratamientos del catálogo.
+
+    Agrupa varias líneas (`TreatmentPackageItem`, cada una un `ServiceConcept`
+    con un número de sesiones) bajo un nombre comercial (p. ej. "Paquete
+    Rejuvenecimiento 6 sesiones"). Sirve como plantilla: `expediente.
+    services_calendarizacion.treatment_plan_create_from_package` arma un
+    `TreatmentPlan` NUEVO copiando (snapshot) el nombre/precio de cada
+    concepto al momento de generarlo — el paquete en sí nunca se snapshotea,
+    solo sus líneas se leen en vivo del catálogo (`base_price` vigente).
+    """
+
+    name = models.CharField(
+        max_length=160,
+        help_text="Nombre comercial del paquete de tratamientos.",
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        help_text="Descripción opcional del paquete.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False = paquete desactivado (no aparece en el catálogo).",
+    )
+
+    class Meta:
+        db_table = "finanzas_treatment_packages"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                name="finanzas_package_name_uniq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Paquete {self.name}"
+
+
+class TreatmentPackageItem(TenantAwareModel):
+    """Línea de un paquete de tratamientos: un concepto del catálogo + sesiones.
+
+    A diferencia de `QuoteItem`/`TreatmentPlanItem`, esta línea NO guarda
+    snapshot de nombre/precio: el paquete es una plantilla viva, siempre
+    referencia al `ServiceConcept` vigente. El snapshot ocurre recién al
+    generar un `TreatmentPlan` desde el paquete.
+    """
+
+    package = models.ForeignKey(
+        TreatmentPackage,
+        on_delete=models.CASCADE,
+        related_name="items",
+        help_text="Paquete al que pertenece esta línea.",
+    )
+    service_concept = models.ForeignKey(
+        ServiceConcept,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="Concepto/tratamiento del catálogo.",
+    )
+    sessions = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Número de sesiones de este tratamiento dentro del paquete.",
+    )
+    order = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Posición de la línea en la tabla del paquete.",
+    )
+
+    class Meta:
+        db_table = "finanzas_treatment_package_items"
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        return f"PaqueteItem({self.id}) — paquete {self.package_id}"
+
+
+# ---------------------------------------------------------------------------
 # Cuentas por cobrar
 # ---------------------------------------------------------------------------
 

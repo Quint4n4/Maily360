@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Save, Loader2, FileText, ListChecks } from 'lucide-react'
+import { ChevronDown, Save, Loader2, FileText, ListChecks, NotebookPen } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type {
   CustomAnswers,
@@ -358,11 +358,6 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
       id: 'padecimiento', titulo: 'Padecimiento actual y plan',
       render: () => (
         <div className="space-y-3">
-          <TextArea label="Antecedentes de importancia"
-            value={form.antecedentes_importancia} onChange={setTexto('antecedentes_importancia')} disabled={!puedeEditar} />
-          {extraPorTituloNucleo.has('Antecedentes de importancia') && (
-            <BloqueGrid>{renderExtrasDe('Antecedentes de importancia')}</BloqueGrid>
-          )}
           <TextArea label="Padecimiento actual"
             value={form.padecimiento_actual} onChange={setTexto('padecimiento_actual')} disabled={!puedeEditar} />
           {extraPorTituloNucleo.has('Padecimiento actual') && (
@@ -396,48 +391,88 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
         <div className="rounded-xl px-4 py-2.5 text-sm" style={{ background: '#DCF3E6', color: '#1F6E47' }}>{okMsg}</div>
       )}
 
-      {bloques.map(b => <Acordeon key={b.id} titulo={b.titulo}>{b.render()}</Acordeon>)}
-
-      {/* ── Preguntas de la clínica (Fase 2) — solo las de SECCIONES NUEVAS.
-          Las preguntas asignadas a una sección del núcleo ya se intercalaron
-          dentro de su bloque del acordeón (arriba). ── */}
-      {seccionesPersonalizadas.length > 0 && (
-        <div className="pt-2 space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <ListChecks className="w-4 h-4" style={{ color: '#C9A227' }} />
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700/80">
-              Preguntas de la clínica
-            </h4>
+      <div className="flex flex-col lg:flex-row gap-5 lg:items-start">
+        {/* ── Recuadro fijo: Antecedentes de importancia ──
+            En escritorio va a la derecha y acompaña el scroll (sticky); en móvil
+            aparece arriba. Es texto libre; se guarda con la historia clínica. ── */}
+        <aside className="w-full lg:w-[330px] lg:shrink-0 lg:order-2">
+          <div className="lg:sticky lg:top-0">
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: 'rgba(255,255,255,0.85)',
+                border: '1.5px solid rgba(201,162,39,0.5)',
+                boxShadow: '0 6px 18px rgba(201,162,39,0.15)',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <NotebookPen className="w-4 h-4" style={{ color: '#C9A227' }} />
+                <h4 className="text-sm font-semibold text-gray-800">Antecedentes de importancia</h4>
+              </div>
+              <p className="text-xs text-gray-500 mb-2.5">
+                Anota aquí lo relevante del paciente. Se guarda con la historia clínica.
+              </p>
+              <textarea
+                className="input resize-none w-full min-h-[220px] lg:min-h-[55vh]"
+                maxLength={10000}
+                value={form.antecedentes_importancia}
+                onChange={e => setTexto('antecedentes_importancia')(e.target.value)}
+                disabled={!puedeEditar}
+                placeholder="Ej. Dolor en hombro derecho desde hace 2 meses. Visión borrosa. Colitis ocasional. Calambres en extremidades…"
+              />
+              {extraPorTituloNucleo.has('Antecedentes de importancia') && (
+                <div className="mt-3 grid gap-3">{renderExtrasDe('Antecedentes de importancia')}</div>
+              )}
+            </div>
           </div>
-          {seccionesPersonalizadas.map(grupo => (
-            <Acordeon key={grupo.section} titulo={grupo.section}>
-              <BloqueGrid>
-                {grupo.preguntas.map(q => (
-                  <PreguntaExtraField
-                    key={q.id}
-                    pregunta={q}
-                    value={form.custom_answers[q.id] ?? respuestaVacia(q)}
-                    onChange={v => setCustom(q.id, v)}
-                    disabled={!puedeEditar}
-                  />
-                ))}
-              </BloqueGrid>
-            </Acordeon>
-          ))}
-        </div>
-      )}
+        </aside>
 
-      {puedeEditar && (
-        <div className="flex justify-end pt-2">
-          <button
-            type="button" onClick={onGuardar} disabled={guardar.isPending}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
-            style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
-          >
-            {guardar.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : <><Save className="w-4 h-4" /> Guardar historia clínica</>}
-          </button>
+        {/* ── Formulario de la historia clínica (bloques + preguntas + guardar) ── */}
+        <div className="flex-1 min-w-0 lg:order-1 space-y-4">
+          {bloques.map(b => <Acordeon key={b.id} titulo={b.titulo}>{b.render()}</Acordeon>)}
+
+          {/* ── Preguntas de la clínica (Fase 2) — solo las de SECCIONES NUEVAS.
+              Las preguntas asignadas a una sección del núcleo ya se intercalaron
+              dentro de su bloque del acordeón (arriba). ── */}
+          {seccionesPersonalizadas.length > 0 && (
+            <div className="pt-2 space-y-3">
+              <div className="flex items-center gap-2 px-1">
+                <ListChecks className="w-4 h-4" style={{ color: '#C9A227' }} />
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700/80">
+                  Preguntas de la clínica
+                </h4>
+              </div>
+              {seccionesPersonalizadas.map(grupo => (
+                <Acordeon key={grupo.section} titulo={grupo.section}>
+                  <BloqueGrid>
+                    {grupo.preguntas.map(q => (
+                      <PreguntaExtraField
+                        key={q.id}
+                        pregunta={q}
+                        value={form.custom_answers[q.id] ?? respuestaVacia(q)}
+                        onChange={v => setCustom(q.id, v)}
+                        disabled={!puedeEditar}
+                      />
+                    ))}
+                  </BloqueGrid>
+                </Acordeon>
+              ))}
+            </div>
+          )}
+
+          {puedeEditar && (
+            <div className="flex justify-end pt-2">
+              <button
+                type="button" onClick={onGuardar} disabled={guardar.isPending}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
+                style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
+              >
+                {guardar.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : <><Save className="w-4 h-4" /> Guardar historia clínica</>}
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

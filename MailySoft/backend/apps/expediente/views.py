@@ -12,6 +12,8 @@ desde `apps.expediente.views` sin cambios:
     views_imagenes     — imágenes de evolución + indicaciones de enfermería (A4).
     views_libro        — libro clínico (JSON + PDF).
     views_preguntas    — preguntas extra de HC (Fase 2).
+    views_resumen      — resumen clínico por consulta (borrador, crear, PDF, listar).
+    views_calendarizacion — calendarización de tratamientos (esquema de protocolos, Fases 1 y 4).
 
 Convención de cada módulo: vistas delgadas (parsean el request, llaman un
 selector/service, devuelven Response; cero lógica de negocio; heredan de
@@ -58,6 +60,14 @@ from apps.expediente.views_alergias import (  # noqa: F401
     AllergyListCreateApi,
     AllergyResolveApi,
 )
+from apps.expediente.views_calendarizacion import (  # noqa: F401
+    TreatmentPlanDetailApi,
+    TreatmentPlanFromPackageApi,
+    TreatmentPlanListCreateApi,
+    TreatmentPlanPdfApi,
+    TreatmentPlanQuoteApi,
+    TreatmentSessionScheduleApi,
+)
 from apps.expediente.views_evoluciones import (  # noqa: F401
     AddendumCreateApi,
     DiagnosisListCreateApi,
@@ -77,6 +87,12 @@ from apps.expediente.views_libro import (  # noqa: F401
 from apps.expediente.views_preguntas import (  # noqa: F401
     MedicalHistoryQuestionDetailApi,
     MedicalHistoryQuestionListCreateApi,
+)
+from apps.expediente.views_resumen import (  # noqa: F401
+    ClinicalSummaryCreateApi,
+    ClinicalSummaryDraftApi,
+    ClinicalSummaryPdfApi,
+    PatientClinicalSummaryListApi,
 )
 from apps.expediente.views_signos import (  # noqa: F401
     VitalSignsListCreateApi,

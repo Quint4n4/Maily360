@@ -22,6 +22,7 @@ const ContactosPage = lazy(() => import('./pages/ContactosPage'))
 const PersonalPage = lazy(() => import('./pages/PersonalPage'))
 const FinanzasPage = lazy(() => import('./pages/FinanzasPage'))
 const CotizacionesPage = lazy(() => import('./pages/CotizacionesPage'))
+const PaquetesPage = lazy(() => import('./pages/PaquetesPage'))
 const NotasPage = lazy(() => import('./pages/NotasPage'))
 const MiConsultorioPage = lazy(() => import('./pages/MiConsultorioPage'))
 const DashboardPlataformaPage = lazy(() => import('./pages/plataforma/DashboardPage'))
@@ -144,6 +145,9 @@ export default function App() {
             <Route path="/notas"     element={<ClinicRoute modulo="notas"><NotasPage /></ClinicRoute>} />
             <Route path="/finanzas"  element={<ClinicRoute modulo="finanzas"><FinanzasPage /></ClinicRoute>} />
             <Route path="/cotizaciones" element={<ClinicRoute modulo="cotizaciones"><CotizacionesPage /></ClinicRoute>} />
+            {/* Paquetes (catálogo reutilizable): gating fino de rol (owner/admin) dentro
+                de la propia página, no es un Modulo del menú → solo RequireAuth aquí. */}
+            <Route path="/paquetes" element={<RequireAuth><PaquetesPage /></RequireAuth>} />
             <Route path="/mi-consultorio" element={<ConsultorioRoute><MiConsultorioPage /></ConsultorioRoute>} />
 
             {/* ── Panel interno de Maily (datos reales: dashboard/clínicas/usuarios) ── */}

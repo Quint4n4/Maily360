@@ -17,13 +17,11 @@ módulo nunca llama al PAC directamente.
 """
 
 import datetime
-import uuid
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum
 from django.utils import timezone
 
 from adapters.cfdi import get_cfdi_adapter
@@ -38,7 +36,10 @@ from apps.finanzas.models import (
     Quote,
     QuoteItem,
     ServiceConcept,
+    TreatmentPackage,
+    TreatmentPackageItem,
 )
+from apps.finanzas.selectors import package_get
 from apps.pacientes.models import Patient
 from apps.tenancy.models import Tenant
 
@@ -129,15 +130,17 @@ def concept_update(
     """
     attempted = _CONCEPT_IMMUTABLE.intersection(fields.keys())
     if attempted:
-        raise ValidationError(
-            f"No se pueden modificar los campos: {', '.join(sorted(attempted))}."
-        )
+        raise ValidationError(f"No se pueden modificar los campos: {', '.join(sorted(attempted))}.")
 
     new_name = fields.get("name")
     if new_name is not None and new_name != concept.name:
-        if ServiceConcept.all_objects.filter(
-            tenant=concept.tenant, name=new_name, deleted_at__isnull=True
-        ).exclude(id=concept.id).exists():
+        if (
+            ServiceConcept.all_objects.filter(
+                tenant=concept.tenant, name=new_name, deleted_at__isnull=True
+            )
+            .exclude(id=concept.id)
+            .exists()
+        ):
             raise ValidationError("Ya existe un concepto con ese nombre en esta clínica.")
 
     for field_name, value in fields.items():
@@ -221,9 +224,7 @@ def clinic_fiscal_config_update(
     """
     attempted = _FISCAL_IMMUTABLE.intersection(fields.keys())
     if attempted:
-        raise ValidationError(
-            f"No se pueden modificar los campos: {', '.join(sorted(attempted))}."
-        )
+        raise ValidationError(f"No se pueden modificar los campos: {', '.join(sorted(attempted))}.")
 
     config = fiscal_config_get_or_create(tenant=tenant, user=user)
     for field_name, value in fields.items():
@@ -266,7 +267,7 @@ def quote_create(
     user: Any,
     patient: Patient,
     items: list[dict[str, Any]],
-    valid_until: Optional[datetime.date] = None,
+    valid_until: datetime.date | None = None,
     notes: str = "",
 ) -> Quote:
     """Crea una cotización en estado DRAFT con sus líneas.
@@ -315,7 +316,7 @@ def _create_quote_item(
     raw: dict[str, Any],
 ) -> QuoteItem:
     """Crea una línea de cotización a partir de un dict de entrada (con snapshot)."""
-    concept: Optional[ServiceConcept] = None
+    concept: ServiceConcept | None = None
     concept_id = raw.get("concept_id")
     if concept_id:
         concept = ServiceConcept.objects.filter(id=concept_id).first()
@@ -378,9 +379,7 @@ def quote_accept(*, quote: Quote, user: Any) -> Quote:
         ValidationError: si la cotización ya está aceptada/rechazada/vencida.
     """
     if quote.status not in (Quote.Status.DRAFT, Quote.Status.SENT):
-        raise ValidationError(
-            "Solo se pueden aceptar cotizaciones en borrador o enviadas."
-        )
+        raise ValidationError("Solo se pueden aceptar cotizaciones en borrador o enviadas.")
 
     now = timezone.now()
     with transaction.atomic():
@@ -432,6 +431,176 @@ def quote_set_status(*, quote: Quote, user: Any, status: str) -> Quote:
 
 
 # ---------------------------------------------------------------------------
+# Paquetes de tratamientos (catálogo reutilizable — Fase 3, Calendarización)
+# ---------------------------------------------------------------------------
+
+
+def _create_package_item(
+    *,
+    tenant: Tenant,
+    user: Any,
+    package: TreatmentPackage,
+    raw: dict[str, Any],
+    order: int,
+) -> TreatmentPackageItem:
+    """Crea una línea de paquete a partir de un dict {concept_id, sessions?, order?}.
+
+    Raises:
+        ValidationError: si falta concept_id, el concepto no existe en el
+                         tenant activo (o es de otro tenant), el concepto
+                         está desactivado, o sessions no es un entero >= 1.
+    """
+    concept_id = raw.get("concept_id")
+    if not concept_id:
+        raise ValidationError("Cada tratamiento del paquete requiere un concepto del catálogo.")
+    try:
+        concept = ServiceConcept.objects.get(id=concept_id)
+    except ServiceConcept.DoesNotExist as exc:
+        raise ValidationError("Concepto no encontrado en esta clínica.") from exc
+    _ensure_same_tenant(tenant=tenant, obj=concept, label="El concepto")
+    if not concept.is_active:
+        raise ValidationError("El concepto está desactivado; no se puede usar en un paquete nuevo.")
+
+    try:
+        sessions = int(raw.get("sessions", 1))
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("El número de sesiones debe ser un entero.") from exc
+    if sessions < 1:
+        raise ValidationError("Cada tratamiento del paquete debe tener al menos una sesión.")
+
+    raw_order = raw.get("order")
+    resolved_order = int(raw_order) if raw_order is not None else order
+
+    return TreatmentPackageItem.objects.create(
+        tenant=tenant,
+        created_by=user,
+        package=package,
+        service_concept=concept,
+        sessions=sessions,
+        order=resolved_order,
+    )
+
+
+def package_create(
+    *,
+    tenant: Tenant,
+    user: Any,
+    name: str,
+    description: str = "",
+    is_active: bool = True,
+    items: list[dict[str, Any]],
+) -> TreatmentPackage:
+    """Crea un paquete reutilizable de tratamientos con sus líneas.
+
+    Cada item: {concept_id, sessions?, order?}. `concept_id` es obligatorio
+    (el paquete es una plantilla del catálogo, no admite captura libre).
+
+    Raises:
+        ValidationError: si ya existe un paquete con el mismo nombre, no hay
+                         items, o un item referencia un concepto inválido.
+    """
+    if TreatmentPackage.all_objects.filter(
+        tenant=tenant, name=name, deleted_at__isnull=True
+    ).exists():
+        raise ValidationError("Ya existe un paquete con ese nombre en esta clínica.")
+    if not items:
+        raise ValidationError("El paquete debe tener al menos un tratamiento.")
+
+    with transaction.atomic():
+        package = TreatmentPackage.objects.create(
+            tenant=tenant,
+            created_by=user,
+            name=name,
+            description=description,
+            is_active=is_active,
+        )
+        for order, raw in enumerate(items):
+            _create_package_item(tenant=tenant, user=user, package=package, raw=raw, order=order)
+
+    audit_record(
+        action=ActionType.PACKAGE_CREATE,
+        resource_type="TreatmentPackage",
+        actor=user,
+        tenant=tenant,
+        resource_id=package.id,
+        resource_repr=package.name,
+        metadata={"items": len(items)},
+    )
+    return package_get(package_id=package.id)
+
+
+def package_replace(
+    *,
+    package: TreatmentPackage,
+    user: Any,
+    name: str,
+    description: str = "",
+    is_active: bool = True,
+    items: list[dict[str, Any]],
+) -> TreatmentPackage:
+    """Reemplaza nombre/descripción/estado/items de un paquete.
+
+    Reemplazo DESTRUCTIVO de items (borra y recrea): un paquete es una
+    plantilla del catálogo sin datos vivos que preservar (a diferencia de
+    `TreatmentPlan`, que sí reconcilia por `id` para no perder citas ya
+    agendadas).
+
+    Raises:
+        ValidationError: si el nuevo nombre colisiona con otro paquete del
+                         tenant, no hay items, o un item es inválido.
+    """
+    if not items:
+        raise ValidationError("El paquete debe tener al menos un tratamiento.")
+
+    if (
+        name != package.name
+        and TreatmentPackage.all_objects.filter(
+            tenant=package.tenant, name=name, deleted_at__isnull=True
+        )
+        .exclude(id=package.id)
+        .exists()
+    ):
+        raise ValidationError("Ya existe un paquete con ese nombre en esta clínica.")
+
+    with transaction.atomic():
+        package.name = name
+        package.description = description
+        package.is_active = is_active
+        package.save(update_fields=["name", "description", "is_active", "updated_at"])
+
+        TreatmentPackageItem.objects.filter(package=package).delete()
+        for order, raw in enumerate(items):
+            _create_package_item(
+                tenant=package.tenant, user=user, package=package, raw=raw, order=order
+            )
+
+    audit_record(
+        action=ActionType.PACKAGE_UPDATE,
+        resource_type="TreatmentPackage",
+        actor=user,
+        tenant=package.tenant,
+        resource_id=package.id,
+        resource_repr=package.name,
+        metadata={"items": len(items)},
+    )
+    return package_get(package_id=package.id)
+
+
+def package_delete(*, package: TreatmentPackage, user: Any) -> None:
+    """Baja lógica de un paquete de tratamientos (no borra físicamente)."""
+    package.deleted_at = timezone.now()
+    package.save(update_fields=["deleted_at", "updated_at"])
+    audit_record(
+        action=ActionType.PACKAGE_DELETE,
+        resource_type="TreatmentPackage",
+        actor=user,
+        tenant=package.tenant,
+        resource_id=package.id,
+        resource_repr=package.name,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Cargos
 # ---------------------------------------------------------------------------
 
@@ -443,9 +612,9 @@ def charge_create(
     patient: Patient,
     amount: Decimal,
     description: str,
-    concept: Optional[ServiceConcept] = None,
-    appointment: Optional[Any] = None,
-    issued_at: Optional[datetime.datetime] = None,
+    concept: ServiceConcept | None = None,
+    appointment: Any | None = None,
+    issued_at: datetime.datetime | None = None,
 ) -> Charge:
     """Crea un cargo (cuenta por cobrar) para un paciente.
 
@@ -535,8 +704,8 @@ def payment_register(
     method: str = Payment.Method.CASH,
     reference: str = "",
     notes: str = "",
-    received_at: Optional[datetime.datetime] = None,
-    allocations: Optional[list[dict[str, Any]]] = None,
+    received_at: datetime.datetime | None = None,
+    allocations: list[dict[str, Any]] | None = None,
 ) -> Payment:
     """Registra un pago y, opcionalmente, lo aplica a uno o varios cargos.
 
@@ -593,9 +762,7 @@ def payment_register(
                 raise ValidationError("El monto de cada aplicación debe ser positivo.")
 
             # select_for_update para evitar carreras al actualizar amount_paid.
-            charge = (
-                Charge.objects.select_for_update().filter(id=charge_id).first()
-            )
+            charge = Charge.objects.select_for_update().filter(id=charge_id).first()
             if charge is None:
                 raise ValidationError("Cargo no encontrado en esta clínica.")
             if charge.patient_id != patient.id:
@@ -605,8 +772,7 @@ def payment_register(
 
             if alloc_amount > charge.balance:
                 raise ValidationError(
-                    "La aplicación excede el saldo pendiente del cargo "
-                    f"({charge.balance})."
+                    "La aplicación excede el saldo pendiente del cargo " f"({charge.balance})."
                 )
 
             PaymentAllocation.objects.create(
@@ -621,9 +787,7 @@ def payment_register(
             allocated_total += alloc_amount
 
         if allocated_total > amount:
-            raise ValidationError(
-                "La suma de las aplicaciones excede el monto del pago."
-            )
+            raise ValidationError("La suma de las aplicaciones excede el monto del pago.")
 
         # Auto-asignación en cascada: el remanente que no se asignó manualmente
         # se aplica a los cargos pendientes/parciales más antiguos del paciente,
@@ -710,9 +874,7 @@ def cfdi_issue(
 
     config = ClinicFiscalConfig.all_objects.filter(tenant=tenant).first()
     if config is None or not config.rfc:
-        raise ValidationError(
-            "Configura los datos fiscales del emisor (RFC) antes de timbrar."
-        )
+        raise ValidationError("Configura los datos fiscales del emisor (RFC) antes de timbrar.")
     if not receptor_rfc or not receptor_name:
         raise ValidationError("El receptor requiere RFC y razón social.")
 
@@ -819,9 +981,7 @@ def cfdi_cancel(*, cfdi: CfdiDocument, user: Any, reason: str = "02") -> CfdiDoc
     cfdi.status = CfdiDocument.Status.CANCELLED
     cfdi.cancellation_reason = reason
     cfdi.cancelled_at = timezone.now()
-    cfdi.save(
-        update_fields=["status", "cancellation_reason", "cancelled_at", "updated_at"]
-    )
+    cfdi.save(update_fields=["status", "cancellation_reason", "cancelled_at", "updated_at"])
 
     audit_record(
         action=ActionType.CFDI_CANCEL,

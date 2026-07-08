@@ -17,18 +17,18 @@ Incluye los selectors analíticos:
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from django.db.models import (
     Count,
     DecimalField,
     F,
-    Q,
+    Prefetch,
     QuerySet,
     Sum,
     Value,
 )
-from django.db.models.functions import Coalesce, TruncDate, TruncWeek, TruncMonth
+from django.db.models.functions import Coalesce, TruncDate, TruncMonth, TruncWeek
 from django.utils import timezone
 
 from apps.core.tenant_context import get_current_tenant
@@ -39,6 +39,8 @@ from apps.finanzas.models import (
     Payment,
     Quote,
     ServiceConcept,
+    TreatmentPackage,
+    TreatmentPackageItem,
 )
 
 ZERO = Decimal("0.00")
@@ -47,9 +49,7 @@ _DEC = DecimalField(max_digits=14, decimal_places=2)
 
 def _sum(qs: QuerySet[Any], field: str) -> Decimal:
     """Suma un campo decimal de un queryset, devolviendo 0.00 si está vacío."""
-    return qs.aggregate(
-        total=Coalesce(Sum(field), Value(ZERO), output_field=_DEC)
-    )["total"]
+    return qs.aggregate(total=Coalesce(Sum(field), Value(ZERO), output_field=_DEC))["total"]
 
 
 # ---------------------------------------------------------------------------
@@ -94,8 +94,8 @@ def quote_get(*, quote_id: uuid.UUID) -> Quote:
 
 def quote_list(
     *,
-    patient_id: Optional[uuid.UUID] = None,
-    status: Optional[str] = None,
+    patient_id: uuid.UUID | None = None,
+    status: str | None = None,
 ) -> QuerySet[Quote]:
     """Lista cotizaciones del tenant actual, con filtros opcionales.
 
@@ -109,6 +109,43 @@ def quote_list(
     if status:
         qs = qs.filter(status=status)
     return qs.order_by("-created_at")
+
+
+# ---------------------------------------------------------------------------
+# Paquetes de tratamientos (catálogo reutilizable — Fase 3, Calendarización)
+# ---------------------------------------------------------------------------
+
+#: Queryset de líneas de paquete con el concepto precargado (evita N+1 al
+#: calcular precio/descripción en los serializers, que leen en vivo del
+#: catálogo).
+_PACKAGE_ITEMS_QS: QuerySet["TreatmentPackageItem"] = TreatmentPackageItem.objects.select_related(
+    "service_concept"
+).order_by("order", "id")
+
+
+def package_get(*, package_id: uuid.UUID) -> TreatmentPackage:
+    """Retorna un paquete de tratamientos por su UUID, con sus líneas precargadas.
+
+    Raises:
+        TreatmentPackage.DoesNotExist: si no existe en el tenant activo.
+    """
+    return TreatmentPackage.objects.prefetch_related(
+        Prefetch("items", queryset=_PACKAGE_ITEMS_QS)
+    ).get(id=package_id)
+
+
+def package_list(*, only_active: bool = True) -> QuerySet[TreatmentPackage]:
+    """Retorna el catálogo de paquetes de tratamientos del tenant actual.
+
+    Args:
+        only_active: si True (default), excluye paquetes desactivados.
+    """
+    qs: QuerySet[TreatmentPackage] = TreatmentPackage.objects.prefetch_related(
+        Prefetch("items", queryset=_PACKAGE_ITEMS_QS)
+    )
+    if only_active:
+        qs = qs.filter(is_active=True)
+    return qs.order_by("name")
 
 
 # ---------------------------------------------------------------------------
@@ -127,9 +164,9 @@ def charge_get(*, charge_id: uuid.UUID) -> Charge:
 
 def charge_list(
     *,
-    patient_id: Optional[uuid.UUID] = None,
-    status: Optional[str] = None,
-    appointment_id: Optional[uuid.UUID] = None,
+    patient_id: uuid.UUID | None = None,
+    status: str | None = None,
+    appointment_id: uuid.UUID | None = None,
 ) -> QuerySet[Charge]:
     """Lista cargos del tenant actual, con filtros opcionales.
 
@@ -165,8 +202,8 @@ def payment_get(*, payment_id: uuid.UUID) -> Payment:
 
 def payment_list(
     *,
-    patient_id: Optional[uuid.UUID] = None,
-    method: Optional[str] = None,
+    patient_id: uuid.UUID | None = None,
+    method: str | None = None,
 ) -> QuerySet[Payment]:
     """Lista pagos del tenant actual, con filtros opcionales."""
     qs: QuerySet[Payment] = Payment.objects.all()
@@ -193,8 +230,8 @@ def cfdi_get(*, cfdi_id: uuid.UUID) -> CfdiDocument:
 
 def cfdi_list(
     *,
-    patient_id: Optional[uuid.UUID] = None,
-    status: Optional[str] = None,
+    patient_id: uuid.UUID | None = None,
+    status: str | None = None,
 ) -> QuerySet[CfdiDocument]:
     """Lista comprobantes CFDI del tenant actual, con filtros opcionales."""
     qs: QuerySet[CfdiDocument] = CfdiDocument.objects.all()
@@ -213,8 +250,8 @@ def cfdi_list(
 def account_statement_build(
     *,
     patient_id: uuid.UUID,
-    date_from: Optional[datetime.date] = None,
-    date_to: Optional[datetime.date] = None,
+    date_from: datetime.date | None = None,
+    date_to: datetime.date | None = None,
 ) -> dict[str, Any]:
     """Construye el estado de cuenta de un paciente en un rango de fechas.
 
@@ -233,9 +270,7 @@ def account_statement_build(
           - total_charged / total_paid / balance: totales del rango.
           - charges_count / payments_count.
     """
-    charges_qs = charge_list(patient_id=patient_id).exclude(
-        status=Charge.Status.CANCELLED
-    )
+    charges_qs = charge_list(patient_id=patient_id).exclude(status=Charge.Status.CANCELLED)
     payments_qs = payment_list(patient_id=patient_id)
 
     if date_from is not None:
@@ -301,8 +336,8 @@ def account_statement_build(
 
 def finance_dashboard_metrics(
     *,
-    date_from: Optional[datetime.date] = None,
-    date_to: Optional[datetime.date] = None,
+    date_from: datetime.date | None = None,
+    date_to: datetime.date | None = None,
 ) -> dict[str, Any]:
     """Calcula KPIs y series para el panel financiero del tenant actual.
 
@@ -374,9 +409,7 @@ def _finance_dashboard_compute(
         )
     )["total"]
 
-    collection_rate = (
-        (total_income / total_charged) if total_charged > ZERO else ZERO
-    )
+    collection_rate = (total_income / total_charged) if total_charged > ZERO else ZERO
 
     # --- Serie: ingresos por día ---
     income_by_day = [
@@ -481,10 +514,7 @@ def _quotes_funnel(
     accepted = counts.get(Quote.Status.ACCEPTED, 0)
     # Denominador de conversión: enviadas + aceptadas + rechazadas + vencidas.
     decided = (
-        sent
-        + accepted
-        + counts.get(Quote.Status.REJECTED, 0)
-        + counts.get(Quote.Status.EXPIRED, 0)
+        sent + accepted + counts.get(Quote.Status.REJECTED, 0) + counts.get(Quote.Status.EXPIRED, 0)
     )
     conversion_rate = (accepted / decided) if decided else 0.0
     return {
@@ -565,9 +595,7 @@ def finance_period_report(
     """
     tenant = get_current_tenant()
     if tenant is None:
-        return _finance_period_report_compute(
-            date_from=date_from, date_to=date_to, group=group
-        )
+        return _finance_period_report_compute(date_from=date_from, date_to=date_to, group=group)
     return finance_cache_get_or_set(
         tenant_id=tenant.id,
         suffix=f"report:{date_from.isoformat()}:{date_to.isoformat()}:{group}",
@@ -624,12 +652,10 @@ def _finance_period_report_compute(
     # --- KPIs periodo anterior ---
     prev_production = _sum(prev_charges_qs, "amount")
     prev_collection = _sum(prev_payments_qs, "amount")
-    prev_collection_pct = (
-        (prev_collection / prev_production) if prev_production > ZERO else ZERO
-    )
+    prev_collection_pct = (prev_collection / prev_production) if prev_production > ZERO else ZERO
 
     # --- Δ% ---
-    def _delta_pct(current: Decimal, previous: Decimal) -> Optional[Decimal]:
+    def _delta_pct(current: Decimal, previous: Decimal) -> Decimal | None:
         """Variación % respecto al periodo anterior; None si anterior es cero."""
         if previous == ZERO:
             return None
@@ -638,9 +664,7 @@ def _finance_period_report_compute(
     delta_production_pct = _delta_pct(production, prev_production)
     delta_collection_pct = _delta_pct(collection, prev_collection)
     # Δ en puntos porcentuales del collection rate.
-    delta_collection_rate_ppt: Optional[Decimal] = round(
-        collection_pct - prev_collection_pct, 4
-    )
+    delta_collection_rate_ppt: Decimal | None = round(collection_pct - prev_collection_pct, 4)
 
     # --- A/R total (todos los cargos con saldo > 0, sin filtro de fecha) ---
     outstanding_qs = Charge.objects.filter(
@@ -775,7 +799,6 @@ def _by_doctor(charges_qs: QuerySet["Charge"]) -> list[dict[str, Any]]:
     Returns:
         lista [{doctor_id, name, amount, count}], ordenada por amount desc.
     """
-    from apps.agenda.models import Appointment  # noqa: PLC0415 — importación tardía para evitar circular
 
     # Cargos con doctor (tienen appointment_id seteado).
     with_doctor = (
@@ -851,9 +874,7 @@ def finance_daily_sheet(*, date: datetime.date) -> dict[str, Any]:
           - movements: lista cronológica de movimientos {at, type, ref, amount}.
           - totals: resumen {charges_count, payments_count, production, collection}.
     """
-    charges_qs = Charge.objects.filter(
-        issued_at__date=date
-    ).exclude(status=Charge.Status.CANCELLED)
+    charges_qs = Charge.objects.filter(issued_at__date=date).exclude(status=Charge.Status.CANCELLED)
 
     payments_qs = Payment.objects.filter(received_at__date=date)
 

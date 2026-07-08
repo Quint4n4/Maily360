@@ -596,3 +596,69 @@ export interface PatientBook {
   /** Capítulos de esta página, MÁS RECIENTE PRIMERO. */
   capitulos: BookCapitulo[]
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Resumen Clínico — constancia que se entrega al paciente desde una evolución
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Las 6 secciones EDITABLES del resumen clínico. Son texto libre; el borrador
+ * las trae auto-rellenadas desde la evolución y el médico las ajusta antes de
+ * generar la constancia. Mismo shape en el borrador y en el POST de creación.
+ */
+export interface ResumenSecciones {
+  /** Ficha de identificación del paciente. */
+  identificacion: string
+  /** Antecedentes de importancia. */
+  antecedentes: string
+  /** Padecimiento actual. */
+  padecimiento_actual: string
+  /** Exploración física. */
+  exploracion_fisica: string
+  /** Diagnóstico y manejo. */
+  diagnostico_manejo: string
+  /** Indicaciones para el paciente. */
+  indicaciones: string
+}
+
+/**
+ * Encabezado NO editable del resumen (datos de la clínica, del paciente y los
+ * signos vitales de la visita). Refleja `encabezado` del endpoint de borrador.
+ * Los numéricos pueden venir null; los signos como string ya formateado o null.
+ */
+export interface ResumenEncabezado {
+  clinic_name: string
+  patient_name: string
+  edad: number | null
+  /** 'M' | 'F' | 'X' | '' (sin especificar). */
+  sexo: 'M' | 'F' | 'X' | ''
+  /** Fecha de la consulta (YYYY-MM-DD). */
+  fecha: string
+  peso_kg: string | null
+  talla_m: string | null
+  /** Tensión arterial (ej. "120/80"). */
+  ta: string | null
+  fc: number | null
+  fr: number | null
+  temp_c: string | null
+}
+
+/**
+ * Borrador del resumen clínico (GET .../resumen/borrador/): encabezado NO
+ * editable + las 6 secciones auto-rellenadas y editables.
+ */
+export interface ResumenBorrador {
+  encabezado: ResumenEncabezado
+  secciones: ResumenSecciones
+}
+
+/**
+ * Constancia de resumen clínico guardada (respuesta del POST y de la lista).
+ * El PDF se genera aparte por el flujo async (endpoint /pdf/).
+ */
+export interface ResumenClinico {
+  id: string
+  created_at: string
+  doctor_name: string
+  evolution_id: string
+}

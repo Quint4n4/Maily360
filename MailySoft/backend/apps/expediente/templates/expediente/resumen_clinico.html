@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    /*
+      Resumen Clínico por consulta — Maily Platform
+      Generado con WeasyPrint. Sin JavaScript.
+      Documento SINTÉTICO entregable al paciente (distinto del libro clínico,
+      de uso interno). Usa el mismo membrete de marca (brand_color, logo,
+      ondas y marca de agua) que el resto de los PDFs de Maily.
+    */
+    @page {
+      size: letter;
+      margin: 2cm 1.8cm 2.4cm 1.8cm;
+      @bottom-center {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 7pt;
+        color: #888;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 9.5pt;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 0;
+      line-height: 1.45;
+    }
+
+    /* ---- Fondo decorativo (ondas + marca de agua) ---- */
+    .page-bg {
+      position: fixed;
+      top: -2cm; left: -1.8cm;
+      width: 21.6cm; height: 27.9cm;
+      z-index: -1;
+    }
+
+    /* ---- Clases requeridas por clinic_header.html ---- */
+    .hdr {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10pt;
+      border-bottom: 2pt solid {{ brand_color }};
+      padding-bottom: 10pt;
+    }
+    .hdr td { vertical-align: top; }
+    .h-logo img { max-width: {{ logo_w }}pt; max-height: {{ logo_h }}pt; display: block; }
+    .h-logo { width: {{ logo_w }}pt; padding-right: 12pt; }
+    .h-center { vertical-align: middle; }
+    .h-clinic {
+      font-size: 15pt;
+      font-weight: bold;
+      color: {{ brand_color }};
+      letter-spacing: 0.3pt;
+    }
+    .h-doctor { font-size: 9pt; color: #333; margin-top: 2pt; }
+    .h-spec { font-size: 8pt; color: #555; }
+    .h-qr { width: 50pt; text-align: right; vertical-align: top; }
+    .creds { width: 100%; margin-top: 4pt; }
+    .h-rule { display: none; }
+
+    /* ---- Título del documento ---- */
+    .doc-title-wrap { text-align: center; margin: 4pt 0 14pt 0; }
+    .doc-title {
+      font-size: 15pt;
+      font-weight: bold;
+      color: {{ brand_color }};
+      letter-spacing: 1.2pt;
+      text-transform: uppercase;
+    }
+    .doc-subtitle {
+      font-size: 8pt;
+      color: #666;
+      margin-top: 2pt;
+    }
+
+    /* ---- Datos del paciente + consulta ---- */
+    .info-row { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
+    .info-cell { width: 50%; vertical-align: top; padding-right: 8pt; }
+    .section-title {
+      font-size: 7pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5pt;
+      color: {{ brand_color }};
+      border-bottom: 0.5pt solid #c5d8f0;
+      padding-bottom: 2pt;
+      margin-bottom: 4pt;
+    }
+    .info-label { font-size: 7pt; color: #888; }
+    .info-value { font-size: 8.5pt; color: #1a1a1a; font-weight: 500; }
+    .info-row-item { margin-bottom: 4pt; }
+
+    /* ---- Signos vitales de la consulta ---- */
+    .vitals-table { width: 100%; border-collapse: collapse; margin-bottom: 10pt; }
+    .vitals-table td {
+      text-align: center;
+      padding: 6pt 4pt;
+      border: 0.5pt solid #e5eaf3;
+      background: #f7f9fd;
+    }
+    .vitals-label { font-size: 6.5pt; color: #888; text-transform: uppercase; }
+    .vitals-value { font-size: 10pt; font-weight: bold; color: #1a1a1a; }
+
+    /* ---- Secciones clínicas en prosa ---- */
+    .clinical-section { margin-bottom: 9pt; }
+    .clinical-section .section-title { margin-bottom: 4pt; }
+    .clinical-text {
+      font-size: 9pt;
+      color: #222;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+    .clinical-text.empty { color: #aaa; font-style: italic; }
+
+    /* ---- Indicaciones (lista) ---- */
+    .indicaciones-box {
+      margin-top: 4pt;
+      padding: 10pt 12pt;
+      background: #f7f9fd;
+      border-left: 3pt solid {{ brand_color }};
+      border-radius: 2pt;
+    }
+    .indicaciones-box ul { margin: 0; padding-left: 14pt; }
+    .indicaciones-box li { font-size: 9pt; color: #222; margin-bottom: 3pt; }
+
+    /* ---- Firma del médico ---- */
+    .firma-wrap {
+      margin-top: 18pt;
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    .firma-linea {
+      width: 55%;
+      margin: 0 auto 4pt auto;
+      border-top: 0.75pt solid #444;
+    }
+    .firma-nombre { font-size: 9.5pt; font-weight: bold; color: #1a1a1a; }
+    .firma-cedula { font-size: 8pt; color: #555; margin-top: 1pt; }
+
+    /* ---- Pie de página fijo ---- */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      font-size: 6.5pt;
+      color: #aaa;
+      text-align: center;
+      padding: 4pt 0;
+      border-top: 0.5pt solid #e0e0e0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Fondo decorativo -->
+<div class="page-bg">
+  {% include "core/pdf/brand_background.html" %}
+</div>
+
+<!-- Pie de página fijo -->
+<div class="footer">
+  Generado el {{ fecha_generacion }} — Maily Platform — Documento entregado al paciente como constancia de la consulta.
+</div>
+
+<!-- ===== Encabezado: membrete de la clínica ===== -->
+{% include "core/pdf/clinic_header.html" %}
+
+<!-- ===== Título del documento ===== -->
+<div class="doc-title-wrap">
+  <div class="doc-title">Resumen Clínico</div>
+  <div class="doc-subtitle">Consulta del {{ fecha_consulta }}</div>
+</div>
+
+<!-- ===== Datos del paciente ===== -->
+<table class="info-row">
+  <tr>
+    <td class="info-cell">
+      <div class="section-title">Datos del Paciente</div>
+      <div class="info-row-item">
+        <div class="info-label">Nombre completo</div>
+        <div class="info-value">{{ paciente_nombre }}</div>
+      </div>
+      <div class="info-row-item">
+        <div class="info-label">Edad / Sexo</div>
+        <div class="info-value">
+          {% if paciente_edad != None %}{{ paciente_edad }} años{% else %}Edad no registrada{% endif %}
+          {% if paciente_sexo %} / {{ paciente_sexo }}{% endif %}
+        </div>
+      </div>
+    </td>
+    <td class="info-cell" style="padding-left:8pt; padding-right:0;">
+      <div class="section-title">Datos de la Consulta</div>
+      <div class="info-row-item">
+        <div class="info-label">Fecha</div>
+        <div class="info-value">{{ fecha_consulta }}</div>
+      </div>
+      {% if paciente_record_number %}
+      <div class="info-row-item">
+        <div class="info-label">No. Expediente</div>
+        <div class="info-value">{{ paciente_record_number }}</div>
+      </div>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+
+<!-- ===== Signos vitales de la consulta ===== -->
+{% if signos %}
+<table class="vitals-table">
+  <tr>
+    {% if signos.weight_kg %}<td><div class="vitals-label">Peso</div><div class="vitals-value">{{ signos.weight_kg }} kg</div></td>{% endif %}
+    {% if signos.height_m %}<td><div class="vitals-label">Talla</div><div class="vitals-value">{{ signos.height_m }} m</div></td>{% endif %}
+    {% if signos.imc %}<td><div class="vitals-label">IMC</div><div class="vitals-value">{{ signos.imc }}</div></td>{% endif %}
+    {% if signos.ta %}<td><div class="vitals-label">T/A</div><div class="vitals-value">{{ signos.ta }}</div></td>{% endif %}
+    {% if signos.fc %}<td><div class="vitals-label">F.C.</div><div class="vitals-value">{{ signos.fc }} lpm</div></td>{% endif %}
+    {% if signos.fr %}<td><div class="vitals-label">F.R.</div><div class="vitals-value">{{ signos.fr }} rpm</div></td>{% endif %}
+    {% if signos.temp_c %}<td><div class="vitals-label">Temp.</div><div class="vitals-value">{{ signos.temp_c }} °C</div></td>{% endif %}
+  </tr>
+</table>
+{% endif %}
+
+<!-- ===== Identificación ===== -->
+<div class="clinical-section">
+  <div class="section-title">Identificación</div>
+  {% if identificacion %}
+    <div class="clinical-text">{{ identificacion }}</div>
+  {% else %}
+    <div class="clinical-text empty">Sin información registrada.</div>
+  {% endif %}
+</div>
+
+<!-- ===== Antecedentes ===== -->
+<div class="clinical-section">
+  <div class="section-title">Antecedentes</div>
+  {% if antecedentes %}
+    <div class="clinical-text">{{ antecedentes }}</div>
+  {% else %}
+    <div class="clinical-text empty">Sin antecedentes de importancia referidos.</div>
+  {% endif %}
+</div>
+
+<!-- ===== Padecimiento actual ===== -->
+<div class="clinical-section">
+  <div class="section-title">Padecimiento Actual</div>
+  {% if padecimiento_actual %}
+    <div class="clinical-text">{{ padecimiento_actual }}</div>
+  {% else %}
+    <div class="clinical-text empty">Sin información registrada.</div>
+  {% endif %}
+</div>
+
+<!-- ===== Exploración física ===== -->
+<div class="clinical-section">
+  <div class="section-title">Exploración Física</div>
+  {% if exploracion_fisica %}
+    <div class="clinical-text">{{ exploracion_fisica }}</div>
+  {% else %}
+    <div class="clinical-text empty">Exploración física sin alteraciones aparentes.</div>
+  {% endif %}
+</div>
+
+<!-- ===== Diagnóstico y manejo ===== -->
+<div class="clinical-section">
+  <div class="section-title">Diagnóstico y Manejo</div>
+  {% if diagnostico_manejo %}
+    <div class="clinical-text">{{ diagnostico_manejo }}</div>
+  {% else %}
+    <div class="clinical-text empty">Sin información registrada.</div>
+  {% endif %}
+</div>
+
+<!-- ===== Indicaciones ===== -->
+<div class="clinical-section">
+  <div class="section-title">Indicaciones</div>
+  {% if indicaciones_lines %}
+    <div class="indicaciones-box">
+      <ul>
+        {% for linea in indicaciones_lines %}
+        <li>{{ linea }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% else %}
+    <div class="clinical-text empty">Sin indicaciones registradas.</div>
+  {% endif %}
+</div>
+
+<!-- ===== Firma del médico ===== -->
+<div class="firma-wrap">
+  <div class="firma-linea"></div>
+  <div class="firma-nombre">{{ doctor_nombre }}</div>
+  {% if doctor_cedula %}<div class="firma-cedula">Céd. {{ doctor_cedula }}</div>{% endif %}
+</div>
+
+</body>
+</html>

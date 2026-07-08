@@ -254,7 +254,7 @@ class MedicalHistory(TenantAwareModel):
         blank=True,
         help_text=(
             "Respuestas a preguntas extra configurables por la clínica (Fase 2). "
-            "Estructura: {\"<question_uuid>\": <valor>}. "
+            'Estructura: {"<question_uuid>": <valor>}. '
             "Las claves son UUIDs de MedicalHistoryQuestion activas del mismo tenant. "
             "Las claves que no correspondan a preguntas activas se ignoran silenciosamente."
         ),
@@ -947,3 +947,380 @@ class MedicalHistoryQuestion(TenantAwareModel):
     def __str__(self) -> str:
         estado = "activa" if self.is_active else "inactiva"
         return f"[{self.field_type}] {self.label} ({estado}) — tenant={self.tenant_id}"
+
+
+# ---------------------------------------------------------------------------
+# ClinicalSummary — Resumen Clínico por consulta (documento entregable)
+# ---------------------------------------------------------------------------
+
+
+class ClinicalSummary(TenantAwareModel):
+    """Resumen clínico de UNA consulta, entregado al paciente como constancia.
+
+    A diferencia del expediente/libro clínico (uso interno, completo), el
+    Resumen Clínico es un documento SINTÉTICO por consulta que se le entrega
+    al paciente: quién lo atendió, qué se encontró y qué debe hacer.
+
+    Nace de una nota de evolución (`evolution`, la consulta base). El borrador
+    se auto-rellena desde el expediente (ver `services_resumen.clinical_summary_draft`)
+    y el médico lo edita antes de guardarlo. Al guardarse queda como CONSTANCIA
+    (registro de lo entregado): es append-only conceptual — no expone endpoint
+    de edición tras crear (no hay PATCH/PUT ruteados). El modelo en sí NO
+    bloquea `save()` a nivel Python/BD (a diferencia de AuditLog), la
+    inmutabilidad es de negocio, igual que EvolutionNote/VitalSignsRecord.
+
+    Secciones (todas TextField editables por el médico antes de guardar):
+        identificacion       — quién es el paciente (sexo, edad, motivo de la visita).
+        antecedentes         — antecedentes heredofamiliares/personales relevantes.
+        padecimiento_actual  — motivo de consulta / interrogatorio.
+        exploracion_fisica   — hallazgos relevantes de la exploración.
+        diagnostico_manejo   — diagnóstico(s) y manejo indicado.
+        indicaciones         — indicaciones entregadas al paciente.
+
+    doctor    — médico de la evolución (snapshot; puede diferir de created_by
+                si un owner/admin genera el resumen en nombre del médico).
+    created_by — usuario que generó el registro (auditoría/trazabilidad).
+
+    Auditoría: CLINICAL_SUMMARY_CREATE en AuditLog (NOM-024).
+    resource_repr = str(obj.id) — NUNCA PII.
+    """
+
+    patient = models.ForeignKey(
+        "pacientes.Patient",
+        on_delete=models.PROTECT,
+        related_name="clinical_summaries",
+        db_index=True,
+        help_text="Paciente al que pertenece el resumen clínico.",
+    )
+    evolution = models.ForeignKey(
+        EvolutionNote,
+        on_delete=models.PROTECT,
+        related_name="clinical_summaries",
+        db_index=True,
+        help_text="Nota de evolución (consulta) de la que nace este resumen.",
+    )
+    doctor = models.ForeignKey(
+        "personal.Doctor",
+        on_delete=models.PROTECT,
+        related_name="clinical_summaries",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Médico de la evolución (snapshot para el membrete del PDF).",
+    )
+    created_by = models.ForeignKey(
+        "authn.User",
+        on_delete=models.PROTECT,
+        related_name="clinical_summaries_created",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Usuario que generó el resumen (auditoría).",
+    )
+
+    identificacion = models.TextField(
+        blank=True,
+        default="",
+        help_text="Identificación del paciente al momento de la consulta (sexo, edad).",
+    )
+    antecedentes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Antecedentes relevantes (heredofamiliares y personales patológicos).",
+    )
+    padecimiento_actual = models.TextField(
+        blank=True,
+        default="",
+        help_text="Motivo de la consulta / padecimiento actual.",
+    )
+    exploracion_fisica = models.TextField(
+        blank=True,
+        default="",
+        help_text="Hallazgos relevantes de la exploración física.",
+    )
+    diagnostico_manejo = models.TextField(
+        blank=True,
+        default="",
+        help_text="Diagnóstico(s) y manejo indicado.",
+    )
+    indicaciones = models.TextField(
+        blank=True,
+        default="",
+        help_text="Indicaciones entregadas al paciente.",
+    )
+
+    class Meta:
+        db_table = "expediente_clinical_summaries"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "patient", "created_at"],
+                name="clin_summ_tenant_pat_time_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"ResumenClínico({self.id}) — paciente {self.patient_id} "
+            f"evolución {self.evolution_id} (tenant={self.tenant_id})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TreatmentPlan — Calendarización de tratamientos (Fase 1)
+# ---------------------------------------------------------------------------
+
+#: Título por defecto cuando el médico no captura uno propio.
+DEFAULT_TREATMENT_PLAN_TITLE = "Esquema y aplicación de protocolos de tratamientos"
+
+
+class TreatmentPlanStatus(models.TextChoices):
+    """Estado general del esquema de tratamientos."""
+
+    BORRADOR = "borrador", "Borrador"
+    ACTIVA = "activa", "Activa"
+    COMPLETADA = "completada", "Completada"
+
+
+class TreatmentSessionStatus(models.TextChoices):
+    """Estado de una sesión individual dentro de un tratamiento."""
+
+    PROGRAMADA = "programada", "Programada"
+    APLICADA = "aplicada", "Aplicada"
+
+
+class TreatmentPlan(TenantAwareModel):
+    """Esquema de calendarización de tratamientos por sesiones de un paciente.
+
+    Vive en el expediente del paciente. El doctor arma una tabla de
+    tratamientos (tomados del catálogo `finanzas.ServiceConcept` o
+    capturados a mano) con N sesiones cada uno, fechas programadas y de
+    aplicación. El PDF resultante lleva el membrete de la clínica y columnas
+    de firma FÍSICA (doctor/paciente) que NUNCA se persisten en BD — solo
+    existen como celdas vacías del documento impreso.
+
+    Campos:
+        patient      Paciente al que pertenece el esquema.
+        doctor       Médico responsable del esquema (opcional — owner/admin
+                     pueden armarlo sin fijar un médico específico).
+        consultorio  Consultorio por defecto del esquema (opcional, Fase 4 —
+                     Calendarización: se usa como sugerencia al agendar las
+                     sesiones como citas reales de agenda).
+        quote        Cotización (borrador) generada a partir de este esquema
+                     (opcional, Fase 2 — Calendarización→Cotización).
+        created_by   Usuario que generó/guardó el esquema (auditoría).
+        title        Título visible del documento (banda de título del PDF).
+                     Default: DEFAULT_TREATMENT_PLAN_TITLE.
+        notes        Notas libres del esquema (no se imprimen en el PDF v1).
+        status       borrador | activa | completada.
+
+    No inmutable: `treatment_plan_replace` RECONCILIA items/sesiones por
+    `id` (no borra y recrea todo) — lo que sobrevive conserva su `id`,
+    preservando `appointment` (la cita real ya agendada) y `applied_date`/
+    `status`; lo que ya no viene en el payload se borra (cancelando su cita
+    si tenía). La baja del esquema completo es lógica (deleted_at heredado
+    de BaseModel).
+
+    Auditoría: TREATMENT_PLAN_SAVE en AuditLog (NOM-024).
+    resource_repr = str(obj.id) — NUNCA PII.
+    """
+
+    patient = models.ForeignKey(
+        "pacientes.Patient",
+        on_delete=models.PROTECT,
+        related_name="treatment_plans",
+        db_index=True,
+        help_text="Paciente al que pertenece el esquema de tratamientos.",
+    )
+    doctor = models.ForeignKey(
+        "personal.Doctor",
+        on_delete=models.PROTECT,
+        related_name="treatment_plans",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Médico responsable del esquema (opcional).",
+    )
+    consultorio = models.ForeignKey(
+        "personal.Consultorio",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        help_text="Consultorio por defecto del esquema, usado al agendar sus sesiones (opcional).",
+    )
+    quote = models.ForeignKey(
+        "finanzas.Quote",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        help_text=(
+            "Cotización (borrador) generada a partir de este esquema (Fase 2 — "
+            "Calendarización), si existe. Cada regeneración crea una cotización "
+            "NUEVA y reapunta este campo; la anterior no se borra."
+        ),
+    )
+    created_by = models.ForeignKey(
+        "authn.User",
+        on_delete=models.PROTECT,
+        related_name="treatment_plans_created",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Usuario que generó/guardó el esquema (auditoría).",
+    )
+    title = models.CharField(
+        max_length=200,
+        blank=True,
+        default=DEFAULT_TREATMENT_PLAN_TITLE,
+        help_text="Título visible del documento (banda de título del PDF).",
+    )
+    notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Notas libres del esquema (no se imprimen en el PDF v1).",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=TreatmentPlanStatus.choices,
+        default=TreatmentPlanStatus.ACTIVA,
+        db_index=True,
+        help_text="Estado del esquema: borrador, activa o completada.",
+    )
+
+    class Meta:
+        db_table = "expediente_treatment_plans"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "patient", "created_at"],
+                name="tx_plan_tenant_pat_time_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"EsquemaTratamientos({self.id}) — paciente {self.patient_id} "
+            f"(tenant={self.tenant_id})"
+        )
+
+
+class TreatmentPlanItem(TenantAwareModel):
+    """Línea de tratamiento dentro de un esquema (TreatmentPlan).
+
+    `description` y `unit_price` son snapshots del catálogo (mismo patrón
+    que `finanzas.QuoteItem`): si el `ServiceConcept` cambia después, el
+    esquema conserva los valores con los que se creó.
+
+    `quantity` es el número de sesiones del tratamiento; cada sesión vive
+    como una fila propia en `TreatmentSession` (1..N).
+    """
+
+    plan = models.ForeignKey(
+        TreatmentPlan,
+        on_delete=models.CASCADE,
+        related_name="items",
+        help_text="Esquema al que pertenece esta línea de tratamiento.",
+    )
+    service_concept = models.ForeignKey(
+        "finanzas.ServiceConcept",
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        help_text="Concepto del catálogo (opcional; permite captura manual).",
+    )
+    description = models.CharField(
+        max_length=255,
+        help_text="Nombre del tratamiento (snapshot del concepto al crearse; editable).",
+    )
+    unit_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Precio unitario del tratamiento (snapshot).",
+    )
+    quantity = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Número de sesiones del tratamiento.",
+    )
+    order = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Posición de la línea en la tabla del esquema.",
+    )
+
+    class Meta:
+        db_table = "expediente_treatment_plan_items"
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        return f"TxItem({self.id}) — plan {self.plan_id}: {self.description}"
+
+
+class TreatmentSession(TenantAwareModel):
+    """Sesión individual (1..N) de una línea de tratamiento.
+
+    Estado por sesión: programada → aplicada. Las columnas de firma
+    (doctor/paciente) del PDF son físicas — nunca se guardan aquí.
+
+    Fase 4 — Calendarización: una sesión puede agendarse como una cita REAL
+    de agenda (`appointment`). `scheduled_time`/`duration_minutes`
+    complementan `scheduled_date` (que sigue siendo la fecha "de referencia"
+    del esquema, se agende o no la cita); son los que persiste
+    `treatment_session_schedule` al agendar/reagendar. La disponibilidad
+    (anti-empalme) NO se valida aquí — la valida `apps.agenda.services.
+    appointment_create`/`appointment_reschedule`, reutilizados tal cual.
+    """
+
+    item = models.ForeignKey(
+        TreatmentPlanItem,
+        on_delete=models.CASCADE,
+        related_name="sessions",
+        help_text="Línea de tratamiento a la que pertenece esta sesión.",
+    )
+    number = models.PositiveSmallIntegerField(
+        help_text="Número de sesión dentro del tratamiento (1..N).",
+    )
+    scheduled_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fecha programada de la sesión.",
+    )
+    scheduled_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text="Hora local programada de la sesión (complementa scheduled_date).",
+    )
+    applied_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que se aplicó la sesión.",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=TreatmentSessionStatus.choices,
+        default=TreatmentSessionStatus.PROGRAMADA,
+        db_index=True,
+        help_text="Estado de la sesión: programada o aplicada.",
+    )
+    duration_minutes = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Duración de la cita agendada, en minutos. Null = usa el default del médico.",
+    )
+    appointment = models.ForeignKey(
+        "agenda.Appointment",
+        on_delete=models.SET_NULL,
+        related_name="treatment_sessions",
+        null=True,
+        blank=True,
+        help_text="Cita real de agenda ligada a esta sesión, si ya se agendó.",
+    )
+
+    class Meta:
+        db_table = "expediente_treatment_sessions"
+        ordering = ["number", "id"]
+
+    def __str__(self) -> str:
+        return f"TxSesión({self.id}) — item {self.item_id} #{self.number} [{self.status}]"

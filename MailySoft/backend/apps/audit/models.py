@@ -84,6 +84,9 @@ class ActionType(models.TextChoices):
     CFDI_ISSUE = "CFDI_ISSUE", "Emitir CFDI"
     CFDI_CANCEL = "CFDI_CANCEL", "Cancelar CFDI"
     FISCAL_CONFIG_UPDATE = "FISCAL_CONFIG_UPDATE", "Actualizar configuración fiscal"
+    PACKAGE_CREATE = "PACKAGE_CREATE", "Crear paquete de tratamientos"
+    PACKAGE_UPDATE = "PACKAGE_UPDATE", "Actualizar paquete de tratamientos"
+    PACKAGE_DELETE = "PACKAGE_DELETE", "Dar de baja paquete de tratamientos"
 
     # Miembros de la clínica
     MEMBER_CREATE = "MEMBER_CREATE", "Alta de miembro"
@@ -205,6 +208,31 @@ class ActionType(models.TextChoices):
     MEDICAL_HISTORY_QUESTION_DEACTIVATE = (
         "MEDICAL_HISTORY_QUESTION_DEACTIVATE",
         "Desactivar pregunta extra de HC",
+    )
+
+    # Resumen Clínico por consulta (documento entregable al paciente)
+    # Se registra al GUARDAR la constancia (no al ver el borrador, que no persiste).
+    # metadata incluye evolution_id; resource_repr = str(summary.id) (NUNCA PII).
+    CLINICAL_SUMMARY_CREATE = (
+        "CLINICAL_SUMMARY_CREATE",
+        "Generar resumen clínico de consulta",
+    )
+
+    # Calendarización de tratamientos (esquema de protocolos por sesiones — Fase 1)
+    # Un solo ActionType para crear/reemplazar (misma naturaleza de "guardar el
+    # esquema completo"). metadata incluye items/total; resource_repr = str(plan.id)
+    # (NUNCA PII).
+    TREATMENT_PLAN_SAVE = (
+        "TREATMENT_PLAN_SAVE",
+        "Guardar esquema de calendarización de tratamientos",
+    )
+
+    # Calendarización de tratamientos — agendar/desagendar una sesión como
+    # cita real (Fase 4). metadata incluye appointment_id/plan_id;
+    # resource_repr = str(session.id) (NUNCA PII).
+    TREATMENT_SESSION_SCHEDULE = (
+        "TREATMENT_SESSION_SCHEDULE",
+        "Agendar o quitar de agenda una sesión de tratamiento",
     )
 
 

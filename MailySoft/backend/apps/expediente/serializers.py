@@ -37,15 +37,17 @@ Nota MEDIO-4: PatientNom004InputSerializer y PatientNom004OutputSerializer
 
 import re
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from rest_framework import serializers
 
 from apps.expediente.models import (
+    EXTRA_PARAMS_WHITELIST,
     Addendum,
     Allergy,
+    ClinicalSummary,
     Diagnosis,
     DiagnosisKind,
     EvolutionImage,
@@ -54,8 +56,12 @@ from apps.expediente.models import (
     MedicalHistoryQuestion,
     QuestionFieldType,
     Severity,
+    TreatmentPlan,
+    TreatmentPlanItem,
+    TreatmentPlanStatus,
+    TreatmentSession,
+    TreatmentSessionStatus,
     VitalSignsRecord,
-    EXTRA_PARAMS_WHITELIST,
 )
 from apps.expediente.validators import (
     validate_exploracion_evolucion,
@@ -66,7 +72,6 @@ from apps.expediente.validators import (
     validate_no_patologicos,
     validate_personales_patologicos,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constantes de validación
@@ -262,15 +267,12 @@ class MedicalHistoryInputSerializer(serializers.Serializer):
             # paciente al context) deje pasar datos gineco sin validar.
             if gineco and patient is None:
                 raise serializers.ValidationError(
-                    {
-                        "gineco_obstetricos": (
-                            "No se pudo verificar el sexo del paciente."
-                        )
-                    }
+                    {"gineco_obstetricos": ("No se pudo verificar el sexo del paciente.")}
                 )
 
             if patient is not None and gineco:
                 from apps.pacientes.models import Sex  # noqa: PLC0415
+
                 if patient.sex != Sex.FEMALE:
                     raise serializers.ValidationError(
                         {
@@ -396,9 +398,7 @@ class VitalSignsInputSerializer(serializers.Serializer):
     oxygen_saturation = serializers.IntegerField(required=False, allow_null=True)
     glucose = serializers.IntegerField(required=False, allow_null=True)
     extra_params = serializers.JSONField(required=False, default=dict)
-    notes = serializers.CharField(
-        max_length=255, required=False, default="", allow_blank=True
-    )
+    notes = serializers.CharField(max_length=255, required=False, default="", allow_blank=True)
     appointment_id = serializers.UUIDField(
         required=False,
         allow_null=True,
@@ -409,9 +409,7 @@ class VitalSignsInputSerializer(serializers.Serializer):
     def validate_measured_at(self, value: Any) -> Any:
         """Rechaza fechas futuras (D-EC-7)."""
         if value > timezone.now():
-            raise serializers.ValidationError(
-                "La fecha de la toma no puede ser futura."
-            )
+            raise serializers.ValidationError("La fecha de la toma no puede ser futura.")
         return value
 
     def _validate_range(self, field: str, value: Any) -> None:
@@ -496,11 +494,7 @@ class VitalSignsInputSerializer(serializers.Serializer):
         if sys_val is not None and dia_val is not None:
             if sys_val <= dia_val:
                 raise serializers.ValidationError(
-                    {
-                        "systolic": (
-                            "La presión sistólica debe ser mayor que la diastólica."
-                        )
-                    }
+                    {"systolic": ("La presión sistólica debe ser mayor que la diastólica.")}
                 )
 
         # Si measured_at no llegó, poner el valor actual (se validó en el service también).
@@ -546,7 +540,7 @@ class VitalSignsOutputSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_imc(self, obj: VitalSignsRecord) -> Optional[float]:
+    def get_imc(self, obj: VitalSignsRecord) -> float | None:
         """Retorna el IMC derivado como float, o None si falta peso o talla."""
         val = obj.imc
         if val is None:
@@ -608,13 +602,9 @@ class EvolutionNoteInputSerializer(serializers.Serializer):
     indicaciones_enfermeria = serializers.CharField(
         required=False, default="", allow_blank=True, max_length=_EVOLUTION_TEXT_MAX
     )
-    exploracion_fisica = serializers.JSONField(
-        required=False, default=dict, allow_null=False
-    )
+    exploracion_fisica = serializers.JSONField(required=False, default=dict, allow_null=False)
 
-    def validate_exploracion_fisica(
-        self, value: dict[str, Any]
-    ) -> dict[str, Any]:
+    def validate_exploracion_fisica(self, value: dict[str, Any]) -> dict[str, Any]:
         """Valida el bloque de exploración por aparatos (D-EC-7 whitelist)."""
         if not isinstance(value, dict):
             raise serializers.ValidationError("Debe ser un objeto JSON.")
@@ -652,17 +642,13 @@ class EvolutionNoteInputSerializer(serializers.Serializer):
         _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
 
         # Verificar si hay al menos un campo de texto con contenido real.
-        has_text_content = any(
-            attrs.get(field, "").strip()
-            for field in self._CLINICAL_TEXT_FIELDS
-        )
+        has_text_content = any(attrs.get(field, "").strip() for field in self._CLINICAL_TEXT_FIELDS)
 
         # Verificar si exploracion_fisica tiene al menos un aparato evaluado
         # (estado distinto de 'no_evaluado').
         exploracion: dict[str, Any] = attrs.get("exploracion_fisica") or {}
         has_exploracion_content = any(
-            isinstance(aparato, dict)
-            and aparato.get("estado") != self._ESTADO_NO_EVALUADO
+            isinstance(aparato, dict) and aparato.get("estado") != self._ESTADO_NO_EVALUADO
             for aparato in exploracion.values()
         )
 
@@ -898,7 +884,9 @@ class NursingInstructionOutputSerializer(serializers.ModelSerializer):
         disponible, retorna una cadena vacía en lugar de fallar.
         """
         try:
-            return str(obj.doctor.membership.user.get_full_name() or obj.doctor.membership.user.email)
+            return str(
+                obj.doctor.membership.user.get_full_name() or obj.doctor.membership.user.email
+            )
         except (AttributeError, ObjectDoesNotExist):
             return ""
 
@@ -1170,7 +1158,7 @@ class BookCapituloSerializer(serializers.Serializer):
     recetas = serializers.SerializerMethodField()
     addenda = serializers.SerializerMethodField()
 
-    def get_signos(self, obj: EvolutionNote) -> Optional[dict[str, Any]]:
+    def get_signos(self, obj: EvolutionNote) -> dict[str, Any] | None:
         """Serializa los signos vitales de la nota (o null si no los tiene)."""
         if obj.vital_signs is None:
             return None
@@ -1214,9 +1202,7 @@ class BookCapituloSerializer(serializers.Serializer):
         """
         return {
             "texto": obj.diagnosticos_texto,
-            "diagnosticos": DiagnosisOutputSerializer(
-                obj.diagnoses.all(), many=True
-            ).data,
+            "diagnosticos": DiagnosisOutputSerializer(obj.diagnoses.all(), many=True).data,
         }
 
     def get_plan(self, obj: EvolutionNote) -> dict[str, Any]:
@@ -1234,24 +1220,18 @@ class BookCapituloSerializer(serializers.Serializer):
         en el context porque el serializer de imágenes no lo necesita para
         la URL relativa. El frontend puede construir la URL absoluta.
         """
-        return EvolutionImageOutputSerializer(
-            obj.images.all(), many=True
-        ).data
+        return EvolutionImageOutputSerializer(obj.images.all(), many=True).data
 
     def get_recetas(self, obj: EvolutionNote) -> list[dict[str, Any]]:
         """Serializa el resumen de recetas vinculadas a esta evolución.
 
         Usa el prefetch "prescriptions" + "prescriptions__items" de book_build.
         """
-        return BookPrescriptionSummarySerializer(
-            obj.prescriptions.all(), many=True
-        ).data
+        return BookPrescriptionSummarySerializer(obj.prescriptions.all(), many=True).data
 
     def get_addenda(self, obj: EvolutionNote) -> list[dict[str, Any]]:
         """Serializa los addenda de la nota en orden cronológico."""
-        return AddendumOutputSerializer(
-            obj.addenda.all(), many=True
-        ).data
+        return AddendumOutputSerializer(obj.addenda.all(), many=True).data
 
 
 class PatientBookSerializer(serializers.Serializer):
@@ -1290,18 +1270,18 @@ class PatientBookSerializer(serializers.Serializer):
     def get_paciente(self, obj: Any) -> dict[str, Any]:
         """Serializa el paciente (portada del libro)."""
         from apps.pacientes.serializers import PatientOutputSerializer  # noqa: PLC0415
+
         return PatientOutputSerializer(obj.patient).data
 
-    def get_clinica(self, obj: Any) -> Optional[dict[str, Any]]:
+    def get_clinica(self, obj: Any) -> dict[str, Any] | None:
         """Serializa la configuración de la clínica (portada)."""
         if obj.clinic_settings is None:
             return None
         from apps.clinica.serializers import ClinicSettingsOutputSerializer  # noqa: PLC0415
-        return ClinicSettingsOutputSerializer(
-            obj.clinic_settings, context=self.context
-        ).data
 
-    def get_historia_clinica(self, obj: Any) -> Optional[dict[str, Any]]:
+        return ClinicSettingsOutputSerializer(obj.clinic_settings, context=self.context).data
+
+    def get_historia_clinica(self, obj: Any) -> dict[str, Any] | None:
         """Serializa la HC viva del paciente (null si no existe aún)."""
         if obj.medical_history is None:
             return None
@@ -1314,3 +1294,438 @@ class PatientBookSerializer(serializers.Serializer):
     def get_capitulos(self, obj: Any) -> list[dict[str, Any]]:
         """Serializa los capítulos (evoluciones) de la página actual."""
         return BookCapituloSerializer(obj.capitulos, many=True).data
+
+
+# ---------------------------------------------------------------------------
+# ClinicalSummary — Resumen Clínico por consulta (documento entregable)
+# ---------------------------------------------------------------------------
+
+# Tope de longitud por sección: generoso para prosa clínica, acota DoS.
+_CLINICAL_SUMMARY_SECTION_MAX_LEN = 10_000
+
+
+class ClinicalSummaryEncabezadoSerializer(serializers.Serializer):
+    """Encabezado de solo lectura del borrador (no persiste — datos del contexto)."""
+
+    clinic_name = serializers.CharField(allow_blank=True)
+    patient_name = serializers.CharField()
+    edad = serializers.IntegerField(allow_null=True)
+    sexo = serializers.CharField(allow_blank=True)
+    fecha = serializers.CharField()
+    peso_kg = serializers.DecimalField(
+        max_digits=5, decimal_places=2, allow_null=True, required=False
+    )
+    talla_m = serializers.DecimalField(
+        max_digits=4, decimal_places=3, allow_null=True, required=False
+    )
+    ta = serializers.CharField(allow_null=True, required=False)
+    fc = serializers.IntegerField(allow_null=True, required=False)
+    fr = serializers.IntegerField(allow_null=True, required=False)
+    temp_c = serializers.DecimalField(
+        max_digits=4, decimal_places=1, allow_null=True, required=False
+    )
+
+
+class ClinicalSummarySeccionesSerializer(serializers.Serializer):
+    """Las 6 secciones de texto del Resumen Clínico (sugeridas en el borrador)."""
+
+    identificacion = serializers.CharField(allow_blank=True)
+    antecedentes = serializers.CharField(allow_blank=True)
+    padecimiento_actual = serializers.CharField(allow_blank=True)
+    exploracion_fisica = serializers.CharField(allow_blank=True)
+    diagnostico_manejo = serializers.CharField(allow_blank=True)
+    indicaciones = serializers.CharField(allow_blank=True)
+
+
+class ClinicalSummaryDraftOutputSerializer(serializers.Serializer):
+    """Respuesta de GET .../resumen/borrador/ — NO persiste nada.
+
+    Forma: {"encabezado": {...}, "secciones": {...}}.
+    """
+
+    encabezado = ClinicalSummaryEncabezadoSerializer()
+    secciones = ClinicalSummarySeccionesSerializer()
+
+
+class ClinicalSummaryInputSerializer(serializers.Serializer):
+    """Valida la entrada para GUARDAR el Resumen Clínico (POST .../resumen/).
+
+    D-EC-7: rechaza campos no declarados. Las 6 secciones son opcionales
+    (el médico puede dejar una en blanco), pero acotadas en longitud
+    (anti-DoS) — el frontend las pre-llena con el borrador y el médico edita.
+    """
+
+    identificacion = serializers.CharField(
+        max_length=_CLINICAL_SUMMARY_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    antecedentes = serializers.CharField(
+        max_length=_CLINICAL_SUMMARY_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    padecimiento_actual = serializers.CharField(
+        max_length=_CLINICAL_SUMMARY_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    exploracion_fisica = serializers.CharField(
+        max_length=_CLINICAL_SUMMARY_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    diagnostico_manejo = serializers.CharField(
+        max_length=_CLINICAL_SUMMARY_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    indicaciones = serializers.CharField(
+        max_length=_CLINICAL_SUMMARY_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Rechaza campos no declarados (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class ClinicalSummaryOutputSerializer(serializers.ModelSerializer):
+    """Respuesta de POST .../resumen/ y de cada item del listado.
+
+    Forma: {id, created_at, doctor_name, evolution_id}. NO expone el texto de
+    las secciones en el listado/creación (evita mandar PII clínica de más en
+    respuestas que no la necesitan; el detalle completo se obtiene del PDF).
+    """
+
+    doctor_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClinicalSummary
+        fields = ["id", "created_at", "doctor_name", "evolution_id"]
+        read_only_fields = fields
+
+    def get_doctor_name(self, obj: ClinicalSummary) -> str:
+        """Nombre del médico de la evolución, o '' si no se pudo resolver."""
+        if obj.doctor_id is None:
+            return ""
+        try:
+            return obj.doctor.full_name
+        except Exception:  # noqa: BLE001
+            return ""
+
+
+# ---------------------------------------------------------------------------
+# TreatmentPlan — Calendarización de tratamientos (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+def _treatment_plan_total(plan: TreatmentPlan) -> Decimal:
+    """Suma(unit_price * quantity) de los items ya precargados del esquema.
+
+    Reusa `plan.items.all()` (prefetched por el selector) — no dispara query.
+    """
+    total = Decimal("0")
+    for item in plan.items.all():
+        total += item.unit_price * item.quantity
+    return total.quantize(Decimal("0.01"))
+
+
+def _treatment_plan_doctor_name(plan: TreatmentPlan) -> str:
+    """Nombre del médico responsable, o '' si no hay o no se pudo resolver."""
+    if plan.doctor_id is None:
+        return ""
+    try:
+        return plan.doctor.full_name
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+class TreatmentSessionInputSerializer(serializers.Serializer):
+    """Sesión individual dentro de una línea de tratamiento (create/replace).
+
+    `id` es opcional (Fase 4): cuando viene y ya existe dentro de la línea,
+    `treatment_plan_replace` actualiza esa sesión EN SITIO (preserva su
+    `appointment`/`applied_date`/`status` salvo que el payload los cambie
+    explícitamente) en vez de borrarla y recrearla — así no se pierde una
+    cita ya agendada. `status` YA NO tiene `default` a nivel serializer
+    (antes sí): el default "programada" para sesiones nuevas lo aplica el
+    service (`treatment_session_...`/`_reconcile_sessions_for_item`), para
+    poder distinguir "no vino en el payload" (preservar) de "vino explícito".
+
+    D-EC-7: rechaza claves no declaradas. Se sobreescribe `to_internal_value`
+    (en vez de `validate` + `self.initial_data`) porque este serializer se
+    usa ANIDADO con `many=True`: DRF no puebla `self.initial_data` en las
+    instancias hijas de un ListSerializer, solo en el serializer raíz al que
+    se le pasó `data=` explícitamente.
+    """
+
+    id = serializers.UUIDField(required=False, allow_null=True)
+    number = serializers.IntegerField(min_value=1)
+    scheduled_date = serializers.DateField(required=False, allow_null=True)
+    scheduled_time = serializers.TimeField(required=False, allow_null=True)
+    duration_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    applied_date = serializers.DateField(required=False, allow_null=True)
+    status = serializers.ChoiceField(choices=TreatmentSessionStatus.choices, required=False)
+
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        _reject_unknown_fields(self, data)
+        return super().to_internal_value(data)  # type: ignore[no-any-return]
+
+
+class TreatmentPlanItemInputSerializer(serializers.Serializer):
+    """Línea de tratamiento dentro del esquema (create/replace).
+
+    `id` es opcional (Fase 4): igual que en la sesión, permite que
+    `treatment_plan_replace` actualice la línea en sitio en vez de
+    recrearla. `concept_id` es opcional (permite captura manual, sin
+    catálogo). `description`/`unit_price` también son opcionales cuando
+    `concept_id` viene: el service usa el nombre/precio del concepto como
+    default. `sessions` es opcional: si no viene, el service genera
+    `quantity` sesiones vacías en estado "programada".
+    """
+
+    id = serializers.UUIDField(required=False, allow_null=True)
+    concept_id = serializers.UUIDField(required=False, allow_null=True)
+    description = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
+    unit_price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, allow_null=True
+    )
+    quantity = serializers.IntegerField(min_value=1, required=False, default=1)
+    order = serializers.IntegerField(min_value=0, required=False, default=0)
+    sessions = TreatmentSessionInputSerializer(many=True, required=False)
+
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        _reject_unknown_fields(self, data)
+        return super().to_internal_value(data)  # type: ignore[no-any-return]
+
+
+class TreatmentPlanInputSerializer(serializers.Serializer):
+    """Valida la entrada para crear/reemplazar un esquema de calendarización
+    de tratamientos (POST y PUT comparten el mismo contrato de entrada).
+
+    D-EC-7: rechaza campos no declarados. `items` es opcional y admite lista
+    vacía: el esquema se crea como contenedor (borrador) y el médico agrega
+    los tratamientos después vía PUT. La validación de negocio (concepto
+    existe en el catálogo del tenant, precio numérico, etc.) ocurre en el
+    service. `consultorio_id` (Fase 4) es el consultorio por defecto del
+    esquema — opcional, se resuelve/valida contra el tenant en la vista.
+    """
+
+    title = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+    status = serializers.ChoiceField(
+        choices=TreatmentPlanStatus.choices,
+        required=False,
+        default=TreatmentPlanStatus.ACTIVA,
+    )
+    doctor_id = serializers.UUIDField(required=False, allow_null=True)
+    consultorio_id = serializers.UUIDField(required=False, allow_null=True)
+    items = TreatmentPlanItemInputSerializer(
+        many=True, allow_empty=True, required=False, default=list
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Validación de nivel serializer: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class TreatmentSessionScheduleInputSerializer(serializers.Serializer):
+    """Valida el body de POST .../calendarizaciones/sesiones/<id>/agendar/ (Fase 4).
+
+    El frontend arma `starts_at`/`ends_at` ya en UTC (mismo patrón que el
+    resto de la agenda — el backend no hace conversión de zona horaria) y
+    `scheduled_date`/`scheduled_time` en hora local, para persistir en la
+    sesión y mostrarlos en el detalle/PDF. `consultorio_id` es el único
+    campo opcional (allow_null): el resto lo arma siempre el asistente de
+    agendar del frontend.
+
+    D-EC-7: rechaza campos no declarados.
+    """
+
+    scheduled_date = serializers.DateField()
+    scheduled_time = serializers.TimeField()
+    starts_at = serializers.DateTimeField()
+    ends_at = serializers.DateTimeField()
+    duration_minutes = serializers.IntegerField(min_value=1)
+    doctor_id = serializers.UUIDField()
+    consultorio_id = serializers.UUIDField(required=False, allow_null=True)
+
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        _reject_unknown_fields(self, data)
+        return super().to_internal_value(data)  # type: ignore[no-any-return]
+
+
+class _TreatmentSessionAppointmentSerializer(serializers.Serializer):
+    """Representación mínima de la cita real ligada a una sesión (Fase 4).
+
+    Mismo patrón que `_DoctorNestedSerializer`/`_ConsultorioNestedSerializer`
+    de `apps.agenda.serializers`: solo lo que la UI de calendarización
+    necesita mostrar (badge de horario + médico + consultorio + status).
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    starts_at = serializers.DateTimeField(read_only=True)
+    ends_at = serializers.DateTimeField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    doctor_id = serializers.UUIDField(read_only=True, allow_null=True)
+    doctor_name = serializers.SerializerMethodField()
+    consultorio_id = serializers.UUIDField(read_only=True, allow_null=True)
+    consultorio_name = serializers.SerializerMethodField()
+
+    def get_doctor_name(self, obj: Any) -> str:
+        if obj.doctor_id is None:
+            return ""
+        try:
+            return obj.doctor.full_name  # type: ignore[no-any-return]
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def get_consultorio_name(self, obj: Any) -> str:
+        if obj.consultorio_id is None:
+            return ""
+        return obj.consultorio.name  # type: ignore[no-any-return]
+
+
+class TreatmentSessionOutputSerializer(serializers.ModelSerializer):
+    """Salida de una sesión dentro de una línea de tratamiento.
+
+    `appointment` (Fase 4) es null cuando la sesión aún no se agendó como
+    cita real; si se agendó, trae el resumen mínimo de la cita.
+    """
+
+    appointment = _TreatmentSessionAppointmentSerializer(read_only=True, allow_null=True)
+
+    class Meta:
+        model = TreatmentSession
+        fields = [
+            "id",
+            "number",
+            "scheduled_date",
+            "scheduled_time",
+            "duration_minutes",
+            "applied_date",
+            "status",
+            "appointment",
+        ]
+        read_only_fields = fields
+
+
+class TreatmentPlanItemOutputSerializer(serializers.ModelSerializer):
+    """Salida de una línea de tratamiento, con sus sesiones anidadas."""
+
+    concept_id = serializers.UUIDField(source="service_concept_id", read_only=True, allow_null=True)
+    sessions = TreatmentSessionOutputSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = TreatmentPlanItem
+        fields = [
+            "id",
+            "concept_id",
+            "description",
+            "unit_price",
+            "quantity",
+            "order",
+            "sessions",
+        ]
+        read_only_fields = fields
+
+
+class TreatmentPlanOutputSerializer(serializers.ModelSerializer):
+    """Detalle de un esquema de calendarización de tratamientos.
+
+    Forma: {id, patient_id, title, notes, status, doctor_id, doctor_name,
+    consultorio_id, consultorio_name, created_at, total,
+    items:[{id, concept_id, description, unit_price, quantity, order,
+    sessions:[{id, number, scheduled_date, scheduled_time, duration_minutes,
+    applied_date, status, appointment}]}]}.
+
+    `total` = suma(unit_price * quantity) de todos los items, como string
+    decimal (evita errores de precisión de punto flotante en el frontend).
+
+    `quote_id` (Fase 2 — Calendarización→Cotización): id de la última
+    cotización generada a partir de este esquema, o null si aún no se ha
+    generado ninguna. El frontend lo usa para mostrar "Ver cotización".
+    """
+
+    doctor_id = serializers.UUIDField(read_only=True, allow_null=True)
+    doctor_name = serializers.SerializerMethodField()
+    consultorio_id = serializers.UUIDField(read_only=True, allow_null=True)
+    consultorio_name = serializers.SerializerMethodField()
+    quote_id = serializers.UUIDField(read_only=True, allow_null=True)
+    total = serializers.SerializerMethodField()
+    items = TreatmentPlanItemOutputSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = TreatmentPlan
+        fields = [
+            "id",
+            "patient_id",
+            "title",
+            "notes",
+            "status",
+            "doctor_id",
+            "doctor_name",
+            "consultorio_id",
+            "consultorio_name",
+            "quote_id",
+            "created_at",
+            "total",
+            "items",
+        ]
+        read_only_fields = fields
+
+    def get_doctor_name(self, obj: TreatmentPlan) -> str:
+        return _treatment_plan_doctor_name(obj)
+
+    def get_consultorio_name(self, obj: TreatmentPlan) -> str:
+        return obj.consultorio.name if obj.consultorio is not None else ""
+
+    def get_total(self, obj: TreatmentPlan) -> str:
+        return str(_treatment_plan_total(obj))
+
+
+class TreatmentPlanListItemSerializer(serializers.ModelSerializer):
+    """Salida de cada esquema en el listado paginado (sin items anidados).
+
+    Forma: {id, title, status, status_display, created_at, doctor_name,
+    total, sessions_count, applied_count}.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    doctor_name = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    sessions_count = serializers.SerializerMethodField()
+    applied_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TreatmentPlan
+        fields = [
+            "id",
+            "title",
+            "status",
+            "status_display",
+            "created_at",
+            "doctor_name",
+            "total",
+            "sessions_count",
+            "applied_count",
+        ]
+        read_only_fields = fields
+
+    def get_doctor_name(self, obj: TreatmentPlan) -> str:
+        return _treatment_plan_doctor_name(obj)
+
+    def get_total(self, obj: TreatmentPlan) -> str:
+        return str(_treatment_plan_total(obj))
+
+    @staticmethod
+    def _all_sessions(obj: TreatmentPlan) -> list[TreatmentSession]:
+        """Aplana las sesiones de todos los items (ya precargados — sin N+1)."""
+        sessions: list[TreatmentSession] = []
+        for item in obj.items.all():
+            sessions.extend(item.sessions.all())
+        return sessions
+
+    def get_sessions_count(self, obj: TreatmentPlan) -> int:
+        return len(self._all_sessions(obj))
+
+    def get_applied_count(self, obj: TreatmentPlan) -> int:
+        return sum(
+            1
+            for session in self._all_sessions(obj)
+            if session.status == TreatmentSessionStatus.APLICADA
+        )

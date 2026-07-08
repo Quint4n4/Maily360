@@ -46,6 +46,9 @@ import type {
   MedicalHistoryQuestionUpdateInput,
   NursingInstruction,
   PatientBook,
+  ResumenBorrador,
+  ResumenClinico,
+  ResumenSecciones,
   VitalSignsInput,
   VitalSignsRecord,
   VitalSignsSeries,
@@ -293,4 +296,52 @@ export async function getPatientBookPdf(
 ): Promise<Blob> {
   const qs = new URLSearchParams({ modo, imagenes: incluirImagenes ? '1' : '0' })
   return pdfJobBlob(`/expediente/${patientId}/libro/pdf/?${qs.toString()}`)
+}
+
+// ── Resumen Clínico (constancia para el paciente) ──────────────────────────────
+
+/**
+ * GET /expediente/evoluciones/<evolution_id>/resumen/borrador/ — borrador del
+ * resumen clínico: encabezado NO editable (clínica + paciente + signos) y las 6
+ * secciones auto-rellenadas desde la evolución (el médico las edita antes de
+ * generar la constancia). Permiso: roles clínicos (doctor/owner/admin).
+ */
+export async function getResumenBorrador(evolutionId: string): Promise<ResumenBorrador> {
+  return request<ResumenBorrador>(`/expediente/evoluciones/${evolutionId}/resumen/borrador/`)
+}
+
+/**
+ * POST /expediente/evoluciones/<evolution_id>/resumen/ — guarda la constancia
+ * con el texto (ya editado) de las 6 secciones (201). Devuelve el registro del
+ * resumen para luego pedir su PDF.
+ */
+export async function crearResumenClinico(
+  evolutionId: string,
+  secciones: ResumenSecciones,
+): Promise<ResumenClinico> {
+  return request<ResumenClinico>(`/expediente/evoluciones/${evolutionId}/resumen/`, {
+    method: 'POST',
+    body: secciones,
+  })
+}
+
+/**
+ * GET /expediente/resumenes/<summary_id>/pdf/ — PDF de la constancia (Blob).
+ * Flujo asíncrono unificado: el endpoint ENCOLA y `pdfJobBlob` hace el polling y
+ * la descarga por dentro. Descarga autenticada (Bearer); el token no va en la URL.
+ */
+export async function getResumenClinicoPdf(summaryId: string): Promise<Blob> {
+  return pdfJobBlob(`/expediente/resumenes/${summaryId}/pdf/`)
+}
+
+/**
+ * GET /expediente/<patient_id>/resumenes/ — constancias de resumen clínico del
+ * paciente (paginado, más reciente primero → usar .results).
+ */
+export async function listResumenesClinicos(
+  patientId: string,
+  page?: number,
+): Promise<Paginated<ResumenClinico>> {
+  const suffix = page ? `?page=${page}` : ''
+  return request<Paginated<ResumenClinico>>(`/expediente/${patientId}/resumenes/${suffix}`)
 }

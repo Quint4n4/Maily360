@@ -28,7 +28,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, CalendarPlus, UserX, Loader2, AlertTriangle, CalendarClock, Wallet } from 'lucide-react'
+import { X, CalendarPlus, UserX, Loader2, AlertTriangle, CalendarClock, Wallet, ListChecks } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { initialsOf } from '../../lib/paciente'
 import { useUploadPatientAvatar } from '../../hooks/pacientes'
@@ -49,6 +49,7 @@ import HistorialExpediente from '../expediente/HistorialExpediente'
 import RecetasTab from '../expediente/RecetasTab'
 import CitasSection from '../expediente/CitasSection'
 import EstadoCuentaExpediente from '../expediente/EstadoCuentaExpediente'
+import CalendarizacionTab from '../expediente/CalendarizacionTab'
 
 interface ExpedienteDrawerProps {
   paciente: PatientOut | null
@@ -79,8 +80,16 @@ export default function ExpedienteDrawer({
   const verEstadoCuenta = puedeVerEstadoCuenta(role, doctorsSeeCosts)
   const cobrar = puedeCobrar(role)
 
-  // Pestaña activa del panel derecho: el expediente o el estado de cuenta.
-  const [tab, setTab] = useState<'expediente' | 'cuenta'>('expediente')
+  // Calendarización de tratamientos (Fase 1): pestaña solo para roles con acceso
+  // clínico editable (owner/admin/doctor). El backend es la autoridad (403).
+  const puedeCalendarizar = accesoClinico && editarClinico
+
+  // Pestaña activa del panel derecho: expediente / estado de cuenta / calendarización.
+  const [tab, setTab] = useState<'expediente' | 'cuenta' | 'calendarizacion'>('expediente')
+
+  // El selector de pestañas se muestra si hay al menos una pestaña extra además
+  // del expediente (estado de cuenta y/o calendarización).
+  const mostrarTabs = verEstadoCuenta || puedeCalendarizar
 
   // Saldo para el badge del encabezado. Solo se consulta si el rol puede verlo.
   const statement = useStatement(verEstadoCuenta && paciente ? paciente.id : null)
@@ -205,8 +214,8 @@ export default function ExpedienteDrawer({
               {/* Columna central/derecha: pestañas Expediente / Estado de cuenta */}
               <section className="flex-1 min-w-0 lg:h-full lg:overflow-y-auto lg:pr-1 space-y-6">
                 {/* Selector de pestañas (solo si hay más de una disponible) */}
-                {verEstadoCuenta && (
-                  <div className="flex gap-2">
+                {mostrarTabs && (
+                  <div className="flex flex-wrap gap-2">
                     <TabButton
                       activo={tab === 'expediente'}
                       onClick={() => setTab('expediente')}
@@ -214,19 +223,32 @@ export default function ExpedienteDrawer({
                     >
                       Expediente
                     </TabButton>
-                    <TabButton
-                      activo={tab === 'cuenta'}
-                      onClick={() => setTab('cuenta')}
-                      icon={<Wallet className="w-4 h-4" />}
-                    >
-                      Estado de cuenta
-                    </TabButton>
+                    {verEstadoCuenta && (
+                      <TabButton
+                        activo={tab === 'cuenta'}
+                        onClick={() => setTab('cuenta')}
+                        icon={<Wallet className="w-4 h-4" />}
+                      >
+                        Estado de cuenta
+                      </TabButton>
+                    )}
+                    {puedeCalendarizar && (
+                      <TabButton
+                        activo={tab === 'calendarizacion'}
+                        onClick={() => setTab('calendarizacion')}
+                        icon={<ListChecks className="w-4 h-4" />}
+                      >
+                        Calendarización
+                      </TabButton>
+                    )}
                   </div>
                 )}
 
-                {/* Pestaña: estado de cuenta */}
+                {/* Pestaña: estado de cuenta / calendarización / expediente */}
                 {verEstadoCuenta && tab === 'cuenta' ? (
                   <EstadoCuentaExpediente paciente={paciente} puedeCobrar={cobrar} />
+                ) : puedeCalendarizar && tab === 'calendarizacion' ? (
+                  <CalendarizacionTab paciente={paciente} />
                 ) : accesoClinico ? (
                   <>
                     <VisitaDeHoy

@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Plus, Loader2, Send, Check, Trash2, FileDown, Info } from 'lucide-react'
+import { Plus, Loader2, Send, Check, Trash2, FileDown, Info, Package } from 'lucide-react'
 
 import type { PatientLite } from '../../api/pacientes'
 import type { QuoteItemInput, ServiceConcept } from '../../api/finanzas'
 import { fetchQuotePdfBlob } from '../../api/finanzas'
+import { getPaquete } from '../../api/paquetes'
 import { errorMsg } from '../../lib/apiErrors'
 import {
   useAcceptQuote,
@@ -12,6 +13,7 @@ import {
   useSendQuote,
   useConcepts,
 } from '../../hooks/finanzas'
+import { usePaquetes } from '../../hooks/paquetes'
 import { can, type Role } from '../../auth/permisos'
 import { formatMoney, formatDate } from '../../lib/format'
 import PatientPicker from './PatientPicker'
@@ -60,13 +62,20 @@ export default function CotizacionesTab({ role }: Props) {
   const [items, setItems] = useState<DraftItem[]>([emptyItem()])
   /** Cotización cuyo PDF se previsualiza en el visor (null = visor cerrado). */
   const [pdfQuoteId, setPdfQuoteId] = useState<string | null>(null)
+  /** Paquete elegido en el selector "Agregar paquete" (Fase 3b). */
+  const [pkgId, setPkgId] = useState('')
+  const [addingPkg, setAddingPkg] = useState(false)
+  const [pkgError, setPkgError] = useState<string | null>(null)
 
   const quotes = useQuotes(patient ? { patient_id: patient.id } : {})
   const conceptsQuery = useConcepts()
+  const paquetesQuery = usePaquetes()
   const createQuote = useCreateQuote()
   const sendQuote = useSendQuote()
   const acceptQuote = useAcceptQuote()
   const canCreate = can(role, 'createQuote')
+
+  const paquetes = paquetesQuery.data?.results ?? []
 
   const concepts: ServiceConcept[] = conceptsQuery.data?.results ?? []
 
@@ -90,8 +99,37 @@ export default function CotizacionesTab({ role }: Props) {
     })
   }
 
+  /**
+   * Agregar paquete (Fase 3b): trae el detalle del paquete elegido y EXPANDE sus
+   * items como nuevos renglones del draft (uno por tratamiento). Solo agrega
+   * renglones; no toca el flujo de creación existente.
+   */
+  const agregarPaquete = async () => {
+    if (!pkgId) return
+    setPkgError(null)
+    setAddingPkg(true)
+    try {
+      const detail = await getPaquete(pkgId)
+      const nuevos: DraftItem[] = detail.items.map((it) => ({
+        concept_id: it.concept_id,
+        description: it.description,
+        quantity: String(it.sessions),
+        unit_price: it.unit_price,
+        discount: '0',
+      }))
+      if (nuevos.length > 0) setItems((p) => [...p, ...nuevos])
+      setPkgId('')
+    } catch (e) {
+      setPkgError(errorMsg(e))
+    } finally {
+      setAddingPkg(false)
+    }
+  }
+
   const resetForm = () => {
     setItems([emptyItem()])
+    setPkgId('')
+    setPkgError(null)
     setOpen(false)
   }
 
@@ -216,9 +254,40 @@ export default function CotizacionesTab({ role }: Props) {
                 </div>
               ))}
 
-              <button className="btn-ghost" onClick={() => setItems((p) => [...p, emptyItem()])}>
-                <Plus className="w-3.5 h-3.5" /> Agregar línea
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button className="btn-ghost" onClick={() => setItems((p) => [...p, emptyItem()])}>
+                  <Plus className="w-3.5 h-3.5" /> Agregar línea
+                </button>
+
+                {/* Agregar paquete: expande sus tratamientos como renglones (Fase 3b) */}
+                <div className="flex items-center gap-1.5">
+                  <Package className="w-4 h-4" style={{ color: '#9A958C' }} />
+                  <select
+                    className="input"
+                    style={{ maxWidth: 220 }}
+                    value={pkgId}
+                    onChange={(e) => setPkgId(e.target.value)}
+                    disabled={paquetesQuery.isLoading || addingPkg}
+                  >
+                    <option value="">Agregar paquete…</option>
+                    {paquetes.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn-ghost"
+                    onClick={agregarPaquete}
+                    disabled={!pkgId || addingPkg}
+                    title="Agregar los tratamientos del paquete como renglones"
+                  >
+                    {addingPkg ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    Agregar
+                  </button>
+                </div>
+              </div>
+              {pkgError && (
+                <p className="text-xs" style={{ color: '#B91C1C' }}>{pkgError}</p>
+              )}
 
               <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
                 <span className="text-sm font-semibold" style={{ color: '#2A241B' }}>

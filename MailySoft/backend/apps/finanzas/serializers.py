@@ -5,6 +5,8 @@ Solo formatean/validan la salida; cero lógica de negocio. Los InputSerializer
 se definen inline en cada view (cerca del contrato que validan).
 """
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.finanzas.models import (
@@ -16,6 +18,8 @@ from apps.finanzas.models import (
     Quote,
     QuoteItem,
     ServiceConcept,
+    TreatmentPackage,
+    TreatmentPackageItem,
 )
 
 
@@ -78,13 +82,88 @@ class QuoteOutputSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+def _package_price(package: TreatmentPackage) -> Decimal:
+    """Precio del paquete = suma(concept.base_price * sessions), leído EN VIVO.
+
+    A diferencia de Quote/TreatmentPlan (que guardan snapshot), el paquete es
+    una plantilla del catálogo: el precio mostrado siempre refleja el
+    `base_price` vigente de cada `ServiceConcept`. Requiere que `items` venga
+    precargado con `service_concept` (ver `apps.finanzas.selectors.package_get`
+    / `package_list`) para no disparar N+1.
+    """
+    return sum(
+        (item.service_concept.base_price * item.sessions for item in package.items.all()),
+        Decimal("0.00"),
+    )
+
+
+class TreatmentPackageItemOutputSerializer(serializers.Serializer):
+    """Salida de una línea de paquete (nombre/precio leídos en vivo del catálogo)."""
+
+    concept_id = serializers.UUIDField(source="service_concept_id", read_only=True)
+    description = serializers.SerializerMethodField()
+    unit_price = serializers.SerializerMethodField()
+    sessions = serializers.IntegerField(read_only=True)
+    order = serializers.IntegerField(read_only=True)
+
+    def get_description(self, obj: TreatmentPackageItem) -> str:
+        return obj.service_concept.name
+
+    def get_unit_price(self, obj: TreatmentPackageItem) -> str:
+        return str(obj.service_concept.base_price)
+
+
+class TreatmentPackageOutputSerializer(serializers.ModelSerializer):
+    """Detalle de un paquete de tratamientos, con sus líneas anidadas."""
+
+    price = serializers.SerializerMethodField()
+    items = TreatmentPackageItemOutputSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = TreatmentPackage
+        fields = ["id", "name", "description", "is_active", "price", "items", "created_at"]
+        read_only_fields = fields
+
+    def get_price(self, obj: TreatmentPackage) -> str:
+        return str(_package_price(obj))
+
+
+class TreatmentPackageListItemSerializer(serializers.ModelSerializer):
+    """Salida resumida de un paquete para el listado (sin líneas anidadas)."""
+
+    items_count = serializers.SerializerMethodField()
+    sessions_total = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TreatmentPackage
+        fields = [
+            "id",
+            "name",
+            "description",
+            "is_active",
+            "items_count",
+            "sessions_total",
+            "price",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_items_count(self, obj: TreatmentPackage) -> int:
+        return len(obj.items.all())
+
+    def get_sessions_total(self, obj: TreatmentPackage) -> int:
+        return sum(item.sessions for item in obj.items.all())
+
+    def get_price(self, obj: TreatmentPackage) -> str:
+        return str(_package_price(obj))
+
+
 class ChargeOutputSerializer(serializers.ModelSerializer):
     """Salida de un cargo / cuenta por cobrar."""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
-    balance = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
-    )
+    balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
     class Meta:
         model = Charge

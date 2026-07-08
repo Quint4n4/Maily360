@@ -20,6 +20,16 @@ Rutas A4 — Notas de Evolución (Inmutables) y Diagnósticos:
     expediente/<patient_id>/diagnosticos/         DiagnosisListCreateApi     GET list / POST create
     expediente/diagnosticos/<id>/resolver/        DiagnosisResolveApi        POST resolver
 
+Rutas — Resumen Clínico por consulta (documento entregable al paciente):
+    expediente/evoluciones/<evolution_id>/resumen/borrador/
+        ClinicalSummaryDraftApi        GET borrador (no persiste)
+    expediente/evoluciones/<evolution_id>/resumen/
+        ClinicalSummaryCreateApi       POST crea (constancia)
+    expediente/resumenes/<summary_id>/pdf/
+        ClinicalSummaryPdfApi          GET encola PDF (202)
+    expediente/<patient_id>/resumenes/
+        PatientClinicalSummaryListApi  GET lista paginada
+
 ORDEN: las rutas estáticas van DESPUÉS de las anidadas por UUID.
 Las rutas de series van ANTES de las de lista para evitar confusión de segmentos.
 Las rutas de acciones específicas (addendum/, resolver/) van ANTES de las anidadas
@@ -32,6 +42,9 @@ from apps.expediente.views import (
     AddendumCreateApi,
     AllergyListCreateApi,
     AllergyResolveApi,
+    ClinicalSummaryCreateApi,
+    ClinicalSummaryDraftApi,
+    ClinicalSummaryPdfApi,
     DiagnosisListCreateApi,
     DiagnosisResolveApi,
     EvolutionImageDeleteApi,
@@ -43,6 +56,13 @@ from apps.expediente.views import (
     NursingInstructionListApi,
     PatientBookApi,
     PatientBookPdfApi,
+    PatientClinicalSummaryListApi,
+    TreatmentPlanDetailApi,
+    TreatmentPlanFromPackageApi,
+    TreatmentPlanListCreateApi,
+    TreatmentPlanPdfApi,
+    TreatmentPlanQuoteApi,
+    TreatmentSessionScheduleApi,
     VitalSignsListCreateApi,
     VitalSignsSeriesApi,
 )
@@ -105,6 +125,66 @@ urlpatterns = [
         "expediente/<uuid:patient_id>/indicaciones-enfermeria/",
         NursingInstructionListApi.as_view(),
         name="nursing-instructions-list",
+    ),
+    # Resumen Clínico por consulta (documento entregable al paciente).
+    # 'resumen/borrador/' va ANTES de 'resumen/' (misma convención de acciones
+    # específicas antes de la ruta base).
+    path(
+        "expediente/evoluciones/<uuid:evolution_id>/resumen/borrador/",
+        ClinicalSummaryDraftApi.as_view(),
+        name="clinical-summary-draft",
+    ),
+    path(
+        "expediente/evoluciones/<uuid:evolution_id>/resumen/",
+        ClinicalSummaryCreateApi.as_view(),
+        name="clinical-summary-create",
+    ),
+    path(
+        "expediente/resumenes/<uuid:summary_id>/pdf/",
+        ClinicalSummaryPdfApi.as_view(),
+        name="clinical-summary-pdf",
+    ),
+    path(
+        "expediente/<uuid:patient_id>/resumenes/",
+        PatientClinicalSummaryListApi.as_view(),
+        name="clinical-summary-list",
+    ),
+    # Calendarización de tratamientos (esquema de protocolos, Fases 1-4).
+    # 'calendarizaciones/<plan_id>/pdf/', '.../cotizacion/' y
+    # 'calendarizaciones/sesiones/<id>/agendar/' van ANTES que la ruta de
+    # detalle genérica, siguiendo la misma convención de acciones específicas
+    # antes de la ruta base usada en el resto del archivo.
+    path(
+        "expediente/calendarizaciones/<uuid:plan_id>/pdf/",
+        TreatmentPlanPdfApi.as_view(),
+        name="treatment-plan-pdf",
+    ),
+    path(
+        "expediente/calendarizaciones/<uuid:plan_id>/cotizacion/",
+        TreatmentPlanQuoteApi.as_view(),
+        name="treatment-plan-quote",
+    ),
+    path(
+        "expediente/calendarizaciones/sesiones/<uuid:session_id>/agendar/",
+        TreatmentSessionScheduleApi.as_view(),
+        name="treatment-session-schedule",
+    ),
+    path(
+        "expediente/calendarizaciones/<uuid:plan_id>/",
+        TreatmentPlanDetailApi.as_view(),
+        name="treatment-plan-detail",
+    ),
+    # 'desde-paquete/' (Fase 3) va ANTES de la ruta de lista/creación genérica
+    # por la misma convención de acciones específicas primero.
+    path(
+        "expediente/<uuid:patient_id>/calendarizaciones/desde-paquete/",
+        TreatmentPlanFromPackageApi.as_view(),
+        name="treatment-plan-from-package",
+    ),
+    path(
+        "expediente/<uuid:patient_id>/calendarizaciones/",
+        TreatmentPlanListCreateApi.as_view(),
+        name="treatment-plan-list-create",
     ),
     # Imágenes de evolución — acciones sobre imagen individual van ANTES del listado
     path(

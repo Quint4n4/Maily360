@@ -296,14 +296,15 @@ class FinanceConceptPermission(HasClinicRole):
     """Permisos para el catálogo de conceptos cobrables.
 
     Matriz:
-        GET    → roles que ven finanzas (recepción/finance los necesitan para cotizar).
+        GET    → roles que ven finanzas + doctor (el médico lee el catálogo
+                 para armar cotizaciones y calendarizaciones de tratamientos).
         POST   → solo owner y admin (mantener el catálogo es administrativo).
         PATCH  → solo owner y admin.
         DELETE → solo owner y admin (desactivación del concepto).
     """
 
     policy: dict[str, frozenset[str]] = {
-        "GET": FINANCE_VIEW_ROLES,
+        "GET": FINANCE_VIEW_ROLES | frozenset({Role.DOCTOR}),
         "POST": MANAGE_ROLES,
         "PATCH": MANAGE_ROLES,
         "DELETE": MANAGE_ROLES,
@@ -360,6 +361,29 @@ class QuotePermission(HasClinicRole):
         "POST": _QUOTE_ROLES,
         "PATCH": _QUOTE_ROLES,
         "DELETE": _QUOTE_ROLES,
+    }
+
+
+class TreatmentPackagePermission(HasClinicRole):
+    """Permisos para el catálogo de Paquetes de tratamientos (Fase 3 — Calendarización).
+
+    Lectura: mismo criterio que QuotePermission (owner/admin/doctor arman
+    calendarizaciones/cotizaciones desde el paquete; recepción también lo
+    consulta al atender caja). Escritura: mantener el catálogo de paquetes
+    es administrativo, igual que FinanceConceptPermission — solo owner/admin.
+
+    Matriz:
+        GET    → owner, admin, doctor, reception.
+        POST   → owner, admin.
+        PATCH  → owner, admin.
+        DELETE → owner, admin.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.RECEPTION}),
+        "POST": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+        "DELETE": MANAGE_ROLES,
     }
 
 
@@ -712,6 +736,56 @@ class EvolutionPermission(HasClinicRole):
     policy: dict[str, frozenset[str]] = {
         "GET": CLINICAL_READ,
         "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "DELETE": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class ClinicalSummaryPermission(HasClinicRole):
+    """Permisos para el Resumen Clínico por consulta (documento entregable al paciente).
+
+    A diferencia del expediente/libro clínico (CLINICAL_READ, incluye nurse y
+    readonly), el Resumen Clínico es un documento que se ENTREGA al paciente
+    con el nombre y la firma del médico: solo el personal que puede firmarlo
+    o autorizarlo en su nombre (owner, admin, doctor) puede verlo, generarlo,
+    guardarlo o descargar su PDF. Enfermería y solo-lectura NO tienen acceso;
+    recepción y finanzas tampoco.
+
+    Se usa el MISMO conjunto de roles para GET y POST (a diferencia de
+    EvolutionPermission/AddendumPermission, cuyo GET es CLINICAL_READ) porque
+    el borrador y el resumen guardado son contenido pre-firma, no un registro
+    de solo consulta.
+
+    Matriz:
+        GET  → owner, admin, doctor (borrador, resumen guardado, listado, PDF).
+        POST → owner, admin, doctor (guardar la constancia).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class TreatmentPlanPermission(HasClinicRole):
+    """Permisos para la Calendarización de tratamientos (esquema de protocolos).
+
+    Mismo criterio que ClinicalSummaryPermission: es un documento clínico que
+    se entrega al paciente para firma física, con precios del catálogo. Solo
+    owner/admin/doctor pueden verlo, crearlo, reemplazarlo, darlo de baja o
+    descargar su PDF. Enfermería, recepción, finanzas y solo-lectura NO
+    tienen acceso.
+
+    Matriz:
+        GET    → owner, admin, doctor (listar, ver detalle, PDF).
+        POST   → owner, admin, doctor (crear).
+        PUT    → owner, admin, doctor (reemplazar).
+        DELETE → owner, admin, doctor (baja lógica).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "PUT": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
         "DELETE": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
     }
 
