@@ -181,7 +181,7 @@ class PatientListCreateApi(TenantAPIView):
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
         if page is not None:
-            serializer = PatientOutputSerializer(page, many=True)
+            serializer = PatientOutputSerializer(page, many=True, context={"request": request})
             return paginator.get_paginated_response(serializer.data)
 
         # Fallback: si paginate_queryset devuelve None (no debería ocurrir con
@@ -218,7 +218,7 @@ class PatientListCreateApi(TenantAPIView):
             )
 
         return Response(
-            PatientOutputSerializer(patient).data,
+            PatientOutputSerializer(patient, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -267,7 +267,7 @@ class PatientQuickCreateApi(TenantAPIView):
             return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
-            PatientOutputSerializer(patient).data,
+            PatientOutputSerializer(patient, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -306,14 +306,18 @@ class PatientDetailApi(TenantAPIView):
         notes = serializers.CharField(required=False, allow_blank=True, max_length=5000)
         # Campos NOM-004 expediente A1 (plan §3.1) — todos opcionales en PATCH.
         address_street = serializers.CharField(max_length=255, required=False, allow_blank=True)
-        address_neighborhood = serializers.CharField(max_length=120, required=False, allow_blank=True)
+        address_neighborhood = serializers.CharField(
+            max_length=120, required=False, allow_blank=True
+        )
         city = serializers.CharField(max_length=120, required=False, allow_blank=True)
         state = serializers.CharField(max_length=120, required=False, allow_blank=True)
         postal_code = serializers.RegexField(
             regex=r"^\d{5}$",
             required=False,
             allow_blank=True,
-            error_messages={"invalid": "El código postal debe ser exactamente 5 dígitos numéricos."},
+            error_messages={
+                "invalid": "El código postal debe ser exactamente 5 dígitos numéricos."
+            },
         )
         birthplace = serializers.CharField(max_length=160, required=False, allow_blank=True)
         marital_status = serializers.ChoiceField(
@@ -384,7 +388,9 @@ class PatientDetailApi(TenantAPIView):
 
             return attrs
 
-    def _get_patient_or_404(self, patient_id: uuid.UUID) -> "tuple[Patient | None, Response | None]":
+    def _get_patient_or_404(
+        self, patient_id: uuid.UUID
+    ) -> "tuple[Patient | None, Response | None]":
         """Recupera el paciente o devuelve una respuesta 404."""
         try:
             patient = patient_get(patient_id=patient_id)
@@ -414,7 +420,7 @@ class PatientDetailApi(TenantAPIView):
             actor_role=getattr(request, "active_role", "") or "",
         )
 
-        return Response(PatientOutputSerializer(patient).data)
+        return Response(PatientOutputSerializer(patient, context={"request": request}).data)
 
     def patch(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Actualización parcial de un paciente."""
@@ -444,7 +450,7 @@ class PatientDetailApi(TenantAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(PatientOutputSerializer(updated_patient).data)
+        return Response(PatientOutputSerializer(updated_patient, context={"request": request}).data)
 
     def delete(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Desactiva (soft) un paciente. No lo borra de la base de datos."""
@@ -486,7 +492,7 @@ class PatientAvatarApi(TenantAPIView):
             return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
 
         patient = patient_set_avatar(patient=patient, user=request.user, image=image)
-        return Response(PatientOutputSerializer(patient).data)
+        return Response(PatientOutputSerializer(patient, context={"request": request}).data)
 
     def delete(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Elimina la foto del paciente."""
@@ -496,7 +502,7 @@ class PatientAvatarApi(TenantAPIView):
             return Response({"detail": "Paciente no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
         patient = patient_clear_avatar(patient=patient, user=request.user)
-        return Response(PatientOutputSerializer(patient).data)
+        return Response(PatientOutputSerializer(patient, context={"request": request}).data)
 
 
 class PatientClassifyApi(TenantAPIView):
@@ -534,4 +540,7 @@ class PatientClassifyApi(TenantAPIView):
             is_favorite=s.validated_data.get("is_favorite"),
             is_vip=s.validated_data.get("is_vip"),
         )
-        return Response(PatientOutputSerializer(updated_patient).data, status=status.HTTP_200_OK)
+        return Response(
+            PatientOutputSerializer(updated_patient, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )

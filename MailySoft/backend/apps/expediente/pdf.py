@@ -872,3 +872,172 @@ def treatment_plan_pdf_build(*, plan: Any, clinic_settings: Any | None) -> bytes
         )
 
     return pdf_bytes
+
+
+# ---------------------------------------------------------------------------
+# PDF del Plan Integral de Longevidad y Medicina Regenerativa (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+def _build_longevity_plan_context(
+    *, plan_integral: Any, clinic_settings: Any | None
+) -> dict[str, Any]:
+    """Construye el contexto para el template expediente/plan_integral.html.
+
+    No hace queries adicionales sobre `plan_integral`: ya viene precargado
+    por el selector longevity_plan_get (patient, doctor__membership__user,
+    treatment_plan__items). Solo la consulta de cédulas del doctor es una
+    query adicional (igual que resumen_clinico y calendarizacion.html) —
+    aceptable porque el PDF corre en background (Celery).
+
+    Args:
+        plan_integral:   Instancia de LongevityPlan.
+        clinic_settings: ClinicSettings del tenant o None.
+
+    Returns:
+        Diccionario de contexto para render_to_string.
+    """
+    patient = plan_integral.patient
+    doctor = plan_integral.doctor
+
+    brand: dict[str, Any] = build_brand_context(clinic_settings=clinic_settings)
+
+    # --- Fecha del plan (fecha de creación de la constancia) ---
+    fecha_ref = timezone.localtime(plan_integral.created_at)
+    fecha_display = fecha_ref.strftime("%d/%m/%Y")
+
+    # --- Datos del paciente: nombre, edad (a la fecha del plan), sexo ---
+    patient_nombre: str = getattr(patient, "full_name", "") or str(patient.id)
+    dob = getattr(patient, "date_of_birth", None)
+    edad: int | None = None
+    if dob is not None:
+        ref_date = fecha_ref.date()
+        edad = ref_date.year - dob.year - ((ref_date.month, ref_date.day) < (dob.month, dob.day))
+    sex_val: str = getattr(patient, "sex", "") or ""
+    sex_labels = {"M": "Masculino", "F": "Femenino", "X": "Otro"}
+    sexo_display = sex_labels.get(sex_val, sex_val)
+
+    # --- Médico y cédula (misma fuente de verdad que resumen_clinico/libro.html) ---
+    doctor_nombre: str = ""
+    doctor_cedula: str = ""
+    if doctor is not None:
+        try:
+            doctor_nombre = doctor.full_name
+        except Exception:  # noqa: BLE001
+            doctor_nombre = "Médico no disponible"
+        try:
+            cedulas = list(
+                doctor.credentials.filter(
+                    validation_status="validada",
+                    is_active=True,
+                    deleted_at__isnull=True,
+                ).values_list("credential_number", flat=True)
+            )
+            doctor_cedula = " · ".join(c for c in cedulas if c)
+        except Exception:  # noqa: BLE001
+            doctor_cedula = ""
+        if not doctor_cedula:
+            doctor_cedula = getattr(doctor, "cedula_profesional", "") or ""
+
+    # --- Esquema de tratamientos (snapshot, no dispara queries) ---
+    esquema: list[dict[str, Any]] = plan_integral.esquema or []
+    esquema_filas = [
+        {"description": item.get("description", ""), "quantity": item.get("quantity", 0)}
+        for item in esquema
+    ]
+    descripciones_tratamientos = [
+        {
+            "description": item.get("description", ""),
+            "clinical_description": item.get("clinical_description", ""),
+        }
+        for item in esquema
+        if (item.get("clinical_description") or "").strip()
+    ]
+
+    # --- Estudios de gabinete y resultados de laboratorio (snapshot, Fase 3) ---
+    gabinete_studies: list[dict[str, Any]] = plan_integral.gabinete_studies or []
+    lab_results: list[dict[str, Any]] = plan_integral.lab_results or []
+
+    # --- Equipo/departamentos de la clínica (snapshot, Fase 4) ---
+    equipo: list[dict[str, Any]] = plan_integral.equipo or []
+
+    return {
+        **brand,
+        "fecha_generacion": timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M"),
+        "fecha_plan": fecha_display,
+        "paciente_nombre": patient_nombre,
+        "paciente_edad": edad,
+        "paciente_sexo": sexo_display,
+        "paciente_record_number": getattr(patient, "record_number", "") or "",
+        "doctor_nombre": doctor_nombre,
+        "doctor_cedula": doctor_cedula,
+        "alergias": plan_integral.alergias,
+        "antecedentes": plan_integral.antecedentes,
+        "tratamientos_actuales": plan_integral.tratamientos_actuales,
+        "condiciones_mejorar": plan_integral.condiciones_mejorar,
+        "estudios": plan_integral.estudios,
+        "reporte_medico": plan_integral.reporte_medico,
+        "interconsulta": plan_integral.interconsulta,
+        "seguimiento": plan_integral.seguimiento,
+        "esquema_filas": esquema_filas,
+        "descripciones_tratamientos": descripciones_tratamientos,
+        "gabinete_studies": gabinete_studies,
+        "lab_results": lab_results,
+        "equipo": equipo,
+    }
+
+
+def longevity_plan_pdf_build(*, plan_integral: Any, clinic_settings: Any | None) -> bytes:
+    """Genera los bytes del PDF del Plan Integral de Longevidad y Medicina Regenerativa.
+
+    Documento CONSTANCIA entregable al paciente, con el mismo membrete de
+    marca (brand_color, logo, ondas y marca de agua) que el resto de los PDFs
+    de Maily (resumen clínico, calendarización de tratamientos).
+
+    Seguridad: usa secure_fetcher (apps.core.pdf.fetchers) — SOLO data URIs,
+    bloquea LFI/SSRF.
+
+    Args:
+        plan_integral:   Instancia de LongevityPlan (precargada por el
+                         selector longevity_plan_get).
+        clinic_settings: ClinicSettings del tenant o None.
+
+    Returns:
+        Bytes del PDF generado.
+
+    Raises:
+        RuntimeError: si WeasyPrint falla o el PDF queda vacío.
+    """
+    from weasyprint import HTML  # import tardío — facilita mocking en tests  # noqa: PLC0415
+
+    from apps.core.pdf.fetchers import secure_fetcher  # noqa: PLC0415
+
+    context = _build_longevity_plan_context(
+        plan_integral=plan_integral, clinic_settings=clinic_settings
+    )
+    html_str: str = render_to_string("expediente/plan_integral.html", context)
+
+    try:
+        pdf_bytes: bytes = HTML(
+            string=html_str,
+            base_url=None,
+            url_fetcher=secure_fetcher,
+        ).write_pdf()
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "longevity_plan_pdf_build: WeasyPrint falló al generar PDF " "para plan=%s — %s",
+            getattr(plan_integral, "id", "?"),
+            exc,
+        )
+        raise RuntimeError(
+            f"Error al generar el PDF del Plan Integral de Longevidad "
+            f"(plan={getattr(plan_integral, 'id', '?')}): {exc}"
+        ) from exc
+
+    if not pdf_bytes:
+        raise RuntimeError(
+            f"El PDF del Plan Integral de Longevidad está vacío "
+            f"(plan={getattr(plan_integral, 'id', '?')})."
+        )
+
+    return pdf_bytes

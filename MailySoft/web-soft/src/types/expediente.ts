@@ -316,6 +316,8 @@ export interface VitalSignsRecord {
   /** IMC derivado (weight_kg / height_m²). null si falta peso o talla. No se almacena. */
   imc: number | null
   created_by_id: string | null
+  /** Nombre legible de quien capturó la toma. Cadena vacía si no se puede resolver. */
+  created_by_name: string
   created_at: string
 }
 

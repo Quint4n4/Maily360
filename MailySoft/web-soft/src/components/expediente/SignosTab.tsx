@@ -194,7 +194,10 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
       {/* Última toma (la más reciente, destacada) */}
       {!isLoading && !isError && tomas.length > 0 && (
         <Card title="Última toma" icon={Activity}>
-          <p className="text-xs text-gray-400 mb-3">{formatFechaHora(tomas[0].measured_at)}</p>
+          <p className="text-xs text-gray-400 mb-3">
+            {formatFechaHora(tomas[0].measured_at)}
+            {tomas[0].created_by_name && <> · Capturado por {tomas[0].created_by_name}</>}
+          </p>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
             <DatoToma label="Peso" value={tomas[0].weight_kg} unidad="kg" />
             <DatoToma label="Estatura" value={tomas[0].height_m} unidad="m" />
@@ -253,7 +256,14 @@ export default function SignosTab({ paciente, puedeCapturar }: SignosTabProps) {
               <tbody>
                 {tomas.map(t => (
                   <tr key={t.id} className="border-b border-amber-900/5 last:border-0">
-                    <td className="py-2 pr-3 text-gray-700 whitespace-nowrap">{formatFechaHora(t.measured_at)}</td>
+                    <td className="py-2 pr-3 text-gray-700 whitespace-nowrap">
+                      {formatFechaHora(t.measured_at)}
+                      {t.created_by_name && (
+                        <span className="block text-[10px] font-normal text-gray-400">
+                          Capturado por {t.created_by_name}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 px-3 text-gray-700">{t.weight_kg ?? '—'}</td>
                     <td className="py-2 px-3 text-gray-700">{t.height_m ?? '—'}</td>
                     <td className="py-2 px-3 font-semibold" style={{ color: '#B8860B' }}>{t.imc ?? '—'}</td>

@@ -26,13 +26,14 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.clinica.models import (
+    _HEX_COLOR_RE,
     ClinicSettings,
+    ClinicTeamMember,
     ClinicTemplate,
     CredentialKind,
     DoctorCredential,
     DoctorUniversity,
     PatientCategory,
-    _HEX_COLOR_RE,
 )
 from apps.core.files import validate_image
 
@@ -128,13 +129,9 @@ def _validate_social_field(value: str) -> str:
     if not value:
         return value
     if _HTML_TAG_RE.search(value):
-        raise serializers.ValidationError(
-            "El valor no puede contener etiquetas HTML."
-        )
+        raise serializers.ValidationError("El valor no puede contener etiquetas HTML.")
     if _CONTROL_CHAR_RE.search(value):
-        raise serializers.ValidationError(
-            "El valor no puede contener caracteres de control."
-        )
+        raise serializers.ValidationError("El valor no puede contener caracteres de control.")
     return value
 
 
@@ -240,8 +237,7 @@ class ClinicSettingsInputSerializer(serializers.Serializer):
         if not _HEX_COLOR_RE.match(value):
             raise serializers.ValidationError(
                 "El color de marca debe estar en formato #RRGGBB "
-                "(p. ej. '#3A7BD5'). Valor recibido: '%(value)s'."
-                % {"value": value}
+                "(p. ej. '#3A7BD5'). Valor recibido: '%(value)s'." % {"value": value}
             )
         return value
 
@@ -516,26 +512,18 @@ class DoctorCredentialInputSerializer(serializers.Serializer):
         """Rechaza etiquetas HTML y valida que no esté vacío."""
         stripped = value.strip()
         if not stripped:
-            raise serializers.ValidationError(
-                "El título no puede estar vacío."
-            )
+            raise serializers.ValidationError("El título no puede estar vacío.")
         if _HTML_TAG_RE.search(stripped):
-            raise serializers.ValidationError(
-                "El título no puede contener etiquetas HTML."
-            )
+            raise serializers.ValidationError("El título no puede contener etiquetas HTML.")
         return stripped
 
     def validate_institution(self, value: str) -> str:
         """Rechaza etiquetas HTML y valida que no esté vacío."""
         stripped = value.strip()
         if not stripped:
-            raise serializers.ValidationError(
-                "La institución no puede estar vacía."
-            )
+            raise serializers.ValidationError("La institución no puede estar vacía.")
         if _HTML_TAG_RE.search(stripped):
-            raise serializers.ValidationError(
-                "La institución no puede contener etiquetas HTML."
-            )
+            raise serializers.ValidationError("La institución no puede contener etiquetas HTML.")
         return stripped
 
     def validate_credential_number(self, value: str) -> str:
@@ -601,9 +589,7 @@ class DoctorCredentialValidationInputSerializer(serializers.Serializer):
     """
 
     status = serializers.ChoiceField(choices=["validada", "rechazada"])
-    note = serializers.CharField(
-        max_length=300, required=False, allow_blank=True, default=""
-    )
+    note = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
 
     def validate_note(self, value: str) -> str:
         if _HTML_TAG_RE.search(value):
@@ -613,3 +599,50 @@ class DoctorCredentialValidationInputSerializer(serializers.Serializer):
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
         return attrs
+
+
+# ---------------------------------------------------------------------------
+# ClinicTeamMember — equipo/departamentos de la clínica (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+class ClinicTeamMemberInputSerializer(serializers.Serializer):
+    """Entrada para POST de ClinicTeamMember.
+
+    M2: rechaza campos desconocidos vía validate().
+    """
+
+    departamento = serializers.CharField(max_length=160)
+    nombre = serializers.CharField(max_length=160)
+    order = serializers.IntegerField(min_value=0, required=False, default=0)
+    is_active = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class ClinicTeamMemberPatchSerializer(serializers.Serializer):
+    """Entrada para PATCH (actualización parcial) de ClinicTeamMember.
+
+    is_active NO se expone aquí (regla de campos sensibles): se maneja por
+    separado en la vista, enrutando a clinic_team_member_activate/deactivate.
+    """
+
+    departamento = serializers.CharField(max_length=160, required=False)
+    nombre = serializers.CharField(max_length=160, required=False)
+    order = serializers.IntegerField(min_value=0, required=False)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class ClinicTeamMemberOutputSerializer(serializers.ModelSerializer["ClinicTeamMember"]):
+    """Salida de ClinicTeamMember."""
+
+    class Meta:
+        model = ClinicTeamMember
+        fields = ["id", "departamento", "nombre", "order", "is_active", "created_at"]
+        read_only_fields = fields

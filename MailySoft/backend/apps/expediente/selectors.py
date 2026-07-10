@@ -55,8 +55,11 @@ from apps.expediente.models import (
     ClinicalSummary,
     Diagnosis,
     DiagnosisStatus,
+    DocumentTemplate,
     EvolutionImage,
     EvolutionNote,
+    LabAnalyte,
+    LongevityPlan,
     MedicalHistory,
     MedicalHistoryQuestion,
     TreatmentPlan,
@@ -673,6 +676,12 @@ def book_build(
             "doctor",
             "doctor__membership",
             "vital_signs",
+            # FIX perf (security review): BookCapituloSerializer.get_signos
+            # serializa vital_signs con VitalSignsOutputSerializer, que expone
+            # created_by_name (accede a vital_signs.created_by). Sin este
+            # select_related anidado, cada capítulo con signos dispara una
+            # query extra (N+1) para resolver el usuario que capturó la toma.
+            "vital_signs__created_by",
         )
         .prefetch_related(
             "addenda",
@@ -831,6 +840,12 @@ def book_build_all(
             "doctor",
             "doctor__membership",
             "vital_signs",
+            # FIX perf (security review): BookCapituloSerializer.get_signos
+            # serializa vital_signs con VitalSignsOutputSerializer, que expone
+            # created_by_name (accede a vital_signs.created_by). Sin este
+            # select_related anidado, cada capítulo con signos dispara una
+            # query extra (N+1) para resolver el usuario que capturó la toma.
+            "vital_signs__created_by",
         )
         .prefetch_related(
             "addenda",
@@ -1053,3 +1068,125 @@ def treatment_plan_list(*, patient: Patient) -> QuerySet[TreatmentPlan]:
         .filter(patient=patient)
         .order_by("-created_at")
     )
+
+
+# ---------------------------------------------------------------------------
+# LongevityPlan selectors — Plan Integral de Longevidad (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+def longevity_plan_get(*, plan_id: uuid.UUID) -> LongevityPlan:
+    """Retorna un Plan Integral de Longevidad por su UUID.
+
+    Usa el TenantManager (filtra por tenant del contexto activo). Lanza
+    LongevityPlan.DoesNotExist si no existe o no pertenece al tenant activo.
+    Las vistas deben capturar DoesNotExist y devolver 404 (anti-IDOR).
+
+    Precarga patient, doctor (con membership) y treatment_plan (con items)
+    para que el generador de PDF y el serializer de salida no disparen N+1.
+
+    Args:
+        plan_id: UUID del Plan Integral de Longevidad.
+
+    Returns:
+        Instancia de LongevityPlan con relaciones precargadas.
+
+    Raises:
+        LongevityPlan.DoesNotExist: si el plan no existe en el tenant activo.
+    """
+    return (
+        LongevityPlan.objects.select_related(
+            "patient",
+            "doctor",
+            "doctor__membership",
+            "doctor__membership__user",
+            "treatment_plan",
+        )
+        .prefetch_related("treatment_plan__items")
+        .get(id=plan_id)
+    )
+
+
+def longevity_plan_list(*, patient: Patient) -> QuerySet[LongevityPlan]:
+    """Retorna el QuerySet de Planes Integrales de Longevidad del paciente, orden -created_at.
+
+    Filtra por tenant del contexto activo (TenantManager) y por patient en
+    defensa en profundidad. Precarga doctor/membership/user para el nombre
+    del médico en el listado, sin N+1.
+
+    Args:
+        patient: Paciente cuyos planes se recuperan.
+
+    Returns:
+        QuerySet[LongevityPlan] ordenado por -created_at (Meta.ordering).
+    """
+    return (
+        LongevityPlan.objects.select_related(
+            "doctor", "doctor__membership", "doctor__membership__user"
+        )
+        .filter(patient=patient)
+        .order_by("-created_at")
+    )
+
+
+# ---------------------------------------------------------------------------
+# DocumentTemplate selectors — catálogo de plantillas de documento (Fase 2)
+# ---------------------------------------------------------------------------
+
+
+def document_template_get(*, template_id: uuid.UUID) -> DocumentTemplate:
+    """Retorna una DocumentTemplate por su UUID.
+
+    Usa el TenantManager (filtra por tenant del contexto activo). Una
+    plantilla de otro tenant lanza DoesNotExist → la vista debe devolver 404.
+
+    Raises:
+        DocumentTemplate.DoesNotExist: si no existe o no pertenece al tenant activo.
+    """
+    return DocumentTemplate.objects.get(id=template_id)
+
+
+def document_template_list(
+    *, section: str | None = None, only_active: bool = True
+) -> QuerySet[DocumentTemplate]:
+    """Retorna el catálogo de plantillas de documento del tenant actual.
+
+    Args:
+        section:     filtra por sección (ver DocumentTemplateSection). None = todas.
+        only_active: si True (default), excluye plantillas desactivadas.
+    """
+    qs: QuerySet[DocumentTemplate] = DocumentTemplate.objects.all()
+    if section is not None:
+        qs = qs.filter(section=section)
+    if only_active:
+        qs = qs.filter(is_active=True)
+    return qs.order_by("section", "name")
+
+
+# ---------------------------------------------------------------------------
+# LabAnalyte selectors — catálogo de analitos de laboratorio (Fase 3)
+# ---------------------------------------------------------------------------
+
+
+def lab_analyte_get(*, analyte_id: uuid.UUID) -> LabAnalyte:
+    """Retorna un LabAnalyte por su UUID.
+
+    Usa el TenantManager (filtra por tenant del contexto activo). Un analito
+    de otro tenant lanza DoesNotExist → la vista debe devolver 404.
+
+    Raises:
+        LabAnalyte.DoesNotExist: si no existe o no pertenece al tenant activo.
+    """
+    return LabAnalyte.objects.get(id=analyte_id)
+
+
+def lab_analyte_list(*, only_active: bool = True) -> QuerySet[LabAnalyte]:
+    """Retorna el catálogo de analitos de laboratorio del tenant actual.
+
+    Args:
+        only_active: si True (default), excluye analitos desactivados.
+    """
+    qs: QuerySet[LabAnalyte] = LabAnalyte.objects.all()
+    if only_active:
+        qs = qs.filter(is_active=True)
+    return qs.order_by("name")

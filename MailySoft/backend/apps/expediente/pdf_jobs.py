@@ -8,6 +8,8 @@ Kinds registrados:
     "resumen_clinico" — build_resumen_clinico_pdf, resumen clínico por consulta.
     "treatment_plan"  — build_treatment_plan_pdf, esquema de calendarización
                          de tratamientos (Fases 1 y 4).
+    "plan_integral"   — build_longevity_plan_pdf, Plan Integral de Longevidad
+                         y Medicina Regenerativa (Fase 1).
 """
 
 from typing import Any
@@ -75,4 +77,22 @@ def build_treatment_plan_pdf(*, params: dict[str, Any], tenant: Any) -> tuple[by
 
     folio_short = str(plan.id).replace("-", "")[:8].upper()
     filename = f"calendarizacion-{folio_short}.pdf"
+    return pdf_bytes, filename
+
+
+def build_longevity_plan_pdf(*, params: dict[str, Any], tenant: Any) -> tuple[bytes, str]:
+    """Construye el PDF del Plan Integral de Longevidad desde los params del job.
+
+    params: {plan_id: str}. Devuelve (pdf_bytes, filename).
+    """
+    from apps.clinica.selectors import clinic_settings_get  # noqa: PLC0415
+    from apps.expediente.pdf import longevity_plan_pdf_build  # noqa: PLC0415
+    from apps.expediente.selectors import longevity_plan_get  # noqa: PLC0415
+
+    plan = longevity_plan_get(plan_id=params["plan_id"])
+    clinic_settings = clinic_settings_get(tenant_id=tenant.id) if tenant is not None else None
+    pdf_bytes = longevity_plan_pdf_build(plan_integral=plan, clinic_settings=clinic_settings)
+
+    folio_short = str(plan.id).replace("-", "")[:8].upper()
+    filename = f"plan-integral-{folio_short}.pdf"
     return pdf_bytes, filename

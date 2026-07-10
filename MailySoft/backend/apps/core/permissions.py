@@ -67,6 +67,16 @@ ALL_ROLES: frozenset[str] = frozenset(
 
 MANAGE_ROLES: frozenset[str] = frozenset({Role.OWNER, Role.ADMIN})
 
+# Roles que pueden VER citas (y por lo tanto contenido de agenda como
+# Appointment.reason, marcado como información clínica). FINANCE queda
+# deliberadamente fuera: finanzas no debe ver motivos de cita ni por la vía
+# de /agenda ni por ningún otro endpoint que reexponga ese dato (p. ej.
+# Patient.last_reason en apps.pacientes.serializers). Fuente única de verdad:
+# AppointmentPermission.policy["GET"] reutiliza esta misma constante.
+APPOINTMENT_VIEW_ROLES: frozenset[str] = frozenset(
+    {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
+)
+
 
 class HasClinicRole(BasePermission):
     """Permiso base method-aware para roles clínicos.
@@ -179,9 +189,7 @@ class AppointmentPermission(HasClinicRole):
     """
 
     policy: dict[str, frozenset[str]] = {
-        "GET": frozenset(
-            {Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTION, Role.READONLY}
-        ),
+        "GET": APPOINTMENT_VIEW_ROLES,
         "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.RECEPTION}),
         "PATCH": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.RECEPTION}),
         "DELETE": frozenset({Role.OWNER, Role.ADMIN, Role.RECEPTION}),
@@ -787,6 +795,66 @@ class TreatmentPlanPermission(HasClinicRole):
         "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
         "PUT": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
         "DELETE": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class LongevityPlanPermission(HasClinicRole):
+    """Permisos para el Plan Integral de Longevidad y Medicina Regenerativa.
+
+    Mismo criterio que ClinicalSummaryPermission/TreatmentPlanPermission: es
+    un documento clínico que se entrega al paciente como constancia. Solo
+    owner, admin y doctor pueden ver el borrador, generarlo, guardarlo,
+    listarlo o descargar su PDF. Enfermería, recepción, finanzas y
+    solo-lectura NO tienen acceso.
+
+    Se usa el MISMO conjunto de roles para GET y POST (igual que
+    ClinicalSummaryPermission) porque el borrador y la constancia guardada
+    son contenido pre-firma, no un registro de solo consulta.
+
+    Matriz:
+        GET  → owner, admin, doctor (borrador, plan guardado, listado, PDF).
+        POST → owner, admin, doctor (guardar la constancia).
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "POST": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+    }
+
+
+class DocumentTemplatePermission(HasClinicRole):
+    """Permisos para el catálogo de plantillas de documento (Plan Integral, Fase 2).
+
+    Matriz:
+        GET    → owner, admin, doctor (el médico las usa para redactar el Plan Integral).
+        POST   → solo owner y admin (mantener el catálogo es administrativo).
+        PATCH  → solo owner y admin.
+        DELETE → solo owner y admin.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "POST": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+        "DELETE": MANAGE_ROLES,
+    }
+
+
+class LabAnalytePermission(HasClinicRole):
+    """Permisos para el catálogo de analitos de laboratorio (Plan Integral, Fase 3).
+
+    Matriz:
+        GET    → owner, admin, doctor (el médico los usa al capturar resultados).
+        POST   → solo owner y admin (mantener el catálogo es administrativo).
+        PATCH  → solo owner y admin.
+        DELETE → solo owner y admin.
+    """
+
+    policy: dict[str, frozenset[str]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "POST": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+        "DELETE": MANAGE_ROLES,
     }
 
 

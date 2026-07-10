@@ -11,14 +11,12 @@ garantiza que nunca se lean datos de otra clínica.
 
 import datetime
 import uuid
-from typing import Optional
 
 from django.conf import settings
-from django.db.models import Count, Exists, Max, OuterRef, Q, QuerySet
+from django.db.models import Count, Exists, Max, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.pacientes.models import Patient
-
 
 # Valores de estado de citas (importados directamente desde el modelo para
 # evitar dependencia circular en nivel de módulo; la app agenda puede importar
@@ -48,11 +46,11 @@ def patient_get(*, patient_id: uuid.UUID) -> Patient:
 
 def patient_list(
     *,
-    search: Optional[str] = "",
+    search: str | None = "",
     segment: str = "all",
-    date_from: Optional[datetime.date] = None,
-    date_to: Optional[datetime.date] = None,
-    category_id: Optional[uuid.UUID] = None,
+    date_from: datetime.date | None = None,
+    date_to: datetime.date | None = None,
+    category_id: uuid.UUID | None = None,
 ) -> QuerySet[Patient]:
     """Retorna el QuerySet de pacientes activos del tenant actual con anotaciones estadísticas.
 
@@ -64,6 +62,28 @@ def patient_list(
       - attended_count:    Número de citas atendidas.
       - cancelled_count:   Número de citas canceladas.
       - rescheduled_count: Número de citas que fueron reagendadas al menos una vez.
+      - last_reason:       Motivo ("¿a qué viene?") de la cita cancelada/reagendada
+                           más reciente del paciente (o None). Útil para precargar el
+                           motivo al "volver a agendar" a un cliente potencial.
+
+                           NOTA DE PRODUCTO: el filtro es status=cancelled OR
+                           reschedule_count>0, ordenado por -starts_at. Como al
+                           reagendar la cita se MUEVE a su nuevo horario futuro
+                           (conserva reschedule_count>0 pero queda ACTIVA), una
+                           cita reagendada-pero-activa puede tener un starts_at
+                           más reciente que una cita cancelada más antigua y
+                           "ganarle" en el ordenamiento — aunque el paciente ya
+                           tenga una cita futura agendada. Esto es intencional:
+                           el caso de uso real es el segmento "potential"
+                           (clientes que NUNCA fueron atendidos), donde interesa
+                           precargar el motivo por el que el paciente viene,
+                           sin importar si la cita vigente es la cancelada o la
+                           reagendada. NO es un bug; no cambiar este criterio sin
+                           revisar el uso en segment="potential" primero.
+                           Ver también: get_last_reason en
+                           apps.pacientes.serializers (filtra por rol — FINANCE
+                           nunca recibe este campo porque Appointment.reason es
+                           información clínica).
 
     Segmentos disponibles:
       "all"       — todos los pacientes activos (orden -created_at).
@@ -130,6 +150,16 @@ def patient_list(
             filter=Q(appointments__reschedule_count__gt=0),
             distinct=True,
         ),
+        # Motivo de la cita cancelada/reagendada más reciente (con motivo no vacío).
+        # El reason se conserva al cancelar/reagendar, así que sirve para precargar
+        # "¿a qué viene?" al volver a agendar a un cliente potencial.
+        last_reason=Subquery(
+            Appointment.objects.filter(patient=OuterRef("pk"))
+            .filter(Q(status=_CANCELLED) | Q(reschedule_count__gt=0))
+            .exclude(reason="")
+            .order_by("-starts_at")
+            .values("reason")[:1]
+        ),
     )
 
     # Segmentos.
@@ -178,9 +208,11 @@ def patient_list(
         ).order_by("-last_seen")
 
     elif segment == "potential":
-        qs = qs.filter(attended_count=0).filter(
-            Q(cancelled_count__gt=0) | Q(rescheduled_count__gt=0)
-        ).order_by("-created_at")
+        qs = (
+            qs.filter(attended_count=0)
+            .filter(Q(cancelled_count__gt=0) | Q(rescheduled_count__gt=0))
+            .order_by("-created_at")
+        )
 
     elif segment == "favorites":
         qs = qs.filter(categories__kind="favorite").order_by("-created_at")
@@ -225,8 +257,8 @@ def _week_bounds() -> tuple[datetime.datetime, datetime.datetime]:
         hour=0, minute=0, second=0, microsecond=0
     )
     next_monday_local = monday_local + datetime.timedelta(weeks=1)
-    return monday_local.astimezone(datetime.timezone.utc), next_monday_local.astimezone(
-        datetime.timezone.utc
+    return monday_local.astimezone(datetime.UTC), next_monday_local.astimezone(
+        datetime.UTC
     )
 
 
@@ -240,9 +272,7 @@ def _month_bounds() -> tuple[datetime.datetime, datetime.datetime]:
         first_next = first_day.replace(year=now_local.year + 1, month=1, day=1)
     else:
         first_next = first_day.replace(month=now_local.month + 1, day=1)
-    return first_day.astimezone(datetime.timezone.utc), first_next.astimezone(
-        datetime.timezone.utc
-    )
+    return first_day.astimezone(datetime.UTC), first_next.astimezone(datetime.UTC)
 
 
 def _date_range_bounds(
@@ -270,6 +300,4 @@ def _date_range_bounds(
     fin_local = datetime.datetime(
         day_after.year, day_after.month, day_after.day, 0, 0, 0, tzinfo=tz
     )
-    return ini_local.astimezone(datetime.timezone.utc), fin_local.astimezone(
-        datetime.timezone.utc
-    )
+    return ini_local.astimezone(datetime.UTC), fin_local.astimezone(datetime.UTC)

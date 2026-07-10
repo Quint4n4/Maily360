@@ -236,9 +236,7 @@
     <td style="text-align:right; vertical-align:top; width:40%;">
       <div class="doc-title">COTIZACIÓN</div>
       <div class="doc-meta">
-        Folio: <strong>COT-{{ folio }}</strong><br>
-        Fecha: {{ fecha_emision }}<br>
-        Estado: <span class="status-badge status-{{ status }}">{{ status_display }}</span>
+        Fecha: {{ fecha_emision }}
         {% if valid_until %}<br>Vigencia hasta: <strong>{{ valid_until }}</strong>{% endif %}
       </div>
     </td>
@@ -254,12 +252,6 @@
         <div class="info-label">Nombre completo</div>
         <div class="info-value">{{ patient_name }}</div>
       </div>
-      {% if patient_record %}
-      <div class="info-row-item">
-        <div class="info-label">No. Expediente</div>
-        <div class="info-value">{{ patient_record }}</div>
-      </div>
-      {% endif %}
     </td>
     <td class="info-cell" style="padding-left:8pt; padding-right:0;">
       <div class="section-title">Resumen</div>

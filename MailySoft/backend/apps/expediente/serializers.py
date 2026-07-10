@@ -50,8 +50,12 @@ from apps.expediente.models import (
     ClinicalSummary,
     Diagnosis,
     DiagnosisKind,
+    DocumentTemplate,
+    DocumentTemplateSection,
     EvolutionImage,
     EvolutionNote,
+    LabAnalyte,
+    LongevityPlan,
     MedicalHistory,
     MedicalHistoryQuestion,
     QuestionFieldType,
@@ -507,13 +511,18 @@ class VitalSignsInputSerializer(serializers.Serializer):
 class VitalSignsOutputSerializer(serializers.ModelSerializer):
     """Serializer de salida para VitalSignsRecord.
 
-    Expone todos los parámetros medidos, el campo derivado `imc` (D-EC-6)
-    y el UUID del responsable (created_by_id, nunca el objeto completo).
+    Expone todos los parámetros medidos, el campo derivado `imc` (D-EC-6),
+    el UUID del responsable (created_by_id, nunca el objeto completo) y su
+    nombre legible (created_by_name) para mostrar "Capturado por [nombre]"
+    en la UI. La toma es inmutable (append-only): no hay updated_by.
     No expone deleted_at ni tenant_id (campos internos).
     """
 
     imc = serializers.SerializerMethodField(
         help_text="IMC derivado (weight_kg / height_m²). None si falta peso o talla. No se almacena."
+    )
+    created_by_name = serializers.SerializerMethodField(
+        help_text="Nombre legible de quien capturó la toma. Cadena vacía si no se puede resolver."
     )
 
     class Meta:
@@ -536,6 +545,7 @@ class VitalSignsOutputSerializer(serializers.ModelSerializer):
             "notes",
             "imc",
             "created_by_id",
+            "created_by_name",
             "created_at",
         ]
         read_only_fields = fields
@@ -546,6 +556,13 @@ class VitalSignsOutputSerializer(serializers.ModelSerializer):
         if val is None:
             return None
         return float(val)
+
+    def get_created_by_name(self, obj: VitalSignsRecord) -> str:
+        """Nombre legible de quien capturó la toma ("" si no hay usuario)."""
+        user = obj.created_by
+        if user is None:
+            return ""
+        return user.full_name
 
 
 # ---------------------------------------------------------------------------
@@ -1268,10 +1285,16 @@ class PatientBookSerializer(serializers.Serializer):
     capitulos = serializers.SerializerMethodField()
 
     def get_paciente(self, obj: Any) -> dict[str, Any]:
-        """Serializa el paciente (portada del libro)."""
+        """Serializa el paciente (portada del libro).
+
+        Propaga el contexto (self.context, incluye "request") igual que
+        get_clinica: PatientOutputSerializer.get_last_reason necesita
+        request.active_role para decidir si expone el motivo clínico de la
+        última cita (fail-closed si no hay contexto).
+        """
         from apps.pacientes.serializers import PatientOutputSerializer  # noqa: PLC0415
 
-        return PatientOutputSerializer(obj.patient).data
+        return PatientOutputSerializer(obj.patient, context=self.context).data
 
     def get_clinica(self, obj: Any) -> dict[str, Any] | None:
         """Serializa la configuración de la clínica (portada)."""
@@ -1729,3 +1752,304 @@ class TreatmentPlanListItemSerializer(serializers.ModelSerializer):
             for session in self._all_sessions(obj)
             if session.status == TreatmentSessionStatus.APLICADA
         )
+
+
+# ---------------------------------------------------------------------------
+# LongevityPlan — Plan Integral de Longevidad y Medicina Regenerativa (Fase 1)
+# ---------------------------------------------------------------------------
+
+_LONGEVITY_PLAN_SECTION_MAX_LEN = 10_000
+
+
+class LongevityPlanEncabezadoSerializer(serializers.Serializer):
+    """Encabezado de solo lectura del borrador (no persiste — datos del contexto).
+
+    Nombres de llave alineados al contrato del frontend
+    (web-soft/src/types/planIntegral.ts) — distinto de
+    ClinicalSummaryEncabezadoSerializer (otro módulo, otra convención).
+    """
+
+    clinica_nombre = serializers.CharField(allow_blank=True)
+    paciente_nombre = serializers.CharField()
+    paciente_edad = serializers.IntegerField(allow_null=True)
+    fecha = serializers.CharField()
+
+
+class LongevityPlanSeccionesSerializer(serializers.Serializer):
+    """Las 8 secciones de texto del Plan Integral (sugeridas en el borrador)."""
+
+    alergias = serializers.CharField(allow_blank=True)
+    antecedentes = serializers.CharField(allow_blank=True)
+    tratamientos_actuales = serializers.CharField(allow_blank=True)
+    condiciones_mejorar = serializers.CharField(allow_blank=True)
+    estudios = serializers.CharField(allow_blank=True)
+    reporte_medico = serializers.CharField(allow_blank=True)
+    interconsulta = serializers.CharField(allow_blank=True)
+    seguimiento = serializers.CharField(allow_blank=True)
+
+
+class LongevityPlanEsquemaItemSerializer(serializers.Serializer):
+    """Línea de tratamiento snapshoteada desde un TreatmentPlanItem."""
+
+    description = serializers.CharField()
+    quantity = serializers.IntegerField()
+    clinical_description = serializers.CharField(allow_blank=True)
+
+
+class LongevityPlanDisponibleSerializer(serializers.Serializer):
+    """Esquema de calendarización disponible del paciente, para elegir en el borrador."""
+
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    items_count = serializers.IntegerField()
+
+
+class LongevityPlanEquipoItemSerializer(serializers.Serializer):
+    """Línea de equipo snapshoteada desde apps.clinica.ClinicTeamMember."""
+
+    departamento = serializers.CharField()
+    nombre = serializers.CharField()
+
+
+class LongevityPlanDraftOutputSerializer(serializers.Serializer):
+    """Respuesta de GET .../plan-integral/borrador/ — NO persiste nada.
+
+    Forma: {"encabezado": {...}, "secciones": {...}, "esquema": [...],
+    "planes_disponibles": [...], "lab_results": [], "gabinete_studies": [],
+    "equipo": [...]}.
+
+    lab_results/gabinete_studies siempre llegan vacíos en el borrador (los
+    captura el médico en el frontend antes de guardar); equipo sí viene
+    poblado desde el catálogo vigente de apps.clinica.ClinicTeamMember
+    (solo para mostrarlo — el cliente NO lo envía de vuelta al crear).
+    """
+
+    encabezado = LongevityPlanEncabezadoSerializer()
+    secciones = LongevityPlanSeccionesSerializer()
+    esquema = LongevityPlanEsquemaItemSerializer(many=True)
+    planes_disponibles = LongevityPlanDisponibleSerializer(many=True)
+    lab_results = serializers.ListField(child=serializers.DictField(), default=list)
+    gabinete_studies = serializers.ListField(child=serializers.DictField(), default=list)
+    equipo = LongevityPlanEquipoItemSerializer(many=True)
+
+
+class LongevityPlanLabResultInputSerializer(serializers.Serializer):
+    """Línea de resultado de laboratorio para el POST de LongevityPlan.
+
+    `out_of_range` NUNCA se acepta del cliente: se calcula en
+    `services_plan_integral.longevity_plan_create` contra `ref_low`/`ref_high`
+    (los capturados a mano, o los del `analyte_id` del catálogo si se indica).
+    """
+
+    analyte_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    name = serializers.CharField(max_length=160)
+    unit = serializers.CharField(max_length=40, required=False, default="", allow_blank=True)
+    ref_low = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True, default=None
+    )
+    ref_high = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True, default=None
+    )
+    result = serializers.CharField(max_length=200)
+
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, data)
+        return super().to_internal_value(data)  # type: ignore[no-any-return]
+
+
+class LongevityPlanGabineteStudyInputSerializer(serializers.Serializer):
+    """Línea de estudio de gabinete para el POST de LongevityPlan."""
+
+    name = serializers.CharField(max_length=200)
+    conclusion = serializers.CharField(
+        max_length=5_000, required=False, default="", allow_blank=True
+    )
+
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, data)
+        return super().to_internal_value(data)  # type: ignore[no-any-return]
+
+
+class LongevityPlanInputSerializer(serializers.Serializer):
+    """Valida la entrada para GUARDAR el Plan Integral (POST .../plan-integral/).
+
+    D-EC-7: rechaza campos no declarados. Las 8 secciones son opcionales (el
+    médico puede dejar una en blanco), pero acotadas en longitud (anti-DoS)
+    — el frontend las pre-llena con el borrador y el médico edita.
+    `treatment_plan_id` es opcional: liga la constancia a un esquema de
+    calendarización existente y snapshotea sus tratamientos.
+    `lab_results`/`gabinete_studies` son opcionales (Fase 3): listas de
+    resultados/estudios capturados por el médico. `equipo` NO se acepta aquí
+    (Fase 4: se snapshotea del catálogo vigente en el service, config-driven).
+    """
+
+    treatment_plan_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    alergias = serializers.CharField(
+        max_length=_LONGEVITY_PLAN_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    antecedentes = serializers.CharField(
+        max_length=_LONGEVITY_PLAN_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    tratamientos_actuales = serializers.CharField(
+        max_length=_LONGEVITY_PLAN_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    condiciones_mejorar = serializers.CharField(
+        max_length=_LONGEVITY_PLAN_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    estudios = serializers.CharField(
+        max_length=_LONGEVITY_PLAN_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    reporte_medico = serializers.CharField(
+        max_length=_LONGEVITY_PLAN_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    interconsulta = serializers.CharField(
+        max_length=_LONGEVITY_PLAN_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    seguimiento = serializers.CharField(
+        max_length=_LONGEVITY_PLAN_SECTION_MAX_LEN, required=False, default="", allow_blank=True
+    )
+    lab_results = LongevityPlanLabResultInputSerializer(many=True, required=False, default=list)
+    gabinete_studies = LongevityPlanGabineteStudyInputSerializer(
+        many=True, required=False, default=list
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Rechaza campos no declarados (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class LongevityPlanOutputSerializer(serializers.ModelSerializer):
+    """Respuesta de POST .../plan-integral/ y de cada item del listado.
+
+    Forma: {id, created_at, doctor_name}. NO expone el texto de las secciones
+    en el listado/creación (evita mandar PII clínica de más en respuestas que
+    no la necesitan; el detalle completo se obtiene del PDF).
+    """
+
+    doctor_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LongevityPlan
+        fields = ["id", "created_at", "doctor_name"]
+        read_only_fields = fields
+
+    def get_doctor_name(self, obj: LongevityPlan) -> str:
+        """Nombre del médico del plan, o '' si no se pudo resolver."""
+        if obj.doctor_id is None:
+            return ""
+        try:
+            return obj.doctor.full_name
+        except Exception:  # noqa: BLE001
+            return ""
+
+
+# ---------------------------------------------------------------------------
+# DocumentTemplate — catálogo de plantillas de documento (Fase 2)
+# ---------------------------------------------------------------------------
+
+
+class DocumentTemplateInputSerializer(serializers.Serializer):
+    """Entrada para POST de DocumentTemplate.
+
+    M2: rechaza campos desconocidos vía validate().
+    """
+
+    name = serializers.CharField(max_length=160)
+    section = serializers.ChoiceField(choices=DocumentTemplateSection.choices)
+    body = serializers.CharField()
+    is_active = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class DocumentTemplatePatchSerializer(serializers.Serializer):
+    """Entrada para PATCH (actualización parcial) de DocumentTemplate.
+
+    is_active NO se expone aquí (regla de campos sensibles): se maneja por
+    separado en la vista, enrutando a document_template_activate/deactivate.
+    """
+
+    name = serializers.CharField(max_length=160, required=False)
+    section = serializers.ChoiceField(choices=DocumentTemplateSection.choices, required=False)
+    body = serializers.CharField(required=False)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class DocumentTemplateOutputSerializer(serializers.ModelSerializer):
+    """Salida de DocumentTemplate."""
+
+    class Meta:
+        model = DocumentTemplate
+        fields = ["id", "name", "section", "body", "is_active", "created_at", "updated_at"]
+        read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
+# LabAnalyte — catálogo de analitos de laboratorio (Fase 3)
+# ---------------------------------------------------------------------------
+
+
+class LabAnalyteInputSerializer(serializers.Serializer):
+    """Entrada para POST de LabAnalyte.
+
+    M2: rechaza campos desconocidos vía validate().
+    """
+
+    name = serializers.CharField(max_length=160)
+    unit = serializers.CharField(max_length=40, required=False, default="", allow_blank=True)
+    ref_low = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True, default=None
+    )
+    ref_high = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True, default=None
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class LabAnalytePatchSerializer(serializers.Serializer):
+    """Entrada para PATCH (actualización parcial) de LabAnalyte.
+
+    is_active NO se expone aquí (regla de campos sensibles): se maneja por
+    separado en la vista, enrutando a lab_analyte_activate/deactivate.
+    """
+
+    name = serializers.CharField(max_length=160, required=False)
+    unit = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    ref_low = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
+    ref_high = serializers.DecimalField(
+        max_digits=12, decimal_places=4, required=False, allow_null=True
+    )
+    is_active = serializers.BooleanField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class LabAnalyteOutputSerializer(serializers.ModelSerializer):
+    """Salida de LabAnalyte."""
+
+    class Meta:
+        model = LabAnalyte
+        fields = ["id", "name", "unit", "ref_low", "ref_high", "is_active", "created_at"]
+        read_only_fields = fields

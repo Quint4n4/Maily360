@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Plus, Phone, CalendarDays, Loader2, AlertCircle, AlertTriangle, Star, Crown, CalendarRange, Tag } from 'lucide-react'
+import { Search, Plus, Phone, CalendarDays, CalendarPlus, Loader2, AlertCircle, AlertTriangle, Star, Crown, CalendarRange, Tag } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import NuevoPacienteDrawer from '../components/contactos/NuevoPacienteDrawer'
 import ExpedienteDrawer from '../components/contactos/ExpedienteDrawer'
 import EtiquetasQuickMenu from '../components/contactos/EtiquetasQuickMenu'
 import MiniCalendario from '../components/agenda/MiniCalendario'
+import CrearEventoModal from '../components/agenda/CrearEventoModal'
 import {
   usePatient, usePatients, useDeactivatePatient, useSetPatientClassification,
 } from '../hooks/pacientes'
 import { useCategories } from '../hooks/clinica'
 import { initialsOf } from '../lib/paciente'
-import { formatFechaCorta } from '../lib/fecha'
+import { formatFechaCorta, formatLargo, toDayKey } from '../lib/fecha'
 import type { PatientOut, PatientSegment } from '../types/paciente'
 import { useRole } from '../auth/RoleContext'
 import { puedeEditar, puedeVerExpedienteClinico } from '../auth/permisos'
@@ -53,6 +54,8 @@ export default function ContactosPage() {
   const [dateTo, setDateTo]       = useState('')
   const [nuevoOpen, setNuevo]     = useState(false)
   const [verPaciente, setVer]     = useState<PatientOut | null>(null)
+  // Paciente para "Volver a agendar" (abre CrearEventoModal precargado). Null = cerrado.
+  const [reagendar, setReagendar] = useState<PatientOut | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const { role } = useRole()
 
@@ -76,7 +79,18 @@ export default function ContactosPage() {
   }
 
   const editar = puedeEditar(role, 'contactos')
+  const puedeAgendar = puedeEditar(role, 'agenda')
   const verClinico = puedeVerExpedienteClinico(role)
+
+  // Slot por defecto para "Volver a agendar": hoy, próxima media hora dentro de
+  // horario de oficina (9:00–17:30). El usuario ajusta el resto en el modal.
+  const hoy = new Date()
+  const dayKeyHoy = toDayKey(hoy)
+  const horaDefault = (() => {
+    const rounded = Math.ceil((hoy.getHours() * 60 + hoy.getMinutes()) / 30) * 30
+    const clamped = Math.min(Math.max(rounded, 9 * 60), 17 * 60 + 30)
+    return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`
+  })()
   const baja = useDeactivatePatient()
   const clasificar = useSetPatientClassification()
   const confirmar = useConfirm()
@@ -352,6 +366,19 @@ export default function ContactosPage() {
                     </div>
                   </div>
                 </button>
+
+                {/* Clientes potenciales: acción directa para reagendarlos. */}
+                {segment === 'potential' && puedeAgendar && (
+                  <button
+                    type="button"
+                    onClick={() => setReagendar(p)}
+                    title={p.last_reason ? `A qué venía: ${p.last_reason}` : undefined}
+                    className="relative z-10 mt-2 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                    style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
+                  >
+                    <CalendarPlus className="w-4 h-4" /> Volver a agendar
+                  </button>
+                )}
               </div>
             ))}
 
@@ -364,6 +391,20 @@ export default function ContactosPage() {
           </div>
         )}
       </div>
+
+      {/* "Volver a agendar" un cliente potencial: modal de agendar precargado con
+          el paciente y el motivo de su última cita cancelada/reagendada. */}
+      <CrearEventoModal
+        open={!!reagendar}
+        onClose={() => setReagendar(null)}
+        dayKey={dayKeyHoy}
+        fechaLarga={formatLargo(hoy)}
+        horaInicio={horaDefault}
+        initialPatient={reagendar
+          ? { id: reagendar.id, full_name: reagendar.full_name, record_number: reagendar.record_number }
+          : undefined}
+        initialReason={reagendar?.last_reason ?? undefined}
+      />
 
       <NuevoPacienteDrawer open={nuevoOpen} onClose={() => setNuevo(false)} />
       <ExpedienteDrawer

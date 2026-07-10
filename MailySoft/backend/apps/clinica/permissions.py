@@ -13,21 +13,17 @@ Matices de acceso:
 
 from typing import ClassVar
 
-from apps.core.permissions import CLINICAL_READ, MANAGE_ROLES, ALL_ROLES, HasClinicRole
+from apps.core.permissions import ALL_ROLES, CLINICAL_READ, MANAGE_ROLES, HasClinicRole
 from apps.tenancy.models import TenantMembership
 
 Role = TenantMembership.Role
 
 # Roles que pueden escribir plantillas: doctores también (crean sus plantillas propias).
-_TEMPLATE_WRITE_ROLES: frozenset[str] = frozenset(
-    {Role.OWNER, Role.ADMIN, Role.DOCTOR}
-)
+_TEMPLATE_WRITE_ROLES: frozenset[str] = frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR})
 
 # Roles que pueden gestionar perfil médico (imágenes, universidades):
 # owner y admin siempre; doctor también (perfil propio — la vista valida doctor == user).
-_DOCTOR_PROFILE_WRITE: frozenset[str] = frozenset(
-    {Role.OWNER, Role.ADMIN, Role.DOCTOR}
-)
+_DOCTOR_PROFILE_WRITE: frozenset[str] = frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR})
 
 
 class ClinicSettingsPermission(HasClinicRole):
@@ -93,4 +89,22 @@ class DoctorProfilePermission(HasClinicRole):
         "POST": _DOCTOR_PROFILE_WRITE,
         "PATCH": _DOCTOR_PROFILE_WRITE,
         "DELETE": _DOCTOR_PROFILE_WRITE,
+    }
+
+
+class ClinicTeamPermission(HasClinicRole):
+    """Permisos para el catálogo del equipo/departamentos de la clínica (Fase 4).
+
+    Matriz:
+        GET    → owner, admin, doctor (el médico lo consulta al armar el Plan Integral).
+        POST   → solo owner y admin (mantener el catálogo es administrativo).
+        PATCH  → solo owner y admin.
+        DELETE → solo owner y admin.
+    """
+
+    policy: ClassVar[dict[str, frozenset[str]]] = {
+        "GET": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR}),
+        "POST": MANAGE_ROLES,
+        "PATCH": MANAGE_ROLES,
+        "DELETE": MANAGE_ROLES,
     }

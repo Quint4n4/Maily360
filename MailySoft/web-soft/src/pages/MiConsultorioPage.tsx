@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BadgeCheck, Building2, DollarSign, FileText, GraduationCap, LayoutTemplate, ListChecks, Tag } from 'lucide-react'
+import { BadgeCheck, Building2, DollarSign, FileText, FlaskConical, GraduationCap, LayoutTemplate, ListChecks, ScrollText, Tag, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
@@ -16,9 +16,13 @@ import SeccionPerfilMedico from '../components/consultorio/SeccionPerfilMedico'
 import SeccionFormatos from '../components/consultorio/SeccionFormatos'
 import SeccionCredencialesValidar from '../components/consultorio/SeccionCredencialesValidar'
 import SeccionHistoriaClinica from '../components/consultorio/SeccionHistoriaClinica'
+import SeccionPlantillasDocumento from '../components/consultorio/SeccionPlantillasDocumento'
+import SeccionAnalitos from '../components/consultorio/SeccionAnalitos'
+import SeccionEquipo from '../components/consultorio/SeccionEquipo'
 
 type SeccionKey =
   | 'datos' | 'formatos' | 'plantillas' | 'categorias' | 'servicios'
+  | 'plantillas-documento' | 'analitos' | 'equipo'
   | 'historia-clinica' | 'validar-credenciales' | 'perfil'
 
 interface SeccionDef {
@@ -33,6 +37,9 @@ const SECCIONES: SeccionDef[] = [
   { key: 'plantillas', label: 'Plantillas', icon: FileText },
   { key: 'categorias', label: 'Categorías de pacientes', icon: Tag },
   { key: 'servicios', label: 'Servicios y precios', icon: DollarSign },
+  { key: 'plantillas-documento', label: 'Plantillas de documento', icon: ScrollText },
+  { key: 'analitos', label: 'Catálogo de analitos', icon: FlaskConical },
+  { key: 'equipo', label: 'Equipo / departamentos', icon: Users },
   { key: 'historia-clinica', label: 'Preguntas de historia clínica', icon: ListChecks },
   { key: 'validar-credenciales', label: 'Credenciales por validar', icon: BadgeCheck },
   { key: 'perfil', label: 'Mi perfil médico', icon: GraduationCap },
@@ -61,6 +68,12 @@ export default function MiConsultorioPage() {
         return <SeccionCategorias editable={gestionable} />
       case 'servicios':
         return <SeccionServicios editable={gestionable} />
+      case 'plantillas-documento':
+        return <SeccionPlantillasDocumento editable={gestionable} />
+      case 'analitos':
+        return <SeccionAnalitos editable={gestionable} />
+      case 'equipo':
+        return <SeccionEquipo editable={gestionable} />
       case 'historia-clinica':
         return <SeccionHistoriaClinica editable={gestionable} />
       case 'validar-credenciales':
@@ -70,12 +83,15 @@ export default function MiConsultorioPage() {
     }
   }
 
-  // "Credenciales por validar" y "Preguntas de historia clínica" son solo para
-  // owner/admin; "Mi perfil médico" para owner/admin/doctor.
+  // Secciones de gestión reservadas a owner/admin (el backend es la autoridad):
+  // credenciales, historia clínica, plantillas de documento, analitos y equipo.
+  // "Mi perfil médico" es para owner/admin/doctor.
+  const soloGestion: SeccionKey[] = [
+    'validar-credenciales', 'historia-clinica', 'plantillas-documento', 'analitos', 'equipo',
+  ]
   const seccionesVisibles = SECCIONES.filter((s) => {
     if (s.key === 'perfil') return editaPerfil
-    if (s.key === 'validar-credenciales') return gestionable
-    if (s.key === 'historia-clinica') return gestionable
+    if (soloGestion.includes(s.key)) return gestionable
     return true
   })
 

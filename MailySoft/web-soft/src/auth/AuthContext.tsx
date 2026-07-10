@@ -24,6 +24,7 @@ import type { LoginInput } from '../api/auth'
 import { getCsrfToken } from '../lib/csrf'
 import { queryClient } from '../lib/queryClient'
 import { clearAccessToken, onAccessTokenChange } from '../lib/tokenStore'
+import { clearAllDrafts } from '../lib/draftKeys'
 import type { ClinicRole } from './permisos'
 import type { Me } from '../types/api'
 
@@ -110,6 +111,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authApi.logout()
     } finally {
       clearAccessToken()
+      // Borrar los BORRADORES LOCALES sin guardar: no dejar datos clínicos de
+      // borradores en el equipo tras cerrar sesión (privacidad multi-tenant).
+      clearAllDrafts()
       // Vaciar el caché de datos (TanStack Query): sin esto, los pacientes/citas
       // de la clínica recién cerrada quedan en memoria y podrían mostrarse un
       // instante si otra cuenta entra en la misma pestaña sin recargar.

@@ -21,15 +21,24 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.clinica.models import ClinicSettings, ClinicTemplate, DoctorCredential, DoctorUniversity, PatientCategory
+from apps.clinica.models import (
+    ClinicTeamMember,
+    ClinicTemplate,
+    DoctorCredential,
+    DoctorUniversity,
+    PatientCategory,
+)
 from apps.clinica.permissions import (
     ClinicSettingsPermission,
+    ClinicTeamPermission,
     ClinicTemplatePermission,
     DoctorProfilePermission,
     PatientCategoryPermission,
 )
 from apps.clinica.selectors import (
     clinic_settings_get,
+    clinic_team_get,
+    clinic_team_list,
     clinic_template_get,
     clinic_template_list,
     doctor_credential_get,
@@ -43,9 +52,12 @@ from apps.clinica.selectors import (
 from apps.clinica.serializers import (
     ClinicSettingsInputSerializer,
     ClinicSettingsOutputSerializer,
+    ClinicTeamMemberInputSerializer,
+    ClinicTeamMemberOutputSerializer,
+    ClinicTeamMemberPatchSerializer,
     ClinicTemplateInputSerializer,
-    ClinicTemplatePatchSerializer,
     ClinicTemplateOutputSerializer,
+    ClinicTemplatePatchSerializer,
     DoctorCredentialInputSerializer,
     DoctorCredentialOutputSerializer,
     DoctorCredentialValidationInputSerializer,
@@ -57,6 +69,11 @@ from apps.clinica.serializers import (
 )
 from apps.clinica.services import (
     clinic_settings_upsert,
+    clinic_team_member_activate,
+    clinic_team_member_create,
+    clinic_team_member_deactivate,
+    clinic_team_member_delete,
+    clinic_team_member_update,
     doctor_credential_create,
     doctor_credential_delete,
     doctor_credential_set_validation,
@@ -74,7 +91,6 @@ from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
 from apps.personal.models import Doctor
 from apps.personal.selectors import doctor_get
-
 
 # ---------------------------------------------------------------------------
 # ClinicSettings — GET/PUT configuracion/
@@ -375,9 +391,7 @@ class DoctorProfileApi(TenantAPIView):
 
     permission_classes = [IsAuthenticated, DoctorProfilePermission]
 
-    def _get_doctor_or_404(
-        self, doctor_id: uuid.UUID
-    ) -> "tuple[Doctor | None, Response | None]":
+    def _get_doctor_or_404(self, doctor_id: uuid.UUID) -> "tuple[Doctor | None, Response | None]":
         try:
             d = doctor_get(doctor_id=doctor_id)
             return d, None
@@ -429,8 +443,8 @@ class DoctorProfileApi(TenantAPIView):
             )
 
         # Re-serializar con el serializer de personal (no necesita uno propio).
-        from apps.personal.serializers import DoctorOutputSerializer
         from apps.personal.selectors import doctor_get as doctor_get_full
+        from apps.personal.serializers import DoctorOutputSerializer
 
         refreshed = doctor_get_full(doctor_id=updated.id)  # type: ignore[arg-type]
         return Response(DoctorOutputSerializer(refreshed).data)
@@ -448,9 +462,7 @@ class DoctorUniversityListCreateApi(TenantAPIView):
 
     permission_classes = [IsAuthenticated, DoctorProfilePermission]
 
-    def _get_doctor_or_404(
-        self, doctor_id: uuid.UUID
-    ) -> "tuple[Doctor | None, Response | None]":
+    def _get_doctor_or_404(self, doctor_id: uuid.UUID) -> "tuple[Doctor | None, Response | None]":
         try:
             d = doctor_get(doctor_id=doctor_id)
             return d, None
@@ -572,9 +584,7 @@ class DoctorCredentialListCreateApi(TenantAPIView):
     permission_classes = [IsAuthenticated, DoctorProfilePermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def _get_doctor_or_404(
-        self, doctor_id: uuid.UUID
-    ) -> "tuple[Doctor | None, Response | None]":
+    def _get_doctor_or_404(self, doctor_id: uuid.UUID) -> "tuple[Doctor | None, Response | None]":
         try:
             d = doctor_get(doctor_id=doctor_id)
             return d, None
@@ -795,3 +805,115 @@ class DoctorCredentialValidationApi(TenantAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(DoctorCredentialOutputSerializer(cred).data)
+
+
+# ---------------------------------------------------------------------------
+# ClinicTeamMember — GET/POST equipo/ y GET/PATCH/DELETE equipo/<id>/ (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+class ClinicTeamMemberListCreateApi(TenantAPIView):
+    """GET  /api/v1/clinica/equipo/ — lista paginada del equipo de la clínica.
+    POST /api/v1/clinica/equipo/ — crea un miembro del equipo (owner/admin).
+    """
+
+    permission_classes = [IsAuthenticated, ClinicTeamPermission]
+
+    def get(self, request: Request) -> Response:
+        """Lista paginada del equipo/departamentos del tenant.
+
+        Query param `only_active` (default true).
+        """
+        only_active = request.query_params.get("only_active", "true").lower() != "false"
+
+        qs = clinic_team_list(only_active=only_active)
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        if page is not None:
+            return paginator.get_paginated_response(
+                ClinicTeamMemberOutputSerializer(page, many=True).data
+            )
+
+        return Response(
+            {"detail": "Paginación no disponible."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    def post(self, request: Request) -> Response:
+        """Crea un miembro del equipo en el tenant del request."""
+        s = ClinicTeamMemberInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            member = clinic_team_member_create(tenant=tenant, user=request.user, **s.validated_data)
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            ClinicTeamMemberOutputSerializer(member).data, status=status.HTTP_201_CREATED
+        )
+
+
+class ClinicTeamMemberDetailApi(TenantAPIView):
+    """GET/PATCH/DELETE /api/v1/clinica/equipo/<id>/."""
+
+    permission_classes = [IsAuthenticated, ClinicTeamPermission]
+
+    def _get_or_404(
+        self, member_id: uuid.UUID
+    ) -> "tuple[ClinicTeamMember | None, Response | None]":
+        try:
+            return clinic_team_get(member_id=member_id), None
+        except ClinicTeamMember.DoesNotExist:
+            return None, Response(
+                {"detail": "Miembro del equipo no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def get(self, request: Request, member_id: uuid.UUID) -> Response:
+        member, err = self._get_or_404(member_id)
+        if err is not None:
+            return err
+        return Response(ClinicTeamMemberOutputSerializer(member).data)
+
+    def patch(self, request: Request, member_id: uuid.UUID) -> Response:
+        member, err = self._get_or_404(member_id)
+        if err is not None:
+            return err
+
+        s = ClinicTeamMemberPatchSerializer(data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        if not s.validated_data:
+            return Response(
+                {"detail": "No se proporcionaron campos para actualizar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        data = dict(s.validated_data)
+        is_active = data.pop("is_active", None)
+        try:
+            if is_active is not None:
+                if is_active:
+                    member = clinic_team_member_activate(member=member, user=request.user)  # type: ignore[arg-type]
+                else:
+                    member = clinic_team_member_deactivate(member=member, user=request.user)  # type: ignore[arg-type]
+            if data:
+                member = clinic_team_member_update(member=member, user=request.user, **data)  # type: ignore[arg-type]
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(ClinicTeamMemberOutputSerializer(member).data)
+
+    def delete(self, request: Request, member_id: uuid.UUID) -> Response:
+        member, err = self._get_or_404(member_id)
+        if err is not None:
+            return err
+        clinic_team_member_delete(member=member, user=request.user)  # type: ignore[arg-type]
+        return Response(status=status.HTTP_204_NO_CONTENT)

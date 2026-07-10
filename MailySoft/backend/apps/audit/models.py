@@ -160,6 +160,18 @@ class ActionType(models.TextChoices):
     TEMPLATE_DELETE = "TEMPLATE_DELETE", "Desactivar plantilla clínica"
     PATIENT_CATEGORY_CREATE = "PATIENT_CATEGORY_CREATE", "Crear categoría de paciente"
     PATIENT_CATEGORY_DELETE = "PATIENT_CATEGORY_DELETE", "Desactivar categoría de paciente"
+    CLINIC_TEAM_MEMBER_CREATE = (
+        "CLINIC_TEAM_MEMBER_CREATE",
+        "Crear miembro del equipo de la clínica",
+    )
+    CLINIC_TEAM_MEMBER_UPDATE = (
+        "CLINIC_TEAM_MEMBER_UPDATE",
+        "Actualizar miembro del equipo de la clínica",
+    )
+    CLINIC_TEAM_MEMBER_DELETE = (
+        "CLINIC_TEAM_MEMBER_DELETE",
+        "Eliminar miembro del equipo de la clínica",
+    )
 
     # Recetas — cumplimiento COFEPRIS (Fase F2)
     CREDENTIAL_CREATE = "CREDENTIAL_CREATE", "Registrar credencial de médico"
@@ -234,6 +246,25 @@ class ActionType(models.TextChoices):
         "TREATMENT_SESSION_SCHEDULE",
         "Agendar o quitar de agenda una sesión de tratamiento",
     )
+
+    # Plan Integral de Longevidad y Medicina Regenerativa (documento entregable
+    # al paciente, nace del paciente — Fase 1). Se registra al GUARDAR la
+    # constancia (no al ver el borrador, que no persiste). metadata incluye
+    # patient_id/treatment_plan_id; resource_repr = str(plan.id) (NUNCA PII).
+    LONGEVITY_PLAN_CREATE = (
+        "LONGEVITY_PLAN_CREATE",
+        "Generar Plan Integral de Longevidad del paciente",
+    )
+
+    # Catálogos del Plan Integral de Longevidad (Fases 2 y 3): plantillas de
+    # documento y analitos de laboratorio. resource_repr = nombre del
+    # registro del catálogo (sin PII clínica de pacientes).
+    DOCUMENT_TEMPLATE_CREATE = "DOCUMENT_TEMPLATE_CREATE", "Crear plantilla de documento"
+    DOCUMENT_TEMPLATE_UPDATE = "DOCUMENT_TEMPLATE_UPDATE", "Actualizar plantilla de documento"
+    DOCUMENT_TEMPLATE_DELETE = "DOCUMENT_TEMPLATE_DELETE", "Eliminar plantilla de documento"
+    LAB_ANALYTE_CREATE = "LAB_ANALYTE_CREATE", "Crear analito de laboratorio"
+    LAB_ANALYTE_UPDATE = "LAB_ANALYTE_UPDATE", "Actualizar analito de laboratorio"
+    LAB_ANALYTE_DELETE = "LAB_ANALYTE_DELETE", "Eliminar analito de laboratorio"
 
 
 class AuditLog(TenantAwareModel):

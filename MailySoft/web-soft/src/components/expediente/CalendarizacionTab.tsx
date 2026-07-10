@@ -18,7 +18,7 @@
  *   - Las fechas se guardan como '' (vacío) en la UI y se mandan como null al PUT.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Loader2, Trash2, FileDown, CalendarClock, Save, AlertTriangle, Check,
@@ -55,6 +55,9 @@ import { formatMoney, formatDate } from '../../lib/format'
 import { toDayKey, to12h, formatFechaHora } from '../../lib/fecha'
 import { useAuth } from '../../auth/AuthContext'
 import { useRole } from '../../auth/RoleContext'
+import { useLocalDraft } from '../../hooks/useLocalDraft'
+import { draftKey } from '../../lib/draftKeys'
+import BorradorRecuperadoAviso from '../common/BorradorRecuperadoAviso'
 import { useAviso, useConfirm } from '../common/DialogProvider'
 import VisorPdf from '../VisorPdf'
 import AgendarSesionModal from './AgendarSesionModal'
@@ -316,6 +319,44 @@ export default function CalendarizacionTab({ paciente }: Props) {
     }
   }, [detalle.data, loadedId, user, soloPropio])
 
+  // ── Borrador local (autoguardado en el navegador) del `edit` del plan ──
+  // Clave por usuario+tenant+plan; el borrador es SOLO del estado editable local
+  // (no de las acciones de agendar, que escriben al backend al instante).
+  const userId = user?.id ?? ''
+  const tenantId = user?.active_tenant?.id ?? ''
+  const draftEntityId = loadedId ?? ''
+  const storageKey = draftKey(userId, tenantId, 'calendarizacion', draftEntityId)
+  const draftEnabled = !!userId && !!tenantId && !!loadedId && edit !== null
+  const { draft, clearDraft } = useLocalDraft<EditState | null>({
+    storageKey,
+    value: edit,
+    enabled: draftEnabled,
+  })
+
+  // Fase B: al terminar de cargar un plan (Fase A la hace el efecto de arriba),
+  // si hay un borrador local para ESE plan, precargarlo por encima del `edit`.
+  // Se aplica una sola vez por plan (ref por id). No toca el `savedSnapshot`, así
+  // que el borrador recuperado aparece como "cambios sin guardar" (coherente).
+  const draftAppliedForRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!loadedId || !edit) return
+    if (draftAppliedForRef.current === loadedId) return
+    draftAppliedForRef.current = loadedId
+    if (draft) setEdit(draft.data)
+  }, [loadedId, edit, draft])
+
+  // Descarta el borrador y revierte `edit` al estado guardado (snapshot).
+  const descartarBorrador = (): void => {
+    clearDraft()
+    if (detalle.data) {
+      const e = fromDetail(detalle.data)
+      if (soloPropio && user?.doctor_id) e.doctor_id = user.doctor_id
+      else if (!e.doctor_id && user?.doctor_id) e.doctor_id = user.doctor_id
+      setEdit(e)
+      setSavedSnapshot(JSON.stringify(toUpdateInput(e)))
+    }
+  }
+
   const dirty = edit ? JSON.stringify(toUpdateInput(edit)) !== savedSnapshot : false
   const total = edit ? edit.items.reduce((acc, it) => acc + itemTotal(it), 0) : 0
 
@@ -483,6 +524,7 @@ export default function CalendarizacionTab({ paciente }: Props) {
         setEdit(e)
         setLoadedId(data.id)
         setSavedSnapshot(JSON.stringify(toUpdateInput(e)))
+        clearDraft() // guardado en el servidor: descartar el borrador local
         void aviso({ mensaje: 'Calendarización guardada.', tipo: 'exito' })
       },
       onError: (e) => void aviso({ mensaje: errorMsg(e), tipo: 'error' }),
@@ -500,6 +542,7 @@ export default function CalendarizacionTab({ paciente }: Props) {
     if (!ok) return
     eliminar.mutate(selectedId, {
       onSuccess: () => {
+        clearDraft() // el plan ya no existe: descartar su borrador local
         setSelectedId(null)
         setEdit(null)
         setLoadedId(null)
@@ -654,6 +697,10 @@ export default function CalendarizacionTab({ paciente }: Props) {
               className="rounded-2xl p-4 space-y-4"
               style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(201,162,39,0.18)' }}
             >
+              {draft && draftEnabled && (
+                <BorradorRecuperadoAviso savedAt={draft.savedAt} onDescartar={descartarBorrador} />
+              )}
+
               {/* Título + estado */}
               <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
                 <div>

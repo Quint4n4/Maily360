@@ -8,9 +8,10 @@ tenant. Se mockea el contexto de tenant igual que en apps/pacientes/tests
 Patrón: AAA. Todas tocan BD → fixture db.
 """
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from decimal import Decimal
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import patch
 
 from rest_framework.test import APIClient
@@ -115,16 +116,55 @@ class TestConceptPermissions:
         tenant = TenantFactory()
         client = _member_client(tenant, "finance")
         with _tenant_context(tenant):
-            resp = client.post(CONCEPTS_URL, data={"name": "Consulta", "base_price": "500.00"}, format="json")
+            resp = client.post(
+                CONCEPTS_URL, data={"name": "Consulta", "base_price": "500.00"}, format="json"
+            )
         assert resp.status_code == 403
 
     def test_admin_can_create_concept(self, db: None) -> None:
         tenant = TenantFactory()
         client = _member_client(tenant, "admin")
         with _tenant_context(tenant):
-            resp = client.post(CONCEPTS_URL, data={"name": "Consulta", "base_price": "500.00"}, format="json")
+            resp = client.post(
+                CONCEPTS_URL, data={"name": "Consulta", "base_price": "500.00"}, format="json"
+            )
         assert resp.status_code == 201
         assert resp.json()["name"] == "Consulta"
+
+    def test_admin_can_create_concept_with_clinical_description(self, db: None) -> None:
+        """clinical_description viaja en el InputSerializer y sale en el output."""
+        tenant = TenantFactory()
+        client = _member_client(tenant, "admin")
+        with _tenant_context(tenant):
+            resp = client.post(
+                CONCEPTS_URL,
+                data={
+                    "name": "Terapia de quelación",
+                    "base_price": "800.00",
+                    "clinical_description": "Sesión de 2 horas, protocolo EDTA.",
+                },
+                format="json",
+            )
+        assert resp.status_code == 201
+        assert resp.json()["clinical_description"] == "Sesión de 2 horas, protocolo EDTA."
+
+    def test_admin_can_patch_clinical_description(self, db: None) -> None:
+        tenant = TenantFactory()
+        client = _member_client(tenant, "admin")
+        with _tenant_context(tenant):
+            create_resp = client.post(
+                CONCEPTS_URL,
+                data={"name": "Drenaje linfático", "base_price": "300.00"},
+                format="json",
+            )
+            concept_id = create_resp.json()["id"]
+            patch_resp = client.patch(
+                f"{CONCEPTS_URL}{concept_id}/",
+                data={"clinical_description": "Masaje manual, 60 minutos."},
+                format="json",
+            )
+        assert patch_resp.status_code == 200
+        assert patch_resp.json()["clinical_description"] == "Masaje manual, 60 minutos."
 
 
 # ===========================================================================
@@ -182,8 +222,11 @@ class TestPaymentPermissions:
         # fuera del _tenant_context porque charge_create no necesita contexto activo.
         aux_user = UserFactory()
         charge_create(
-            tenant=tenant, user=aux_user, patient=patient,
-            amount=Decimal("300.00"), description="Consulta",
+            tenant=tenant,
+            user=aux_user,
+            patient=patient,
+            amount=Decimal("300.00"),
+            description="Consulta",
         )
         with _tenant_context(tenant):
             resp = client.post(

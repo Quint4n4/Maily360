@@ -5,7 +5,7 @@
  * El bloque gineco-obstétrico se oculta si el paciente no es sexo F.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Save, Loader2, FileText, ListChecks, NotebookPen } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type {
@@ -24,6 +24,10 @@ import type {
   ViviendaChoice,
 } from '../../types/expediente'
 import { useMedicalHistory, useUpsertMedicalHistory } from '../../hooks/expediente'
+import { useAuth } from '../../auth/AuthContext'
+import { useLocalDraft } from '../../hooks/useLocalDraft'
+import { draftKey } from '../../lib/draftKeys'
+import BorradorRecuperadoAviso from '../common/BorradorRecuperadoAviso'
 import { erroresDe } from '../../lib/apiErrors'
 import {
   AGO_FIELDS, AHF_FIELDS, APNP_FIELDS, APP_FIELDS, HABITOS_FIELDS, NUCLEO_TITULOS_SET,
@@ -122,10 +126,26 @@ interface HistoriaTabProps {
 export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps) {
   const { data, isLoading, isError } = useMedicalHistory(paciente.id)
   const guardar = useUpsertMedicalHistory(paciente.id)
+  const { user } = useAuth()
   const [form, setForm] = useState<FormState | null>(null)
   const [errores, setErrores] = useState<string[]>([])
   const [okMsg, setOkMsg] = useState('')
   const esFemenino = paciente.sex === 'F'
+
+  // ── Borrador local (autoguardado en el navegador) ──
+  // Clave por usuario+tenant+tipo+paciente para no mezclar borradores.
+  const userId = user?.id ?? ''
+  const tenantId = user?.active_tenant?.id ?? ''
+  const storageKey = draftKey(userId, tenantId, 'historia', paciente.id)
+  // Solo se vigila una vez cargada la HC del servidor (fija el baseline) y si el
+  // usuario puede editar y hay usuario/tenant. Sin eso, autoguardado apagado.
+  const [serverLoaded, setServerLoaded] = useState(false)
+  const draftEnabled = puedeEditar && !!userId && !!tenantId && serverLoaded
+  const { draft, clearDraft } = useLocalDraft<FormState | null>({
+    storageKey,
+    value: form,
+    enabled: draftEnabled,
+  })
 
   // Preguntas extra ACTIVAS de la clínica (vienen embebidas en la HC, Fase 2).
   const preguntasActivas = useMemo(() => data?.active_questions ?? [], [data])
@@ -147,9 +167,31 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
     [seccionesExtra],
   )
 
+  // Fase A: sembrar el estado del formulario desde el servidor UNA vez. Este
+  // valor es el "baseline" del borrador local; por eso va antes de precargar el
+  // borrador. No re-siembra en refetches para no pisar lo que el usuario escribe.
+  const seededRef = useRef(false)
+  const draftAppliedRef = useRef(false)
   useEffect(() => {
-    if (data) setForm(fromHistory(data))
+    if (!data || seededRef.current) return
+    seededRef.current = true
+    setForm(fromHistory(data))
+    setServerLoaded(true)
   }, [data])
+
+  // Fase B: si hay un borrador local y el usuario puede editar, precargarlo por
+  // encima del estado del servidor (una sola vez).
+  useEffect(() => {
+    if (!serverLoaded || draftAppliedRef.current) return
+    draftAppliedRef.current = true
+    if (draft && puedeEditar) setForm(draft.data)
+  }, [serverLoaded, draft, puedeEditar])
+
+  // Descarta el borrador y revierte el formulario al estado del servidor.
+  const descartarBorrador = () => {
+    clearDraft()
+    if (data) setForm(fromHistory(data))
+  }
 
   // Setters tipados por bloque (solo los bloques objeto, no los textos planos).
   const setStr = <B extends BlockKey>(block: B) =>
@@ -206,6 +248,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
     try {
       await guardar.mutateAsync(payload)
       setOkMsg('Historia clínica guardada.')
+      clearDraft() // se guardó en el servidor: descartar el borrador local
     } catch (err) {
       setErrores(erroresDe(err))
     }
@@ -324,7 +367,7 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
     }
 
     list.push({
-      id: 'exploracion', titulo: 'Exploración física basal',
+      id: 'exploracion', titulo: 'Exploración física',
       render: () => (
         <div className="space-y-2">
           {SISTEMAS.map(sistema => {
@@ -386,6 +429,9 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
 
   return (
     <div className="space-y-4">
+      {draft && puedeEditar && serverLoaded && (
+        <BorradorRecuperadoAviso savedAt={draft.savedAt} onDescartar={descartarBorrador} />
+      )}
       <ErroresAlerta errores={errores} />
       {okMsg && (
         <div className="rounded-xl px-4 py-2.5 text-sm" style={{ background: '#DCF3E6', color: '#1F6E47' }}>{okMsg}</div>

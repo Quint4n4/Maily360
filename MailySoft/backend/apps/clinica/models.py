@@ -21,7 +21,7 @@ from django.core.validators import MaxValueValidator
 from django.db import models
 from django.db.models import Q
 
-from apps.core.files import validate_image, _random_name
+from apps.core.files import _random_name, validate_image
 from apps.core.models import TenantAwareModel
 
 # Expresión regular para validar colores en formato #RRGGBB.
@@ -446,7 +446,7 @@ class DoctorUniversity(TenantAwareModel):
         ordering = ["name"]
 
     def __str__(self) -> str:
-        from apps.personal.models import Doctor  # evitar circular al nivel de módulo
+
         doctor_str = str(self.doctor_id)
         return f"{self.name or 'Logo'} — Doctor {doctor_str}"
 
@@ -458,9 +458,7 @@ class DoctorUniversity(TenantAwareModel):
             # de tenant la hace el service en todos los paths de escritura).
             doctor_tenant = getattr(self, "_doctor_cache_tenant_id", None)
             if doctor_tenant is not None and str(doctor_tenant) != str(self.tenant_id):
-                raise ValidationError(
-                    "El médico no pertenece al tenant de esta institución."
-                )
+                raise ValidationError("El médico no pertenece al tenant de esta institución.")
 
 
 # ---------------------------------------------------------------------------
@@ -569,8 +567,7 @@ class DoctorCredential(TenantAwareModel):
         blank=True,
         validators=[validate_clinic_image],
         help_text=(
-            "Logo opcional de la institución que expide la credencial. "
-            "JPG/PNG/WEBP, máx 5 MB."
+            "Logo opcional de la institución que expide la credencial. " "JPG/PNG/WEBP, máx 5 MB."
         ),
     )
     is_active = models.BooleanField(
@@ -615,3 +612,48 @@ class DoctorCredential(TenantAwareModel):
             f"[{self.get_kind_display()}] {self.title} "
             f"— {self.institution} (doctor={self.doctor_id})"
         )
+
+
+# ---------------------------------------------------------------------------
+# ClinicTeamMember — catálogo del equipo/departamentos de la clínica (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+class ClinicTeamMember(TenantAwareModel):
+    """Miembro del equipo de la clínica, agrupado por departamento.
+
+    Catálogo config-driven (mismo patrón que `PatientCategory`): owner/admin
+    lo mantienen desde "Mi Consultorio". `apps.expediente.services_plan_integral.
+    longevity_plan_create` snapshotea la lista completa (ordenada por
+    `order`) en `LongevityPlan.equipo` al crear cada constancia — el cliente
+    NUNCA envía este campo, se toma del catálogo vigente.
+
+    Baja: DELETE físico (soft-delete vía `deleted_at`, heredado de
+    BaseModel) — mismo patrón que `TreatmentPackage.deleted_at`
+    (apps.finanzas).
+    """
+
+    departamento = models.CharField(
+        max_length=160,
+        help_text="Departamento o área del equipo (p. ej. 'Nutrición', 'Enfermería').",
+    )
+    nombre = models.CharField(
+        max_length=160,
+        help_text="Nombre de la persona que integra el equipo.",
+    )
+    order = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Posición de aparición en el listado y en el PDF del Plan Integral.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False = miembro oculto del catálogo (no aparece en el listado por defecto).",
+    )
+
+    class Meta:
+        db_table = "clinica_team_members"
+        ordering = ["order", "departamento", "nombre"]
+
+    def __str__(self) -> str:
+        return f"{self.departamento} — {self.nombre}"

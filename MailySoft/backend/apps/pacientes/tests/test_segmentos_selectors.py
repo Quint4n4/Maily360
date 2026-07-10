@@ -1037,3 +1037,61 @@ class TestAnnotations:
             assert result.rescheduled_count == 1
         finally:
             _deactivate_tenant()
+
+
+# ===========================================================================
+# Anotación "last_reason" (motivo de la última cita cancelada/reagendada)
+# ===========================================================================
+
+
+class TestLastReasonAnnotation:
+    """La anotación last_reason expone el motivo ('¿a qué viene?') de la cita
+    cancelada/reagendada más reciente, para precargar el motivo al reagendar."""
+
+    def test_last_reason_is_most_recent_cancelled_or_rescheduled(self, db: None) -> None:
+        """Devuelve el reason de la cita cancelada/reagendada más reciente."""
+        # Arrange
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant, is_active=True)
+        doctor = DoctorFactory(tenant=tenant)
+        # Cancelada antigua con un motivo.
+        AppointmentFactory(
+            tenant=tenant, patient=patient, doctor=doctor, consultorio=None,
+            status=Appointment.Status.CANCELLED, reason="Dolor de muela",
+            starts_at=_FIXED_DT_IN_RANGE,
+            ends_at=_FIXED_DT_IN_RANGE + datetime.timedelta(hours=1),
+        )
+        # Reagendada más reciente con otro motivo → debe ganar.
+        AppointmentFactory(
+            tenant=tenant, patient=patient, doctor=doctor, consultorio=None,
+            status=Appointment.Status.SCHEDULED, reschedule_count=1, reason="Revisión anual",
+            starts_at=_FIXED_DT_IN_RANGE + datetime.timedelta(days=5),
+            ends_at=_FIXED_DT_IN_RANGE + datetime.timedelta(days=5, hours=1),
+        )
+
+        _activate_tenant(tenant)
+        try:
+            # Act
+            result = patient_list(segment="all").get(id=patient.id)
+
+            # Assert
+            assert result.last_reason == "Revisión anual"
+        finally:
+            _deactivate_tenant()
+
+    def test_last_reason_none_without_cancelled_or_rescheduled(self, db: None) -> None:
+        """Sin citas canceladas/reagendadas (solo atendida), last_reason es None."""
+        # Arrange
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant, is_active=True)
+        _attended_appointment(tenant, patient, _FIXED_DT_IN_RANGE)
+
+        _activate_tenant(tenant)
+        try:
+            # Act
+            result = patient_list(segment="all").get(id=patient.id)
+
+            # Assert
+            assert result.last_reason is None
+        finally:
+            _deactivate_tenant()

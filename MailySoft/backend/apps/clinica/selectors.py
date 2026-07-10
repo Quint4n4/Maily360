@@ -9,14 +9,20 @@ Convención: keyword-only args, nombrado acción+entidad.
 """
 
 import uuid
-from typing import Optional
 
 from django.db.models import QuerySet
 
-from apps.clinica.models import ClinicSettings, ClinicTemplate, DoctorCredential, DoctorUniversity, PatientCategory
+from apps.clinica.models import (
+    ClinicSettings,
+    ClinicTeamMember,
+    ClinicTemplate,
+    DoctorCredential,
+    DoctorUniversity,
+    PatientCategory,
+)
 
 
-def clinic_settings_get(*, tenant_id: uuid.UUID) -> Optional[ClinicSettings]:
+def clinic_settings_get(*, tenant_id: uuid.UUID) -> ClinicSettings | None:
     """Retorna la ClinicSettings activa del tenant, o None si no existe aún.
 
     No lanza DoesNotExist: el flujo de upsert puede llamar a esta función
@@ -29,11 +35,7 @@ def clinic_settings_get(*, tenant_id: uuid.UUID) -> Optional[ClinicSettings]:
     Returns:
         Instancia ClinicSettings o None.
     """
-    return (
-        ClinicSettings.objects
-        .filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        .first()
-    )
+    return ClinicSettings.objects.filter(tenant_id=tenant_id, deleted_at__isnull=True).first()
 
 
 def clinic_settings_get_strict(*, tenant_id: uuid.UUID) -> ClinicSettings:
@@ -68,7 +70,7 @@ def clinic_template_get(*, template_id: uuid.UUID) -> ClinicTemplate:
     return ClinicTemplate.objects.get(id=template_id)
 
 
-def clinic_template_list(*, kind: Optional[str] = None) -> QuerySet[ClinicTemplate]:
+def clinic_template_list(*, kind: str | None = None) -> QuerySet[ClinicTemplate]:
     """Retorna el QuerySet de plantillas activas del tenant actual.
 
     Args:
@@ -123,10 +125,8 @@ def doctor_university_list(*, doctor_id: uuid.UUID) -> QuerySet[DoctorUniversity
     Returns:
         QuerySet[DoctorUniversity] ordenado por nombre.
     """
-    return (
-        DoctorUniversity.objects
-        .filter(doctor_id=doctor_id, deleted_at__isnull=True)
-        .order_by("name")
+    return DoctorUniversity.objects.filter(doctor_id=doctor_id, deleted_at__isnull=True).order_by(
+        "name"
     )
 
 
@@ -142,16 +142,12 @@ def doctor_credential_list(*, doctor_id: uuid.UUID) -> QuerySet[DoctorCredential
     Returns:
         QuerySet[DoctorCredential] activas, ordenadas por order, id.
     """
-    return (
-        DoctorCredential.objects
-        .filter(doctor_id=doctor_id, is_active=True, deleted_at__isnull=True)
-        .order_by("order", "id")
-    )
+    return DoctorCredential.objects.filter(
+        doctor_id=doctor_id, is_active=True, deleted_at__isnull=True
+    ).order_by("order", "id")
 
 
-def doctor_credentials_for_tenant(
-    *, status: str | None = None
-) -> QuerySet[DoctorCredential]:
+def doctor_credentials_for_tenant(*, status: str | None = None) -> QuerySet[DoctorCredential]:
     """Retorna las credenciales activas de TODOS los médicos del tenant activo.
 
     Para la bandeja de validación del administrador. El TenantManager limita al
@@ -164,8 +160,7 @@ def doctor_credentials_for_tenant(
         QuerySet[DoctorCredential] activas del tenant, con el doctor precargado.
     """
     qs = (
-        DoctorCredential.objects
-        .filter(is_active=True, deleted_at__isnull=True)
+        DoctorCredential.objects.filter(is_active=True, deleted_at__isnull=True)
         .select_related("doctor", "doctor__membership__user")
         .order_by("validation_status", "doctor", "order", "id")
     )
@@ -206,3 +201,34 @@ def doctor_university_get(*, university_id: uuid.UUID) -> DoctorUniversity:
         DoctorUniversity.DoesNotExist: si no existe o no pertenece al tenant activo.
     """
     return DoctorUniversity.objects.select_related("doctor").get(id=university_id)
+
+
+# ---------------------------------------------------------------------------
+# ClinicTeamMember — equipo/departamentos de la clínica (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+def clinic_team_get(*, member_id: uuid.UUID) -> ClinicTeamMember:
+    """Retorna un ClinicTeamMember por su UUID.
+
+    Usa el TenantManager: un miembro de otro tenant → DoesNotExist → 404.
+
+    Raises:
+        ClinicTeamMember.DoesNotExist: si no existe o no pertenece al tenant activo.
+    """
+    return ClinicTeamMember.objects.get(id=member_id)
+
+
+def clinic_team_list(*, only_active: bool = True) -> QuerySet[ClinicTeamMember]:
+    """Retorna el equipo/departamentos de la clínica del tenant actual.
+
+    Usado también por `apps.expediente.services_plan_integral.longevity_plan_draft`
+    (para mostrarlo) y `longevity_plan_create` (para snapshotearlo en `equipo`).
+
+    Args:
+        only_active: si True (default), excluye miembros desactivados.
+    """
+    qs: QuerySet[ClinicTeamMember] = ClinicTeamMember.objects.all()
+    if only_active:
+        qs = qs.filter(is_active=True)
+    return qs.order_by("order", "departamento", "nombre")

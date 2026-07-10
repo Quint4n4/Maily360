@@ -132,6 +132,9 @@ export default function VisitaSignos({ paciente, puedeCapturar }: VisitaSignosPr
               Signos guardados · {formatFechaHora(ultima.measured_at)}
             </p>
           </div>
+          {ultima.created_by_name && (
+            <p className="text-[10px] text-gray-400 mb-2">Capturado por {ultima.created_by_name}</p>
+          )}
           <div className="flex flex-wrap gap-2">
             <ResumenDato label="PA" value={pa} />
             <ResumenDato label="Temp" value={ultima.temperature_c} unidad="°C" />

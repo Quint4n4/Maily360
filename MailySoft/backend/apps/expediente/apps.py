@@ -11,15 +11,17 @@ class ExpedienteConfig(AppConfig):
     def ready(self) -> None:
         """Registra los generadores de PDF del expediente.
 
-        Kinds: "book", "resumen_clinico", "treatment_plan".
+        Kinds: "book", "resumen_clinico", "treatment_plan", "plan_integral".
         """
         from apps.core.permissions import (  # noqa: PLC0415
             ClinicalSummaryPermission,
             EvolutionPermission,
+            LongevityPlanPermission,
             TreatmentPlanPermission,
         )
         from apps.expediente.pdf_jobs import (  # noqa: PLC0415
             build_book_pdf,
+            build_longevity_plan_pdf,
             build_resumen_clinico_pdf,
             build_treatment_plan_pdf,
         )
@@ -35,4 +37,9 @@ class ExpedienteConfig(AppConfig):
             "treatment_plan",
             builder=build_treatment_plan_pdf,
             permission=TreatmentPlanPermission,
+        )
+        register_pdf_kind(
+            "plan_integral",
+            builder=build_longevity_plan_pdf,
+            permission=LongevityPlanPermission,
         )

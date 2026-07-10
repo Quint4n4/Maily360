@@ -336,6 +336,12 @@ export interface ServiceConcept {
   id: string
   name: string
   description: string
+  /**
+   * Descripción CLÍNICA del tratamiento (independiente de `description`, que es
+   * la comercial/fiscal). Se muestra por cada tratamiento en el Plan Integral de
+   * Longevidad y Medicina Regenerativa del paciente. '' si no se capturó.
+   */
+  clinical_description: string
   base_price: number
   sat_product_key: string
   sat_unit_key: string
@@ -356,6 +362,8 @@ export interface ConceptInput {
   name: string
   base_price: number
   description?: string
+  /** Descripción clínica del tratamiento (aparece en el Plan Integral del paciente). */
+  clinical_description?: string
   sat_product_key?: string
   sat_unit_key?: string
   /** Solo en PATCH: reactivar un concepto previamente desactivado. */

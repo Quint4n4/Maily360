@@ -34,18 +34,21 @@ interface Borrador {
   name: string
   /** Precio base como texto del input; se convierte a número al enviar. */
   base_price: string
+  /** Descripción clínica del tratamiento (para el Plan Integral del paciente). */
+  clinical_description: string
   sat_product_key: string
   sat_unit_key: string
 }
 
 const BORRADOR_VACIO: Borrador = {
-  name: '', base_price: '', sat_product_key: '', sat_unit_key: '',
+  name: '', base_price: '', clinical_description: '', sat_product_key: '', sat_unit_key: '',
 }
 
 function borradorDe(c: ServiceConcept): Borrador {
   return {
     name: c.name,
     base_price: String(c.base_price),
+    clinical_description: c.clinical_description,
     sat_product_key: c.sat_product_key,
     sat_unit_key: c.sat_unit_key,
   }
@@ -65,6 +68,7 @@ function aPayload(b: Borrador): { input: ConceptInput } | { errores: string[] } 
     input: {
       name,
       base_price: precio,
+      clinical_description: b.clinical_description.trim(),
       sat_product_key: b.sat_product_key.trim(),
       sat_unit_key: b.sat_unit_key.trim(),
     },
@@ -336,6 +340,21 @@ function EditorServicio({
             value={borrador.base_price}
             onChange={e => set('base_price', e.target.value)}
           />
+        </div>
+
+        <div className="sm:col-span-full">
+          <label className="label">Descripción clínica (para el Plan Integral)</label>
+          <textarea
+            className="input resize-none w-full"
+            rows={3}
+            maxLength={2000}
+            placeholder="Ej. Aplicación de células madre mesenquimales para regeneración articular…"
+            value={borrador.clinical_description}
+            onChange={e => set('clinical_description', e.target.value)}
+          />
+          <p className="text-[11px] text-gray-400 mt-1">
+            Este texto aparece por cada tratamiento en el Plan Integral del paciente.
+          </p>
         </div>
       </div>
 

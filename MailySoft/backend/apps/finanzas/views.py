@@ -129,6 +129,7 @@ class ConceptListCreateApi(TenantAPIView):
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=160)
         description = serializers.CharField(default="", allow_blank=True)
+        clinical_description = serializers.CharField(default="", allow_blank=True)
         base_price = serializers.DecimalField(
             max_digits=12, decimal_places=2, default=Decimal("0.00")
         )
@@ -166,6 +167,7 @@ class ConceptDetailApi(TenantAPIView):
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=160, required=False)
         description = serializers.CharField(required=False, allow_blank=True)
+        clinical_description = serializers.CharField(required=False, allow_blank=True)
         base_price = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
         sat_product_key = serializers.CharField(max_length=10, required=False, allow_blank=True)
         sat_unit_key = serializers.CharField(max_length=10, required=False, allow_blank=True)

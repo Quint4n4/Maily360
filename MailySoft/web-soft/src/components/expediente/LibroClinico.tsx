@@ -404,9 +404,9 @@ function BloqueTitulo({ icon: Icon, children }: { icon: typeof User; children: R
 function Dato({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value == null || value === '') return null
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col min-w-0">
       <span className="text-[10px] uppercase tracking-wide text-gray-400">{label}</span>
-      <span className="text-sm text-gray-800">{value}</span>
+      <span className="text-sm text-gray-800 break-words">{value}</span>
     </div>
   )
 }
@@ -588,7 +588,7 @@ function HistoriaClinicaPage({
       {tieneExplorBasal && (
         <div className="mb-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700/70 mb-1.5">
-            Exploración física basal
+            Exploración física
           </p>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(historia.exploracion_fisica_basal ?? {})

@@ -14,15 +14,16 @@ Principios:
 """
 
 import logging
-import uuid
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
 from apps.clinica.models import (
     ClinicSettings,
+    ClinicTeamMember,
     ClinicTemplate,
     CredentialKind,
     CredentialValidationStatus,
@@ -64,9 +65,7 @@ def _notify_credential_pending(credential: DoctorCredential, actor: "User") -> N
             target_id=credential.id,
         )
     except Exception:  # noqa: BLE001
-        logger.warning(
-            "No se pudo notificar credencial por validar (cred=%s).", credential.id
-        )
+        logger.warning("No se pudo notificar credencial por validar (cred=%s).", credential.id)
 
 
 def _notify_credential_result(credential: DoctorCredential, actor: "User", status: str) -> None:
@@ -97,9 +96,7 @@ def _notify_credential_result(credential: DoctorCredential, actor: "User", statu
             target_id=credential.id,
         )
     except Exception:  # noqa: BLE001
-        logger.warning(
-            "No se pudo notificar resultado de validación (cred=%s).", credential.id
-        )
+        logger.warning("No se pudo notificar resultado de validación (cred=%s).", credential.id)
 
 
 # ---------------------------------------------------------------------------
@@ -154,13 +151,13 @@ def clinic_settings_upsert(
     youtube: str = "",
     letterhead_full: Any = None,
     letterhead_half: Any = None,
-    letterhead_full_spaces: Optional[int] = None,
-    letterhead_half_spaces: Optional[int] = None,
+    letterhead_full_spaces: int | None = None,
+    letterhead_half_spaces: int | None = None,
     commercial_name: str = "",
     brand_color: str = "",
-    doctors_see_costs: Optional[bool] = None,
+    doctors_see_costs: bool | None = None,
     # Soporte partial update: solo actualiza los campos explícitamente pasados.
-    _partial_fields: Optional[frozenset[str]] = None,
+    _partial_fields: frozenset[str] | None = None,
 ) -> ClinicSettings:
     """Crea o actualiza la configuración de la clínica (upsert).
 
@@ -249,7 +246,11 @@ def clinic_settings_upsert(
         tenant=tenant,
         resource_id=settings.id,
         resource_repr=str(settings.id),
-        description="Configuración de clínica creada." if creating else "Configuración de clínica actualizada.",
+        description=(
+            "Configuración de clínica creada."
+            if creating
+            else "Configuración de clínica actualizada."
+        ),
         metadata={"created": creating, "changed_fields": sorted(field_map.keys())},
     )
     return settings
@@ -340,9 +341,7 @@ def template_update(
     """
     bad = _TEMPLATE_IMMUTABLE & set(fields)
     if bad:
-        raise ValidationError(
-            f"No se pueden modificar los campos: {', '.join(sorted(bad))}."
-        )
+        raise ValidationError(f"No se pueden modificar los campos: {', '.join(sorted(bad))}.")
 
     for field_name, value in fields.items():
         setattr(template, field_name, value)
@@ -421,9 +420,7 @@ def patient_category_create(
         name=name,
         deleted_at__isnull=True,
     ).exists():
-        raise ValidationError(
-            f"Ya existe una categoría con el nombre '{name}' en esta clínica."
-        )
+        raise ValidationError(f"Ya existe una categoría con el nombre '{name}' en esta clínica.")
 
     category = PatientCategory.objects.create(
         tenant=tenant,
@@ -461,9 +458,7 @@ def patient_category_deactivate(
         ValidationError: si la etiqueta es del sistema (Favorito/VIP).
     """
     if category.is_system:
-        raise ValidationError(
-            "Las etiquetas del sistema (Favorito y VIP) no se pueden eliminar."
-        )
+        raise ValidationError("Las etiquetas del sistema (Favorito y VIP) no se pueden eliminar.")
     category.is_active = False
     category.save(update_fields=["is_active", "updated_at"])
 
@@ -518,7 +513,7 @@ def doctor_update_profile_images(
     user: "User",
     sello: Any = None,
     foto: Any = None,
-    cedulas_adicionales: Optional[str] = None,
+    cedulas_adicionales: str | None = None,
 ) -> "Doctor":
     """Actualiza sello, foto y/o cédulas adicionales del médico.
 
@@ -871,9 +866,7 @@ def doctor_credential_set_validation(
         CredentialValidationStatus.RECHAZADA.value,
     }
     if status not in allowed:
-        raise ValidationError(
-            "El estado de validación debe ser 'validada' o 'rechazada'."
-        )
+        raise ValidationError("El estado de validación debe ser 'validada' o 'rechazada'.")
 
     credential.validation_status = status
     credential.validation_note = (note or "").strip()
@@ -923,4 +916,133 @@ def doctor_credential_delete(
         resource_id=credential_id,
         resource_repr=f"{credential_repr} dado de baja",
         metadata={"doctor_id": str(doctor_id)},
+    )
+
+
+# ---------------------------------------------------------------------------
+# ClinicTeamMember — equipo/departamentos de la clínica (Fase 4)
+# ---------------------------------------------------------------------------
+
+_TEAM_MEMBER_IMMUTABLE: frozenset[str] = frozenset(
+    {"id", "tenant", "tenant_id", "created_at", "updated_at", "deleted_at", "is_active"}
+)
+
+
+def clinic_team_member_create(
+    *,
+    tenant: "Tenant",
+    user: "User",
+    departamento: str,
+    nombre: str,
+    order: int = 0,
+    is_active: bool = True,
+) -> ClinicTeamMember:
+    """Crea un miembro del equipo de la clínica.
+
+    Args:
+        tenant:       Clínica a la que pertenece el miembro.
+        user:         Usuario que crea el registro.
+        departamento: Departamento o área del equipo.
+        nombre:       Nombre de la persona.
+        order:        Posición de aparición (0 = primero).
+        is_active:    True = visible en el catálogo (default).
+
+    Returns:
+        Instancia ClinicTeamMember recién creada.
+    """
+    member = ClinicTeamMember.objects.create(
+        tenant=tenant,
+        created_by=user,
+        departamento=departamento,
+        nombre=nombre,
+        order=order,
+        is_active=is_active,
+    )
+    audit_record(
+        action=ActionType.CLINIC_TEAM_MEMBER_CREATE,
+        resource_type="ClinicTeamMember",
+        actor=user,
+        tenant=tenant,
+        resource_id=member.id,
+        resource_repr=str(member),
+    )
+    return member
+
+
+def clinic_team_member_update(
+    *,
+    member: ClinicTeamMember,
+    user: "User",
+    **fields: Any,
+) -> ClinicTeamMember:
+    """Actualiza campos permitidos de un miembro del equipo.
+
+    No permite modificar is_active (solo vía clinic_team_member_activate/
+    deactivate) ni campos de identidad.
+
+    Raises:
+        ValidationError: si se intenta modificar un campo inmutable.
+    """
+    bad = _TEAM_MEMBER_IMMUTABLE & set(fields)
+    if bad:
+        raise ValidationError(f"No se pueden modificar los campos: {', '.join(sorted(bad))}.")
+
+    for field_name, value in fields.items():
+        setattr(member, field_name, value)
+
+    update_fields = [*fields.keys(), "updated_at"]
+    member.save(update_fields=update_fields)
+
+    audit_record(
+        action=ActionType.CLINIC_TEAM_MEMBER_UPDATE,
+        resource_type="ClinicTeamMember",
+        actor=user,
+        tenant=member.tenant,
+        resource_id=member.id,
+        resource_repr=str(member),
+    )
+    return member
+
+
+def clinic_team_member_activate(*, member: ClinicTeamMember, user: "User") -> ClinicTeamMember:
+    """Reactiva un miembro del equipo (is_active=True)."""
+    member.is_active = True
+    member.save(update_fields=["is_active", "updated_at"])
+    audit_record(
+        action=ActionType.CLINIC_TEAM_MEMBER_UPDATE,
+        resource_type="ClinicTeamMember",
+        actor=user,
+        tenant=member.tenant,
+        resource_id=member.id,
+        resource_repr=str(member),
+    )
+    return member
+
+
+def clinic_team_member_deactivate(*, member: ClinicTeamMember, user: "User") -> ClinicTeamMember:
+    """Oculta un miembro del equipo del catálogo (is_active=False)."""
+    member.is_active = False
+    member.save(update_fields=["is_active", "updated_at"])
+    audit_record(
+        action=ActionType.CLINIC_TEAM_MEMBER_UPDATE,
+        resource_type="ClinicTeamMember",
+        actor=user,
+        tenant=member.tenant,
+        resource_id=member.id,
+        resource_repr=str(member),
+    )
+    return member
+
+
+def clinic_team_member_delete(*, member: ClinicTeamMember, user: "User") -> None:
+    """Baja lógica (deleted_at) de un miembro del equipo — no borra físicamente."""
+    member.deleted_at = timezone.now()
+    member.save(update_fields=["deleted_at", "updated_at"])
+    audit_record(
+        action=ActionType.CLINIC_TEAM_MEMBER_DELETE,
+        resource_type="ClinicTeamMember",
+        actor=user,
+        tenant=member.tenant,
+        resource_id=member.id,
+        resource_repr=str(member),
     )

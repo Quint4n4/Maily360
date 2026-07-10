@@ -52,6 +52,16 @@ class ServiceConcept(TenantAwareModel):
         default="",
         help_text="Descripción opcional del concepto.",
     )
+    clinical_description = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Descripción CLÍNICA del tratamiento (distinta de `description`, que es "
+            "comercial). Se usa como texto sugerido en la sección 'Descripción de los "
+            "tratamientos' del Plan Integral de Longevidad (apps.expediente) cuando "
+            "este concepto se incluye en un esquema de calendarización."
+        ),
+    )
     base_price = models.DecimalField(
         max_digits=_MONEY_MAX_DIGITS,
         decimal_places=_MONEY_DECIMALS,

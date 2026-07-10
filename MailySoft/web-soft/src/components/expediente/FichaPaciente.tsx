@@ -18,7 +18,7 @@ import {
   Phone, Mail, Fingerprint, StickyNote, User,
   AlertTriangle, Plus, X, Loader2, MapPin, Heart,
   Droplet, GraduationCap, Briefcase, Cake, Calendar, Tag, Users, BookOpen, Baby,
-  Pencil, AlertCircle, DollarSign, ClipboardList, FileHeart,
+  Pencil, AlertCircle, ClipboardList, FileHeart,
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type { Allergy, AllergyInput, AllergySeverity } from '../../types/expediente'
@@ -261,10 +261,6 @@ function FichaLectura({
           <DatoIcono icon={BookOpen} color="#7c3aed" label="Religión" value={paciente.religion} />
           <DatoIcono icon={Droplet} color="#dc2626" label="Tipo de sangre" value={paciente.blood_type_display} />
           <DatoIcono icon={Tag} color="#0d9488" label="Categoría" value={paciente.category} />
-          <DatoIcono
-            icon={DollarSign} color="#16a34a" label="Costo de consulta"
-            value={paciente.custom_consultation_fee ? `$${paciente.custom_consultation_fee}` : null}
-          />
           <DatoIcono
             icon={AlertTriangle} color="#6b7280" label="Defunción"
             value={paciente.is_deceased ? (paciente.deceased_at ? `Finado · ${paciente.deceased_at}` : 'Finado') : null}

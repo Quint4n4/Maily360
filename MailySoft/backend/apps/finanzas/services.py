@@ -78,10 +78,15 @@ def concept_create(
     name: str,
     base_price: Decimal = ZERO,
     description: str = "",
+    clinical_description: str = "",
     sat_product_key: str = "",
     sat_unit_key: str = "E48",
 ) -> ServiceConcept:
     """Crea un concepto cobrable en el catálogo del tenant.
+
+    `clinical_description` es texto clínico (distinto de `description`,
+    comercial) que se sugiere al incluir este concepto en el esquema de
+    tratamientos de un Plan Integral de Longevidad (apps.expediente).
 
     Raises:
         ValidationError: si ya existe un concepto con el mismo nombre.
@@ -97,6 +102,7 @@ def concept_create(
         name=name,
         base_price=base_price,
         description=description,
+        clinical_description=clinical_description,
         sat_product_key=sat_product_key,
         sat_unit_key=sat_unit_key,
     )

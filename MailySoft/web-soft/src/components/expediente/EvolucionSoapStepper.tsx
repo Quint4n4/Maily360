@@ -23,7 +23,7 @@
  * useUploadEvolutionImage) antes de cerrar.
  */
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   X, Loader2, Lock, ChevronLeft, ChevronRight, Plus, Trash2, ImagePlus, ImageIcon,
   CheckCircle2, Activity,
@@ -39,6 +39,10 @@ import {
   useCreateEvolutionNote, useEvolutionImages, useUploadEvolutionImage,
   useDeleteEvolutionImage, useVitalSigns,
 } from '../../hooks/expediente'
+import { useAuth } from '../../auth/AuthContext'
+import { useLocalDraft } from '../../hooks/useLocalDraft'
+import { draftKey } from '../../lib/draftKeys'
+import BorradorRecuperadoAviso from '../common/BorradorRecuperadoAviso'
 import { formatFechaHora } from '../../lib/fecha'
 import { erroresDe } from '../../lib/apiErrors'
 import {
@@ -80,6 +84,14 @@ const TEXTO_VACIO: NotaTexto = {
   tratamiento: '', plan_recomendaciones: '', indicaciones_enfermeria: '',
 }
 
+/** Forma del BORRADOR LOCAL de una nota de evolución en progreso. */
+interface EvolucionDraft {
+  appointmentId: string
+  paso: number
+  texto: NotaTexto
+  explor: ExploracionEvolucion
+}
+
 interface EvolucionSoapStepperProps {
   paciente: PatientOut
   onClose: () => void
@@ -90,6 +102,8 @@ export default function EvolucionSoapStepper({ paciente, onClose }: EvolucionSoa
   const { data: signosData } = useVitalSigns(paciente.id)
   const crear = useCreateEvolutionNote(paciente.id)
 
+  const { user } = useAuth()
+
   const [appointmentId, setAppointmentId] = useState('')
   const [paso, setPaso] = useState(0)
   const [texto, setTexto] = useState<NotaTexto>(TEXTO_VACIO)
@@ -98,6 +112,43 @@ export default function EvolucionSoapStepper({ paciente, onClose }: EvolucionSoa
   const [errores, setErrores] = useState<string[]>([])
   /** Nota recién creada: se ofrece adjuntar imágenes antes de cerrar. */
   const [creada, setCreada] = useState<EvolutionNote | null>(null)
+
+  // ── Borrador local: una nota de evolución en progreso por paciente ──
+  const userId = user?.id ?? ''
+  const tenantId = user?.active_tenant?.id ?? ''
+  const storageKey = draftKey(userId, tenantId, 'evolucion', paciente.id)
+  const draftEnabled = !!userId && !!tenantId && !creada
+  const draftValue = useMemo<EvolucionDraft>(
+    () => ({ appointmentId, paso, texto, explor }),
+    [appointmentId, paso, texto, explor],
+  )
+  const { draft, clearDraft } = useLocalDraft<EvolucionDraft>({
+    storageKey,
+    value: draftValue,
+    enabled: draftEnabled,
+  })
+
+  // Precarga del borrador (una sola vez, si hay uno y hay usuario/tenant).
+  const draftAppliedRef = useRef(false)
+  useEffect(() => {
+    if (draftAppliedRef.current) return
+    if (!userId || !tenantId) return // esperar a que la sesión esté lista
+    draftAppliedRef.current = true
+    if (draft) {
+      setAppointmentId(draft.data.appointmentId)
+      setPaso(draft.data.paso)
+      setTexto(draft.data.texto)
+      setExplor(draft.data.explor)
+    }
+  }, [draft, userId, tenantId])
+
+  const descartarBorrador = (): void => {
+    clearDraft()
+    setAppointmentId('')
+    setPaso(0)
+    setTexto(TEXTO_VACIO)
+    setExplor({})
+  }
 
   // Solo citas ATTENDED del paciente (requisito del backend D-EC-2).
   const citasAtendidas = useMemo<Appointment[]>(
@@ -146,6 +197,7 @@ export default function EvolucionSoapStepper({ paciente, onClose }: EvolucionSoa
     if (Object.keys(explorEnviar).length > 0) input.exploracion_fisica = explorEnviar
     try {
       const nota = await crear.mutateAsync(input)
+      clearDraft() // nota creada en el servidor: descartar el borrador local
       setCreada(nota)
     } catch (err) {
       setErrores(erroresDe(err))
@@ -187,6 +239,10 @@ export default function EvolucionSoapStepper({ paciente, onClose }: EvolucionSoa
           <X className="w-4 h-4" />
         </button>
       </div>
+
+      {draft && draftEnabled && (
+        <BorradorRecuperadoAviso savedAt={draft.savedAt} onDescartar={descartarBorrador} />
+      )}
 
       {/* Selección de cita atendida (igual que el flujo anterior) */}
       <div>

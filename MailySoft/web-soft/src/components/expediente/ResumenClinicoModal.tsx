@@ -17,7 +17,7 @@
  * componente `VisorPdf`. Estilo glass, mismo lenguaje visual que el expediente.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -30,6 +30,10 @@ import { useResumenBorrador, useCrearResumen } from '../../hooks/expediente'
 import { getResumenClinicoPdf } from '../../api/expediente'
 import { erroresDe } from '../../lib/apiErrors'
 import { formatFechaCorta } from '../../lib/fecha'
+import { useAuth } from '../../auth/AuthContext'
+import { useLocalDraft } from '../../hooks/useLocalDraft'
+import { draftKey } from '../../lib/draftKeys'
+import BorradorRecuperadoAviso from '../common/BorradorRecuperadoAviso'
 import { useAviso } from '../common/DialogProvider'
 import VisorPdf from '../VisorPdf'
 
@@ -75,6 +79,7 @@ export default function ResumenClinicoModal({
   evolutionId, patientId, onClose,
 }: ResumenClinicoModalProps) {
   const aviso = useAviso()
+  const { user } = useAuth()
   const { data: borrador, isLoading, isError, error } = useResumenBorrador(evolutionId, true)
   const crear = useCrearResumen(evolutionId, patientId)
 
@@ -83,9 +88,40 @@ export default function ResumenClinicoModal({
   // Id de la constancia recién generada: null = aún no; string = abrir VisorPdf.
   const [pdfSummaryId, setPdfSummaryId] = useState<string | null>(null)
 
+  // ── Borrador local del resumen (por evolución) ──
+  const userId = user?.id ?? ''
+  const tenantId = user?.active_tenant?.id ?? ''
+  const storageKey = draftKey(userId, tenantId, 'resumen', evolutionId)
+  // Se vigila solo tras sembrar el borrador del servidor (fija el baseline).
+  const [serverLoaded, setServerLoaded] = useState(false)
+  const draftEnabled = !!userId && !!tenantId && serverLoaded && !pdfSummaryId
+  const { draft, clearDraft } = useLocalDraft<ResumenSecciones>({
+    storageKey,
+    value: secciones,
+    enabled: draftEnabled,
+  })
+
+  // Fase A: sembrar desde el servidor una sola vez (baseline del borrador).
+  const seededRef = useRef(false)
+  const draftAppliedRef = useRef(false)
   useEffect(() => {
-    if (borrador) setSecciones(borrador.secciones)
+    if (!borrador || seededRef.current) return
+    seededRef.current = true
+    setSecciones(borrador.secciones)
+    setServerLoaded(true)
   }, [borrador])
+
+  // Fase B: precargar el borrador local por encima (una sola vez).
+  useEffect(() => {
+    if (!serverLoaded || draftAppliedRef.current) return
+    draftAppliedRef.current = true
+    if (draft) setSecciones(draft.data)
+  }, [serverLoaded, draft])
+
+  const descartarBorrador = (): void => {
+    clearDraft()
+    if (borrador) setSecciones(borrador.secciones)
+  }
 
   const setCampo = (key: keyof ResumenSecciones) =>
     (e: React.ChangeEvent<HTMLTextAreaElement>) =>
@@ -94,6 +130,7 @@ export default function ResumenClinicoModal({
   const generar = async () => {
     try {
       const resumen = await crear.mutateAsync(secciones)
+      clearDraft() // generado en el servidor: descartar el borrador local
       setPdfSummaryId(resumen.id)
     } catch (err) {
       await aviso({
@@ -158,6 +195,9 @@ export default function ResumenClinicoModal({
               <ErrorBorrador error={error} />
             ) : (
               <div className="space-y-5">
+                {draft && draftEnabled && (
+                  <BorradorRecuperadoAviso savedAt={draft.savedAt} onDescartar={descartarBorrador} />
+                )}
                 {/* Nota informativa */}
                 <div
                   className="flex items-start gap-2.5 rounded-2xl px-4 py-3"

@@ -20,7 +20,6 @@ from django.core.exceptions import ValidationError
 from apps.finanzas.models import (
     CfdiDocument,
     Charge,
-    Payment,
     PaymentAllocation,
     Quote,
 )
@@ -44,7 +43,6 @@ from tests.factories import (
     TenantFactory,
     UserFactory,
 )
-
 
 # ===========================================================================
 # Conceptos
@@ -87,6 +85,37 @@ class TestConceptServices:
         concept_deactivate(concept=concept, user=user)
 
         assert concept.is_active is False
+
+    def test_concept_create_persists_clinical_description(self, db: None) -> None:
+        """clinical_description es texto CLÍNICO, distinto de description (comercial).
+
+        Se sugiere en el Plan Integral de Longevidad (apps.expediente) cuando
+        este concepto se incluye en un esquema de calendarización.
+        """
+        tenant = TenantFactory()
+        user = UserFactory()
+
+        concept = concept_create(
+            tenant=tenant,
+            user=user,
+            name="Terapia de ozono",
+            description="Sesión de 45 minutos",
+            clinical_description="Aplicación intravenosa semanal por 6 semanas.",
+        )
+
+        assert concept.clinical_description == "Aplicación intravenosa semanal por 6 semanas."
+        assert concept.description == "Sesión de 45 minutos"
+
+    def test_concept_update_clinical_description(self, db: None) -> None:
+        tenant = TenantFactory()
+        user = UserFactory()
+        concept = concept_create(tenant=tenant, user=user, name="Vitaminoterapia")
+
+        updated = concept_update(
+            concept=concept, user=user, clinical_description="Infusión IV cada 15 días."
+        )
+
+        assert updated.clinical_description == "Infusión IV cada 15 días."
 
 
 # ===========================================================================
@@ -163,7 +192,9 @@ class TestQuoteServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         quote = quote_create(
-            tenant=tenant, user=user, patient=patient,
+            tenant=tenant,
+            user=user,
+            patient=patient,
             items=[{"description": "X", "unit_price": "100"}],
         )
         quote_send(quote=quote, user=user)
@@ -185,8 +216,11 @@ class TestChargeServices:
         patient = PatientFactory(tenant=tenant)
 
         charge = charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("750.00"), description="Consulta urgente",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("750.00"),
+            description="Consulta urgente",
         )
 
         assert charge.status == Charge.Status.PENDING
@@ -199,8 +233,11 @@ class TestChargeServices:
 
         with pytest.raises(ValidationError):
             charge_create(
-                tenant=tenant, user=user, patient=patient,
-                amount=Decimal("0.00"), description="Cero",
+                tenant=tenant,
+                user=user,
+                patient=patient,
+                amount=Decimal("0.00"),
+                description="Cero",
             )
 
     def test_charge_cancel_rejects_if_paid(self, db: None) -> None:
@@ -208,11 +245,17 @@ class TestChargeServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         charge = charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("500.00"), description="Consulta",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
+            description="Consulta",
         )
         payment_register(
-            tenant=tenant, user=user, patient=patient, amount=Decimal("500.00"),
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
             allocations=[{"charge_id": str(charge.id), "amount": "500.00"}],
         )
         charge.refresh_from_db()
@@ -232,12 +275,18 @@ class TestPaymentServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         charge = charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("500.00"), description="Consulta",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
+            description="Consulta",
         )
 
         payment_register(
-            tenant=tenant, user=user, patient=patient, amount=Decimal("500.00"),
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
             allocations=[{"charge_id": str(charge.id), "amount": "500.00"}],
         )
 
@@ -250,12 +299,18 @@ class TestPaymentServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         charge = charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("500.00"), description="Consulta",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
+            description="Consulta",
         )
 
         payment_register(
-            tenant=tenant, user=user, patient=patient, amount=Decimal("200.00"),
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("200.00"),
             allocations=[{"charge_id": str(charge.id), "amount": "200.00"}],
         )
 
@@ -270,17 +325,26 @@ class TestPaymentServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         c1 = charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("800.00"), description="Consulta general",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("800.00"),
+            description="Consulta general",
         )
         c2 = charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("100.00"), description="Consulta dolor de muela",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("100.00"),
+            description="Consulta dolor de muela",
         )
 
         # Pago de 850 SIN allocations -> cubre c1 (800) y abona 50 a c2.
         payment_register(
-            tenant=tenant, user=user, patient=patient, amount=Decimal("850.00"),
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("850.00"),
         )
 
         c1.refresh_from_db()
@@ -294,13 +358,19 @@ class TestPaymentServices:
         user = UserFactory()
         patient = PatientFactory(tenant=tenant)
         charge = charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("100.00"), description="Consulta",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("100.00"),
+            description="Consulta",
         )
 
         with pytest.raises(ValidationError):
             payment_register(
-                tenant=tenant, user=user, patient=patient, amount=Decimal("200.00"),
+                tenant=tenant,
+                user=user,
+                patient=patient,
+                amount=Decimal("200.00"),
                 allocations=[{"charge_id": str(charge.id), "amount": "200.00"}],
             )
 
@@ -311,7 +381,10 @@ class TestPaymentServices:
 
         with pytest.raises(ValidationError):
             payment_register(
-                tenant=tenant, user=user, patient=patient, amount=Decimal("0.00"),
+                tenant=tenant,
+                user=user,
+                patient=patient,
+                amount=Decimal("0.00"),
             )
 
 
@@ -329,16 +402,25 @@ class TestCfdiServices:
         # Arrange: crear un cargo pendiente que cubra el monto del pago (regla:
         # pago no puede exceder la deuda pendiente del paciente).
         charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("500.00"), description="Consulta general",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
+            description="Consulta general",
         )
         payment = payment_register(
-            tenant=tenant, user=user, patient=patient, amount=Decimal("500.00"),
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
         )
 
         cfdi = cfdi_issue(
-            tenant=tenant, user=user, payment=payment,
-            receptor_rfc="XAXX010101000", receptor_name="Público en general",
+            tenant=tenant,
+            user=user,
+            payment=payment,
+            receptor_rfc="XAXX010101000",
+            receptor_name="Público en general",
         )
 
         assert cfdi.status == CfdiDocument.Status.STAMPED
@@ -354,17 +436,26 @@ class TestCfdiServices:
         # falta de deuda pendiente (la regla de no-saldo-a-favor es anterior a la
         # validación de config fiscal que este test pretende ejercitar).
         charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("500.00"), description="Consulta general",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
+            description="Consulta general",
         )
         payment = payment_register(
-            tenant=tenant, user=user, patient=patient, amount=Decimal("500.00"),
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
         )
 
         with pytest.raises(ValidationError):
             cfdi_issue(
-                tenant=tenant, user=user, payment=payment,
-                receptor_rfc="XAXX010101000", receptor_name="X",
+                tenant=tenant,
+                user=user,
+                payment=payment,
+                receptor_rfc="XAXX010101000",
+                receptor_name="X",
             )
 
     def test_cfdi_cancel_marks_cancelled(self, db: None) -> None:
@@ -374,15 +465,24 @@ class TestCfdiServices:
         ClinicFiscalConfigFactory(tenant=tenant)
         # Arrange: crear cargo previo para cubrir la deuda del paciente.
         charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("500.00"), description="Consulta general",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
+            description="Consulta general",
         )
         payment = payment_register(
-            tenant=tenant, user=user, patient=patient, amount=Decimal("500.00"),
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("500.00"),
         )
         cfdi = cfdi_issue(
-            tenant=tenant, user=user, payment=payment,
-            receptor_rfc="XAXX010101000", receptor_name="X",
+            tenant=tenant,
+            user=user,
+            payment=payment,
+            receptor_rfc="XAXX010101000",
+            receptor_name="X",
         )
 
         cfdi_cancel(cfdi=cfdi, user=user, reason="02")
@@ -400,14 +500,21 @@ class TestCfdiServices:
         # lo salda por completo. Así ambos payment_register pasan la validación
         # de deuda pendiente y el test puede ejercitar el folio consecutivo.
         charge_create(
-            tenant=tenant, user=user, patient=patient,
-            amount=Decimal("300.00"), description="Tratamiento",
+            tenant=tenant,
+            user=user,
+            patient=patient,
+            amount=Decimal("300.00"),
+            description="Tratamiento",
         )
         p1 = payment_register(tenant=tenant, user=user, patient=patient, amount=Decimal("100.00"))
         p2 = payment_register(tenant=tenant, user=user, patient=patient, amount=Decimal("200.00"))
 
-        c1 = cfdi_issue(tenant=tenant, user=user, payment=p1, receptor_rfc="XAXX010101000", receptor_name="X")
-        c2 = cfdi_issue(tenant=tenant, user=user, payment=p2, receptor_rfc="XAXX010101000", receptor_name="X")
+        c1 = cfdi_issue(
+            tenant=tenant, user=user, payment=p1, receptor_rfc="XAXX010101000", receptor_name="X"
+        )
+        c2 = cfdi_issue(
+            tenant=tenant, user=user, payment=p2, receptor_rfc="XAXX010101000", receptor_name="X"
+        )
 
         assert (c1.folio, c2.folio) == (1, 2)
 
@@ -423,7 +530,10 @@ class TestFiscalConfigServices:
         user = UserFactory()
 
         config = clinic_fiscal_config_update(
-            tenant=tenant, user=user, rfc="MARP850101AB1", legal_name="Clínica X",
+            tenant=tenant,
+            user=user,
+            rfc="MARP850101AB1",
+            legal_name="Clínica X",
         )
 
         assert config.rfc == "MARP850101AB1"

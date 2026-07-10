@@ -28,7 +28,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, CalendarPlus, UserX, Loader2, AlertTriangle, CalendarClock, Wallet, ListChecks } from 'lucide-react'
+import { X, CalendarPlus, UserX, Loader2, AlertTriangle, CalendarClock, Wallet, ListChecks, Sparkles } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { initialsOf } from '../../lib/paciente'
 import { useUploadPatientAvatar } from '../../hooks/pacientes'
@@ -50,6 +50,7 @@ import RecetasTab from '../expediente/RecetasTab'
 import CitasSection from '../expediente/CitasSection'
 import EstadoCuentaExpediente from '../expediente/EstadoCuentaExpediente'
 import CalendarizacionTab from '../expediente/CalendarizacionTab'
+import PlanIntegralModal from '../expediente/PlanIntegralModal'
 
 interface ExpedienteDrawerProps {
   paciente: PatientOut | null
@@ -86,6 +87,11 @@ export default function ExpedienteDrawer({
 
   // Pestaña activa del panel derecho: expediente / estado de cuenta / calendarización.
   const [tab, setTab] = useState<'expediente' | 'cuenta' | 'calendarizacion'>('expediente')
+
+  // Plan Integral (constancia a nivel paciente): solo roles clínicos editables
+  // (owner/admin/doctor). El backend es la autoridad y responde 403 al resto.
+  const [planIntegralAbierto, setPlanIntegralAbierto] = useState(false)
+  const puedeVerPlanIntegral = accesoClinico && editarClinico
 
   // El selector de pestañas se muestra si hay al menos una pestaña extra además
   // del expediente (estado de cuenta y/o calendarización).
@@ -174,6 +180,16 @@ export default function ExpedienteDrawer({
                       <CalendarPlus className="w-4 h-4" /> Agendar
                     </button>
                   </div>
+                  {puedeVerPlanIntegral && (
+                    <button
+                      onClick={() => setPlanIntegralAbierto(true)}
+                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:brightness-105"
+                      style={{ background: 'rgba(255,255,255,0.75)', color: '#854F0B', border: '1px solid rgba(201,162,39,0.4)' }}
+                      title="Generar el Plan Integral de Longevidad y Medicina Regenerativa"
+                    >
+                      <Sparkles className="w-4 h-4" /> Plan Integral
+                    </button>
+                  )}
                   {puedeEditar && paciente.is_active && (
                     <button onClick={onDarDeBaja} disabled={dandoDeBaja}
                       className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:underline transition-colors disabled:opacity-60">
@@ -281,6 +297,14 @@ export default function ExpedienteDrawer({
                 )}
               </section>
             </div>
+
+            {/* Plan Integral de Longevidad y Medicina Regenerativa (constancia paciente) */}
+            {planIntegralAbierto && (
+              <PlanIntegralModal
+                patientId={paciente.id}
+                onClose={() => setPlanIntegralAbierto(false)}
+              />
+            )}
           </motion.div>
         </motion.div>
       )}

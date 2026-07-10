@@ -34,7 +34,11 @@ export interface CitaDetalle {
   modalidad: string
   horario: string   // "9:00 – 10:00"
   fecha: string     // "Jueves 4 de Junio, 2026"
-  motivo: string
+  /** Tipo de cita (nombre del catálogo) o '' si la cita no tiene tipo. */
+  tipoCita: string
+  /** Motivo real de la cita ("¿a qué viene?" = Appointment.reason). Se conserva al
+   *  cancelar/reagendar, por eso es clave mostrarlo en citas canceladas/reagendadas. */
+  aQueVenia: string
   especialidad: string
   notas: string
   estadoInicial: EstadoCita
@@ -225,6 +229,21 @@ export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = f
               </div>
             )}
 
+            {/* ── A qué venía (motivo real de la cita) — visible en cualquier estado,
+                   clave cuando está cancelada/reagendada (el reason se conserva). ── */}
+            {cita.aQueVenia && (
+              <div className="px-7 pt-5">
+                <div className="flex items-start gap-2.5 rounded-xl px-4 py-3"
+                  style={{ background: 'rgba(201,162,39,0.10)', border: '1px solid rgba(201,162,39,0.3)' }}>
+                  <FileText className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#C9A227' }} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#9A7B1E' }}>A qué venía</p>
+                    <p className="text-sm text-gray-800">{cita.aQueVenia}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── Cuerpo: detalles + recordatorios ── */}
             <div className="grid md:grid-cols-2 gap-6 px-7 py-6">
               {/* Detalles */}
@@ -233,7 +252,7 @@ export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = f
                 <Dato icon={User}        label="Doctor"       value={cita.doctor} />
                 <Dato icon={Video}       label="Modalidad"    value={cita.modalidad} />
                 <Dato icon={MapPin}      label="Consultorio"  value={cita.consultorioName} dot={cita.consultorioColor} />
-                <Dato icon={FileText}    label="Motivo"       value={cita.motivo} />
+                <Dato icon={FileText}    label="Tipo de cita" value={cita.tipoCita} />
                 <Dato icon={Stethoscope} label="Especialidad" value={cita.especialidad} />
                 {cita.notas && <Dato icon={FileText} label="Notas" value={cita.notas} />}
 

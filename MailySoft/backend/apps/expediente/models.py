@@ -1324,3 +1324,305 @@ class TreatmentSession(TenantAwareModel):
 
     def __str__(self) -> str:
         return f"TxSesión({self.id}) — item {self.item_id} #{self.number} [{self.status}]"
+
+
+# ---------------------------------------------------------------------------
+# LongevityPlan — Plan Integral de Longevidad y Medicina Regenerativa (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+class LongevityPlan(TenantAwareModel):
+    """Plan Integral de Longevidad, constancia entregable al paciente.
+
+    A diferencia del Resumen Clínico (nace de UNA consulta/EvolutionNote), el
+    Plan Integral nace directamente del PACIENTE: compone (lee, no muta)
+    varios módulos ya existentes del expediente — alergias, historia clínica
+    (antecedentes/tratamientos actuales/exploración física basal) y,
+    opcionalmente, un esquema de calendarización de tratamientos
+    (`treatment_plan`) del cual se toma un SNAPSHOT (`esquema`) al crear.
+
+    El borrador se auto-rellena desde el expediente
+    (`services_plan_integral.longevity_plan_draft`) y el médico edita el
+    texto antes de guardarlo como constancia (append-only conceptual, igual
+    que ClinicalSummary/EvolutionNote: no hay endpoint de edición tras crear).
+
+    Secciones (todas TextField, snapshot editable por el médico):
+        alergias              — alergias vigentes del paciente.
+        antecedentes          — antecedentes de importancia (HC).
+        tratamientos_actuales — tratamientos actuales del paciente (HC).
+        condiciones_mejorar   — principales condiciones a mejorar (sugeridas
+                                 desde exploracion_fisica_basal con alteraciones).
+        estudios              — reporte de estudios de laboratorio y gabinete.
+        reporte_medico        — reporte médico.
+        interconsulta         — interconsulta de departamentos.
+        seguimiento           — seguimiento y acompañamiento.
+
+    esquema — snapshot (lista de dicts) de los tratamientos del
+        `treatment_plan` referenciado al momento de crear la constancia:
+        [{"description": str, "quantity": int, "clinical_description": str}].
+        Independiente de que `treatment_plan` se edite o borre después.
+
+    doctor    — médico del actor que genera el plan (si actor_role == "doctor");
+                None si lo genera owner/admin en nombre de la clínica.
+    created_by — usuario que generó el registro (auditoría/trazabilidad).
+
+    Auditoría: LONGEVITY_PLAN_CREATE en AuditLog (NOM-024).
+    resource_repr = str(obj.id) — NUNCA PII.
+    """
+
+    patient = models.ForeignKey(
+        "pacientes.Patient",
+        on_delete=models.PROTECT,
+        related_name="longevity_plans",
+        db_index=True,
+        help_text="Paciente al que pertenece el Plan Integral de Longevidad.",
+    )
+    doctor = models.ForeignKey(
+        "personal.Doctor",
+        on_delete=models.PROTECT,
+        related_name="longevity_plans",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Médico que genera el plan (si el actor es médico; None si es owner/admin).",
+    )
+    created_by = models.ForeignKey(
+        "authn.User",
+        on_delete=models.PROTECT,
+        related_name="longevity_plans_created",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Usuario que generó el plan (auditoría).",
+    )
+    treatment_plan = models.ForeignKey(
+        TreatmentPlan,
+        on_delete=models.SET_NULL,
+        related_name="longevity_plans",
+        null=True,
+        blank=True,
+        help_text=(
+            "Esquema de calendarización de tratamientos usado como base del "
+            "snapshot `esquema` (opcional). Si se borra o cambia después, "
+            "`esquema` conserva los valores con los que se creó esta constancia."
+        ),
+    )
+
+    alergias = models.TextField(
+        blank=True,
+        default="",
+        help_text="Alergias vigentes del paciente (snapshot editable).",
+    )
+    antecedentes = models.TextField(
+        blank=True,
+        default="",
+        help_text="Antecedentes de importancia (snapshot editable de la HC).",
+    )
+    tratamientos_actuales = models.TextField(
+        blank=True,
+        default="",
+        help_text="Tratamientos actuales del paciente (snapshot editable de la HC).",
+    )
+    condiciones_mejorar = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Principales condiciones a mejorar (sugeridas desde la exploración física basal)."
+        ),
+    )
+    estudios = models.TextField(
+        blank=True,
+        default="",
+        help_text="Reporte de estudios de laboratorio y gabinete.",
+    )
+    reporte_medico = models.TextField(
+        blank=True,
+        default="",
+        help_text="Reporte médico.",
+    )
+    interconsulta = models.TextField(
+        blank=True,
+        default="",
+        help_text="Interconsulta de departamentos.",
+    )
+    seguimiento = models.TextField(
+        blank=True,
+        default="",
+        help_text="Seguimiento y acompañamiento propuesto al paciente.",
+    )
+    esquema = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Snapshot de los tratamientos del treatment_plan al momento de crear "
+            "la constancia: [{description, quantity, clinical_description}]. "
+            "Lista vacía si no se ligó ningún esquema."
+        ),
+    )
+    lab_results = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Snapshot de resultados de laboratorio capturados al crear la constancia: "
+            "[{analyte_id, name, unit, ref_low, ref_high, result, out_of_range}]. "
+            "out_of_range se calcula en longevity_plan_create contra el rango de "
+            "referencia vigente del analito (o el capturado a mano) al momento de crear."
+        ),
+    )
+    gabinete_studies = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Snapshot de estudios de gabinete capturados al crear la constancia: "
+            "[{name, conclusion}]."
+        ),
+    )
+    equipo = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Snapshot del equipo/departamentos de la clínica al momento de crear la "
+            "constancia (config-driven, NO lo envía el cliente): "
+            "[{departamento, nombre}], tomado de apps.clinica.ClinicTeamMember."
+        ),
+    )
+
+    class Meta:
+        db_table = "expediente_longevity_plans"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "patient", "created_at"],
+                name="long_plan_tenant_pat_time_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"PlanIntegral({self.id}) — paciente {self.patient_id} " f"(tenant={self.tenant_id})"
+
+
+# ---------------------------------------------------------------------------
+# DocumentTemplate — catálogo de plantillas de documento (Fase 2)
+# ---------------------------------------------------------------------------
+
+
+class DocumentTemplateSection(models.TextChoices):
+    """Sección del Plan Integral que una plantilla de documento pre-rellena.
+
+    Corresponde a un subconjunto de las 8 secciones de texto de
+    LongevityPlan (mismo `TextChoices`-style que el resto del expediente,
+    D-EC-8: respuestas precargadas). `general` es una plantilla libre que el
+    médico puede usar/copiar en cualquier sección.
+    """
+
+    REPORTE_MEDICO = "reporte_medico", "Reporte médico"
+    SEGUIMIENTO = "seguimiento", "Seguimiento"
+    INTERCONSULTA = "interconsulta", "Interconsulta"
+    ESTUDIOS = "estudios", "Estudios"
+    CONDICIONES_MEJORAR = "condiciones_mejorar", "Condiciones a mejorar"
+    GENERAL = "general", "General"
+
+
+class DocumentTemplate(TenantAwareModel):
+    """Plantilla de texto reutilizable para rellenar secciones del Plan Integral.
+
+    Catálogo simple por tenant (mismo patrón que `apps.clinica.ClinicTemplate`
+    y `apps.finanzas.ServiceConcept`): el médico la crea una vez y la
+    reutiliza al redactar reportes/seguimientos/interconsultas/estudios de un
+    Plan Integral de Longevidad. NO modifica el PDF: solo pre-rellena el
+    texto de las secciones que ya se renderizan en `plan_integral.html`.
+
+    Baja: DELETE físico (soft-delete vía `deleted_at`, heredado de
+    BaseModel) — mismo patrón que `TreatmentPackage.deleted_at`
+    (apps.finanzas). `is_active` es una bandera independiente de
+    publicación/borrador que el médico controla al crear/editar.
+    """
+
+    name = models.CharField(
+        max_length=160,
+        help_text="Nombre identificador de la plantilla.",
+    )
+    section = models.CharField(
+        max_length=30,
+        choices=DocumentTemplateSection.choices,
+        db_index=True,
+        help_text="Sección del Plan Integral a la que está destinada esta plantilla.",
+    )
+    body = models.TextField(
+        help_text="Cuerpo de la plantilla. Texto libre que el médico copia/edita.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False = plantilla oculta del catálogo (no aparece en el listado por defecto).",
+    )
+
+    class Meta:
+        db_table = "expediente_document_templates"
+        ordering = ["section", "name"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "section"],
+                name="doc_tmpl_tenant_section_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.get_section_display()}] {self.name}"
+
+
+# ---------------------------------------------------------------------------
+# LabAnalyte — catálogo de analitos de laboratorio (Fase 3)
+# ---------------------------------------------------------------------------
+
+
+class LabAnalyte(TenantAwareModel):
+    """Analito de laboratorio del catálogo por tenant (p. ej. "Glucosa en ayuno").
+
+    Provee el rango de referencia (`ref_low`/`ref_high`) que
+    `services_plan_integral.longevity_plan_create` usa para calcular
+    `out_of_range` de cada resultado capturado en `LongevityPlan.lab_results`.
+    Catálogo vivo: el rango se lee al momento de crear la constancia y se
+    snapshotea junto con el resultado (cambios posteriores al catálogo no
+    alteran constancias ya emitidas).
+    """
+
+    name = models.CharField(
+        max_length=160,
+        help_text="Nombre del analito (p. ej. 'Glucosa en ayuno', 'Colesterol total').",
+    )
+    unit = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="Unidad de medida (p. ej. 'mg/dL').",
+    )
+    ref_low = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="Límite inferior del rango de referencia (opcional).",
+    )
+    ref_high = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="Límite superior del rango de referencia (opcional).",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False = analito oculto del catálogo (no aparece en el listado por defecto).",
+    )
+
+    class Meta:
+        db_table = "expediente_lab_analytes"
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["tenant", "name"], name="lab_analyte_tenant_name_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.name

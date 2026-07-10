@@ -32,6 +32,7 @@ from rest_framework.test import APIClient
 from apps.audit.models import ActionType, AuditLog
 from apps.expediente.models import VitalSignsRecord
 from apps.expediente.selectors import vital_signs_list, vital_signs_series
+from apps.expediente.serializers import VitalSignsOutputSerializer
 from apps.expediente.services import vital_signs_create
 from apps.expediente.tests.conftest import api_tenant_ctx, tenant_ctx
 from apps.tenancy.models import TenantMembership
@@ -124,6 +125,48 @@ class TestVitalSignsModelImc:
             tenant=tenant, patient=patient, weight_kg=None, height_m=None
         )
         assert record.imc is None
+
+
+class TestVitalSignsOutputSerializerCreatedByName:
+    """Tests unitarios de VitalSignsOutputSerializer.created_by_name.
+
+    La toma es inmutable (append-only): no existe updated_by, solo se expone
+    quién la capturó originalmente (created_by_name), resuelto desde el User.
+    """
+
+    def test_created_by_name_usa_full_name(self, db: Any) -> None:
+        """created_by_name refleja el full_name del usuario (first_name + last_name)."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        user = UserFactory(first_name="Ana", last_name="Ramírez")
+        record = VitalSignsRecordFactory(tenant=tenant, patient=patient, created_by=user)
+
+        data = VitalSignsOutputSerializer(record).data
+
+        assert data["created_by_name"] == "Ana Ramírez"
+        assert data["created_by_id"] == user.id
+
+    def test_created_by_name_cae_a_email_sin_nombre(self, db: Any) -> None:
+        """Si el usuario no tiene first_name/last_name, cae al email (User.full_name)."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        user = UserFactory(first_name="", last_name="")
+        record = VitalSignsRecordFactory(tenant=tenant, patient=patient, created_by=user)
+
+        data = VitalSignsOutputSerializer(record).data
+
+        assert data["created_by_name"] == user.email
+
+    def test_created_by_name_vacio_si_created_by_es_none(self, db: Any) -> None:
+        """Si created_by es None (seed/import), created_by_name es cadena vacía."""
+        tenant = TenantFactory()
+        patient = PatientFactory(tenant=tenant)
+        record = VitalSignsRecordFactory(tenant=tenant, patient=patient, created_by=None)
+
+        data = VitalSignsOutputSerializer(record).data
+
+        assert data["created_by_name"] == ""
+        assert data["created_by_id"] is None
 
 
 # ===========================================================================
@@ -842,6 +885,48 @@ class TestVitalSignsApis:
             )
         assert resp.status_code == 201
         assert resp.data["extra_params"]["colesterol"] == 200
+
+    def test_created_by_name_expone_nombre_de_quien_capturo(self, db: Any) -> None:
+        """El GET de la lista expone created_by_name con el nombre de quien creó la toma."""
+        tenant = TenantFactory()
+        doctor = _member(tenant, role=TenantMembership.Role.DOCTOR)
+        doctor.first_name = "Ana"
+        doctor.last_name = "Ramírez"
+        doctor.save(update_fields=["first_name", "last_name"])
+        patient = PatientFactory(tenant=tenant)
+
+        client = _auth_client(doctor)
+        with api_tenant_ctx(tenant):
+            post_resp = client.post(
+                _signos_url(patient.id),
+                data={"heart_rate": 72},
+                format="json",
+            )
+            assert post_resp.status_code == 201
+            assert post_resp.data["created_by_name"] == "Ana Ramírez"
+
+            get_resp = client.get(_signos_url(patient.id))
+            assert get_resp.status_code == 200
+            assert get_resp.data["results"][0]["created_by_name"] == "Ana Ramírez"
+
+    def test_created_by_name_usa_email_si_no_hay_nombre(self, db: Any) -> None:
+        """Si el usuario no tiene first_name/last_name, created_by_name cae al email (User.full_name)."""
+        tenant = TenantFactory()
+        doctor = _member(tenant, role=TenantMembership.Role.DOCTOR)
+        doctor.first_name = ""
+        doctor.last_name = ""
+        doctor.save(update_fields=["first_name", "last_name"])
+        patient = PatientFactory(tenant=tenant)
+
+        client = _auth_client(doctor)
+        with api_tenant_ctx(tenant):
+            post_resp = client.post(
+                _signos_url(patient.id),
+                data={"heart_rate": 72},
+                format="json",
+            )
+            assert post_resp.status_code == 201
+            assert post_resp.data["created_by_name"] == doctor.email
 
     def test_series_endpoint_devuelve_estructura(self, db: Any) -> None:
         """GET series devuelve todas las claves de parámetros."""

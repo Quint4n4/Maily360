@@ -24,6 +24,7 @@ from apps.audit.models import ActionType, AuditLog
 from apps.authn.models import User
 from apps.clinica.models import (
     ClinicSettings,
+    ClinicTeamMember,
     ClinicTemplate,
     CredentialKind,
     DoctorCredential,
@@ -37,7 +38,10 @@ from apps.expediente.models import (
     Diagnosis,
     DiagnosisKind,
     DiagnosisStatus,
+    DocumentTemplate,
+    DocumentTemplateSection,
     EvolutionNote,
+    LabAnalyte,
     MedicalHistory,
     VitalSignsRecord,
 )
@@ -439,6 +443,35 @@ class AllergyFactory(DjangoModelFactory):
     is_active = True
 
 
+class DocumentTemplateFactory(DjangoModelFactory):
+    """Plantilla de documento del Plan Integral de Longevidad (Fase 2)."""
+
+    class Meta:
+        model = DocumentTemplate
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Plantilla PI {n}")
+    section = DocumentTemplateSection.GENERAL
+    body = factory.Sequence(lambda n: f"Cuerpo de la plantilla {n}.")
+    is_active = True
+
+
+class LabAnalyteFactory(DjangoModelFactory):
+    """Analito de laboratorio del catálogo (Plan Integral — Fase 3)."""
+
+    class Meta:
+        model = LabAnalyte
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Analito {n}")
+    unit = "mg/dL"
+    ref_low = Decimal("70.0000")
+    ref_high = Decimal("100.0000")
+    is_active = True
+
+
 class MedicalHistoryFactory(DjangoModelFactory):
     """Historia clínica formal de un paciente.
 
@@ -673,6 +706,20 @@ class PatientCategoryFactory(DjangoModelFactory):
     tenant = factory.SubFactory(TenantFactory)
     created_by = factory.SubFactory(UserFactory)
     name = factory.Sequence(lambda n: f"Categoría {n}")
+    is_active = True
+
+
+class ClinicTeamMemberFactory(DjangoModelFactory):
+    """Miembro del equipo/departamentos de la clínica (Plan Integral — Fase 4)."""
+
+    class Meta:
+        model = ClinicTeamMember
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    departamento = factory.Sequence(lambda n: f"Departamento {n}")
+    nombre = factory.Sequence(lambda n: f"Persona {n}")
+    order = 0
     is_active = True
 
 

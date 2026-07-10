@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check, Building2, Phone, Video, MapPin, ChevronLeft, ChevronRight, Repeat, Plus, ScrollText } from 'lucide-react'
 import { usePatients } from '../../hooks/pacientes'
@@ -35,6 +35,10 @@ interface CrearEventoModalProps {
   initialMode?: Modo
   /** Modalidad inicial de la cita (office por defecto; 'video' al abrir desde Telemedicina). */
   initialModality?: AppointmentModality
+  /** Paciente existente precargado (p. ej. "Volver a agendar" desde Clientes potenciales). */
+  initialPatient?: { id: string; full_name: string; record_number: string }
+  /** Motivo ("¿a qué viene?") precargado (p. ej. el de la última cita cancelada). */
+  initialReason?: string
 }
 
 const DURACIONES = [30, 45, 60, 90]
@@ -90,6 +94,7 @@ function ModoPill({ label, icon: Icon, active, onClick }: { label: string; icon:
 
 export default function CrearEventoModal({
   open, onClose, dayKey, fechaLarga, horaInicio, consultorioId, consultorioName, initialMode = 'cita', initialModality = 'office',
+  initialPatient, initialReason,
 }: CrearEventoModalProps) {
   const [modo, setModo] = useState<Modo>(initialMode)
   const [paso, setPaso] = useState<1 | 2>(1) // asistente de la cita (1: quién · 2: cómo/cuándo)
@@ -98,6 +103,20 @@ export default function CrearEventoModal({
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [pacienteId, setPacienteId] = useState('')
+  // Paciente elegido en el combobox (para mostrarlo como chip). Con `pacienteId`.
+  const [pacienteSel, setPacienteSel] = useState<{ id: string; full_name: string; record_number: string } | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false) // dropdown del combobox abierto
+  const comboRef = useRef<HTMLDivElement>(null)
+
+  // Cerrar el dropdown del combobox al hacer clic fuera de él.
+  useEffect(() => {
+    if (!pickerOpen) return
+    const alClicFuera = (e: MouseEvent): void => {
+      if (comboRef.current && !comboRef.current.contains(e.target as Node)) setPickerOpen(false)
+    }
+    document.addEventListener('mousedown', alClicFuera)
+    return () => document.removeEventListener('mousedown', alClicFuera)
+  }, [pickerOpen])
   const [modoPaciente, setModoPaciente] = useState<ModoPaciente>('existente')
   const [npNombre, setNpNombre] = useState('')
   const [npPaterno, setNpPaterno] = useState('')
@@ -169,9 +188,10 @@ export default function CrearEventoModal({
     setModo(initialMode); setPaso(1)
     setErrores([]); setEnviando(false)
     // cita
-    setSearch(''); setDebounced(''); setModoPaciente('existente'); setPacienteId('')
+    setSearch(''); setDebounced(''); setModoPaciente('existente'); setPickerOpen(false)
+    setPacienteId(initialPatient?.id ?? ''); setPacienteSel(initialPatient ?? null)
     setNpNombre(''); setNpPaterno(''); setNpMaterno(''); setNpTel('')
-    setDoctorId(user?.doctor_id ?? ''); setConsId(consultorioId ?? ''); setModalidad(initialModality); setDuracion(30); setTipoId(''); setNotas(''); setQuoteId('')
+    setDoctorId(user?.doctor_id ?? ''); setConsId(consultorioId ?? ''); setModalidad(initialModality); setDuracion(30); setTipoId(''); setNotas(initialReason ?? ''); setQuoteId('')
     // repetición
     setRepetir(false); setFrecuencia('weekly'); setTopeTipo('count'); setTopeCount(4); setTopeUntil(''); setOcurrencias([]); setResultado(null)
     // evento (prefill desde el slot clicado)
@@ -179,7 +199,7 @@ export default function CrearEventoModal({
     setEvAlcance(consultorioId ? 'consultorios' : 'clinica')
     setEvCons(consultorioId ? [consultorioId] : [])
     setEvIni(horaInicio); setEvFin(addMin(horaInicio, 60))
-  }, [open, initialMode, initialModality, consultorioId, horaInicio])
+  }, [open, initialMode, initialModality, consultorioId, horaInicio, initialPatient?.id, initialReason])
 
   // Si el médico cambia y el consultorio elegido ya no le pertenece, lo limpiamos.
   useEffect(() => {
@@ -252,7 +272,18 @@ export default function CrearEventoModal({
       const p = partirNombre(search)
       setNpNombre(p.nombre); setNpPaterno(p.paterno); setNpMaterno(p.materno)
     }
+    setPickerOpen(false)
     setModoPaciente('nuevo')
+  }
+
+  // Combobox de paciente existente: elegir del dropdown / limpiar la selección.
+  const elegirPaciente = (p: { id: string; full_name: string; record_number: string }) => {
+    setPacienteId(p.id)
+    setPacienteSel({ id: p.id, full_name: p.full_name, record_number: p.record_number })
+    setPickerOpen(false); setSearch(''); setDebounced('')
+  }
+  const limpiarPaciente = () => {
+    setPacienteId(''); setPacienteSel(null); setSearch(''); setDebounced(''); setPickerOpen(true)
   }
 
   // Paso 1 del asistente: paciente + médico.
@@ -442,21 +473,55 @@ export default function CrearEventoModal({
                       <Pill label="Paciente nuevo" selected={modoPaciente === 'nuevo'} onClick={activarNuevoPaciente} />
                     </div>
                     {modoPaciente === 'existente' ? (
-                      <>
-                        <div className="relative mb-2">
-                          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                          <input value={search} maxLength={255} onChange={e => setSearch(e.target.value)} placeholder="Buscar paciente…" className={`${INPUT} pl-10`} />
-                        </div>
-                        <select value={pacienteId} onChange={e => setPacienteId(e.target.value)} className={INPUT}>
-                          <option value="">{loadingPac ? 'Cargando…' : 'Selecciona un paciente…'}</option>
-                          {pacientes.map(p => <option key={p.id} value={p.id}>{p.full_name} · {p.record_number}</option>)}
-                        </select>
-                        {!loadingPac && debounced && pacientes.length === 0 && (
-                          <button type="button" onClick={activarNuevoPaciente} className="mt-2 text-xs font-medium hover:underline" style={{ color: '#B8860B' }}>
-                            ¿No aparece? Crea «{search.trim()}» como paciente nuevo →
+                      pacienteSel ? (
+                        // Paciente elegido: chip con opción de cambiarlo.
+                        <div className="flex items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 text-sm"
+                          style={{ background: 'rgba(201,162,39,0.10)', border: '1px solid rgba(201,162,39,0.35)' }}>
+                          <span style={{ color: '#2A241B' }}>
+                            {pacienteSel.full_name}
+                            {pacienteSel.record_number && <span style={{ color: '#9A958C' }}> · {pacienteSel.record_number}</span>}
+                          </span>
+                          <button type="button" onClick={limpiarPaciente} title="Cambiar paciente" className="p-0.5 rounded hover:bg-black/5">
+                            <X className="w-4 h-4" style={{ color: '#7A756C' }} />
                           </button>
-                        )}
-                      </>
+                        </div>
+                      ) : (
+                        // Combobox: escribir filtra y seleccionar ocurre en el mismo control.
+                        <div className="relative" ref={comboRef}>
+                          <div className="relative">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            <input value={search} maxLength={255} autoComplete="off"
+                              onChange={e => { setSearch(e.target.value); setPickerOpen(true) }}
+                              onFocus={() => setPickerOpen(true)}
+                              onKeyDown={e => {
+                                // Escape cierra solo el dropdown, no el modal completo.
+                                if (e.key === 'Escape' && pickerOpen) { e.stopPropagation(); setPickerOpen(false) }
+                              }}
+                              placeholder="Buscar paciente por nombre o expediente…" className={`${INPUT} pl-10`} />
+                          </div>
+                          {pickerOpen && debounced && (
+                            <div className="absolute z-30 mt-1 w-full rounded-xl overflow-hidden shadow-lg max-h-60 overflow-y-auto"
+                              style={{ background: 'rgba(255,255,255,0.97)', border: '1px solid rgba(0,0,0,0.08)' }}>
+                              {loadingPac && <div className="px-3 py-2 text-xs" style={{ color: '#9A958C' }}>Buscando…</div>}
+                              {!loadingPac && pacientes.length === 0 && (
+                                <div className="px-3 py-2.5">
+                                  <p className="text-xs mb-1.5" style={{ color: '#9A958C' }}>Sin resultados.</p>
+                                  <button type="button" onClick={activarNuevoPaciente} className="text-xs font-medium hover:underline" style={{ color: '#B8860B' }}>
+                                    Crea «{search.trim()}» como paciente nuevo →
+                                  </button>
+                                </div>
+                              )}
+                              {!loadingPac && pacientes.map(p => (
+                                <button key={p.id} type="button" onClick={() => elegirPaciente(p)}
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 transition-colors">
+                                  <span style={{ color: '#2A241B' }}>{p.full_name}</span>{' '}
+                                  <span style={{ color: '#9A958C' }}>· {p.record_number}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
                     ) : (
                       <div className="rounded-xl p-3 space-y-3" style={{ background: 'rgba(201,162,39,0.08)', border: '1px solid rgba(201,162,39,0.25)' }}>
                         <div className="flex items-start gap-2">

@@ -56,6 +56,9 @@ export interface PatientOut {
   last_seen_at: string | null
   /** Cuántas citas atendidas tiene en total. */
   attended_count: number | null
+  /** Motivo ("¿a qué viene?") de la última cita cancelada/reagendada, o null.
+   *  Útil para precargar el motivo al "volver a agendar" a un cliente potencial. */
+  last_reason: string | null
   // ── Campos NOM-004 (expediente A1, plan §3.1) ──
   address_street: string
   address_neighborhood: string

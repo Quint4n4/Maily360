@@ -32,6 +32,7 @@ class ServiceConceptOutputSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "clinical_description",
             "base_price",
             "sat_product_key",
             "sat_unit_key",

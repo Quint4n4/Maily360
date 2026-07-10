@@ -30,6 +30,15 @@ Rutas — Resumen Clínico por consulta (documento entregable al paciente):
     expediente/<patient_id>/resumenes/
         PatientClinicalSummaryListApi  GET lista paginada
 
+Rutas — Plan Integral de Longevidad y Medicina Regenerativa (constancia
+entregable al paciente, nace del paciente — Fase 1):
+    expediente/<patient_id>/plan-integral/borrador/
+        LongevityPlanDraftApi          GET borrador (no persiste)
+    expediente/<patient_id>/plan-integral/
+        LongevityPlanListCreateApi     GET lista paginada / POST crea (constancia)
+    expediente/plan-integral/<plan_id>/pdf/
+        LongevityPlanPdfApi            GET encola PDF (202)
+
 ORDEN: las rutas estáticas van DESPUÉS de las anidadas por UUID.
 Las rutas de series van ANTES de las de lista para evitar confusión de segmentos.
 Las rutas de acciones específicas (addendum/, resolver/) van ANTES de las anidadas
@@ -47,9 +56,16 @@ from apps.expediente.views import (
     ClinicalSummaryPdfApi,
     DiagnosisListCreateApi,
     DiagnosisResolveApi,
+    DocumentTemplateDetailApi,
+    DocumentTemplateListCreateApi,
     EvolutionImageDeleteApi,
     EvolutionImageListCreateApi,
     EvolutionNoteListCreateApi,
+    LabAnalyteDetailApi,
+    LabAnalyteListCreateApi,
+    LongevityPlanDraftApi,
+    LongevityPlanListCreateApi,
+    LongevityPlanPdfApi,
     MedicalHistoryApi,
     MedicalHistoryQuestionDetailApi,
     MedicalHistoryQuestionListCreateApi,
@@ -149,6 +165,27 @@ urlpatterns = [
         PatientClinicalSummaryListApi.as_view(),
         name="clinical-summary-list",
     ),
+    # Plan Integral de Longevidad y Medicina Regenerativa (constancia entregable,
+    # documento entregable al paciente, análogo al Resumen Clínico — Fase 1).
+    # 'plan-integral/borrador/' va ANTES de 'plan-integral/' (misma convención
+    # de acciones específicas antes de la ruta base). La ruta del PDF usa el
+    # prefijo literal 'plan-integral/' (sin patient_id) — no colisiona con
+    # '<uuid:patient_id>/plan-integral/' porque "plan-integral" no matchea <uuid>.
+    path(
+        "expediente/<uuid:patient_id>/plan-integral/borrador/",
+        LongevityPlanDraftApi.as_view(),
+        name="longevity-plan-draft",
+    ),
+    path(
+        "expediente/plan-integral/<uuid:plan_id>/pdf/",
+        LongevityPlanPdfApi.as_view(),
+        name="longevity-plan-pdf",
+    ),
+    path(
+        "expediente/<uuid:patient_id>/plan-integral/",
+        LongevityPlanListCreateApi.as_view(),
+        name="longevity-plan-list-create",
+    ),
     # Calendarización de tratamientos (esquema de protocolos, Fases 1-4).
     # 'calendarizaciones/<plan_id>/pdf/', '.../cotizacion/' y
     # 'calendarizaciones/sesiones/<id>/agendar/' van ANTES que la ruta de
@@ -220,5 +257,28 @@ urlpatterns = [
         "expediente/preguntas-hc/",
         MedicalHistoryQuestionListCreateApi.as_view(),
         name="mhq-list-create",
+    ),
+    # Catálogo de plantillas de documento (Plan Integral de Longevidad — Fase 2).
+    # La ruta de detalle va ANTES de la de listado para evitar colisiones de segmentos.
+    path(
+        "expediente/plantillas-documento/<uuid:template_id>/",
+        DocumentTemplateDetailApi.as_view(),
+        name="document-template-detail",
+    ),
+    path(
+        "expediente/plantillas-documento/",
+        DocumentTemplateListCreateApi.as_view(),
+        name="document-template-list-create",
+    ),
+    # Catálogo de analitos de laboratorio (Plan Integral de Longevidad — Fase 3).
+    path(
+        "expediente/analitos/<uuid:analyte_id>/",
+        LabAnalyteDetailApi.as_view(),
+        name="lab-analyte-detail",
+    ),
+    path(
+        "expediente/analitos/",
+        LabAnalyteListCreateApi.as_view(),
+        name="lab-analyte-list-create",
     ),
 ]

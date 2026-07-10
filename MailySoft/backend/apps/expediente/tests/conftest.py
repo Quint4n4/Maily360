@@ -71,6 +71,8 @@ def api_tenant_ctx(tenant: Any) -> Generator[None, None, None]:
         patch("apps.expediente.views_preguntas.get_current_tenant", return_value=tenant),
         patch("apps.expediente.views_resumen.get_current_tenant", return_value=tenant),
         patch("apps.expediente.views_calendarizacion.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_plan_integral.get_current_tenant", return_value=tenant),
+        patch("apps.expediente.views_catalogos.get_current_tenant", return_value=tenant),
         patch("apps.core.managers.get_current_tenant", return_value=tenant),
         patch("apps.core.managers.is_tenant_context_active", return_value=True),
     ):

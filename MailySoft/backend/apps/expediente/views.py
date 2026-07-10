@@ -14,6 +14,7 @@ desde `apps.expediente.views` sin cambios:
     views_preguntas    — preguntas extra de HC (Fase 2).
     views_resumen      — resumen clínico por consulta (borrador, crear, PDF, listar).
     views_calendarizacion — calendarización de tratamientos (esquema de protocolos, Fases 1 y 4).
+    views_plan_integral — Plan Integral de Longevidad (borrador, crear/listar, PDF, Fase 1).
 
 Convención de cada módulo: vistas delgadas (parsean el request, llaman un
 selector/service, devuelven Response; cero lógica de negocio; heredan de
@@ -68,6 +69,12 @@ from apps.expediente.views_calendarizacion import (  # noqa: F401
     TreatmentPlanQuoteApi,
     TreatmentSessionScheduleApi,
 )
+from apps.expediente.views_catalogos import (  # noqa: F401
+    DocumentTemplateDetailApi,
+    DocumentTemplateListCreateApi,
+    LabAnalyteDetailApi,
+    LabAnalyteListCreateApi,
+)
 from apps.expediente.views_evoluciones import (  # noqa: F401
     AddendumCreateApi,
     DiagnosisListCreateApi,
@@ -83,6 +90,11 @@ from apps.expediente.views_imagenes import (  # noqa: F401
 from apps.expediente.views_libro import (  # noqa: F401
     PatientBookApi,
     PatientBookPdfApi,
+)
+from apps.expediente.views_plan_integral import (  # noqa: F401
+    LongevityPlanDraftApi,
+    LongevityPlanListCreateApi,
+    LongevityPlanPdfApi,
 )
 from apps.expediente.views_preguntas import (  # noqa: F401
     MedicalHistoryQuestionDetailApi,

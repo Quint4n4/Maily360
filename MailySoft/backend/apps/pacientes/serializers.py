@@ -11,7 +11,8 @@ para mantener el contrato de validación cerca de la vista que lo usa.
 
 from rest_framework import serializers
 
-from apps.pacientes.models import Patient, Sex
+from apps.core.permissions import APPOINTMENT_VIEW_ROLES
+from apps.pacientes.models import Patient
 
 
 class PatientOutputSerializer(serializers.ModelSerializer):
@@ -39,6 +40,7 @@ class PatientOutputSerializer(serializers.ModelSerializer):
     avatar = serializers.ImageField(read_only=True)
     last_seen_at = serializers.SerializerMethodField()
     attended_count = serializers.SerializerMethodField()
+    last_reason = serializers.SerializerMethodField()
     categories = serializers.SerializerMethodField()
     is_favorite = serializers.SerializerMethodField()
     is_vip = serializers.SerializerMethodField()
@@ -51,13 +53,35 @@ class PatientOutputSerializer(serializers.ModelSerializer):
         """Devuelve la anotación attended_count si existe (null si no viene anotada)."""
         return getattr(obj, "attended_count", None)
 
+    def get_last_reason(self, obj: Patient) -> object:
+        """Motivo de la última cita cancelada/reagendada (null si no viene anotado).
+
+        FIX CRÍTICO (seguridad): Appointment.reason es información clínica y
+        AppointmentPermission.GET excluye deliberadamente al rol FINANCE (ver
+        apps.core.permissions.APPOINTMENT_VIEW_ROLES). Sin este control, un
+        usuario finance vería motivos clínicos vía /pacientes/ aunque el
+        endpoint de citas se los niegue — una fuga de dato clínico por rol.
+
+        Se reutiliza EXACTAMENTE el mismo conjunto de roles que
+        AppointmentPermission.GET (APPOINTMENT_VIEW_ROLES) para que ambos
+        controles nunca se desincronicen.
+
+        Fail-closed: si no hay request en el contexto o no hay rol activo
+        resuelto (p. ej. serialización fuera de un request HTTP, como en un
+        script o comando de management), se devuelve None en vez de exponer
+        el dato por defecto.
+        """
+        request = self.context.get("request")
+        role = getattr(request, "active_role", None) if request is not None else None
+        if role not in APPOINTMENT_VIEW_ROLES:
+            return None
+        return getattr(obj, "last_reason", None)
+
     def get_categories(self, obj: Patient) -> list[dict[str, str]]:
         """Etiquetas PERSONALIZADAS asignadas (las de sistema Favorito/VIP se
         exponen como is_favorite/is_vip). Usa el prefetch de patient_list."""
         return [
-            {"id": str(c.id), "name": c.name}
-            for c in obj.categories.all()
-            if c.kind == "custom"
+            {"id": str(c.id), "name": c.name} for c in obj.categories.all() if c.kind == "custom"
         ]
 
     def get_is_favorite(self, obj: Patient) -> bool:
@@ -116,5 +140,6 @@ class PatientOutputSerializer(serializers.ModelSerializer):
             "created_at",
             "last_seen_at",
             "attended_count",
+            "last_reason",
         ]
         read_only_fields = fields

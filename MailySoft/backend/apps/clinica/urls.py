@@ -14,12 +14,16 @@ Rutas:
     clinica/universidades/<university_id>/               DoctorUniversityDetailApi
     clinica/doctores/<doctor_id>/credenciales/           DoctorCredentialListCreateApi  [F2]
     clinica/credenciales/<credential_id>/                DoctorCredentialDetailApi      [F2]
+    clinica/equipo/                                      ClinicTeamMemberListCreateApi  [Fase 4]
+    clinica/equipo/<member_id>/                          ClinicTeamMemberDetailApi      [Fase 4]
 """
 
 from django.urls import path
 
 from apps.clinica.views import (
     ClinicSettingsApi,
+    ClinicTeamMemberDetailApi,
+    ClinicTeamMemberListCreateApi,
     ClinicTemplateDetailApi,
     ClinicTemplateListCreateApi,
     DoctorCredentialDetailApi,
@@ -100,5 +104,16 @@ urlpatterns = [
         "clinica/credenciales/<uuid:credential_id>/",
         DoctorCredentialDetailApi.as_view(),
         name="doctor-credential-detail",
+    ),
+    # Equipo/departamentos de la clínica (Plan Integral de Longevidad — Fase 4)
+    path(
+        "clinica/equipo/",
+        ClinicTeamMemberListCreateApi.as_view(),
+        name="clinic-team-list-create",
+    ),
+    path(
+        "clinica/equipo/<uuid:member_id>/",
+        ClinicTeamMemberDetailApi.as_view(),
+        name="clinic-team-detail",
     ),
 ]
