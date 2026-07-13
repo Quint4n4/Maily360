@@ -19,7 +19,7 @@ import CfdiTab from '../components/finanzas/CfdiTab'
 import EstadoCuentaTab from '../components/finanzas/EstadoCuentaTab'
 import RetencionTab from '../components/finanzas/RetencionTab'
 import { can, canAccessFinance, type FinanceCapability } from '../auth/permisos'
-import { ALL_ROLES, useRole } from '../auth/useRole'
+import { useRole } from '../auth/RoleContext'
 import { toIsoDate } from '../lib/format'
 
 type TabKey =
@@ -59,7 +59,7 @@ const RANGE_PRESETS = [
 const GOLD = '#C9A227'
 
 export default function FinanzasPage() {
-  const { role, setRole } = useRole()
+  const { role } = useRole()
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard')
   const [rangeDays, setRangeDays] = useState(30)
 
@@ -85,20 +85,6 @@ export default function FinanzasPage() {
             <p className="text-sm" style={{ color: '#7A756C' }}>
               Cobros, cotizaciones, facturación CFDI 4.0 y analítica de tu clínica.
             </p>
-          </div>
-
-          {/* Selector de rol (demo de UX por rol — se reemplaza por la sesión real) */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs" style={{ color: '#9A958C' }}>Vista de rol:</span>
-            <select
-              className="input py-1.5 text-sm"
-              value={role}
-              onChange={(e) => setRole(e.target.value as never)}
-            >
-              {ALL_ROLES.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
           </div>
         </div>
 
