@@ -10,7 +10,6 @@ Convención: keyword-only args, nombrado acción+entidad, auditoría NOM-024.
 
 import logging
 import uuid
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -21,7 +20,7 @@ from apps.agenda.selectors import agenda_block_get, appointment_get
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
 from apps.notificaciones.models import NotificationKind, NotificationTarget
-from apps.notificaciones.recipients import users_with_role
+from apps.notificaciones.recipients import filter_recipients_by_sucursal, users_with_role
 from apps.notificaciones.services import notification_fanout
 from apps.tenancy.models import Tenant, TenantMembership
 
@@ -40,8 +39,8 @@ def agenda_item_note_create(
     tenant: Tenant,
     user: "User",  # type: ignore[valid-type]
     body: str,
-    appointment_id: Optional[uuid.UUID] = None,
-    block_id: Optional[uuid.UUID] = None,
+    appointment_id: uuid.UUID | None = None,
+    block_id: uuid.UUID | None = None,
 ) -> AgendaItemNote:
     """Agrega una nota al hilo colaborativo de una cita o de un evento de agenda.
 
@@ -70,14 +69,12 @@ def agenda_item_note_create(
     has_appointment = appointment_id is not None
     has_block = block_id is not None
     if has_appointment == has_block:  # ambos True o ambos False
-        raise ValidationError(
-            "Debe indicarse exactamente uno: appointment_id o block_id."
-        )
+        raise ValidationError("Debe indicarse exactamente uno: appointment_id o block_id.")
 
     # -- 3. Resolver y validar el objeto destino (el TenantManager ya filtra por tenant,
     #       pero validamos tenant_id == tenant.id como defensa en profundidad).
-    appointment: Optional[Appointment] = None
-    agenda_block: Optional[AgendaBlock] = None
+    appointment: Appointment | None = None
+    agenda_block: AgendaBlock | None = None
 
     if has_appointment:
         try:
@@ -124,8 +121,14 @@ def agenda_item_note_create(
     try:
         if appointment is not None:
             recipients = [appointment.doctor.membership.user]
-            recipients += users_with_role(
-                tenant=tenant, role=TenantMembership.Role.RECEPTION
+            # Multi-sede: la recepción (lista amplia por rol) se filtra a la
+            # sede de la cita — la recepción de otra sede no debe recibir la
+            # campana de una cita que no puede ver. El médico de la cita y
+            # quienes ya comentaron van SIEMPRE (están directamente involucrados).
+            recipients += filter_recipients_by_sucursal(
+                tenant=tenant,
+                recipients=users_with_role(tenant=tenant, role=TenantMembership.Role.RECEPTION),
+                sucursal_id=appointment.sucursal_id,
             )
             recipients += [
                 n.author
@@ -210,7 +213,7 @@ def agenda_item_note_delete(
             is_active=True,
             deleted_at__isnull=True,
         )
-        user_role: Optional[str] = membership.role
+        user_role: str | None = membership.role
     except TenantMembership.DoesNotExist:
         user_role = None
 

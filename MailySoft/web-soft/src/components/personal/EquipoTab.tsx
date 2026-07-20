@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Loader2, Mail, ChevronLeft, ChevronRight, Lock,
+  Loader2, Mail, ChevronLeft, ChevronRight, Lock, Building2,
   Crown, Shield, Stethoscope, HeartPulse, Bell, Wallet, Eye,
 } from 'lucide-react'
 import { useMembers } from '../../hooks/miembros'
@@ -36,8 +36,15 @@ interface Props {
 
 export default function EquipoTab({ enabled }: Props) {
   const { data: miembros, isLoading, isError } = useMembers(enabled)
-  const { user } = useAuth()
+  const { user, clinicRole } = useAuth()
   const [rolSel, setRolSel] = useState<ClinicRole | null>(null)
+
+  // Multi-sede (clúster F, jerarquía de roles): un admin de sucursal solo
+  // gestiona al equipo operativo de su sede — no ve a los dueños. El backend ya
+  // omite a los dueños/otros-admins de la lista; aquí ocultamos además el
+  // GRUPO "Dueño" para que no aparezca vacío. El dueño sigue viendo todo.
+  const esOwner = clinicRole === 'owner'
+  const rolesVisibles = esOwner ? ROLES_META : ROLES_META.filter(r => r.key !== 'owner')
   const [miembroSel, setMiembroSel] = useState<Member | null>(null)
 
   if (!enabled) {
@@ -90,6 +97,23 @@ export default function EquipoTab({ enabled }: Props) {
                 </div>
                 {m.is_blocked && <Lock className="w-4 h-4 shrink-0" style={{ color: '#C0392B' }} />}
               </div>
+
+              {/* Sedes que este usuario puede ver y operar (multi-sede F4). */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                <Building2 className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                {m.role === 'owner' ? (
+                  <span className="text-[11px] text-gray-500">Todas las sucursales</span>
+                ) : m.sucursales.length > 0 ? (
+                  m.sucursales.map(s => (
+                    <span key={s.id} className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                      style={{ background: 'rgba(201,162,39,0.16)', color: '#8A6D12' }}>
+                      {s.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-gray-400">Sin sedes asignadas (solo la principal)</span>
+                )}
+              </div>
             </button>
           ))}
           {items.length === 0 && (
@@ -112,7 +136,7 @@ export default function EquipoTab({ enabled }: Props) {
   // ── Nivel 1: selector de roles ──
   return (
     <div className="grid gap-4 mt-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-      {ROLES_META.map(({ key, label, icon: Icon }) => {
+      {rolesVisibles.map(({ key, label, icon: Icon }) => {
         const n = cuenta(key)
         return (
           <button key={key} onClick={() => setRolSel(key)}

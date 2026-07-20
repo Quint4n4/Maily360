@@ -27,13 +27,16 @@ from apps.clinica.models import (
     DoctorCredential,
     DoctorUniversity,
     PatientCategory,
+    Sucursal,
 )
 from apps.clinica.permissions import (
     ClinicSettingsPermission,
     ClinicTeamPermission,
     ClinicTemplatePermission,
     DoctorProfilePermission,
+    MembershipSucursalPermission,
     PatientCategoryPermission,
+    SucursalPermission,
 )
 from apps.clinica.selectors import (
     clinic_settings_get,
@@ -46,8 +49,10 @@ from apps.clinica.selectors import (
     doctor_credentials_for_tenant,
     doctor_university_get,
     doctor_university_list,
+    membership_sucursales_list,
     patient_category_get,
     patient_category_list,
+    sucursal_get,
 )
 from apps.clinica.serializers import (
     ClinicSettingsInputSerializer,
@@ -64,8 +69,13 @@ from apps.clinica.serializers import (
     DoctorProfileImageInputSerializer,
     DoctorUniversityInputSerializer,
     DoctorUniversityOutputSerializer,
+    MembershipSucursalesInputSerializer,
     PatientCategoryInputSerializer,
     PatientCategoryOutputSerializer,
+    SucursalInputSerializer,
+    SucursalMiniOutputSerializer,
+    SucursalOutputSerializer,
+    SucursalPatchSerializer,
 )
 from apps.clinica.services import (
     clinic_settings_upsert,
@@ -81,16 +91,25 @@ from apps.clinica.services import (
     doctor_university_create,
     doctor_university_delete,
     doctor_update_profile_images,
+    membership_sucursales_set,
     patient_category_create,
     patient_category_deactivate,
+    sucursal_activate,
+    sucursal_create,
+    sucursal_deactivate,
+    sucursal_set_default,
+    sucursal_update,
     template_create,
     template_deactivate,
     template_update,
 )
+from apps.clinica.sucursal_scope import actor_sucursal_ids, allowed_sucursales
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
 from apps.personal.models import Doctor
 from apps.personal.selectors import doctor_get
+from apps.tenancy.models import TenantMembership
+from apps.tenancy.selectors import membership_get
 
 # ---------------------------------------------------------------------------
 # ClinicSettings — GET/PUT configuracion/
@@ -917,3 +936,245 @@ class ClinicTeamMemberDetailApi(TenantAPIView):
             return err
         clinic_team_member_delete(member=member, user=request.user)  # type: ignore[arg-type]
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Sucursal — GET/POST sucursales/ y GET/PATCH/DELETE sucursales/<id>/ (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+class SucursalListCreateApi(TenantAPIView):
+    """GET  /api/v1/clinica/sucursales/ — sucursales permitidas del usuario (selector).
+    POST /api/v1/clinica/sucursales/ — crea una sucursal (owner/admin).
+
+    GET devuelve `allowed_sucursales(user, tenant)`: owner ve TODAS las
+    sucursales activas del tenant; cualquier otro rol (admin incluido) solo
+    las suyas (MembershipSucursal), o la sede default como fallback
+    anti-lockout si no tiene ninguna asignación. Este es el mismo criterio
+    que usa `resolve_active_sucursal` para validar el header X-Sucursal-Id
+    — así el selector del frontend nunca ofrece una sede que luego el
+    backend rechazaría.
+    """
+
+    permission_classes = [IsAuthenticated, SucursalPermission]
+
+    def get(self, request: Request) -> Response:
+        """Lista paginada de las sucursales activas que el usuario puede operar."""
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        qs = allowed_sucursales(user=request.user, tenant=tenant)
+
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        if page is not None:
+            return paginator.get_paginated_response(SucursalOutputSerializer(page, many=True).data)
+
+        return Response(
+            {"detail": "Paginación no disponible."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    def post(self, request: Request) -> Response:
+        """Crea una sucursal en el tenant del request (owner/admin)."""
+        s = SucursalInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            sucursal = sucursal_create(tenant=tenant, user=request.user, **s.validated_data)
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            SucursalOutputSerializer(sucursal).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SucursalDetailApi(TenantAPIView):
+    """GET    /api/v1/clinica/sucursales/<id>/ — detalle de una sucursal.
+    PATCH  /api/v1/clinica/sucursales/<id>/ — actualización parcial (owner/admin).
+    DELETE /api/v1/clinica/sucursales/<id>/ — baja lógica (is_active=False, owner/admin).
+
+    PATCH separa is_active/is_default del resto de los campos: se enrutan a
+    sucursal_activate/sucursal_deactivate/sucursal_set_default en vez de al
+    service de update genérico (regla de campos sensibles del proyecto).
+
+    `_get_or_404` acota el id contra `actor_sucursal_ids` (owner: todas; el
+    resto de los roles: solo su `MembershipSucursal`, sea la sede activa o
+    no) — no solo contra el tenant. Cierra el Clúster C de la auditoría de
+    seguridad (docs/design/sucursales-hallazgos-seguridad.md): antes, un
+    admin acotado a Centro podía PATCH/DELETE la sucursal Norte (renombrar,
+    marcar default, e incluso desactivarla) con solo conocer su id.
+    """
+
+    permission_classes = [IsAuthenticated, SucursalPermission]
+
+    def _get_or_404(
+        self, request: Request, sucursal_id: uuid.UUID
+    ) -> "tuple[Sucursal | None, Response | None]":
+        try:
+            sucursal = sucursal_get(sucursal_id=sucursal_id)
+        except Sucursal.DoesNotExist:
+            return None, Response(
+                {"detail": "Sucursal no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return None, Response(
+                {"detail": "No se encontró un tenant activo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        scope_ids = actor_sucursal_ids(user=request.user, tenant=tenant)
+        if scope_ids is not None and sucursal.id not in scope_ids:
+            # Existe en el tenant pero fuera del alcance del actor: 404, no
+            # 403 — nunca revela que la sucursal existe en otra sede.
+            return None, Response(
+                {"detail": "Sucursal no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return sucursal, None
+
+    def get(self, request: Request, sucursal_id: uuid.UUID) -> Response:
+        sucursal, err = self._get_or_404(request, sucursal_id)
+        if err is not None:
+            return err
+        return Response(SucursalOutputSerializer(sucursal).data)
+
+    def patch(self, request: Request, sucursal_id: uuid.UUID) -> Response:
+        sucursal, err = self._get_or_404(request, sucursal_id)
+        if err is not None:
+            return err
+
+        s = SucursalPatchSerializer(data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        if not s.validated_data:
+            return Response(
+                {"detail": "No se proporcionaron campos para actualizar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        data = dict(s.validated_data)
+        is_active = data.pop("is_active", None)
+        is_default = data.pop("is_default", None)
+
+        try:
+            if is_active is not None:
+                if is_active:
+                    sucursal = sucursal_activate(sucursal=sucursal, user=request.user)  # type: ignore[arg-type]
+                else:
+                    sucursal = sucursal_deactivate(sucursal=sucursal, user=request.user)  # type: ignore[arg-type]
+            if is_default is True:
+                sucursal = sucursal_set_default(sucursal=sucursal, user=request.user)  # type: ignore[arg-type]
+            if data:
+                sucursal = sucursal_update(sucursal=sucursal, user=request.user, **data)  # type: ignore[arg-type]
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(SucursalOutputSerializer(sucursal).data)
+
+    def delete(self, request: Request, sucursal_id: uuid.UUID) -> Response:
+        sucursal, err = self._get_or_404(request, sucursal_id)
+        if err is not None:
+            return err
+
+        try:
+            sucursal_deactivate(sucursal=sucursal, user=request.user)  # type: ignore[arg-type]
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# MembershipSucursal — GET/PUT membresias/<id>/sucursales/ (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+class MembershipSucursalesApi(TenantAPIView):
+    """GET /api/v1/clinica/membresias/<membership_id>/sucursales/
+        — sucursales asignadas a un miembro de la clínica.
+    PUT /api/v1/clinica/membresias/<membership_id>/sucursales/
+        — reemplaza el conjunto completo de sucursales asignadas.
+
+    Es el endpoint que habilita crear un "administrador de sucursal" desde la
+    app: asignarle a un admin solo una sede lo acota a operar/ver solo esa
+    sede (apps.clinica.sucursal_scope.allowed_sucursales). Solo owner y admin
+    pueden llegar aquí (MembershipSucursalPermission); la regla fina de que
+    un admin solo puede tocar sedes que él mismo tiene asignadas —y las
+    guardas anti-lockout— se valida en el service `membership_sucursales_set`.
+
+    `membership_id` se resuelve con el selector tenant-scoped de tenancy
+    (`membership_get`): una membresía de otro tenant produce DoesNotExist →
+    404 (nunca se revela si existe en otro negocio).
+    """
+
+    permission_classes = [IsAuthenticated, MembershipSucursalPermission]
+
+    def _get_membership_or_404(
+        self, membership_id: uuid.UUID
+    ) -> "tuple[TenantMembership | None, Response | None]":
+        try:
+            return membership_get(membership_id=membership_id), None
+        except TenantMembership.DoesNotExist:
+            return None, Response(
+                {"detail": "Miembro no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def _serialize(self, membership: TenantMembership) -> dict[str, object]:
+        qs = membership_sucursales_list(membership=membership)
+        return {
+            "membership_id": str(membership.id),
+            "sucursales": SucursalMiniOutputSerializer(qs, many=True).data,
+        }
+
+    def get(self, request: Request, membership_id: uuid.UUID) -> Response:
+        """Lista las sucursales actualmente asignadas al miembro."""
+        membership, err = self._get_membership_or_404(membership_id)
+        if err is not None:
+            return err
+        return Response(self._serialize(membership))  # type: ignore[arg-type]
+
+    def put(self, request: Request, membership_id: uuid.UUID) -> Response:
+        """Reemplaza el conjunto de sucursales asignadas al miembro."""
+        membership, err = self._get_membership_or_404(membership_id)
+        if err is not None:
+            return err
+
+        s = MembershipSucursalesInputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            membership = membership_sucursales_set(
+                tenant=tenant,
+                actor=request.user,
+                membership=membership,  # type: ignore[arg-type]
+                sucursal_ids=s.validated_data["sucursal_ids"],
+            )
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(self._serialize(membership))

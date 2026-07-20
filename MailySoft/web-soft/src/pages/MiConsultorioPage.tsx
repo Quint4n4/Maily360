@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { BadgeCheck, Building2, DollarSign, FileText, FlaskConical, GraduationCap, LayoutTemplate, ListChecks, ScrollText, Tag, Users } from 'lucide-react'
+import { BadgeCheck, Building, Building2, DollarSign, FileText, FlaskConical, GraduationCap, LayoutTemplate, ListChecks, ScrollText, Tag, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
 import {
   puedeEditarPlantillas,
   puedeGestionarConsultorio,
-  puedeGestionarPerfilMedico,
 } from '../auth/permisos'
 import SeccionDatosClinica from '../components/consultorio/SeccionDatosClinica'
 import SeccionPlantillas from '../components/consultorio/SeccionPlantillas'
@@ -19,9 +18,10 @@ import SeccionHistoriaClinica from '../components/consultorio/SeccionHistoriaCli
 import SeccionPlantillasDocumento from '../components/consultorio/SeccionPlantillasDocumento'
 import SeccionAnalitos from '../components/consultorio/SeccionAnalitos'
 import SeccionEquipo from '../components/consultorio/SeccionEquipo'
+import SeccionSucursales from '../components/consultorio/SeccionSucursales'
 
 type SeccionKey =
-  | 'datos' | 'formatos' | 'plantillas' | 'categorias' | 'servicios'
+  | 'datos' | 'sucursales' | 'formatos' | 'plantillas' | 'categorias' | 'servicios'
   | 'plantillas-documento' | 'analitos' | 'equipo'
   | 'historia-clinica' | 'validar-credenciales' | 'perfil'
 
@@ -33,6 +33,7 @@ interface SeccionDef {
 
 const SECCIONES: SeccionDef[] = [
   { key: 'datos', label: 'Datos de la clínica', icon: Building2 },
+  { key: 'sucursales', label: 'Sucursales', icon: Building },
   { key: 'formatos', label: 'Configuración de recetas', icon: LayoutTemplate },
   { key: 'plantillas', label: 'Plantillas', icon: FileText },
   { key: 'categorias', label: 'Categorías de pacientes', icon: Tag },
@@ -52,7 +53,12 @@ export default function MiConsultorioPage() {
 
   const gestionable = puedeGestionarConsultorio(role) // datos, recetas, categorías
   const editaPlantillas = puedeEditarPlantillas(role)
-  const editaPerfil = puedeGestionarPerfilMedico(role)
+  // Multi-sede (2026-07-16): lo que el admin NO puede tocar tampoco le aparece
+  // en el menú (el backend es la autoridad, responde 403). SUCURSALES y
+  // SERVICIOS/PRECIOS son dominio EXCLUSIVO del dueño. "Mi perfil médico" es de
+  // quien atiende (dueño o médico) — un administrador puro no tiene perfil médico.
+  const esOwner = role === 'owner'
+  const editaPerfil = role === 'owner' || role === 'doctor'
 
   const titulo = SECCIONES.find((s) => s.key === seccion)?.label ?? ''
 
@@ -60,6 +66,8 @@ export default function MiConsultorioPage() {
     switch (seccion) {
       case 'datos':
         return <SeccionDatosClinica editable={gestionable} />
+      case 'sucursales':
+        return <SeccionSucursales editable={esOwner} />
       case 'formatos':
         return <SeccionFormatos editable={gestionable} />
       case 'plantillas':
@@ -67,7 +75,7 @@ export default function MiConsultorioPage() {
       case 'categorias':
         return <SeccionCategorias editable={gestionable} />
       case 'servicios':
-        return <SeccionServicios editable={gestionable} />
+        return <SeccionServicios editable={esOwner} />
       case 'plantillas-documento':
         return <SeccionPlantillasDocumento editable={gestionable} />
       case 'analitos':
@@ -83,14 +91,16 @@ export default function MiConsultorioPage() {
     }
   }
 
-  // Secciones de gestión reservadas a owner/admin (el backend es la autoridad):
+  // Solo el DUEÑO: sucursales y servicios/precios (ni siquiera aparecen al admin).
+  const soloDueno: SeccionKey[] = ['sucursales', 'servicios']
+  // Gestión reservada a owner/admin (el backend es la autoridad):
   // credenciales, historia clínica, plantillas de documento, analitos y equipo.
-  // "Mi perfil médico" es para owner/admin/doctor.
   const soloGestion: SeccionKey[] = [
     'validar-credenciales', 'historia-clinica', 'plantillas-documento', 'analitos', 'equipo',
   ]
   const seccionesVisibles = SECCIONES.filter((s) => {
     if (s.key === 'perfil') return editaPerfil
+    if (soloDueno.includes(s.key)) return esOwner
     if (soloGestion.includes(s.key)) return gestionable
     return true
   })

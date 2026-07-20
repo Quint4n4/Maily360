@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock, Video, FolderOpen, ScrollText, FileDown } from 'lucide-react'
+import { X, Check, MessageCircle, MapPin, FileText, Stethoscope, User, AlertCircle, Loader2, UserX, RotateCcw, CalendarClock, Video, FolderOpen, ScrollText, FileDown, Building2 } from 'lucide-react'
 import NotasHilo from './NotasHilo'
 import { fetchQuotePdfBlob } from '../../api/finanzas'
 import { formatMoney } from '../../lib/format'
@@ -31,6 +31,8 @@ export interface CitaDetalle {
   doctor: string
   consultorioName: string
   consultorioColor: string
+  /** Sucursal (sede) de la cita, o null si la clínica no usa sedes (multi-sede F2). */
+  sucursalName?: string | null
   modalidad: string
   horario: string   // "9:00 – 10:00"
   fecha: string     // "Jueves 4 de Junio, 2026"
@@ -250,6 +252,8 @@ export default function DetalleCitaModal({ cita, onClose, puedeCambiarEstado = f
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-2">Detalles de la cita</p>
                 <Dato icon={User}        label="Doctor"       value={cita.doctor} />
+                {/* Sucursal (sede) de la cita — solo si la clínica usa multi-sede. */}
+                {cita.sucursalName && <Dato icon={Building2} label="Sucursal" value={cita.sucursalName} />}
                 <Dato icon={Video}       label="Modalidad"    value={cita.modalidad} />
                 <Dato icon={MapPin}      label="Consultorio"  value={cita.consultorioName} dot={cita.consultorioColor} />
                 <Dato icon={FileText}    label="Tipo de cita" value={cita.tipoCita} />

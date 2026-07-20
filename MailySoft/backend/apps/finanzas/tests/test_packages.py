@@ -459,7 +459,42 @@ class TestPackageApiPermissions:
         assert resp.json()["name"] == "Paquete API"
         assert len(resp.json()["items"]) == 1
 
-    def test_admin_can_patch_package(self, db: None) -> None:
+    def test_owner_can_patch_package(self, db: None) -> None:
+        tenant = TenantFactory()
+        package = TreatmentPackageFactory(tenant=tenant, name="Antes")
+        concept = ServiceConceptFactory(tenant=tenant)
+        TreatmentPackageItemFactory(package=package, service_concept=concept)
+        client = _member_client(tenant, "owner")
+
+        with _tenant_context(tenant):
+            resp = client.patch(
+                _package_detail_url(package.id),
+                data={"name": "Después"},
+                format="json",
+            )
+        assert resp.status_code == 200, resp.content
+        assert resp.json()["name"] == "Después"
+        # items preservados porque no se enviaron en el PATCH.
+        assert len(resp.json()["items"]) == 1
+
+    def test_admin_cannot_create_package(self, db: None) -> None:
+        """Decisión del dueño, 2026-07-16: solo el owner gestiona el catálogo
+        de paquetes (antes owner+admin)."""
+        tenant = TenantFactory()
+        concept = ServiceConceptFactory(tenant=tenant)
+        client = _member_client(tenant, "admin")
+        with _tenant_context(tenant):
+            resp = client.post(
+                PACKAGES_URL,
+                data={
+                    "name": "Paquete API",
+                    "items": [{"concept_id": str(concept.id), "sessions": 3}],
+                },
+                format="json",
+            )
+        assert resp.status_code == 403
+
+    def test_admin_cannot_patch_package(self, db: None) -> None:
         tenant = TenantFactory()
         package = TreatmentPackageFactory(tenant=tenant, name="Antes")
         concept = ServiceConceptFactory(tenant=tenant)
@@ -472,10 +507,24 @@ class TestPackageApiPermissions:
                 data={"name": "Después"},
                 format="json",
             )
-        assert resp.status_code == 200, resp.content
-        assert resp.json()["name"] == "Después"
-        # items preservados porque no se enviaron en el PATCH.
-        assert len(resp.json()["items"]) == 1
+        assert resp.status_code == 403
+
+    def test_admin_cannot_delete_package(self, db: None) -> None:
+        tenant = TenantFactory()
+        package = TreatmentPackageFactory(tenant=tenant)
+        client = _member_client(tenant, "admin")
+        with _tenant_context(tenant):
+            resp = client.delete(_package_detail_url(package.id))
+        assert resp.status_code == 403
+
+    def test_admin_can_list_packages_read_only(self, db: None) -> None:
+        """El GET NO cambia: admin sigue viendo el catálogo de paquetes."""
+        tenant = TenantFactory()
+        TreatmentPackageFactory(tenant=tenant)
+        client = _member_client(tenant, "admin")
+        with _tenant_context(tenant):
+            resp = client.get(PACKAGES_URL)
+        assert resp.status_code == 200
 
     def test_reception_cannot_patch_package(self, db: None) -> None:
         tenant = TenantFactory()

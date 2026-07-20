@@ -17,6 +17,8 @@
  *   DELETE /finanzas/paquetes/<id>/             → 204
  */
 
+import type { SucursalRef } from './sucursal'
+
 /** Fila de la lista (resumen liviano de cada paquete). */
 export interface PackageListItem {
   id: string
@@ -29,6 +31,11 @@ export interface PackageListItem {
   sessions_total: number
   /** Precio total del paquete como string decimal (ej. "3500.00"). */
   price: string
+  /**
+   * Sedes DONDE está disponible el paquete (multi-sede). **`[]` = todas las
+   * sedes.** El precio es el mismo en todas (no hay precio por sede).
+   */
+  sucursales: SucursalRef[]
 }
 
 /** Un tratamiento (renglón) del paquete (detalle). */
@@ -51,6 +58,10 @@ export interface PackageDetail {
   /** Precio total del paquete como string decimal. */
   price: string
   items: PackageItem[]
+  /**
+   * Sedes DONDE está disponible el paquete (multi-sede). **`[]` = todas las sedes.**
+   */
+  sucursales: SucursalRef[]
 }
 
 /* ── Inputs (cuerpos de POST / PATCH) ───────────────────────────────────────── */
@@ -68,6 +79,8 @@ export interface PackageCreateInput {
   description?: string
   is_active?: boolean
   items: PackageItemInput[]
+  /** Sedes donde queda disponible. **`[]` = todas las sedes.** Solo el dueño. */
+  sucursal_ids?: string[]
 }
 
 /** Cuerpo del PATCH (actualizar paquete): todos los campos opcionales. */
@@ -76,4 +89,9 @@ export interface PackageUpdateInput {
   description?: string
   is_active?: boolean
   items?: PackageItemInput[]
+  /**
+   * Sedes donde queda disponible. **`[]` = todas las sedes.** Omitirlo = no tocar
+   * la asignación actual. Solo el dueño puede enviarlo.
+   */
+  sucursal_ids?: string[]
 }

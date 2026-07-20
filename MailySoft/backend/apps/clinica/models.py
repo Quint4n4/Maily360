@@ -657,3 +657,133 @@ class ClinicTeamMember(TenantAwareModel):
 
     def __str__(self) -> str:
         return f"{self.departamento} — {self.nombre}"
+
+
+# ---------------------------------------------------------------------------
+# Sucursal — multi-sede (Fase 1)
+# ---------------------------------------------------------------------------
+#
+# DISEÑO (docs/design/sucursales-plan-implementacion.md, Opción A):
+#   La sucursal vive DENTRO del tenant (NO es un tenant nuevo). El aislamiento
+#   de seguridad duro sigue siendo por tenant_id vía RLS (sin cambios). La
+#   sucursal es una segunda dimensión de scoping OPERATIVO: filtra vistas y se
+#   valida en la capa de servicio/permiso, pero NO es una política RLS — dos
+#   sucursales del mismo tenant NO están aisladas a nivel de base de datos.
+#   Por eso Sucursal sigue heredando de TenantAwareModel (RLS por tenant, como
+#   cualquier otra tabla) — la sucursal es un campo más, no reemplaza al tenant.
+
+
+class Sucursal(TenantAwareModel):
+    """Una sede/ubicación física del negocio (tenant).
+
+    Compatibilidad hacia atrás (principio 1 del plan de sucursales): todos los
+    FK `sucursal` de otras tablas nacen NULLABLE y cada tenant tiene una única
+    "Sucursal Principal" (`is_default=True`) creada por la migración de backfill
+    0019. Una clínica de una sola sede no nota ningún cambio.
+
+    Unicidad:
+        - `name` único por tenant (mismo patrón que `Consultorio.name`).
+        - Solo una sucursal puede tener `is_default=True` por tenant
+          (índice único parcial `sucursal_tenant_one_default_uniq`).
+    """
+
+    name = models.CharField(
+        max_length=160,
+        help_text="Nombre de la sucursal (p. ej. 'Sucursal Centro', 'Sucursal Norte').",
+    )
+    address = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Dirección física de la sucursal (opcional).",
+    )
+    phone = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="Teléfono de contacto de la sucursal (opcional).",
+    )
+    color_hex = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        validators=[validate_hex_color],
+        help_text=(
+            "Color en formato #RRGGBB para distinguir la sede en la agenda "
+            "(uso futuro, Fase 2). Opcional."
+        ),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="False = sucursal desactivada (soft). No borra el registro.",
+    )
+    is_default = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "True = sucursal predeterminada del tenant (única por clínica). "
+            "Se asigna vía sucursal_set_default, nunca por PATCH directo."
+        ),
+    )
+
+    class Meta:
+        db_table = "clinica_sucursales"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                name="sucursal_tenant_name_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["tenant"],
+                condition=Q(is_default=True),
+                name="sucursal_tenant_one_default_uniq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class MembershipSucursal(TenantAwareModel):
+    """Asigna una TenantMembership (usuario + rol en el tenant) a una Sucursal.
+
+    Define en qué sede(s) opera un usuario. Solo el owner NO necesita filas
+    aquí: su acceso a TODAS las sucursales del tenant es implícito por rol
+    (ver `apps.clinica.sucursal_scope.allowed_sucursales`). Cualquier otro
+    rol, INCLUIDO admin, se acota a lo asignado aquí — así se modela el
+    "administrador de sucursal" (un admin con una sola fila) y el "admin de
+    negocio" (un admin con una fila por cada sede). Sin ninguna fila, el
+    usuario cae al fallback anti-lockout (solo la sucursal default).
+
+    NO es una tabla de seguridad RLS por sucursal (principio 2 del plan): es
+    metadata operativa que consulta `allowed_sucursales` para scoping, no una
+    política de base de datos.
+    """
+
+    membership = models.ForeignKey(
+        "tenancy.TenantMembership",
+        on_delete=models.CASCADE,
+        related_name="sucursales_asignadas",
+        help_text="Membresía (usuario + rol) del tenant asignada a la sucursal.",
+    )
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name="membresias",
+        help_text="Sucursal en la que opera la membresía.",
+    )
+
+    class Meta:
+        db_table = "tenancy_membership_sucursales"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["membership", "sucursal"],
+                name="membership_sucursal_uniq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"membership={self.membership_id} @ sucursal={self.sucursal_id}"

@@ -82,3 +82,61 @@ def all_tenant_users(*, tenant: Any) -> list[Any]:
             Role.READONLY,
         ],
     )
+
+
+def filter_recipients_by_sucursal(
+    *, tenant: Any, recipients: list[Any], sucursal_id: Any
+) -> list[Any]:
+    """Filtra destinatarios de campana a los MIEMBROS de esa sede.
+
+    Cierre de hueco de sedes (notificaciones/campana — 2026-07-16): un evento
+    PRIVADO de una sucursal (una cita, un bloqueo, un aviso de sede) solo debe
+    sonar la campana a quienes TRABAJAN en esa sede.
+
+    IMPORTANTE — el DUEÑO queda EXCLUIDO de las campanas de una sede específica
+    (2026-07-16, feedback del dueño): el owner "puede ver" TODAS las sedes
+    (`allowed_sucursales`), pero un aviso *de sucursal* es para el personal de
+    esa sucursal, no para el dueño. El dueño lo sigue VIENDO en la lista de
+    Notas (supervisión bajo demanda), pero no recibe la campana de cada aviso
+    interno de cada sede. Para los NO-owner, "miembro de la sede" = la sede está
+    en su `allowed_sucursales` (sus MembershipSucursal, o la predeterminada si
+    no tiene asignación).
+
+    `sucursal_id=None` ("de toda la clínica" / sin sede) NO filtra: se notifica
+    a todos los destinatarios originales, incluido el dueño (un aviso a todas
+    las sedes sí es para todos).
+
+    Import perezoso de `allowed_sucursales` para no crear un ciclo
+    notificaciones→clinica a nivel de módulo.
+
+    Args:
+        tenant:      Tenant del evento.
+        recipients:  Usuarios candidatos ya resueltos (por rol/dominio).
+        sucursal_id: Sede a la que quedó acotado el evento, o None.
+
+    Returns:
+        Subconjunto de `recipients` que son miembros de `sucursal_id`, sin los
+        owners (o la lista completa si `sucursal_id` es None).
+    """
+    if sucursal_id is None:
+        return recipients
+
+    from apps.clinica.sucursal_scope import allowed_sucursales
+
+    # Owners: excluidos de la campana de una sede específica (ven el aviso en la
+    # lista, pero no reciben la notificación). Una sola query para todos.
+    owner_user_ids: set[Any] = set(
+        TenantMembership.objects.filter(
+            tenant=tenant,
+            role=Role.OWNER,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).values_list("user_id", flat=True)
+    )
+
+    return [
+        recipient
+        for recipient in recipients
+        if recipient.pk not in owner_user_ids
+        and allowed_sucursales(user=recipient, tenant=tenant).filter(id=sucursal_id).exists()
+    ]

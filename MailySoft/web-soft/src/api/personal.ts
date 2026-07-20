@@ -8,6 +8,8 @@ import type {
   ConsultorioUpdateInput,
   Doctor,
   DoctorCreateInput,
+  DoctorSchedule,
+  DoctorScheduleCreateInput,
   DoctorUpdateInput,
 } from '../types/personal'
 
@@ -55,4 +57,24 @@ export async function updateConsultorio(id: string, input: ConsultorioUpdateInpu
 /** DELETE /personal/consultorios/<id>/ — desactiva (soft). */
 export async function deactivateConsultorio(id: string): Promise<void> {
   await request<void>(`/personal/consultorios/${id}/`, { method: 'DELETE' })
+}
+
+// ── Horarios laborales del médico (por sede — multi-sede F2) ─────────────────
+
+/** GET /personal/doctores/<id>/horarios/ — horarios activos del médico (paginado). */
+export async function listDoctorSchedules(doctorId: string): Promise<Paginated<DoctorSchedule>> {
+  return request<Paginated<DoctorSchedule>>(`/personal/doctores/${doctorId}/horarios/`)
+}
+
+/** POST /personal/doctores/<id>/horarios/ — crea un bloque de horario (con su sede). */
+export async function createDoctorSchedule(
+  doctorId: string,
+  input: DoctorScheduleCreateInput,
+): Promise<DoctorSchedule> {
+  return request<DoctorSchedule>(`/personal/doctores/${doctorId}/horarios/`, { method: 'POST', body: input })
+}
+
+/** DELETE /personal/horarios/<id>/ — desactiva (soft) un bloque de horario. */
+export async function deactivateDoctorSchedule(scheduleId: string): Promise<void> {
+  await request<void>(`/personal/horarios/${scheduleId}/`, { method: 'DELETE' })
 }

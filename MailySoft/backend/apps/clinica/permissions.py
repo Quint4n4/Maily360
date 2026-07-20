@@ -108,3 +108,54 @@ class ClinicTeamPermission(HasClinicRole):
         "PATCH": MANAGE_ROLES,
         "DELETE": MANAGE_ROLES,
     }
+
+
+class SucursalPermission(HasClinicRole):
+    """Permisos para el CRUD de Sucursal (multi-sede).
+
+    Multi-sede (decisión del dueño, 2026-07-16): dar de alta, editar o dar de
+    baja SUCURSALES es dominio EXCLUSIVO del dueño. El administrador (incluido
+    el "admin de sucursal") ya NO puede crear/editar/borrar sedes — antes era
+    owner+admin. El GET se mantiene para TODOS (el selector de sucursal del
+    encabezado); la VISTA sigue acotando el resultado a `allowed_sucursales`.
+
+    Matriz:
+        GET    → todos los roles (selector de sucursal; la VISTA acota a
+                 `allowed_sucursales` — owner ve todas; el resto solo las suyas).
+        POST   → solo owner (alta de sedes).
+        PATCH  → solo owner.
+        DELETE → solo owner (baja lógica — is_active=False).
+    """
+
+    #: Gestión de sucursales: solo el dueño.
+    _OWNER_ONLY: ClassVar[frozenset[str]] = frozenset({Role.OWNER})
+
+    policy: ClassVar[dict[str, frozenset[str]]] = {
+        "GET": ALL_ROLES,
+        "POST": _OWNER_ONLY,
+        "PATCH": _OWNER_ONLY,
+        "DELETE": _OWNER_ONLY,
+    }
+
+
+class MembershipSucursalPermission(HasClinicRole):
+    """Permisos para gestionar la asignación de sucursales a un miembro (Fase 4).
+
+    Matriz:
+        GET → solo owner y admin (ver qué sedes administra cada quien es dato
+              administrativo).
+        PUT → solo owner y admin.
+
+    La granularidad fina —un admin solo puede otorgar/quitar sucursales que él
+    mismo tiene permitidas, reglas anti-lockout del owner y del propio admin—
+    NO se valida aquí: este permiso solo gatea por ROL (método-consciente, sin
+    acceso al payload ni al actor's `allowed_sucursales`). Esa lógica de
+    negocio vive en el service `membership_sucursales_set` — mismo patrón que
+    `apps.clinica.sucursal_scope.resolve_write_sucursal`, que también autoriza
+    en la capa de servicio en vez de en un permiso DRF.
+    """
+
+    policy: ClassVar[dict[str, frozenset[str]]] = {
+        "GET": MANAGE_ROLES,
+        "PUT": MANAGE_ROLES,
+    }

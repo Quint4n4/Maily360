@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ScrollText, Package, ChevronDown, LogOut, User, Building2, Briefcase } from 'lucide-react'
+import { BarChart3, CalendarDays, Users, Stethoscope, StickyNote, ScrollText, Package, ChevronDown, LogOut, User, Building2, Briefcase, Layers } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
+import { useSucursalActiva } from '../auth/SucursalContext'
 import { Modulo, accesoModulo, puedeAccederConsultorio, ROLE_LABEL } from '../auth/permisos'
 import CampanaNotificaciones from './CampanaNotificaciones'
 import BottomNav from './BottomNav'
@@ -88,8 +90,9 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
         </nav>
       </div>
 
-      {/* ── Derecha: notificaciones + perfil ── */}
+      {/* ── Derecha: sucursal + notificaciones + perfil ── */}
       <div className="flex items-center gap-1.5">
+        <SelectorSucursal />
         <CampanaNotificaciones />
         <div className="relative">
         <button
@@ -172,5 +175,87 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
       }))}
     />
     </>
+  )
+}
+
+/**
+ * Selector de sucursal (sede) activa. Solo se muestra si el usuario tiene MÁS de
+ * una sede permitida; con una sola (o ninguna) queda oculto. Al cambiar,
+ * `setActiveSucursal` persiste la elección y refresca los datos por sede
+ * (personal/consultorios/agenda/finanzas). El backend filtra por el header
+ * X-Sucursal-Id.
+ *
+ * Opción "Todas las sucursales" (consolidado): pasa la sede activa a null → el
+ * cliente http NO manda el header y el backend consolida sobre las sedes
+ * PERMITIDAS del usuario (dueño → todas; admin de sede → solo la suya). Aplica a
+ * caja/reportes/dashboard; el estado de cuenta del paciente siempre es compartido.
+ */
+function SelectorSucursal() {
+  const { sucursales, activeSucursal, esTodas, puedeVerTodas, setActiveSucursal } = useSucursalActiva()
+  const [abierto, setAbierto] = useState(false)
+
+  // Con una sola sede (o sin sedes) no hay nada que elegir → oculto.
+  if (sucursales.length <= 1) return null
+
+  const etiqueta = esTodas ? 'Todas las sucursales' : activeSucursal?.name ?? 'Sucursal'
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setAbierto((v) => !v)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors hover:bg-black/5"
+        title="Cambiar de sucursal"
+      >
+        <Building2 className="w-4 h-4" style={{ color: '#C9A227' }} />
+        <span className="text-sm font-medium max-w-[140px] truncate hidden sm:block" style={{ color: '#2A241B' }}>
+          {etiqueta}
+        </span>
+        <ChevronDown className="w-4 h-4" style={{ color: '#9A958C' }} />
+      </button>
+
+      {abierto && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
+          <div
+            className="absolute right-0 mt-2 w-60 rounded-xl overflow-hidden z-20 shadow-lg"
+            style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.7)' }}
+          >
+            <div className="px-4 py-2.5 border-b border-gray-100">
+              <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#B8860B' }}>Sucursal activa</p>
+            </div>
+
+            {/* Consolidado: solo con más de una sede permitida. */}
+            {puedeVerTodas && (
+              <button
+                onClick={() => { setActiveSucursal(null); setAbierto(false) }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 transition-colors text-left border-b border-gray-100"
+                style={esTodas ? { color: '#B8860B', fontWeight: 600, background: 'rgba(201,162,39,0.08)' } : undefined}
+              >
+                <Layers className="w-4 h-4 shrink-0" style={{ color: esTodas ? '#C9A227' : '#9A958C' }} />
+                <span className="flex-1 min-w-0 truncate">Todas las sucursales</span>
+                {esTodas && <Check className="w-4 h-4 shrink-0" style={{ color: '#C9A227' }} />}
+              </button>
+            )}
+
+            {sucursales.map((s) => {
+              const activa = s.id === activeSucursal?.id
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => { setActiveSucursal(s.id); setAbierto(false) }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 transition-colors text-left"
+                  style={activa ? { color: '#B8860B', fontWeight: 600, background: 'rgba(201,162,39,0.08)' } : undefined}
+                >
+                  <Building2 className="w-4 h-4 shrink-0" style={{ color: activa ? '#C9A227' : '#9A958C' }} />
+                  <span className="flex-1 min-w-0 truncate">{s.name}</span>
+                  {s.is_default && !activa && <span className="text-[10px] text-gray-400">Principal</span>}
+                  {activa && <Check className="w-4 h-4 shrink-0" style={{ color: '#C9A227' }} />}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
   )
 }

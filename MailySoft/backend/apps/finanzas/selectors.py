@@ -24,6 +24,7 @@ from django.db.models import (
     DecimalField,
     F,
     Prefetch,
+    Q,
     QuerySet,
     Sum,
     Value,
@@ -52,6 +53,42 @@ def _sum(qs: QuerySet[Any], field: str) -> Decimal:
     return qs.aggregate(total=Coalesce(Sum(field), Value(ZERO), output_field=_DEC))["total"]
 
 
+def _scope_suffix(sucursal_ids: list[uuid.UUID] | None) -> str:
+    """Sufijo estable para la clave de caché según el alcance de sucursales.
+
+    CRÍTICO para privacidad: dashboard/reporte se cachean por (tenant, rango).
+    Sin este sufijo, un admin acotado a la Sucursal A podría leer el mismo
+    valor cacheado que el dueño (vista consolidada) o que un admin de la
+    Sucursal B, si ambos consultan el mismo rango de fechas dentro del TTL.
+    """
+    if sucursal_ids is None:
+        return "all"
+    return "s:" + ",".join(sorted(str(sid) for sid in sucursal_ids))
+
+
+def _filter_by_sucursal_availability(
+    qs: QuerySet[Any], *, sucursal_ids: list[uuid.UUID] | None
+) -> QuerySet[Any]:
+    """Filtra un catálogo (ServiceConcept/TreatmentPackage) por disponibilidad de sede.
+
+    CONVENCIÓN (multi-sede — decisión del dueño, 2026-07-16): el M2M
+    `sucursales` VACÍO significa "disponible en TODAS las sedes". Un
+    registro es visible si:
+      - su M2M está vacío (disponible en todas), O
+      - alguna de sus sucursales está en `sucursal_ids`.
+
+    `sucursal_ids=None` (owner sin header, o tenant sin sucursales) → NO se
+    aplica ningún filtro (vista consolidada, ve todo el catálogo).
+
+    `.distinct()` es obligatorio: el filtro por `sucursales__id__in` hace un
+    JOIN que puede duplicar filas si el registro tiene varias sucursales que
+    matchean el scope.
+    """
+    if sucursal_ids is None:
+        return qs
+    return qs.filter(Q(sucursales__isnull=True) | Q(sucursales__id__in=sucursal_ids)).distinct()
+
+
 # ---------------------------------------------------------------------------
 # Conceptos (catálogo)
 # ---------------------------------------------------------------------------
@@ -63,18 +100,29 @@ def concept_get(*, concept_id: uuid.UUID) -> ServiceConcept:
     Raises:
         ServiceConcept.DoesNotExist: si no existe en el tenant activo.
     """
-    return ServiceConcept.objects.get(id=concept_id)
+    return ServiceConcept.objects.prefetch_related("sucursales").get(id=concept_id)
 
 
-def concept_list(*, only_active: bool = True) -> QuerySet[ServiceConcept]:
+def concept_list(
+    *,
+    only_active: bool = True,
+    sucursal_ids: list[uuid.UUID] | None = None,
+) -> QuerySet[ServiceConcept]:
     """Retorna el catálogo de conceptos del tenant actual.
 
     Args:
-        only_active: si True (default), excluye conceptos desactivados.
+        only_active:  si True (default), excluye conceptos desactivados.
+        sucursal_ids: lista de sedes permitidas (multi-sede — decisión del
+                      dueño, 2026-07-16; ver `sucursal_scope_ids`). Un
+                      concepto es visible si su M2M `sucursales` está VACÍO
+                      (disponible en todas) o si alguna de sus sucursales
+                      está en `sucursal_ids`. None = sin filtro (vista
+                      consolidada).
     """
-    qs: QuerySet[ServiceConcept] = ServiceConcept.objects.all()
+    qs: QuerySet[ServiceConcept] = ServiceConcept.objects.prefetch_related("sucursales")
     if only_active:
         qs = qs.filter(is_active=True)
+    qs = _filter_by_sucursal_availability(qs, sucursal_ids=sucursal_ids)
     return qs.order_by("name")
 
 
@@ -89,25 +137,33 @@ def quote_get(*, quote_id: uuid.UUID) -> Quote:
     Raises:
         Quote.DoesNotExist: si no existe en el tenant activo.
     """
-    return Quote.objects.prefetch_related("items").get(id=quote_id)
+    return Quote.objects.select_related("sucursal").prefetch_related("items").get(id=quote_id)
 
 
 def quote_list(
     *,
     patient_id: uuid.UUID | None = None,
     status: str | None = None,
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> QuerySet[Quote]:
     """Lista cotizaciones del tenant actual, con filtros opcionales.
 
     Args:
-        patient_id: si se provee, filtra por paciente.
-        status:     si se provee, filtra por estado (draft/sent/...).
+        patient_id:   si se provee, filtra por paciente.
+        status:       si se provee, filtra por estado (draft/sent/...).
+        sucursal_ids: lista de sedes permitidas (multi-sede — Fase 3,
+                      seguridad; ver `sucursal_scope_ids`). None = sin filtro.
+                      La vista NO debe aplicar este filtro cuando se consulta
+                      por `patient_id` (el historial del paciente es
+                      compartido entre sedes).
     """
-    qs: QuerySet[Quote] = Quote.objects.all()
+    qs: QuerySet[Quote] = Quote.objects.select_related("sucursal")
     if patient_id is not None:
         qs = qs.filter(patient_id=patient_id)
     if status:
         qs = qs.filter(status=status)
+    if sucursal_ids is not None:
+        qs = qs.filter(sucursal_id__in=sucursal_ids)
     return qs.order_by("-created_at")
 
 
@@ -130,21 +186,32 @@ def package_get(*, package_id: uuid.UUID) -> TreatmentPackage:
         TreatmentPackage.DoesNotExist: si no existe en el tenant activo.
     """
     return TreatmentPackage.objects.prefetch_related(
-        Prefetch("items", queryset=_PACKAGE_ITEMS_QS)
+        Prefetch("items", queryset=_PACKAGE_ITEMS_QS), "sucursales"
     ).get(id=package_id)
 
 
-def package_list(*, only_active: bool = True) -> QuerySet[TreatmentPackage]:
+def package_list(
+    *,
+    only_active: bool = True,
+    sucursal_ids: list[uuid.UUID] | None = None,
+) -> QuerySet[TreatmentPackage]:
     """Retorna el catálogo de paquetes de tratamientos del tenant actual.
 
     Args:
-        only_active: si True (default), excluye paquetes desactivados.
+        only_active:  si True (default), excluye paquetes desactivados.
+        sucursal_ids: lista de sedes permitidas (multi-sede — decisión del
+                      dueño, 2026-07-16; ver `sucursal_scope_ids`). Un
+                      paquete es visible si su M2M `sucursales` está VACÍO
+                      (disponible en todas) o si alguna de sus sucursales
+                      está en `sucursal_ids`. None = sin filtro (vista
+                      consolidada).
     """
     qs: QuerySet[TreatmentPackage] = TreatmentPackage.objects.prefetch_related(
-        Prefetch("items", queryset=_PACKAGE_ITEMS_QS)
+        Prefetch("items", queryset=_PACKAGE_ITEMS_QS), "sucursales"
     )
     if only_active:
         qs = qs.filter(is_active=True)
+    qs = _filter_by_sucursal_availability(qs, sucursal_ids=sucursal_ids)
     return qs.order_by("name")
 
 
@@ -159,7 +226,7 @@ def charge_get(*, charge_id: uuid.UUID) -> Charge:
     Raises:
         Charge.DoesNotExist: si no existe en el tenant activo.
     """
-    return Charge.objects.get(id=charge_id)
+    return Charge.objects.select_related("sucursal").get(id=charge_id)
 
 
 def charge_list(
@@ -167,6 +234,7 @@ def charge_list(
     patient_id: uuid.UUID | None = None,
     status: str | None = None,
     appointment_id: uuid.UUID | None = None,
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> QuerySet[Charge]:
     """Lista cargos del tenant actual, con filtros opcionales.
 
@@ -175,14 +243,22 @@ def charge_list(
         status:         si se provee, filtra por estado (pending/partial/paid/cancelled).
         appointment_id: si se provee, filtra por la cita a la que está ligado el cargo.
                         Útil para el bloque «estado de cuenta de la visita» del libro.
+        sucursal_ids:   lista de sedes permitidas (multi-sede — Fase 3,
+                        seguridad; ver `sucursal_scope_ids`). None = sin
+                        filtro. La vista NO debe aplicar este filtro cuando
+                        se consulta por `patient_id`/`appointment_id` (el
+                        estado de cuenta del paciente es compartido entre
+                        sedes).
     """
-    qs: QuerySet[Charge] = Charge.objects.all()
+    qs: QuerySet[Charge] = Charge.objects.select_related("sucursal")
     if patient_id is not None:
         qs = qs.filter(patient_id=patient_id)
     if status:
         qs = qs.filter(status=status)
     if appointment_id is not None:
         qs = qs.filter(appointment_id=appointment_id)
+    if sucursal_ids is not None:
+        qs = qs.filter(sucursal_id__in=sucursal_ids)
     return qs.order_by("-issued_at")
 
 
@@ -197,20 +273,37 @@ def payment_get(*, payment_id: uuid.UUID) -> Payment:
     Raises:
         Payment.DoesNotExist: si no existe en el tenant activo.
     """
-    return Payment.objects.prefetch_related("allocations").get(id=payment_id)
+    return (
+        Payment.objects.select_related("sucursal")
+        .prefetch_related("allocations")
+        .get(id=payment_id)
+    )
 
 
 def payment_list(
     *,
     patient_id: uuid.UUID | None = None,
     method: str | None = None,
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> QuerySet[Payment]:
-    """Lista pagos del tenant actual, con filtros opcionales."""
-    qs: QuerySet[Payment] = Payment.objects.all()
+    """Lista pagos del tenant actual, con filtros opcionales.
+
+    Args:
+        patient_id:   si se provee, filtra por paciente.
+        method:       si se provee, filtra por método de pago.
+        sucursal_ids: lista de sedes permitidas (multi-sede — Fase 3,
+                      seguridad; ver `sucursal_scope_ids`). None = sin
+                      filtro. La vista NO debe aplicar este filtro cuando se
+                      consulta por `patient_id` (el estado de cuenta del
+                      paciente es compartido entre sedes).
+    """
+    qs: QuerySet[Payment] = Payment.objects.select_related("sucursal")
     if patient_id is not None:
         qs = qs.filter(patient_id=patient_id)
     if method:
         qs = qs.filter(method=method)
+    if sucursal_ids is not None:
+        qs = qs.filter(sucursal_id__in=sucursal_ids)
     return qs.order_by("-received_at")
 
 
@@ -225,26 +318,47 @@ def cfdi_get(*, cfdi_id: uuid.UUID) -> CfdiDocument:
     Raises:
         CfdiDocument.DoesNotExist: si no existe en el tenant activo.
     """
-    return CfdiDocument.objects.get(id=cfdi_id)
+    return CfdiDocument.objects.select_related("sucursal").get(id=cfdi_id)
 
 
 def cfdi_list(
     *,
     patient_id: uuid.UUID | None = None,
     status: str | None = None,
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> QuerySet[CfdiDocument]:
-    """Lista comprobantes CFDI del tenant actual, con filtros opcionales."""
-    qs: QuerySet[CfdiDocument] = CfdiDocument.objects.all()
+    """Lista comprobantes CFDI del tenant actual, con filtros opcionales.
+
+    Args:
+        patient_id:   si se provee, filtra por paciente.
+        status:       si se provee, filtra por estado (draft/stamped/cancelled).
+        sucursal_ids: lista de sedes permitidas (multi-sede — Fase 3, clúster
+                      D, seguridad; ver `sucursal_scope_ids`). None = sin
+                      filtro. La vista NO debe aplicar este filtro cuando se
+                      consulta por `patient_id` (el historial fiscal del
+                      paciente es compartido entre sedes, mismo criterio que
+                      cargos/pagos/cotizaciones).
+    """
+    qs: QuerySet[CfdiDocument] = CfdiDocument.objects.select_related("sucursal")
     if patient_id is not None:
         qs = qs.filter(patient_id=patient_id)
     if status:
         qs = qs.filter(status=status)
+    if sucursal_ids is not None:
+        qs = qs.filter(sucursal_id__in=sucursal_ids)
     return qs.order_by("-created_at")
 
 
 # ---------------------------------------------------------------------------
 # Estado de cuenta
 # ---------------------------------------------------------------------------
+
+
+def _sucursal_brief(sucursal: Any) -> dict[str, str] | None:
+    """Representación mínima {id, name} de una sucursal, o None si no tiene."""
+    if sucursal is None:
+        return None
+    return {"id": str(sucursal.id), "name": sucursal.name}
 
 
 def account_statement_build(
@@ -258,6 +372,13 @@ def account_statement_build(
     Combina cargos (débitos) y pagos (créditos) ordenados cronológicamente y
     calcula el saldo corriente. Devuelve también totales para el apartado visual.
 
+    IMPORTANTE (multi-sede — Fase 3): el estado de cuenta del paciente es
+    COMPARTIDO entre TODAS sus sedes — este selector NUNCA filtra por
+    sucursal (caso "Acapulco→CDMX": un paciente cobrado en dos sedes distintas
+    ve AMBOS movimientos aquí). Cada movimiento expone `sucursal` ({id, name}
+    o None) como columna informativa para que la UI muestre "dónde" se generó
+    cada cargo/pago, sin ocultar ninguno.
+
     Args:
         patient_id: paciente del estado de cuenta.
         date_from:  fecha inicial inclusiva (opcional).
@@ -266,7 +387,7 @@ def account_statement_build(
     Returns:
         dict con:
           - movements: lista de movimientos {date, type, description, charge,
-            payment, balance} ordenada por fecha con saldo corriente.
+            payment, balance, sucursal} ordenada por fecha con saldo corriente.
           - total_charged / total_paid / balance: totales del rango.
           - charges_count / payments_count.
     """
@@ -292,6 +413,7 @@ def account_statement_build(
                 "payment": ZERO,
                 "reference": "",
                 "id": str(charge.id),
+                "sucursal": _sucursal_brief(charge.sucursal),
             }
         )
     for payment in payments_qs:
@@ -304,6 +426,7 @@ def account_statement_build(
                 "payment": payment.amount,
                 "reference": payment.reference,
                 "id": str(payment.id),
+                "sucursal": _sucursal_brief(payment.sucursal),
             }
         )
 
@@ -338,6 +461,7 @@ def finance_dashboard_metrics(
     *,
     date_from: datetime.date | None = None,
     date_to: datetime.date | None = None,
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> dict[str, Any]:
     """Calcula KPIs y series para el panel financiero del tenant actual.
 
@@ -345,6 +469,11 @@ def finance_dashboard_metrics(
     drill-down (cada punto/segmento mapea a un filtro de la tabla del frontend).
 
     Rango por defecto: últimos 30 días si no se especifica.
+
+    Multi-sede — Fase 3 (privado por sede): `sucursal_ids` (ver
+    `apps.clinica.sucursal_scope.sucursal_scope_ids`) acota TODAS las series y
+    KPIs a las sedes permitidas del usuario. None = vista consolidada (dueño
+    sin sede activa, o tenant sin sucursales).
 
     Returns:
         dict con:
@@ -357,8 +486,11 @@ def finance_dashboard_metrics(
           - aging:            [{bucket, amount, count}] (barras apiladas de CxC)
           - quotes_funnel:    {sent, accepted, rejected, draft, expired, conversion_rate}
 
-    Resultado cacheado en Redis por (tenant, rango) con TTL de seguridad; se
-    invalida al crear/editar/borrar Payment/Charge/Quote (ver apps.finanzas.cache).
+    Resultado cacheado en Redis por (tenant, rango, alcance de sucursal) con
+    TTL de seguridad; se invalida al crear/editar/borrar Payment/Charge/Quote
+    (ver apps.finanzas.cache). El alcance de sucursal SIEMPRE forma parte de
+    la clave de caché (ver `_scope_suffix`) para no filtrar datos de una sede
+    a un usuario acotado a otra.
     """
     today = timezone.now().date()
     if date_to is None:
@@ -369,17 +501,26 @@ def finance_dashboard_metrics(
     tenant = get_current_tenant()
     if tenant is None:
         # Sin contexto de tenant (p. ej. management command) → sin caché.
-        return _finance_dashboard_compute(date_from=date_from, date_to=date_to)
+        return _finance_dashboard_compute(
+            date_from=date_from, date_to=date_to, sucursal_ids=sucursal_ids
+        )
     return finance_cache_get_or_set(
         tenant_id=tenant.id,
-        suffix=f"dash:{date_from.isoformat()}:{date_to.isoformat()}",
+        suffix=(
+            f"dash:{date_from.isoformat()}:{date_to.isoformat()}:" f"{_scope_suffix(sucursal_ids)}"
+        ),
         ttl=DASHBOARD_TTL,
-        compute=lambda: _finance_dashboard_compute(date_from=date_from, date_to=date_to),
+        compute=lambda: _finance_dashboard_compute(
+            date_from=date_from, date_to=date_to, sucursal_ids=sucursal_ids
+        ),
     )
 
 
 def _finance_dashboard_compute(
-    *, date_from: datetime.date, date_to: datetime.date
+    *,
+    date_from: datetime.date,
+    date_to: datetime.date,
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> dict[str, Any]:
     """Computa las métricas del dashboard (sin caché). Rango ya normalizado."""
     today = timezone.now().date()
@@ -392,6 +533,10 @@ def _finance_dashboard_compute(
         issued_at__date__lte=date_to,
     ).exclude(status=Charge.Status.CANCELLED)
 
+    if sucursal_ids is not None:
+        payments_qs = payments_qs.filter(sucursal_id__in=sucursal_ids)
+        charges_qs = charges_qs.filter(sucursal_id__in=sucursal_ids)
+
     total_income = _sum(payments_qs, "amount")
     total_charged = _sum(charges_qs, "amount")
     payments_count = payments_qs.count()
@@ -401,6 +546,8 @@ def _finance_dashboard_compute(
     outstanding_qs = Charge.objects.filter(
         status__in=[Charge.Status.PENDING, Charge.Status.PARTIAL]
     )
+    if sucursal_ids is not None:
+        outstanding_qs = outstanding_qs.filter(sucursal_id__in=sucursal_ids)
     outstanding = outstanding_qs.aggregate(
         total=Coalesce(
             Sum(F("amount") - F("amount_paid"), output_field=_DEC),
@@ -449,7 +596,7 @@ def _finance_dashboard_compute(
     aging = _aging_buckets(outstanding_qs, today=today)
 
     # --- Embudo de cotizaciones ---
-    quotes_funnel = _quotes_funnel(date_from=date_from, date_to=date_to)
+    quotes_funnel = _quotes_funnel(date_from=date_from, date_to=date_to, sucursal_ids=sucursal_ids)
 
     return {
         "range": {"date_from": date_from.isoformat(), "date_to": date_to.isoformat()},
@@ -503,12 +650,15 @@ def _quotes_funnel(
     *,
     date_from: datetime.date,
     date_to: datetime.date,
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> dict[str, Any]:
     """Conteo de cotizaciones por estado en el rango + tasa de conversión."""
     qs = Quote.objects.filter(
         created_at__date__gte=date_from,
         created_at__date__lte=date_to,
     )
+    if sucursal_ids is not None:
+        qs = qs.filter(sucursal_id__in=sucursal_ids)
     counts = {row["status"]: row["n"] for row in qs.values("status").annotate(n=Count("id"))}
     sent = counts.get(Quote.Status.SENT, 0)
     accepted = counts.get(Quote.Status.ACCEPTED, 0)
@@ -547,6 +697,7 @@ def finance_period_report(
     date_from: datetime.date,
     date_to: datetime.date,
     group: str = "day",
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> dict[str, Any]:
     """Dataset completo de métricas para el reporte financiero de un periodo.
 
@@ -583,31 +734,45 @@ def finance_period_report(
       adjustments_note   — str: nota sobre ajustes (no hay modelo Adjustment aún).
 
     Args:
-        date_from: Inicio del periodo (inclusivo).
-        date_to:   Fin del periodo (inclusivo).
-        group:     Granularidad de la serie temporal: 'day' | 'week' | 'month'.
+        date_from:    Inicio del periodo (inclusivo).
+        date_to:      Fin del periodo (inclusivo).
+        group:        Granularidad de la serie temporal: 'day' | 'week' | 'month'.
+        sucursal_ids: lista de sedes permitidas (multi-sede — Fase 3, privado
+                      por sede; ver `sucursal_scope_ids`). None = vista
+                      consolidada.
 
     Returns:
         dict con todos los campos descritos arriba.
 
-    Resultado cacheado en Redis por (tenant, rango, group); se invalida igual que el
-    dashboard al escribir Payment/Charge/Quote (ver apps.finanzas.cache).
+    Resultado cacheado en Redis por (tenant, rango, group, alcance de
+    sucursal); se invalida igual que el dashboard al escribir Payment/Charge/
+    Quote (ver apps.finanzas.cache). El alcance de sucursal SIEMPRE forma
+    parte de la clave de caché (ver `_scope_suffix`).
     """
     tenant = get_current_tenant()
     if tenant is None:
-        return _finance_period_report_compute(date_from=date_from, date_to=date_to, group=group)
+        return _finance_period_report_compute(
+            date_from=date_from, date_to=date_to, group=group, sucursal_ids=sucursal_ids
+        )
     return finance_cache_get_or_set(
         tenant_id=tenant.id,
-        suffix=f"report:{date_from.isoformat()}:{date_to.isoformat()}:{group}",
+        suffix=(
+            f"report:{date_from.isoformat()}:{date_to.isoformat()}:{group}:"
+            f"{_scope_suffix(sucursal_ids)}"
+        ),
         ttl=DASHBOARD_TTL,
         compute=lambda: _finance_period_report_compute(
-            date_from=date_from, date_to=date_to, group=group
+            date_from=date_from, date_to=date_to, group=group, sucursal_ids=sucursal_ids
         ),
     )
 
 
 def _finance_period_report_compute(
-    *, date_from: datetime.date, date_to: datetime.date, group: str = "day"
+    *,
+    date_from: datetime.date,
+    date_to: datetime.date,
+    group: str = "day",
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> dict[str, Any]:
     """Computa el dataset del reporte de periodo (sin caché)."""
     if group not in _GROUP_TRUNC:
@@ -642,6 +807,12 @@ def _finance_period_report_compute(
         received_at__date__lte=prev_date_to,
     )
 
+    if sucursal_ids is not None:
+        charges_qs = charges_qs.filter(sucursal_id__in=sucursal_ids)
+        payments_qs = payments_qs.filter(sucursal_id__in=sucursal_ids)
+        prev_charges_qs = prev_charges_qs.filter(sucursal_id__in=sucursal_ids)
+        prev_payments_qs = prev_payments_qs.filter(sucursal_id__in=sucursal_ids)
+
     # --- KPIs periodo actual ---
     production = _sum(charges_qs, "amount")
     collection = _sum(payments_qs, "amount")
@@ -670,6 +841,8 @@ def _finance_period_report_compute(
     outstanding_qs = Charge.objects.filter(
         status__in=[Charge.Status.PENDING, Charge.Status.PARTIAL]
     )
+    if sucursal_ids is not None:
+        outstanding_qs = outstanding_qs.filter(sucursal_id__in=sucursal_ids)
     ar_total = outstanding_qs.aggregate(
         total=Coalesce(
             Sum(F("amount") - F("amount_paid"), output_field=_DEC),
@@ -848,7 +1021,9 @@ def _by_doctor(charges_qs: QuerySet["Charge"]) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def finance_daily_sheet(*, date: datetime.date) -> dict[str, Any]:
+def finance_daily_sheet(
+    *, date: datetime.date, sucursal_ids: list[uuid.UUID] | None = None
+) -> dict[str, Any]:
     """Cierre diario de caja para una fecha concreta.
 
     Devuelve producción, cobranza y ajustes del día, desglose por método de pago,
@@ -858,10 +1033,17 @@ def finance_daily_sheet(*, date: datetime.date) -> dict[str, Any]:
     la fecha. La lista de movimientos incluye todos los registros del día para que
     la recepción o el administrador impriman o revisen el resumen al cerrar.
 
+    Multi-sede — Fase 3 (privado por sede): `sucursal_ids` (ver
+    `sucursal_scope_ids`) acota el cierre a las sedes permitidas del usuario;
+    la caja de cada sede es privada — un admin de Centro no ve el cierre de
+    Norte. None = vista consolidada (dueño sin sede activa, o tenant sin
+    sucursales).
+
     Nota: adjustments_total = 0 (no hay modelo Adjustment aún — plan §4 Fase 2).
 
     Args:
-        date: Fecha del cierre (local; se filtra por __date__ contra el campo UTC).
+        date:         Fecha del cierre (local; se filtra por __date__ contra el campo UTC).
+        sucursal_ids: lista de sedes permitidas, o None para vista consolidada.
 
     Returns:
         dict con:
@@ -877,6 +1059,10 @@ def finance_daily_sheet(*, date: datetime.date) -> dict[str, Any]:
     charges_qs = Charge.objects.filter(issued_at__date=date).exclude(status=Charge.Status.CANCELLED)
 
     payments_qs = Payment.objects.filter(received_at__date=date)
+
+    if sucursal_ids is not None:
+        charges_qs = charges_qs.filter(sucursal_id__in=sucursal_ids)
+        payments_qs = payments_qs.filter(sucursal_id__in=sucursal_ids)
 
     production = _sum(charges_qs, "amount")
     collection = _sum(payments_qs, "amount")
@@ -900,8 +1086,11 @@ def finance_daily_sheet(*, date: datetime.date) -> dict[str, Any]:
     ]
 
     # Lista de movimientos del día (cargos y pagos juntos, orden cronológico).
+    # Cada movimiento expone `sucursal` ({id, name} o None): el cierre ya viene
+    # acotado a las sedes permitidas, pero en la vista CONSOLIDADA del dueño
+    # (sucursal_ids=None) sirve para saber de qué sede salió cada movimiento.
     movements: list[dict[str, Any]] = []
-    for charge in charges_qs.select_related("patient").order_by("issued_at"):
+    for charge in charges_qs.select_related("patient", "sucursal").order_by("issued_at"):
         movements.append(
             {
                 "at": charge.issued_at.isoformat(),
@@ -910,9 +1099,10 @@ def finance_daily_sheet(*, date: datetime.date) -> dict[str, Any]:
                 "patient_id": str(charge.patient_id),
                 "amount": charge.amount,
                 "status": charge.status,
+                "sucursal": _sucursal_brief(charge.sucursal),
             }
         )
-    for payment in payments_qs.select_related("patient").order_by("received_at"):
+    for payment in payments_qs.select_related("patient", "sucursal").order_by("received_at"):
         movements.append(
             {
                 "at": payment.received_at.isoformat(),
@@ -922,6 +1112,7 @@ def finance_daily_sheet(*, date: datetime.date) -> dict[str, Any]:
                 "patient_id": str(payment.patient_id),
                 "amount": payment.amount,
                 "reference": payment.reference,
+                "sucursal": _sucursal_brief(payment.sucursal),
             }
         )
     movements.sort(key=lambda m: m["at"])

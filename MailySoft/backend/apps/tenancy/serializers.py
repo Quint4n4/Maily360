@@ -30,6 +30,10 @@ class MemberOutputSerializer(serializers.ModelSerializer):
     role_display = serializers.SerializerMethodField()
     # is_blocked es la lectura cómoda para el frontend (negación de user.is_active).
     is_blocked = serializers.SerializerMethodField()
+    # Sucursales asignadas (multi-sede — Fase 4): el selector membership_list()
+    # precarga sucursales_asignadas__sucursal, así que .all() aquí NUNCA
+    # dispara una query adicional por miembro (cero N+1).
+    sucursales = serializers.SerializerMethodField()
 
     class Meta:
         model = TenantMembership
@@ -40,6 +44,7 @@ class MemberOutputSerializer(serializers.ModelSerializer):
             "role_display",
             "is_active",
             "is_blocked",
+            "sucursales",
             "created_at",
         ]
         read_only_fields = fields
@@ -49,3 +54,9 @@ class MemberOutputSerializer(serializers.ModelSerializer):
 
     def get_is_blocked(self, obj: TenantMembership) -> bool:
         return not obj.user.is_active
+
+    def get_sucursales(self, obj: TenantMembership) -> list[dict[str, str]]:
+        return [
+            {"id": str(ms.sucursal_id), "name": ms.sucursal.name}
+            for ms in obj.sucursales_asignadas.all()
+        ]

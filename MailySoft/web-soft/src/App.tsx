@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import { RequireAuth } from './auth/RequireAuth'
 import { onPasswordChangeRequired } from './lib/http'
 import { RoleProvider, useRole } from './auth/RoleContext'
+import { SucursalProvider } from './auth/SucursalContext'
 import { Modulo, accesoModulo, inicioDeRol, puedeAccederConsultorio } from './auth/permisos'
 import { PlatformRoleProvider, usePlatformRole } from './platform/PlatformRoleContext'
 import { DialogProvider } from './components/common/DialogProvider'
@@ -126,6 +127,7 @@ export default function App() {
   return (
     <AuthProvider>
       <RoleProvider>
+        <SucursalProvider>
         <PlatformRoleProvider>
           <DialogProvider>
           <Suspense fallback={<PantallaCargando />}>
@@ -171,6 +173,7 @@ export default function App() {
           <LuzRecordatorios />
           </DialogProvider>
         </PlatformRoleProvider>
+        </SucursalProvider>
       </RoleProvider>
     </AuthProvider>
   )

@@ -5,6 +5,7 @@ import type { Role } from '../../auth/permisos'
 import { puedeCobrar } from '../../auth/permisos'
 import { useCierreDiario } from '../../hooks/finanzas'
 import { formatMoney, formatPercent, formatDateTime, toIsoDate } from '../../lib/format'
+import SedeIndicador, { mensajeErrorSede, nombreSede } from './SedeIndicador'
 
 interface Props {
   role: Role
@@ -56,7 +57,7 @@ export default function CierreDiarioTab({ role }: Props) {
 
       {isError && (
         <div className="glass-card rounded-2xl p-6 text-sm" style={{ color: '#B91C1C' }}>
-          No se pudo cargar el cierre del día. {(error as Error)?.message ?? ''}
+          {mensajeErrorSede(error, 'No se pudo cargar el cierre del día.')}
         </div>
       )}
 
@@ -64,7 +65,11 @@ export default function CierreDiarioTab({ role }: Props) {
         <div className="glass-card rounded-2xl p-5 space-y-5" id="cierre-imprimible">
           <div>
             <h2 className="text-lg font-bold" style={{ color: '#2A241B' }}>Cierre de caja</h2>
-            <p className="text-sm" style={{ color: '#7A756C' }}>{date}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm" style={{ color: '#7A756C' }}>{date}</p>
+              {/* La caja es PRIVADA de cada sede: esto dice cuál se está cerrando. */}
+              <SedeIndicador />
+            </div>
           </div>
 
           {/* Resumen del día */}
@@ -122,6 +127,7 @@ export default function CierreDiarioTab({ role }: Props) {
                   <tr className="text-left" style={{ color: '#9A958C' }}>
                     <th className="py-1.5 font-medium">Hora</th>
                     <th className="py-1.5 font-medium">Tipo</th>
+                    <th className="py-1.5 font-medium">Sede</th>
                     <th className="py-1.5 font-medium">Detalle</th>
                     <th className="py-1.5 font-medium text-right">Monto</th>
                   </tr>
@@ -141,6 +147,7 @@ export default function CierreDiarioTab({ role }: Props) {
                           {m.type === 'payment' ? 'Pago' : 'Cargo'}
                         </span>
                       </td>
+                      <td className="py-1.5" style={{ color: '#7A756C' }}>{nombreSede(m.sucursal)}</td>
                       <td className="py-1.5" style={{ color: '#2A241B' }}>
                         {m.type === 'payment'
                           ? `${m.method_label ?? ''}${m.reference ? ` · ${m.reference}` : ''}`
@@ -156,7 +163,7 @@ export default function CierreDiarioTab({ role }: Props) {
                   ))}
                   {sheet.movements.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center" style={{ color: '#9A958C' }}>
+                      <td colSpan={5} className="py-8 text-center" style={{ color: '#9A958C' }}>
                         No hubo movimientos este día.
                       </td>
                     </tr>

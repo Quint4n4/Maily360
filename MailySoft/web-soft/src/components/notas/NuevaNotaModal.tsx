@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, AlertCircle, Loader2, CheckSquare, Bell, Pin, Megaphone } from 'lucide-react'
+import { X, AlertCircle, Loader2, CheckSquare, Bell, Pin, Megaphone, AlertTriangle, Building2 } from 'lucide-react'
 import { useCreateNote, useUpdateNote } from '../../hooks/notas'
 import { useRole } from '../../auth/RoleContext'
+import { useSucursalActiva } from '../../auth/SucursalContext'
 import { ROLES } from '../../auth/permisos'
 import { combineToISO, toDayKey, localHHMM } from '../../lib/fecha'
 import { erroresDe } from '../../lib/apiErrors'
@@ -25,7 +26,12 @@ const Toggle = ({ on, onClick, icon: Icon, label }: { on: boolean; onClick: () =
 
 export default function NuevaNotaModal({ open, onClose, editing }: Props) {
   const { role } = useRole()
+  const { sucursales } = useSucursalActiva()
   const esOwner = role === 'owner'
+  const esAdmin = role === 'admin'
+  // Quién puede publicar avisos (no solo notas personales). El admin queda
+  // acotado a SU sede por el backend; el dueño elige sede y puede destacar.
+  const puedeAvisar = esOwner || esAdmin
   const esEdicion = !!editing
 
   const [titulo, setTitulo] = useState('')
@@ -37,6 +43,9 @@ export default function NuevaNotaModal({ open, onClose, editing }: Props) {
   const [hora, setHora] = useState('09:00')
   const [scope, setScope] = useState<NoteScope>('personal')
   const [targetRole, setTargetRole] = useState('doctor')
+  // Multi-sede (solo dueño): sede destino del aviso ('todas' = null) + destacado.
+  const [sedeId, setSedeId] = useState<string>('todas')
+  const [importante, setImportante] = useState(false)
   const [errores, setErrores] = useState<string[]>([])
 
   const crear = useCreateNote()
@@ -56,6 +65,7 @@ export default function NuevaNotaModal({ open, onClose, editing }: Props) {
       setTitulo(''); setCuerpo(''); setEsTarea(false); setFijada(false)
       setConRecordatorio(false); setFecha(''); setHora('09:00'); setScope('personal'); setTargetRole('doctor')
     }
+    setSedeId('todas'); setImportante(false)
   }, [open, editing])
 
   const guardar = async () => {
@@ -71,6 +81,11 @@ export default function NuevaNotaModal({ open, onClose, editing }: Props) {
       scope,
       target_role: scope === 'role' ? targetRole : '',
       remind_at: conRecordatorio ? combineToISO(fecha, hora) : null,
+      // Multi-sede: sede + destacado solo los manda el DUEÑO en un aviso nuevo.
+      // El admin queda acotado a su sede por el backend (no se envían aquí).
+      ...(esOwner && !esEdicion && scope !== 'personal'
+        ? { sucursal_id: sedeId === 'todas' ? null : sedeId, is_important: importante }
+        : {}),
     }
     try {
       if (editing) await actualizar.mutateAsync({ id: editing.id, input })
@@ -130,18 +145,39 @@ export default function NuevaNotaModal({ open, onClose, editing }: Props) {
                 </div>
               )}
 
-              {esOwner && (
-                <div className="rounded-xl p-3" style={{ background: 'rgba(58,110,165,0.06)', border: '1px solid rgba(58,110,165,0.18)' }}>
-                  <label className={LABEL}><Megaphone className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />Alcance (como Dueño)</label>
+              {puedeAvisar && !esEdicion && (
+                <div className="rounded-xl p-3 space-y-2" style={{ background: 'rgba(58,110,165,0.06)', border: '1px solid rgba(58,110,165,0.18)' }}>
+                  <label className={LABEL}><Megaphone className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />Alcance</label>
                   <select className={INPUT} value={scope} onChange={e => setScope(e.target.value as NoteScope)}>
                     <option value="personal">Personal (solo yo)</option>
-                    <option value="all">Global — todos los roles</option>
-                    <option value="role">Global — un rol específico</option>
+                    <option value="all">{esOwner ? 'Aviso — todos los roles' : 'Aviso para mi sucursal'}</option>
+                    <option value="role">{esOwner ? 'Aviso — un rol específico' : 'Aviso a un rol (de mi sucursal)'}</option>
                   </select>
                   {scope === 'role' && (
-                    <select className={`${INPUT} mt-2`} value={targetRole} onChange={e => setTargetRole(e.target.value)}>
+                    <select className={INPUT} value={targetRole} onChange={e => setTargetRole(e.target.value)}>
                       {ROLES.filter(r => r.key !== 'owner').map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
                     </select>
+                  )}
+
+                  {/* Dueño: elige a qué sede(s) va y puede destacarlo. */}
+                  {esOwner && scope !== 'personal' && (
+                    <>
+                      <label className={LABEL}><Building2 className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />Sede</label>
+                      <select className={INPUT} value={sedeId} onChange={e => setSedeId(e.target.value)}>
+                        <option value="todas">Todas las sedes</option>
+                        {sucursales.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                      <div className="pt-1">
+                        <Toggle on={importante} onClick={() => setImportante(v => !v)} icon={AlertTriangle} label="Importante" />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Admin: el aviso queda acotado a su sucursal (lo fuerza el backend). */}
+                  {esAdmin && scope !== 'personal' && (
+                    <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                      <Building2 className="w-3 h-3" /> Este aviso será solo para tu sucursal.
+                    </p>
                   )}
                 </div>
               )}

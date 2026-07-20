@@ -21,7 +21,6 @@ Anti-empalme:
                  NO se modelan en Meta de Django (requieren btree_gist + sintaxis raw).
 """
 
-import uuid as _uuid_module
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -30,10 +29,10 @@ from django.db.models import Q
 
 from apps.core.models import TenantAwareModel
 
-
 # ---------------------------------------------------------------------------
 # Helpers de default para JSONField
 # ---------------------------------------------------------------------------
+
 
 def _default_reminder_offsets() -> list[int]:
     """Default para reminder_offsets_minutes: [1440] (24 horas antes)."""
@@ -202,6 +201,21 @@ class AgendaBlock(TenantAwareModel):
         related_name="agenda_blocks",
         help_text="Consultorio al que aplica. Null = no atado a un consultorio.",
     )
+    sucursal = models.ForeignKey(
+        "clinica.Sucursal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="agenda_blocks",
+        help_text=(
+            "Sucursal (sede) del evento (multi-sede — Fase 2). Determina el "
+            "alcance de un bloqueo SIN doctor ni consultorio ('de toda la "
+            "clínica' pasó a ser 'de una sucursal': un cierre en Centro ya NO "
+            "bloquea Norte). Un bloqueo con doctor sigue aplicando en TODAS "
+            "las sedes de ese médico; uno con consultorio, solo a ese cuarto. "
+            "Se resuelve automáticamente si no se indica explícitamente."
+        ),
+    )
     starts_at = models.DateTimeField(db_index=True, help_text="Inicio en UTC.")
     ends_at = models.DateTimeField(help_text="Fin en UTC. Debe ser posterior a starts_at.")
     all_day = models.BooleanField(default=False, help_text="True = ocupa el día completo.")
@@ -275,6 +289,23 @@ class Appointment(TenantAwareModel):
         help_text=(
             "Consultorio donde se realizará la cita. "
             "Opcional (puede ser telemedicina o domicilio)."
+        ),
+    )
+    sucursal = models.ForeignKey(
+        "clinica.Sucursal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+        related_name="appointments",
+        help_text=(
+            "Sucursal (sede) donde se agenda la cita (multi-sede — Fase 2). "
+            "Se resuelve automáticamente en appointment_create si no se "
+            "indica explícitamente (consultorio.sucursal → sede activa del "
+            "request → sede predeterminada del tenant). Null = dato legado "
+            "sin backfillar. La disponibilidad del MÉDICO sigue siendo "
+            "GLOBAL entre sedes (ver _check_doctor_overlap); solo los "
+            "bloqueos 'de toda la clínica' quedan acotados por sucursal."
         ),
     )
     modality = models.CharField(
@@ -422,6 +453,11 @@ class Appointment(TenantAwareModel):
             models.Index(
                 fields=["tenant", "status", "starts_at"],
                 name="appt_status_idx",
+            ),
+            # Calendario por sede (multi-sede — Fase 2)
+            models.Index(
+                fields=["tenant", "sucursal", "starts_at"],
+                name="appt_sucursal_range_idx",
             ),
         ]
         # NOTA: Los exclusion constraints anti-empalme (btree_gist) NO se modelan aquí.
@@ -684,9 +720,7 @@ class AppointmentReminder(TenantAwareModel):
     def __str__(self) -> str:
         channel_label = self.get_channel_display()  # type: ignore[attr-defined]
         status_label = self.get_status_display()  # type: ignore[attr-defined]
-        scheduled = (
-            self.scheduled_at.strftime("%Y-%m-%d %H:%M") if self.scheduled_at else "?"
-        )
+        scheduled = self.scheduled_at.strftime("%Y-%m-%d %H:%M") if self.scheduled_at else "?"
         return (
             f"Recordatorio [{channel_label}] cita={self.appointment_id} "
             f"scheduled={scheduled} UTC [{status_label}]"

@@ -10,6 +10,7 @@ import { toIsoDate } from '../../lib/format'
 import { exportReportExcel } from '../../lib/exportReporte'
 import VisorPdf from '../VisorPdf'
 import ReporteKpiCards from './ReporteKpiCards'
+import SedeIndicador, { mensajeErrorSede } from './SedeIndicador'
 import SerieTemporalChart from './charts/SerieTemporalChart'
 import AgingApiladoChart from './charts/AgingApiladoChart'
 import MetodosPagoChart from './charts/MetodosPagoChart'
@@ -82,6 +83,9 @@ export default function ReporteTab({ role }: Props) {
       {/* Barra de filtros + exportación */}
       <div className="glass-card rounded-2xl p-3 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3 flex-wrap">
+          {/* Sede del reporte: los reportes son PRIVADOS de cada sucursal. */}
+          <SedeIndicador />
+
           {/* Rango */}
           <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: 'rgba(0,0,0,0.04)' }}>
             {RANGE_PRESETS.map((p) => (
@@ -155,7 +159,7 @@ export default function ReporteTab({ role }: Props) {
 
       {isError && (
         <div className="glass-card rounded-2xl p-6 text-sm" style={{ color: '#B91C1C' }}>
-          No se pudo cargar el reporte financiero. {(error as Error)?.message ?? ''}
+          {mensajeErrorSede(error, 'No se pudo cargar el reporte financiero.')}
         </div>
       )}
 

@@ -21,6 +21,12 @@ export interface Member {
   user: MemberUser
   role: ClinicRole
   role_display: string
+  /**
+   * Sucursales (sedes) ASIGNADAS al miembro (multi-sede, Fase 4).
+   * Definen qué sedes puede ver y operar. Vacío = sin asignación explícita
+   * (el owner ve todas; los demás roles caen en la sede por defecto).
+   */
+  sucursales: SucursalRefMin[]
   is_active: boolean // membresía activa
   is_blocked: boolean // cuenta bloqueada (no puede iniciar sesión)
   created_at: string
@@ -49,6 +55,12 @@ export interface ConsultorioRefMin {
   id: string
   name: string
 }
+
+/** Referencia compacta a una sucursal, embebida en consultorios/doctores. */
+export interface SucursalRefMin {
+  id: string
+  name: string
+}
 export interface Doctor {
   id: string
   full_name: string
@@ -66,6 +78,8 @@ export interface Doctor {
   cedulas_adicionales: string
   /** Consultorios asignados al médico (vacío = puede usar cualquiera). */
   consultorios: ConsultorioRefMin[]
+  /** Sucursales (sedes) donde opera el médico (multi-sede, Fase 1). */
+  sucursales: SucursalRefMin[]
   is_active: boolean
   created_at: string
 }
@@ -75,6 +89,8 @@ export interface Consultorio {
   name: string
   location: string
   color_hex: string
+  /** Sucursal (sede) a la que pertenece el consultorio, o null (multi-sede, F1). */
+  sucursal: SucursalRefMin | null
   is_active: boolean
   created_at: string
 }
@@ -85,6 +101,8 @@ export interface ConsultorioCreateInput {
   location?: string
   /** Formato #RRGGBB; vacío permitido. */
   color_hex?: string
+  /** Id de la sucursal a la que pertenece el consultorio (multi-sede, F1). */
+  sucursal_id?: string
 }
 
 /** Cuerpo para actualización parcial de consultorio (PATCH). */
@@ -98,6 +116,8 @@ export interface DoctorUpdateInput {
   bio_short?: string
   /** Lista de ids de consultorios asignados al médico. */
   consultorio_ids?: string[]
+  /** Lista de ids de sucursales donde opera el médico (multi-sede, F1). */
+  sucursal_ids?: string[]
 }
 
 /** Cuerpo para crear un perfil de médico (POST). Liga a la membresía con rol doctor. */
@@ -107,4 +127,44 @@ export interface DoctorCreateInput {
   specialty?: string
   default_appointment_duration?: number
   bio_short?: string
+}
+
+// ── Horarios laborales del médico (DoctorSchedule) ───────────────────────────
+
+/** Día de la semana del backend (Weekday): 0 = Lunes … 6 = Domingo. */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+/**
+ * Bloque de horario laboral de un médico. Refleja DoctorScheduleOutputSerializer.
+ *
+ * Multi-sede (Fase 2): el horario es POR SEDE — un médico puede atender L-V 9-14
+ * en la Sucursal Centro y S 9-13 en la Sucursal Norte.
+ *
+ * OJO (contrato del backend): start_time/end_time están en hora LOCAL del tenant
+ * (formato 'HH:MM:SS'), NO en UTC.
+ */
+export interface DoctorSchedule {
+  id: string
+  day_of_week: Weekday
+  day_of_week_display: string
+  start_time: string // 'HH:MM:SS' hora local del tenant
+  end_time: string // 'HH:MM:SS' hora local del tenant
+  consultorio: ConsultorioRefMin | null
+  /** Sucursal (sede) a la que pertenece este horario, o null (multi-sede, F2). */
+  sucursal: SucursalRefMin | null
+  valid_from: string | null // 'yyyy-mm-dd'
+  valid_until: string | null // 'yyyy-mm-dd'
+  is_active: boolean
+}
+
+/** Cuerpo para crear un horario (POST /personal/doctores/<id>/horarios/). */
+export interface DoctorScheduleCreateInput {
+  day_of_week: Weekday
+  start_time: string // 'HH:MM'
+  end_time: string // 'HH:MM'
+  consultorio_id?: string | null
+  /** Sede del horario (multi-sede, F2). Si no se manda, el backend la deriva. */
+  sucursal_id?: string | null
+  valid_from?: string | null
+  valid_until?: string | null
 }

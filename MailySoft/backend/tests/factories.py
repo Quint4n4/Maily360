@@ -29,7 +29,9 @@ from apps.clinica.models import (
     CredentialKind,
     DoctorCredential,
     DoctorUniversity,
+    MembershipSucursal,
     PatientCategory,
+    Sucursal,
     TemplateKind,
 )
 from apps.expediente.models import (
@@ -724,6 +726,48 @@ class ClinicTeamMemberFactory(DjangoModelFactory):
 
 
 # ---------------------------------------------------------------------------
+# Sucursal / MembershipSucursal — multi-sede (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+class SucursalFactory(DjangoModelFactory):
+    """Sucursal (sede) de un tenant. Por defecto activa y NO predeterminada.
+
+    is_default=True dispara la constraint de unicidad parcial por tenant
+    (una sola sucursal default); no la pongas True en más de una factory del
+    mismo tenant en un mismo test.
+    """
+
+    class Meta:
+        model = Sucursal
+
+    tenant = factory.SubFactory(TenantFactory)
+    created_by = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Sucursal {n}")
+    address = ""
+    phone = ""
+    color_hex = ""
+    is_active = True
+    is_default = False
+
+
+class MembershipSucursalFactory(DjangoModelFactory):
+    """Asigna una TenantMembership a una Sucursal (multi-sede — Fase 1).
+
+    tenant se toma de la sucursal por defecto para garantizar consistencia
+    (membership y sucursal deben ser del mismo tenant).
+    """
+
+    class Meta:
+        model = MembershipSucursal
+
+    tenant = factory.LazyAttribute(lambda obj: obj.sucursal.tenant)
+    created_by = factory.SubFactory(UserFactory)
+    membership = factory.SubFactory(TenantMembershipFactory)
+    sucursal = factory.SubFactory(SucursalFactory)
+
+
+# ---------------------------------------------------------------------------
 # Recetas — GlobalMedication y Medication (B1.1)
 # ---------------------------------------------------------------------------
 
@@ -978,6 +1022,7 @@ class QuoteFactory(DjangoModelFactory):
     subtotal = factory.LazyFunction(lambda: Decimal("0.00"))
     discount_total = factory.LazyFunction(lambda: Decimal("0.00"))
     total = factory.LazyFunction(lambda: Decimal("0.00"))
+    sucursal = None
 
 
 class QuoteItemFactory(DjangoModelFactory):
@@ -1014,6 +1059,7 @@ class ChargeFactory(DjangoModelFactory):
     amount_paid = factory.LazyFunction(lambda: Decimal("0.00"))
     status = Charge.Status.PENDING
     issued_at = factory.LazyFunction(timezone.now)
+    sucursal = None
 
 
 class PaymentFactory(DjangoModelFactory):
@@ -1030,6 +1076,7 @@ class PaymentFactory(DjangoModelFactory):
     reference = ""
     received_at = factory.LazyFunction(timezone.now)
     notes = ""
+    sucursal = None
 
 
 class CfdiDocumentFactory(DjangoModelFactory):
@@ -1055,3 +1102,4 @@ class CfdiDocumentFactory(DjangoModelFactory):
     payment_method = "PUE"
     subtotal = factory.LazyFunction(lambda: Decimal("500.00"))
     total = factory.LazyFunction(lambda: Decimal("500.00"))
+    sucursal = None

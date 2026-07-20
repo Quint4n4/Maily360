@@ -13,7 +13,7 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   Stethoscope, Plus, Loader2, MessageSquarePlus, Lock, X, Activity, ChevronDown,
-  ImagePlus, Trash2, ImageIcon,
+  ImagePlus, Trash2, ImageIcon, ClipboardList,
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type { Appointment } from '../../types/agenda'
@@ -32,6 +32,7 @@ import {
   Card, Cargando, ErroresAlerta, Vacio, EXPLORACION_EVOLUCION_OPTIONS, SISTEMA_LABEL,
   SistemaIcono, SistemaLabelConIcono,
 } from './ui'
+import ResumenClinicoModal from './ResumenClinicoModal'
 
 const SISTEMAS: ExploracionSistema[] = [
   'cerebro', 'sistema_nervioso', 'ocular', 'endocrino', 'corazon', 'circulatorio',
@@ -184,6 +185,7 @@ function NotaCard({
   const [body, setBody] = useState('')
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState('')
+  const [resumenAbierto, setResumenAbierto] = useState(false)
 
   const explorAlteradas = Object.entries(nota.exploracion_fisica).filter(
     ([, v]) => v?.estado && v.estado !== 'no_evaluado',
@@ -203,7 +205,22 @@ function NotaCard({
 
   return (
     <Card title={`Evolución · ${formatFechaHora(nota.created_at)}`} icon={Stethoscope}
-      action={<span className="inline-flex items-center gap-1 text-[11px] text-gray-400"><Lock className="w-3 h-3" /> Firmada</span>}
+      action={
+        <div className="flex items-center gap-2.5">
+          {/* Solo roles clínicos (owner/admin/doctor) generan el resumen del paciente. */}
+          {puedeEditar && (
+            <button
+              type="button"
+              onClick={() => setResumenAbierto(true)}
+              title="Generar el resumen clínico para el paciente"
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 hover:text-amber-800"
+            >
+              <ClipboardList className="w-3.5 h-3.5" /> Resumen clínico
+            </button>
+          )}
+          <span className="inline-flex items-center gap-1 text-[11px] text-gray-400"><Lock className="w-3 h-3" /> Firmada</span>
+        </div>
+      }
     >
       <div className="space-y-2.5">
         {vitalSigns && <SignosSnapshot signo={vitalSigns} />}
@@ -278,6 +295,15 @@ function NotaCard({
             </button>
           )}
         </div>
+      )}
+
+      {/* Resumen clínico del paciente (constancia + PDF) */}
+      {resumenAbierto && (
+        <ResumenClinicoModal
+          evolutionId={nota.id}
+          patientId={patientId}
+          onClose={() => setResumenAbierto(false)}
+        />
       )}
     </Card>
   )

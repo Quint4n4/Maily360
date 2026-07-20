@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { useCreateConsultorio, useUpdateConsultorio } from '../../hooks/personal'
+import { useSucursales } from '../../hooks/sucursales'
 import { erroresDe } from '../../lib/apiErrors'
 
 export interface ConsultorioEdit {
@@ -9,6 +10,8 @@ export interface ConsultorioEdit {
   name: string
   location: string
   color_hex: string
+  /** Sucursal (sede) del consultorio (multi-sede, F1); null = sin asignar. */
+  sucursal_id: string | null
 }
 
 interface Props {
@@ -24,9 +27,12 @@ export default function NuevoConsultorioDrawer({ open, onClose, editing }: Props
   const [nombre, setNombre]  = useState('')
   const [ubicacion, setUbic] = useState('')
   const [color, setColor]    = useState(COLORES[0])
+  const [sucursalId, setSucursalId] = useState('')
   const [errores, setErrores] = useState<string[]>([])
   const crear = useCreateConsultorio()
   const actualizar = useUpdateConsultorio()
+  const sucursalesQ = useSucursales()
+  const sucursales = (sucursalesQ.data?.results ?? []).filter(s => s.is_active)
   const esEdicion = !!editing
   const guardando = crear.isPending || actualizar.isPending
 
@@ -38,8 +44,9 @@ export default function NuevoConsultorioDrawer({ open, onClose, editing }: Props
       setNombre(editing.name)
       setUbic(editing.location)
       setColor(editing.color_hex || COLORES[0])
+      setSucursalId(editing.sucursal_id ?? '')
     } else {
-      setNombre(''); setUbic(''); setColor(COLORES[0])
+      setNombre(''); setUbic(''); setColor(COLORES[0]); setSucursalId('')
     }
   }, [open, editing])
 
@@ -49,7 +56,13 @@ export default function NuevoConsultorioDrawer({ open, onClose, editing }: Props
   const guardar = async () => {
     setErrores([])
     if (!nombre.trim()) { setErrores(['El nombre es obligatorio.']); return }
-    const payload = { name: nombre.trim(), location: ubicacion.trim(), color_hex: color }
+    const payload = {
+      name: nombre.trim(),
+      location: ubicacion.trim(),
+      color_hex: color,
+      // Solo enviamos sucursal_id si hay una elegida (multi-sede, F1).
+      ...(sucursalId ? { sucursal_id: sucursalId } : {}),
+    }
     try {
       if (editing) {
         await actualizar.mutateAsync({ id: editing.id, input: payload })
@@ -98,6 +111,18 @@ export default function NuevoConsultorioDrawer({ open, onClose, editing }: Props
                 <label className="label">Ubicación</label>
                 <input className="input" maxLength={255} value={ubicacion} onChange={e => setUbic(e.target.value)} placeholder="Planta baja, ala norte" />
               </div>
+              {sucursales.length > 0 && (
+                <div>
+                  <label className="label">Sucursal</label>
+                  <select className="input" value={sucursalId} onChange={e => setSucursalId(e.target.value)}>
+                    <option value="">Sin asignar</option>
+                    {sucursales.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-gray-400 mt-1">La sede a la que pertenece este consultorio.</p>
+                </div>
+              )}
               <div>
                 <label className="label">Color en la agenda</label>
                 <div className="flex flex-wrap gap-2.5 mt-1">

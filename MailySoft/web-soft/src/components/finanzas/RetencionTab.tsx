@@ -33,6 +33,7 @@ import type {
 } from '../../api/finanzas'
 import { exportRetencionExcel } from '../../lib/exportRetencion'
 import { formatMoney, formatPercent, formatDate } from '../../lib/format'
+import SedeIndicador, { mensajeErrorSede } from './SedeIndicador'
 
 interface Props {
   role: Role
@@ -88,7 +89,7 @@ export default function RetencionTab({ role }: Props) {
   if (isError || !data) {
     return (
       <div className="glass-card rounded-2xl p-6 text-sm" style={{ color: '#B91C1C' }}>
-        No se pudo cargar el panel de retención. {(error as Error)?.message ?? ''}
+        {mensajeErrorSede(error, 'No se pudo cargar el panel de retención.')}
       </div>
     )
   }
@@ -111,6 +112,12 @@ export default function RetencionTab({ role }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Sede del panel: la retención se calcula sobre la sede activa (o el
+          consolidado de las sedes permitidas si eliges "Todas las sucursales"). */}
+      <div className="flex items-center justify-end">
+        <SedeIndicador />
+      </div>
+
       {/* Aviso: solo visualización, contacto manual (D-7) */}
       <div
         className="rounded-xl p-3 flex items-start gap-2.5 text-xs"

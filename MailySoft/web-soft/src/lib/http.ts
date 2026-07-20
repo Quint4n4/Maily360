@@ -15,6 +15,7 @@
  */
 
 import { getCsrfToken } from './csrf'
+import { getActiveSucursalId } from './sucursalStore'
 import { clearAccessToken, getAccessToken, setAccessToken } from './tokenStore'
 import type { ApiErrorBody, RefreshResponse } from '../types/api'
 
@@ -126,6 +127,12 @@ async function doFetch(path: string, options: RequestOptions): Promise<Response>
 
   const accessToken = getAccessToken()
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`
+
+  // Sucursal activa (multi-sede): el backend la usa para filtrar personal y
+  // consultorios; los demás endpoints la ignoran. Si no hay sede elegida, no
+  // se manda el header.
+  const sucursalId = getActiveSucursalId()
+  if (sucursalId) headers['X-Sucursal-Id'] = sucursalId
 
   let body: BodyInit | undefined
   if (options.body instanceof FormData) {

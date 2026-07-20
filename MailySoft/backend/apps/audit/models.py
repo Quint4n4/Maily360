@@ -266,6 +266,18 @@ class ActionType(models.TextChoices):
     LAB_ANALYTE_UPDATE = "LAB_ANALYTE_UPDATE", "Actualizar analito de laboratorio"
     LAB_ANALYTE_DELETE = "LAB_ANALYTE_DELETE", "Eliminar analito de laboratorio"
 
+    # Sucursales (multi-sede — Fase 1). resource_repr = nombre de la sucursal.
+    SUCURSAL_CREATE = "SUCURSAL_CREATE", "Crear sucursal"
+    SUCURSAL_UPDATE = "SUCURSAL_UPDATE", "Actualizar sucursal"
+    SUCURSAL_ACTIVATE = "SUCURSAL_ACTIVATE", "Reactivar sucursal"
+    SUCURSAL_DEACTIVATE = "SUCURSAL_DEACTIVATE", "Desactivar sucursal"
+    SUCURSAL_SET_DEFAULT = "SUCURSAL_SET_DEFAULT", "Marcar sucursal como predeterminada"
+    DOCTOR_SUCURSALES = "DOCTOR_SUCURSALES", "Asignar sucursales a médico"
+    MEMBERSHIP_SUCURSALES_SET = (
+        "MEMBERSHIP_SUCURSALES_SET",
+        "Asignar sucursales a un miembro (administrador de sucursal)",
+    )
+
 
 class AuditLog(TenantAwareModel):
     """Registro inmutable de un evento auditable en la plataforma.

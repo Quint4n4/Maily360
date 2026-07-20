@@ -74,9 +74,12 @@ from apps.expediente.services_calendarizacion import (
 from apps.expediente.tests.conftest import api_tenant_ctx, tenant_ctx
 from apps.tenancy.models import TenantMembership
 from tests.factories import (
+    ConsultorioFactory,
     DoctorFactory,
+    MembershipSucursalFactory,
     PatientFactory,
     ServiceConceptFactory,
+    SucursalFactory,
     TenantFactory,
     TenantMembershipFactory,
     UserFactory,
@@ -1694,3 +1697,344 @@ class TestTreatmentSessionScheduleApi:
         assert session_out["duration_minutes"] == 30
         assert session_out["appointment"]["doctor_id"] == str(doctor.id)
         assert session_out["appointment"]["status"] == "scheduled"
+
+
+# ---------------------------------------------------------------------------
+# 8. Multi-sede — cierre de A8 (docs/design/sucursales-hallazgos-seguridad.md)
+#
+# TreatmentSessionScheduleApi (agendar/quitar) NO resolvía ni validaba sede,
+# así que la rama "misma sesión + mismo médico" de treatment_session_schedule
+# delegaba en appointment_reschedule (que tampoco valida sede) y la cita
+# adoptaba la sede del consultorio elegido sin comprobar allowed_sucursales;
+# el DELETE cancelaba la cita ligada sin filtro de sede. Un admin/doctor
+# acotado a una sede podía así mover una cita de sesión a otra sede, o
+# cancelar una cita que vive en otra sede.
+# ---------------------------------------------------------------------------
+
+
+def _admin_scoped_to(tenant: Any, sucursal: Any) -> Any:
+    """Crea un admin con MembershipSucursal — acotado SOLO a `sucursal`."""
+    membership = TenantMembershipFactory(
+        tenant=tenant, role=TenantMembership.Role.ADMIN, is_active=True
+    )
+    MembershipSucursalFactory(membership=membership, sucursal=sucursal)
+    return membership.user
+
+
+class TestTreatmentSessionScheduleApiSucursal:
+    def _create_plan(self, tenant: Any, patient: Any, doctor: Any) -> Any:
+        with tenant_ctx(tenant):
+            return treatment_plan_create(
+                patient=patient,
+                actor=doctor.membership.user,
+                title="",
+                notes="",
+                status=TreatmentPlanStatus.ACTIVA,
+                items=[dict(_SIMPLE_ITEM, quantity=1)],
+                doctor=doctor,
+                actor_role="doctor",
+            )
+
+    def test_admin_acotado_a_centro_no_puede_mover_cita_a_consultorio_de_norte(
+        self, db: Any
+    ) -> None:
+        """Sesión ya agendada (mismo doctor) — reagendar con consultorio_id de
+        Norte debe rechazarse; la cita NO se mueve (sigue en Centro)."""
+        tenant = TenantFactory()
+        centro = SucursalFactory(tenant=tenant, is_default=True)
+        norte = SucursalFactory(tenant=tenant)
+        consultorio_centro = ConsultorioFactory(tenant=tenant, sucursal=centro)
+        consultorio_norte = ConsultorioFactory(tenant=tenant, sucursal=norte)
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+        plan = self._create_plan(tenant, patient, doctor)
+        session = plan.items.first().sessions.first()
+
+        admin_centro = _admin_scoped_to(tenant, centro)
+        client = _auth_client(admin_centro)
+
+        with api_tenant_ctx(tenant):
+            resp1 = client.post(
+                _SCHEDULE_URL_TMPL.format(session_id=session.id),
+                data=_schedule_payload(doctor.id, consultorio_id=str(consultorio_centro.id)),
+                format="json",
+            )
+        assert resp1.status_code == 200, resp1.content
+        appointment_id = resp1.json()["appointment"]["id"]
+
+        with api_tenant_ctx(tenant):
+            resp2 = client.post(
+                _SCHEDULE_URL_TMPL.format(session_id=session.id),
+                data=_schedule_payload(
+                    doctor.id,
+                    consultorio_id=str(consultorio_norte.id),
+                    scheduled_date="2026-08-02",
+                    scheduled_time="11:00:00",
+                    starts_at="2026-08-02T17:00:00Z",
+                    ends_at="2026-08-02T17:30:00Z",
+                ),
+                format="json",
+            )
+
+        assert resp2.status_code == 400, resp2.content
+        assert "detail" in resp2.json()
+
+        appt = Appointment.objects.get(id=appointment_id)
+        assert appt.sucursal_id == centro.id
+        assert appt.consultorio_id == consultorio_centro.id
+        assert appt.starts_at == datetime.datetime(2026, 8, 1, 16, 0, tzinfo=datetime.UTC)
+
+    def test_admin_acotado_a_centro_no_puede_quitar_de_agenda_cita_de_norte(self, db: Any) -> None:
+        """DELETE sobre una sesión cuya cita vive en Norte debe rechazarse; la
+        cita NO se cancela."""
+        tenant = TenantFactory()
+        centro = SucursalFactory(tenant=tenant, is_default=True)
+        norte = SucursalFactory(tenant=tenant)
+        consultorio_norte = ConsultorioFactory(tenant=tenant, sucursal=norte)
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+        plan = self._create_plan(tenant, patient, doctor)
+        session = plan.items.first().sessions.first()
+
+        owner = _member(tenant, TenantMembership.Role.OWNER)
+        owner_client = _auth_client(owner)
+        with api_tenant_ctx(tenant):
+            resp1 = owner_client.post(
+                _SCHEDULE_URL_TMPL.format(session_id=session.id),
+                data=_schedule_payload(doctor.id, consultorio_id=str(consultorio_norte.id)),
+                format="json",
+            )
+        assert resp1.status_code == 200, resp1.content
+        appointment_id = resp1.json()["appointment"]["id"]
+
+        admin_centro = _admin_scoped_to(tenant, centro)
+        client = _auth_client(admin_centro)
+
+        with api_tenant_ctx(tenant):
+            resp2 = client.delete(_SCHEDULE_URL_TMPL.format(session_id=session.id))
+
+        assert resp2.status_code == 400, resp2.content
+        assert "detail" in resp2.json()
+
+        appt = Appointment.objects.get(id=appointment_id)
+        assert appt.status == Appointment.Status.SCHEDULED
+        session.refresh_from_db()
+        assert session.appointment_id == appt.id
+
+    def test_admin_acotado_a_centro_puede_agendar_en_su_propia_sede(self, db: Any) -> None:
+        tenant = TenantFactory()
+        centro = SucursalFactory(tenant=tenant, is_default=True)
+        consultorio_centro = ConsultorioFactory(tenant=tenant, sucursal=centro)
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+        plan = self._create_plan(tenant, patient, doctor)
+        session = plan.items.first().sessions.first()
+
+        admin_centro = _admin_scoped_to(tenant, centro)
+        client = _auth_client(admin_centro)
+
+        with api_tenant_ctx(tenant):
+            resp = client.post(
+                _SCHEDULE_URL_TMPL.format(session_id=session.id),
+                data=_schedule_payload(doctor.id, consultorio_id=str(consultorio_centro.id)),
+                format="json",
+            )
+
+        assert resp.status_code == 200, resp.content
+        appt = Appointment.objects.get(id=resp.json()["appointment"]["id"])
+        assert appt.sucursal_id == centro.id
+
+    def test_owner_puede_mover_sesion_agendada_a_otra_sede(self, db: Any) -> None:
+        """El owner (alcance total) SÍ puede mover la cita ligada a otra sede."""
+        tenant = TenantFactory()
+        centro = SucursalFactory(tenant=tenant, is_default=True)
+        norte = SucursalFactory(tenant=tenant)
+        consultorio_centro = ConsultorioFactory(tenant=tenant, sucursal=centro)
+        consultorio_norte = ConsultorioFactory(tenant=tenant, sucursal=norte)
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+        plan = self._create_plan(tenant, patient, doctor)
+        session = plan.items.first().sessions.first()
+
+        owner = _member(tenant, TenantMembership.Role.OWNER)
+        client = _auth_client(owner)
+
+        with api_tenant_ctx(tenant):
+            resp1 = client.post(
+                _SCHEDULE_URL_TMPL.format(session_id=session.id),
+                data=_schedule_payload(doctor.id, consultorio_id=str(consultorio_centro.id)),
+                format="json",
+            )
+        assert resp1.status_code == 200, resp1.content
+        appointment_id = resp1.json()["appointment"]["id"]
+
+        with api_tenant_ctx(tenant):
+            resp2 = client.post(
+                _SCHEDULE_URL_TMPL.format(session_id=session.id),
+                data=_schedule_payload(
+                    doctor.id,
+                    consultorio_id=str(consultorio_norte.id),
+                    scheduled_date="2026-08-02",
+                    scheduled_time="11:00:00",
+                    starts_at="2026-08-02T17:00:00Z",
+                    ends_at="2026-08-02T17:30:00Z",
+                ),
+                format="json",
+            )
+        assert resp2.status_code == 200, resp2.content
+        assert resp2.json()["appointment"]["id"] == appointment_id
+
+        appt = Appointment.objects.get(id=appointment_id)
+        assert appt.sucursal_id == norte.id
+        assert appt.consultorio_id == consultorio_norte.id
+
+    def test_owner_puede_quitar_de_agenda_cita_de_cualquier_sede(self, db: Any) -> None:
+        tenant = TenantFactory()
+        norte = SucursalFactory(tenant=tenant)
+        SucursalFactory(tenant=tenant, is_default=True)
+        consultorio_norte = ConsultorioFactory(tenant=tenant, sucursal=norte)
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+        plan = self._create_plan(tenant, patient, doctor)
+        session = plan.items.first().sessions.first()
+
+        owner = _member(tenant, TenantMembership.Role.OWNER)
+        client = _auth_client(owner)
+
+        with api_tenant_ctx(tenant):
+            resp1 = client.post(
+                _SCHEDULE_URL_TMPL.format(session_id=session.id),
+                data=_schedule_payload(doctor.id, consultorio_id=str(consultorio_norte.id)),
+                format="json",
+            )
+        assert resp1.status_code == 200, resp1.content
+
+        with api_tenant_ctx(tenant):
+            resp2 = client.delete(_SCHEDULE_URL_TMPL.format(session_id=session.id))
+
+        assert resp2.status_code == 200, resp2.content
+        assert resp2.json()["appointment"] is None
+
+
+class TestTreatmentSessionScheduleServiceSucursal:
+    """Defensa en profundidad: los mismos candados directamente en el service,
+    sin pasar por la vista (protege callers internos — commands, Celery, etc.)."""
+
+    def test_service_rechaza_agendar_si_la_cita_existente_es_de_otra_sede(self, db: Any) -> None:
+        tenant = TenantFactory()
+        centro = SucursalFactory(tenant=tenant, is_default=True)
+        norte = SucursalFactory(tenant=tenant)
+        consultorio_norte = ConsultorioFactory(tenant=tenant, sucursal=norte)
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+
+        with tenant_ctx(tenant):
+            plan = treatment_plan_create(
+                patient=patient,
+                actor=doctor.membership.user,
+                title="",
+                notes="",
+                status=TreatmentPlanStatus.ACTIVA,
+                items=[dict(_SIMPLE_ITEM, quantity=1)],
+                doctor=doctor,
+                actor_role="doctor",
+            )
+            # El actor que agenda la PRIMERA cita (en Norte) debe tener acceso
+            # a esa sede — se usa un owner (alcance total) para no confundir
+            # esta validación con la del propio `doctor` (que, sin fila de
+            # MembershipSucursal, cae por el fallback anti-lockout SOLO en la
+            # sede default = Centro).
+            owner = TenantMembershipFactory(
+                tenant=tenant, role=TenantMembership.Role.OWNER, is_active=True
+            ).user
+            session = plan.items.first().sessions.first()
+            session = treatment_session_schedule(
+                session=session,
+                actor=owner,
+                actor_role="owner",
+                doctor_id=doctor.id,
+                consultorio_id=consultorio_norte.id,
+                starts_at=datetime.datetime(2026, 8, 1, 16, 0, tzinfo=datetime.UTC),
+                ends_at=datetime.datetime(2026, 8, 1, 16, 30, tzinfo=datetime.UTC),
+                scheduled_date=datetime.date(2026, 8, 1),
+                scheduled_time=datetime.time(10, 0),
+                duration_minutes=30,
+            )
+            assert session.appointment is not None
+            assert session.appointment.sucursal_id == norte.id
+
+            admin_centro = _admin_scoped_to(tenant, centro)
+
+            with pytest.raises(DjangoValidationError, match="No tienes acceso a la sede"):
+                treatment_session_schedule(
+                    session=session,
+                    actor=admin_centro,
+                    actor_role="admin",
+                    doctor_id=doctor.id,
+                    consultorio_id=None,
+                    starts_at=datetime.datetime(2026, 8, 2, 16, 0, tzinfo=datetime.UTC),
+                    ends_at=datetime.datetime(2026, 8, 2, 16, 30, tzinfo=datetime.UTC),
+                    scheduled_date=datetime.date(2026, 8, 2),
+                    scheduled_time=datetime.time(10, 0),
+                    duration_minutes=30,
+                )
+
+            session.appointment.refresh_from_db()
+            assert session.appointment.sucursal_id == norte.id
+            assert session.appointment.starts_at == datetime.datetime(
+                2026, 8, 1, 16, 0, tzinfo=datetime.UTC
+            )
+
+    def test_service_rechaza_unschedule_si_la_cita_es_de_otra_sede(self, db: Any) -> None:
+        tenant = TenantFactory()
+        centro = SucursalFactory(tenant=tenant, is_default=True)
+        norte = SucursalFactory(tenant=tenant)
+        consultorio_norte = ConsultorioFactory(tenant=tenant, sucursal=norte)
+        doctor = DoctorFactory(tenant=tenant)
+        patient = PatientFactory(tenant=tenant)
+
+        with tenant_ctx(tenant):
+            plan = treatment_plan_create(
+                patient=patient,
+                actor=doctor.membership.user,
+                title="",
+                notes="",
+                status=TreatmentPlanStatus.ACTIVA,
+                items=[dict(_SIMPLE_ITEM, quantity=1)],
+                doctor=doctor,
+                actor_role="doctor",
+            )
+            # El actor que agenda la PRIMERA cita (en Norte) debe tener acceso
+            # a esa sede — se usa un owner (alcance total) para no confundir
+            # esta validación con la del propio `doctor` (que, sin fila de
+            # MembershipSucursal, cae por el fallback anti-lockout SOLO en la
+            # sede default = Centro).
+            owner = TenantMembershipFactory(
+                tenant=tenant, role=TenantMembership.Role.OWNER, is_active=True
+            ).user
+            session = plan.items.first().sessions.first()
+            session = treatment_session_schedule(
+                session=session,
+                actor=owner,
+                actor_role="owner",
+                doctor_id=doctor.id,
+                consultorio_id=consultorio_norte.id,
+                starts_at=datetime.datetime(2026, 8, 1, 16, 0, tzinfo=datetime.UTC),
+                ends_at=datetime.datetime(2026, 8, 1, 16, 30, tzinfo=datetime.UTC),
+                scheduled_date=datetime.date(2026, 8, 1),
+                scheduled_time=datetime.time(10, 0),
+                duration_minutes=30,
+            )
+            appointment_id = session.appointment_id
+
+            admin_centro = _admin_scoped_to(tenant, centro)
+
+            with pytest.raises(DjangoValidationError, match="No tienes acceso a la sede"):
+                treatment_session_unschedule(
+                    session=session, actor=admin_centro, actor_role="admin"
+                )
+
+            session.refresh_from_db()
+            assert session.appointment_id == appointment_id
+            appt = Appointment.objects.get(id=appointment_id)
+            assert appt.status == Appointment.Status.SCHEDULED

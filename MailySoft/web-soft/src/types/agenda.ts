@@ -22,6 +22,12 @@ export interface ConsultorioRef {
   name: string
 }
 
+/** Referencia compacta a la sucursal (sede) de una cita (multi-sede, Fase 2). */
+export interface SucursalRef {
+  id: string
+  name: string
+}
+
 /** Referencia mínima del tipo de cita dentro de una cita. */
 export interface AppointmentTypeRef {
   id: string
@@ -123,6 +129,8 @@ export interface Appointment {
   patient: AppointmentRef
   doctor: AppointmentRef
   consultorio: ConsultorioRef | null
+  /** Sucursal (sede) donde ocurre la cita, o null si la clínica no usa sedes (F2). */
+  sucursal: SucursalRef | null
   appointment_type: AppointmentTypeRef | null
   modality: AppointmentModality
   modality_display: string
@@ -164,6 +172,12 @@ export interface CreateAppointmentInput {
   notes?: string
   /** Cotización ACEPTADA a vincular (opcional). El backend valida mismo paciente + estado accepted. */
   quote_id?: string | null
+  /**
+   * Sucursal (sede) de la cita (multi-sede, F2). OPCIONAL: si no se manda, el
+   * backend la deriva (del consultorio o de la sucursal activa del header
+   * X-Sucursal-Id). El frontend NO la manda: el backend es la autoridad.
+   */
+  sucursal_id?: string | null
 }
 
 /** Frecuencia de una serie de citas recurrentes. */

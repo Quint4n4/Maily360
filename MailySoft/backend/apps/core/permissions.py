@@ -286,6 +286,13 @@ FINANCE_DESK_ROLES: frozenset[str] = frozenset(
 # Roles financieros "duros" (cargos, CFDI): owner/admin/finance, sin recepción.
 FINANCE_CORE_ROLES: frozenset[str] = frozenset({Role.OWNER, Role.ADMIN, Role.FINANCE})
 
+# Gestión del catálogo de servicios (ServiceConcept) y paquetes (TreatmentPackage):
+# SOLO el dueño (decisión del dueño, 2026-07-16 — mismo criterio que
+# SucursalPermission para la gestión de sedes). Antes era MANAGE_ROLES
+# (owner+admin); admin ya NO puede crear/editar/borrar del catálogo, pero
+# SIGUE viendo el catálogo (GET) para cobrar/cotizar — no se toca la lectura.
+FINANCE_CATALOG_MANAGE_ROLES: frozenset[str] = frozenset({Role.OWNER})
+
 
 class FinanceDashboardPermission(HasClinicRole):
     """Permisos para GET /finanzas/dashboard/ (métricas y series para gráficas).
@@ -306,16 +313,20 @@ class FinanceConceptPermission(HasClinicRole):
     Matriz:
         GET    → roles que ven finanzas + doctor (el médico lee el catálogo
                  para armar cotizaciones y calendarizaciones de tratamientos).
-        POST   → solo owner y admin (mantener el catálogo es administrativo).
-        PATCH  → solo owner y admin.
-        DELETE → solo owner y admin (desactivación del concepto).
+        POST   → SOLO owner (decisión del dueño, 2026-07-16: mantener el
+                 catálogo de servicios es dominio exclusivo del dueño — antes
+                 era owner+admin). El GET NO cambia: admin y el resto de
+                 FINANCE_VIEW_ROLES + doctor siguen viendo el catálogo
+                 completo para cobrar/cotizar.
+        PATCH  → solo owner.
+        DELETE → solo owner (desactivación del concepto).
     """
 
     policy: dict[str, frozenset[str]] = {
         "GET": FINANCE_VIEW_ROLES | frozenset({Role.DOCTOR}),
-        "POST": MANAGE_ROLES,
-        "PATCH": MANAGE_ROLES,
-        "DELETE": MANAGE_ROLES,
+        "POST": FINANCE_CATALOG_MANAGE_ROLES,
+        "PATCH": FINANCE_CATALOG_MANAGE_ROLES,
+        "DELETE": FINANCE_CATALOG_MANAGE_ROLES,
     }
 
 
@@ -377,21 +388,22 @@ class TreatmentPackagePermission(HasClinicRole):
 
     Lectura: mismo criterio que QuotePermission (owner/admin/doctor arman
     calendarizaciones/cotizaciones desde el paquete; recepción también lo
-    consulta al atender caja). Escritura: mantener el catálogo de paquetes
-    es administrativo, igual que FinanceConceptPermission — solo owner/admin.
+    consulta al atender caja). Escritura: SOLO owner (decisión del dueño,
+    2026-07-16 — mismo criterio que FinanceConceptPermission; antes era
+    owner+admin). El GET NO cambia: admin sigue viendo el catálogo completo.
 
     Matriz:
         GET    → owner, admin, doctor, reception.
-        POST   → owner, admin.
-        PATCH  → owner, admin.
-        DELETE → owner, admin.
+        POST   → solo owner.
+        PATCH  → solo owner.
+        DELETE → solo owner.
     """
 
     policy: dict[str, frozenset[str]] = {
         "GET": frozenset({Role.OWNER, Role.ADMIN, Role.DOCTOR, Role.RECEPTION}),
-        "POST": MANAGE_ROLES,
-        "PATCH": MANAGE_ROLES,
-        "DELETE": MANAGE_ROLES,
+        "POST": FINANCE_CATALOG_MANAGE_ROLES,
+        "PATCH": FINANCE_CATALOG_MANAGE_ROLES,
+        "DELETE": FINANCE_CATALOG_MANAGE_ROLES,
     }
 
 

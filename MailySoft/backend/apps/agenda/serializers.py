@@ -13,7 +13,7 @@ IMPORTANTE: `status` NUNCA aparece en un InputSerializer de PATCH genérico.
 Solo se acepta en AppointmentChangeStatusApi.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from rest_framework import serializers
 
@@ -25,7 +25,6 @@ from apps.agenda.models import (
     AppointmentType,
     TenantAgendaConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # Serializers de representación anidada (mínimos)
@@ -59,6 +58,13 @@ class _ConsultorioNestedSerializer(serializers.Serializer):
     name = serializers.CharField(read_only=True)
 
 
+class _SucursalNestedSerializer(serializers.Serializer):
+    """Representación mínima de la sucursal (multi-sede — Fase 2, puede ser null)."""
+
+    id = serializers.UUIDField(read_only=True)
+    name = serializers.CharField(read_only=True)
+
+
 class _AppointmentTypeNestedSerializer(serializers.Serializer):
     """Representación mínima del tipo de cita (id + nombre + color)."""
 
@@ -82,6 +88,7 @@ class AgendaBlockOutputSerializer(serializers.ModelSerializer):
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     doctor = _DoctorNestedSerializer(read_only=True, allow_null=True)
     consultorio = _ConsultorioNestedSerializer(read_only=True, allow_null=True)
+    sucursal = _SucursalNestedSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = AgendaBlock
@@ -92,6 +99,7 @@ class AgendaBlockOutputSerializer(serializers.ModelSerializer):
             "title",
             "doctor",
             "consultorio",
+            "sucursal",
             "starts_at",
             "ends_at",
             "all_day",
@@ -173,6 +181,7 @@ class AppointmentOutputSerializer(serializers.ModelSerializer):
     patient = _PatientNestedSerializer(read_only=True)
     doctor = _DoctorNestedSerializer(read_only=True)
     consultorio = _ConsultorioNestedSerializer(read_only=True, allow_null=True)
+    sucursal = _SucursalNestedSerializer(read_only=True, allow_null=True)
     appointment_type = _AppointmentTypeNestedSerializer(read_only=True, allow_null=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     modality_display = serializers.CharField(source="get_modality_display", read_only=True)
@@ -186,6 +195,7 @@ class AppointmentOutputSerializer(serializers.ModelSerializer):
             "patient",
             "doctor",
             "consultorio",
+            "sucursal",
             "appointment_type",
             "modality",
             "modality_display",

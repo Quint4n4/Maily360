@@ -74,12 +74,15 @@ export default function FinanzasPage() {
   const current = visibleTabs.find((t) => t.key === activeTab) ?? visibleTabs[0]
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #f6f1e4 0%, #faf7ef 100%)' }}>
+    <div className="min-h-screen relative">
+      <div className="fixed inset-0 -z-10" style={{ background: 'linear-gradient(135deg, #b89a52 0%, #d8c690 45%, #f1e8cf 100%)' }} />
+      <div className="fixed inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url('/fondo-agenda.jpg')" }} />
+      <div className="fixed inset-0 -z-10" style={{ background: 'rgba(255,255,255,0.20)' }} />
       <Topbar active="finanzas" />
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-5">
         {/* Encabezado */}
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="glass-card rounded-2xl px-6 py-5 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight" style={{ color: '#2A241B' }}>Finanzas</h1>
             <p className="text-sm" style={{ color: '#7A756C' }}>

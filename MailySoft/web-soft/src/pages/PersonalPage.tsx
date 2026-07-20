@@ -34,7 +34,7 @@ export default function PersonalPage() {
   const consultorios: ConsultorioApi[] = consultoriosQ.data?.results ?? []
 
   const editarConsultorio = (c: ConsultorioApi) =>
-    setEditConsul({ id: c.id, name: c.name, location: c.location, color_hex: c.color_hex })
+    setEditConsul({ id: c.id, name: c.name, location: c.location, color_hex: c.color_hex, sucursal_id: c.sucursal?.id ?? null })
 
   const desactivarConsultorio = async (c: ConsultorioApi) => {
     if (!(await confirmar({

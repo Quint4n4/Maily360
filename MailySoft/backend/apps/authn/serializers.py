@@ -88,6 +88,11 @@ class MeSerializer(serializers.Serializer):
     # UUID del Doctor del usuario si su rol activo es 'doctor'; null en cualquier otro caso.
     # Permite que el frontend sepa "qué Doctor soy yo" sin hacer otra llamada.
     doctor_id = serializers.SerializerMethodField()
+    # Sucursales permitidas del usuario en el tenant activo (multi-sede — Fase 1).
+    # Lista vacía si no hay tenant activo. Owner/admin ven TODAS las sucursales
+    # activas del tenant; cualquier otro rol solo las suyas (MembershipSucursal).
+    # Inicializa el selector de sucursal del frontend (X-Sucursal-Id).
+    sucursales = serializers.SerializerMethodField()
 
     def get_active_tenant(self, obj: User) -> dict | None:
         """Retorna la representación del tenant activo o null."""
@@ -126,6 +131,15 @@ class MeSerializer(serializers.Serializer):
         if doctor_id is None:
             return None
         return str(doctor_id)
+
+    def get_sucursales(self, obj: User) -> list[dict]:
+        """Retorna la lista de sucursales permitidas del usuario ({id, name, is_default}).
+
+        El valor ya viene pre-formado (lista de dicts) desde MeApi.get(), que
+        lo calcula con apps.clinica.sucursal_scope.allowed_sucursales. El
+        serializer solo forma la salida, sin lógica de negocio.
+        """
+        return self.context.get("sucursales", [])
 
 
 class PasswordChangeInputSerializer(serializers.Serializer):

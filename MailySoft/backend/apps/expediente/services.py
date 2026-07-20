@@ -38,14 +38,13 @@ REGLA DE PRIVACIDAD — NUNCA incluir PII clínica en logs ni en la bitácora:
   Violación de esta regla = bug crítico de privacidad.
 """
 
+import datetime
 import logging
+from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import IntegrityError, transaction
-
-import datetime
-from decimal import Decimal
 
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
@@ -65,7 +64,11 @@ from apps.expediente.models import (
     VitalSignsRecord,
 )
 from apps.notificaciones.models import NotificationKind, NotificationTarget
-from apps.notificaciones.recipients import Role, users_with_role
+from apps.notificaciones.recipients import (
+    Role,
+    filter_recipients_by_sucursal,
+    users_with_role,
+)
 from apps.notificaciones.services import notification_fanout
 from apps.pacientes.models import Patient
 from apps.tenancy.models import Tenant
@@ -117,17 +120,13 @@ def allergy_create(
     # Guardia: el service puede invocarse desde Celery/management commands donde
     # no hay contexto HTTP y tenant podría llegar como None.
     if tenant is None:
-        raise ValidationError(
-            "Se requiere un tenant activo para registrar una alergia."
-        )
+        raise ValidationError("Se requiere un tenant activo para registrar una alergia.")
 
     # Defensa en profundidad: el paciente debe ser del mismo tenant.
     # Aunque la view resuelve el paciente por TenantManager, el service puede
     # llamarse desde Celery o comandos sin contexto de request.
     if patient.tenant_id != tenant.id:
-        raise ValidationError(
-            "El paciente no pertenece a esta clínica."
-        )
+        raise ValidationError("El paciente no pertenece a esta clínica.")
 
     # Validar sustancia.
     substance = substance.strip()
@@ -205,9 +204,7 @@ def allergy_resolve(
     """
     # Guardia: la alergia debe tener un tenant asociado.
     if allergy.tenant is None:
-        raise ValidationError(
-            "La alergia no tiene un tenant asociado. No se puede resolver."
-        )
+        raise ValidationError("La alergia no tiene un tenant asociado. No se puede resolver.")
 
     if allergy.is_active:
         allergy.is_active = False
@@ -310,15 +307,11 @@ def medical_history_upsert(
     # Guardia: el service puede invocarse desde Celery/management commands donde
     # no hay contexto HTTP y tenant podría llegar como None.
     if tenant is None:
-        raise ValidationError(
-            "Se requiere un tenant activo para actualizar la historia clínica."
-        )
+        raise ValidationError("Se requiere un tenant activo para actualizar la historia clínica.")
 
     # Defensa en profundidad: el paciente debe ser del mismo tenant.
     if patient.tenant_id != tenant.id:
-        raise ValidationError(
-            "El paciente no pertenece a esta clínica."
-        )
+        raise ValidationError("El paciente no pertenece a esta clínica.")
 
     # MEDIO-1 — Protección contra condición de carrera en upsert.
     #
@@ -371,9 +364,7 @@ def medical_history_upsert(
                     tenant=tenant, is_active=True
                 ).values_list("id", flat=True)
             )
-            h.custom_answers = {
-                k: v for k, v in custom_answers.items() if k in valid_ids
-            }
+            h.custom_answers = {k: v for k, v in custom_answers.items() if k in valid_ids}
 
         return h
 
@@ -539,33 +530,23 @@ def vital_signs_create(
     # Guardia: el service puede invocarse desde Celery/management commands donde
     # no hay contexto HTTP y tenant podría llegar como None.
     if tenant is None:
-        raise ValidationError(
-            "Se requiere un tenant activo para registrar signos vitales."
-        )
+        raise ValidationError("Se requiere un tenant activo para registrar signos vitales.")
 
     # Defensa en profundidad: el paciente debe ser del mismo tenant.
     if patient.tenant_id != tenant.id:
-        raise ValidationError(
-            "El paciente no pertenece a esta clínica."
-        )
+        raise ValidationError("El paciente no pertenece a esta clínica.")
 
     # Validar que measured_at no sea futuro (también validado en serializer).
     now = timezone.now()
     if measured_at > now:
-        raise ValidationError(
-            "La fecha de la toma no puede ser futura."
-        )
+        raise ValidationError("La fecha de la toma no puede ser futura.")
 
     # Validar appointment si se provee.
     if appointment is not None:
         if appointment.patient_id != patient.id:
-            raise ValidationError(
-                "La cita no corresponde al paciente indicado."
-            )
+            raise ValidationError("La cita no corresponde al paciente indicado.")
         if appointment.tenant_id != tenant.id:
-            raise ValidationError(
-                "La cita no pertenece a esta clínica."
-            )
+            raise ValidationError("La cita no pertenece a esta clínica.")
 
     record = VitalSignsRecord.objects.create(
         tenant=tenant,
@@ -687,9 +668,7 @@ def evolution_note_create(
     from apps.agenda.models import Appointment  # noqa: PLC0415
 
     if tenant is None:
-        raise ValidationError(
-            "Se requiere un tenant activo para crear una nota de evolución."
-        )
+        raise ValidationError("Se requiere un tenant activo para crear una nota de evolución.")
 
     # Defensa en profundidad: el paciente debe ser del mismo tenant.
     if patient.tenant_id != tenant.id:
@@ -708,9 +687,7 @@ def evolution_note_create(
 
     # Validar que el doctor sea el de la cita.
     if appointment.doctor_id != doctor.id:
-        raise ValidationError(
-            "El médico de la nota debe ser el médico de la cita."
-        )
+        raise ValidationError("El médico de la nota debe ser el médico de la cita.")
 
     # Defensa: el doctor debe pertenecer al mismo tenant.
     if doctor.tenant_id != tenant.id:
@@ -725,9 +702,7 @@ def evolution_note_create(
         try:
             membership_user_id = appointment.doctor.membership.user_id
         except (AttributeError, ObjectDoesNotExist):
-            raise ValidationError(
-                "El médico de la cita no tiene perfil de membresía válido."
-            )
+            raise ValidationError("El médico de la cita no tiene perfil de membresía válido.")
         if membership_user_id != user.pk:
             raise ValidationError(
                 "Un médico solo puede crear notas de evolución sobre sus propias citas."
@@ -736,24 +711,16 @@ def evolution_note_create(
     # Validar vital_signs si se provee.
     if vital_signs is not None:
         if vital_signs.patient_id != patient.id:
-            raise ValidationError(
-                "Los signos vitales no corresponden al paciente indicado."
-            )
+            raise ValidationError("Los signos vitales no corresponden al paciente indicado.")
         if vital_signs.tenant_id != tenant.id:
-            raise ValidationError(
-                "Los signos vitales no pertenecen a esta clínica."
-            )
+            raise ValidationError("Los signos vitales no pertenecen a esta clínica.")
 
     # MEDIO-2: capturar IntegrityError de UniqueConstraint(appointment) para dar
     # error 400 claro en lugar de 500. Se valida antes con un SELECT para dar el
     # mensaje de error en ValidationError antes del INSERT; el IntegrityError es
     # la segunda barrera (race condition o llamada directa al service).
-    if EvolutionNote.objects.filter(
-        appointment=appointment, deleted_at__isnull=True
-    ).exists():
-        raise ValidationError(
-            "Ya existe una nota de evolución para esta cita."
-        )
+    if EvolutionNote.objects.filter(appointment=appointment, deleted_at__isnull=True).exists():
+        raise ValidationError("Ya existe una nota de evolución para esta cita.")
 
     try:
         note = EvolutionNote.objects.create(
@@ -776,9 +743,7 @@ def evolution_note_create(
     except IntegrityError as exc:
         # Segunda barrera: race condition entre el SELECT de arriba y el INSERT.
         if "evolution_note_appointment_uniq" in str(exc) or "unique" in str(exc).lower():
-            raise ValidationError(
-                "Ya existe una nota de evolución para esta cita."
-            ) from exc
+            raise ValidationError("Ya existe una nota de evolución para esta cita.") from exc
         raise
 
     logger.info(
@@ -811,7 +776,15 @@ def evolution_note_create(
     # usa target_type=PATIENT + target_id (UUID del paciente).
     if indicaciones_enfermeria.strip():
         try:
-            nurses = users_with_role(tenant=tenant, role=Role.NURSE)
+            # Multi-sede: aunque el expediente es COMPARTIDO, la tarea de
+            # enfermería es operativa de la sede donde ocurre la cita. Se
+            # notifica solo a enfermería de esa sede (o a todas si la cita no
+            # tiene sede — sucursal_id None).
+            nurses = filter_recipients_by_sucursal(
+                tenant=tenant,
+                recipients=users_with_role(tenant=tenant, role=Role.NURSE),
+                sucursal_id=appointment.sucursal_id,
+            )
             notification_fanout(
                 tenant=tenant,
                 recipients=nurses,
@@ -874,14 +847,10 @@ def addendum_create(
                          el body está vacío.
     """
     if tenant is None:
-        raise ValidationError(
-            "Se requiere un tenant activo para agregar un addendum."
-        )
+        raise ValidationError("Se requiere un tenant activo para agregar un addendum.")
 
     if evolution.tenant_id != tenant.id:
-        raise ValidationError(
-            "La nota de evolución no pertenece a esta clínica."
-        )
+        raise ValidationError("La nota de evolución no pertenece a esta clínica.")
 
     body = body.strip()
     if not body:
@@ -965,9 +934,7 @@ def diagnosis_create(
         ValidationError: si las validaciones fallan.
     """
     if tenant is None:
-        raise ValidationError(
-            "Se requiere un tenant activo para registrar un diagnóstico."
-        )
+        raise ValidationError("Se requiere un tenant activo para registrar un diagnóstico.")
 
     if patient.tenant_id != tenant.id:
         raise ValidationError("El paciente no pertenece a esta clínica.")
@@ -980,20 +947,15 @@ def diagnosis_create(
     valid_kinds = [choice[0] for choice in DiagnosisKind.choices]
     if kind not in valid_kinds:
         raise ValidationError(
-            f"Tipo de diagnóstico inválido '{kind}'. "
-            f"Debe ser uno de: {', '.join(valid_kinds)}."
+            f"Tipo de diagnóstico inválido '{kind}'. " f"Debe ser uno de: {', '.join(valid_kinds)}."
         )
 
     # Validar evolution si se provee.
     if evolution is not None:
         if evolution.tenant_id != tenant.id:
-            raise ValidationError(
-                "La nota de evolución no pertenece a esta clínica."
-            )
+            raise ValidationError("La nota de evolución no pertenece a esta clínica.")
         if evolution.patient_id != patient.id:
-            raise ValidationError(
-                "La nota de evolución no corresponde al paciente indicado."
-            )
+            raise ValidationError("La nota de evolución no corresponde al paciente indicado.")
 
     diagnosis = Diagnosis.objects.create(
         tenant=tenant,
@@ -1063,9 +1025,7 @@ def diagnosis_resolve(
         ValidationError: si el tenant de la instancia es None.
     """
     if diagnosis.tenant is None:
-        raise ValidationError(
-            "El diagnóstico no tiene un tenant asociado. No se puede resolver."
-        )
+        raise ValidationError("El diagnóstico no tiene un tenant asociado. No se puede resolver.")
 
     if diagnosis.status == DiagnosisStatus.ACTIVO:
         diagnosis.status = DiagnosisStatus.RESUELTO
@@ -1146,15 +1106,11 @@ def evolution_image_add(
                          la validación de seguridad.
     """
     if tenant is None:
-        raise ValidationError(
-            "Se requiere un tenant activo para subir imágenes de evolución."
-        )
+        raise ValidationError("Se requiere un tenant activo para subir imágenes de evolución.")
 
     # Defensa en profundidad: la nota de evolución debe ser del mismo tenant.
     if evolution.tenant_id != tenant.id:
-        raise ValidationError(
-            "La nota de evolución no pertenece a esta clínica."
-        )
+        raise ValidationError("La nota de evolución no pertenece a esta clínica.")
 
     # Límite de imágenes activas por nota.
     # Usamos el manager por defecto (objects) que ya excluye soft-deleted y
@@ -1260,9 +1216,7 @@ def medical_history_question_create(
                          o las opciones no son coherentes con el tipo de campo.
     """
     if tenant is None:
-        raise ValidationError(
-            "Se requiere un tenant activo para crear una pregunta de HC."
-        )
+        raise ValidationError("Se requiere un tenant activo para crear una pregunta de HC.")
 
     label = label.strip()
     if not label:
@@ -1272,23 +1226,18 @@ def medical_history_question_create(
     valid_types = [choice[0] for choice in QuestionFieldType.choices]
     if field_type not in valid_types:
         raise ValidationError(
-            f"Tipo de campo inválido '{field_type}'. "
-            f"Debe ser uno de: {', '.join(valid_types)}."
+            f"Tipo de campo inválido '{field_type}'. " f"Debe ser uno de: {', '.join(valid_types)}."
         )
 
     options_clean: list[Any] = options or []
 
     # Si field_type == 'select', options no puede ser vacío.
     if field_type == QuestionFieldType.SELECT and not options_clean:
-        raise ValidationError(
-            "Las opciones son requeridas para tipo 'select'."
-        )
+        raise ValidationError("Las opciones son requeridas para tipo 'select'.")
 
     # Si field_type != 'select', options debe ser vacío.
     if field_type != QuestionFieldType.SELECT and options_clean:
-        raise ValidationError(
-            "Las opciones solo aplican para tipo 'select'."
-        )
+        raise ValidationError("Las opciones solo aplican para tipo 'select'.")
 
     question = MedicalHistoryQuestion.objects.create(
         tenant=tenant,
@@ -1356,16 +1305,12 @@ def medical_history_question_update(
                          no son coherentes.
     """
     if question.tenant is None:
-        raise ValidationError(
-            "La pregunta no tiene un tenant asociado."
-        )
+        raise ValidationError("La pregunta no tiene un tenant asociado.")
 
     # Bloquear campos inmutables.
     bad = set(fields) & _MHQ_IMMUTABLE_FIELDS
     if bad:
-        raise ValidationError(
-            f"No se pueden modificar los campos: {', '.join(sorted(bad))}."
-        )
+        raise ValidationError(f"No se pueden modificar los campos: {', '.join(sorted(bad))}.")
 
     # Determinar el field_type resultante (el nuevo o el actual).
     new_field_type: str = fields.get("field_type", question.field_type)
@@ -1374,22 +1319,16 @@ def medical_history_question_update(
     if "field_type" in fields:
         valid_types = [choice[0] for choice in QuestionFieldType.choices]
         if new_field_type not in valid_types:
-            raise ValidationError(
-                f"Tipo de campo inválido '{new_field_type}'."
-            )
+            raise ValidationError(f"Tipo de campo inválido '{new_field_type}'.")
 
     # Determinar options resultantes.
     new_options: list[Any] = fields.get("options", question.options)
 
     # Validar coherencia options/field_type.
     if new_field_type == QuestionFieldType.SELECT and not new_options:
-        raise ValidationError(
-            "Las opciones son requeridas para tipo 'select'."
-        )
+        raise ValidationError("Las opciones son requeridas para tipo 'select'.")
     if new_field_type != QuestionFieldType.SELECT and new_options:
-        raise ValidationError(
-            "Las opciones solo aplican para tipo 'select'."
-        )
+        raise ValidationError("Las opciones solo aplican para tipo 'select'.")
 
     # Normalizar label si se provee.
     if "label" in fields:
@@ -1449,9 +1388,7 @@ def medical_history_question_deactivate(
         ValidationError: si el tenant de la instancia es None.
     """
     if question.tenant is None:
-        raise ValidationError(
-            "La pregunta no tiene un tenant asociado. No se puede desactivar."
-        )
+        raise ValidationError("La pregunta no tiene un tenant asociado. No se puede desactivar.")
 
     if question.is_active:
         question.is_active = False
@@ -1503,9 +1440,7 @@ def evolution_image_remove(
     from django.utils import timezone  # noqa: PLC0415
 
     if image.tenant is None:
-        raise ValidationError(
-            "La imagen no tiene un tenant asociado. No se puede dar de baja."
-        )
+        raise ValidationError("La imagen no tiene un tenant asociado. No se puede dar de baja.")
 
     if image.deleted_at is None:
         image.deleted_at = timezone.now()

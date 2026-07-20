@@ -3,26 +3,28 @@ import { ScrollText, Lock } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import CotizacionesTab from '../components/finanzas/CotizacionesTab'
 import { can } from '../auth/permisos'
-import { ALL_ROLES, useRole } from '../auth/useRole'
+import { useRole } from '../auth/RoleContext'
 
 /**
  * Página top-level "Cotizaciones".
  *
  * El acceso al módulo lo decide el router (Guard con accesoModulo). Aquí, además,
  * gateamos la CREACIÓN con can(role, 'createQuote') — SOLO UX: el backend es la
- * autoridad. El selector de rol es la misma ayuda de demo que usa FinanzasPage
- * para validar la matriz de permisos hasta que la sesión real cablee el rol.
+ * autoridad. El rol viene de la sesión real (/me/ → active_role) vía RoleContext.
  */
 export default function CotizacionesPage() {
-  const { role, setRole } = useRole()
+  const { role } = useRole()
   const puedeVer = can(role, 'viewModule') || can(role, 'createQuote')
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #f6f1e4 0%, #faf7ef 100%)' }}>
+    <div className="min-h-screen relative">
+      <div className="fixed inset-0 -z-10" style={{ background: 'linear-gradient(135deg, #b89a52 0%, #d8c690 45%, #f1e8cf 100%)' }} />
+      <div className="fixed inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url('/fondo-agenda.jpg')" }} />
+      <div className="fixed inset-0 -z-10" style={{ background: 'rgba(255,255,255,0.20)' }} />
       <Topbar active="cotizaciones" />
 
       <main className="max-w-4xl mx-auto px-4 md:px-6 py-6 space-y-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="glass-card rounded-2xl px-6 py-5 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: '#2A241B' }}>
               <ScrollText className="w-6 h-6" style={{ color: '#C9A227' }} />
@@ -31,20 +33,6 @@ export default function CotizacionesPage() {
             <p className="text-sm" style={{ color: '#7A756C' }}>
               Cotiza servicios desde tu catálogo, descarga el PDF y márcalas como enviadas o aceptadas.
             </p>
-          </div>
-
-          {/* Selector de rol (demo de UX por rol — se reemplaza por la sesión real) */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs" style={{ color: '#9A958C' }}>Vista de rol:</span>
-            <select
-              className="input py-1.5 text-sm"
-              value={role}
-              onChange={(e) => setRole(e.target.value as never)}
-            >
-              {ALL_ROLES.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
           </div>
         </div>
 

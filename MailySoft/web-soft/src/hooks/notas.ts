@@ -1,15 +1,25 @@
 /** Hooks de TanStack Query para Notas y Tareas. */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSucursalActiva } from '../auth/SucursalContext'
 import { createNote, deleteNote, listNotes, listReminders, toggleNoteDone, updateNote } from '../api/notas'
 import type { NoteCreateInput, NoteUpdateInput } from '../types/nota'
 
 const notasKey = ['notas'] as const
 
-/** Notas visibles para mí (con filtros opcionales). */
+/**
+ * Notas visibles para mí (con filtros opcionales).
+ *
+ * Multi-sede: el backend acota los AVISOS de la clínica por la sede activa
+ * (header X-Sucursal-Id, que ya manda src/lib/http.ts). La sede entra en la
+ * queryKey para que, al cambiar de sucursal, TanStack Query refresque la lista
+ * en vez de mostrar los avisos de la sede anterior (las notas personales no
+ * cambian entre sedes). Invalidar `notasKey` (prefijo) invalida todas.
+ */
 export function useNotes(filters: { is_task?: boolean; done?: boolean } = {}) {
+  const { activeSucursalId } = useSucursalActiva()
   return useQuery({
-    queryKey: [...notasKey, 'list', filters],
+    queryKey: [...notasKey, 'list', filters, activeSucursalId],
     queryFn: () => listNotes(filters),
   })
 }

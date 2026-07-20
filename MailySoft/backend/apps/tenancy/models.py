@@ -101,6 +101,32 @@ class TenantMembership(BaseModel):
         FINANCE = "finance", "Finanzas"
         READONLY = "readonly", "Solo lectura"
 
+    @classmethod
+    def operational_roles(cls) -> frozenset[str]:
+        """Roles "operacionales": TODOS los roles EXCEPTO `owner` y `admin`.
+
+        Jerarquía de roles (decisión del dueño 2026-07-16): un actor con rol
+        `owner` administra a cualquiera (incluidos otros owners y admins,
+        sin cambios). Un actor con cualquier OTRO rol — el "administrador de
+        sucursal" (típicamente `admin`, pero la regla aplica al rol en sí, no
+        al nombre) — solo puede VER/CREAR/GESTIONAR personal con un rol
+        operacional: nunca a un owner ni a otro admin. Ver
+        `apps.tenancy.selectors.membership_list` (visibilidad) y
+        `apps.tenancy.services._authorize_write_on_member` (autorización de
+        escritura), consumidores de este helper.
+
+        Se DERIVA de `Role.choices` en cada llamada (no se hardcodea la
+        lista) para que agregar un rol nuevo a `Role` nunca requiera tocar
+        este cálculo ni arriesgue que la lista quede desactualizada.
+
+        Returns:
+            frozenset con los values de `Role` distintos de OWNER y ADMIN.
+        """
+        return frozenset(choice[0] for choice in cls.Role.choices) - {
+            cls.Role.OWNER,
+            cls.Role.ADMIN,
+        }
+
     user = models.ForeignKey(
         "authn.User",
         on_delete=models.CASCADE,

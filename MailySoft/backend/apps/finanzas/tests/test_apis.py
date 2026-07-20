@@ -112,7 +112,7 @@ class TestConceptPermissions:
             assert client.get(CONCEPTS_URL).status_code == 200
 
     def test_finance_cannot_create_concept(self, db: None) -> None:
-        """El catálogo es administrativo: finance no crea conceptos (solo owner/admin)."""
+        """El catálogo es administrativo: finance no crea conceptos (solo owner)."""
         tenant = TenantFactory()
         client = _member_client(tenant, "finance")
         with _tenant_context(tenant):
@@ -121,9 +121,27 @@ class TestConceptPermissions:
             )
         assert resp.status_code == 403
 
-    def test_admin_can_create_concept(self, db: None) -> None:
+    def test_admin_cannot_create_concept(self, db: None) -> None:
+        """Decisión del dueño, 2026-07-16: solo el owner gestiona el catálogo
+        (antes owner+admin). Admin queda fuera de POST/PATCH/DELETE."""
         tenant = TenantFactory()
         client = _member_client(tenant, "admin")
+        with _tenant_context(tenant):
+            resp = client.post(
+                CONCEPTS_URL, data={"name": "Consulta", "base_price": "500.00"}, format="json"
+            )
+        assert resp.status_code == 403
+
+    def test_admin_can_list_concepts(self, db: None) -> None:
+        """El GET NO cambia: admin sigue viendo el catálogo para cobrar/cotizar."""
+        tenant = TenantFactory()
+        client = _member_client(tenant, "admin")
+        with _tenant_context(tenant):
+            assert client.get(CONCEPTS_URL).status_code == 200
+
+    def test_owner_can_create_concept(self, db: None) -> None:
+        tenant = TenantFactory()
+        client = _member_client(tenant, "owner")
         with _tenant_context(tenant):
             resp = client.post(
                 CONCEPTS_URL, data={"name": "Consulta", "base_price": "500.00"}, format="json"
@@ -131,10 +149,10 @@ class TestConceptPermissions:
         assert resp.status_code == 201
         assert resp.json()["name"] == "Consulta"
 
-    def test_admin_can_create_concept_with_clinical_description(self, db: None) -> None:
+    def test_owner_can_create_concept_with_clinical_description(self, db: None) -> None:
         """clinical_description viaja en el InputSerializer y sale en el output."""
         tenant = TenantFactory()
-        client = _member_client(tenant, "admin")
+        client = _member_client(tenant, "owner")
         with _tenant_context(tenant):
             resp = client.post(
                 CONCEPTS_URL,
@@ -148,9 +166,9 @@ class TestConceptPermissions:
         assert resp.status_code == 201
         assert resp.json()["clinical_description"] == "Sesión de 2 horas, protocolo EDTA."
 
-    def test_admin_can_patch_clinical_description(self, db: None) -> None:
+    def test_owner_can_patch_clinical_description(self, db: None) -> None:
         tenant = TenantFactory()
-        client = _member_client(tenant, "admin")
+        client = _member_client(tenant, "owner")
         with _tenant_context(tenant):
             create_resp = client.post(
                 CONCEPTS_URL,
@@ -165,6 +183,34 @@ class TestConceptPermissions:
             )
         assert patch_resp.status_code == 200
         assert patch_resp.json()["clinical_description"] == "Masaje manual, 60 minutos."
+
+    def test_admin_cannot_patch_concept(self, db: None) -> None:
+        tenant = TenantFactory()
+        owner_client = _member_client(tenant, "owner")
+        with _tenant_context(tenant):
+            create_resp = owner_client.post(
+                CONCEPTS_URL, data={"name": "Consulta", "base_price": "500.00"}, format="json"
+            )
+            concept_id = create_resp.json()["id"]
+
+            admin_client = _member_client(tenant, "admin")
+            patch_resp = admin_client.patch(
+                f"{CONCEPTS_URL}{concept_id}/", data={"base_price": "600.00"}, format="json"
+            )
+        assert patch_resp.status_code == 403
+
+    def test_admin_cannot_delete_concept(self, db: None) -> None:
+        tenant = TenantFactory()
+        owner_client = _member_client(tenant, "owner")
+        with _tenant_context(tenant):
+            create_resp = owner_client.post(
+                CONCEPTS_URL, data={"name": "Consulta", "base_price": "500.00"}, format="json"
+            )
+            concept_id = create_resp.json()["id"]
+
+            admin_client = _member_client(tenant, "admin")
+            delete_resp = admin_client.delete(f"{CONCEPTS_URL}{concept_id}/")
+        assert delete_resp.status_code == 403
 
 
 # ===========================================================================

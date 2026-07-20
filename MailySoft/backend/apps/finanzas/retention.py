@@ -54,14 +54,11 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from django.db.models import (
     Count,
     DecimalField,
-    ExpressionWrapper,
-    F,
-    FloatField,
     Max,
     Min,
     OuterRef,
@@ -71,7 +68,7 @@ from django.db.models import (
     Sum,
     Value,
 )
-from django.db.models.functions import Coalesce, Now
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.agenda.models import Appointment
@@ -130,13 +127,20 @@ def _date_threshold(days: int) -> datetime.date:
     return _today() - datetime.timedelta(days=days)
 
 
-def _attended_qs(*, tenant_id: Any) -> QuerySet[Appointment]:
-    """Queryset de citas ATTENDED del tenant (filtrado por tenant_id directo, no por TenantManager)."""
-    return Appointment.objects.filter(
+def _attended_qs(*, tenant_id: Any, sucursal_ids: list[Any] | None = None) -> QuerySet[Appointment]:
+    """Queryset de citas ATTENDED del tenant (filtrado por tenant_id directo, no por TenantManager).
+
+    sucursal_ids (multi-sede — Fase 3, privado por sede): si se provee, acota
+    a las citas atendidas EN esas sedes. None = todas las sedes (consolidado).
+    """
+    qs = Appointment.objects.filter(
         tenant_id=tenant_id,
         status=Appointment.Status.ATTENDED,
         deleted_at__isnull=True,
     )
+    if sucursal_ids is not None:
+        qs = qs.filter(sucursal_id__in=sucursal_ids)
+    return qs
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +148,9 @@ def _attended_qs(*, tenant_id: Any) -> QuerySet[Appointment]:
 # ---------------------------------------------------------------------------
 
 
-def _rfm_rows(*, tenant_id: Any, today: datetime.date) -> list[dict[str, Any]]:
+def _rfm_rows(
+    *, tenant_id: Any, today: datetime.date, sucursal_ids: list[Any] | None = None
+) -> list[dict[str, Any]]:
     """Devuelve un dict por paciente con recency/frequency/monetary calculados en BD.
 
     Usa una sola query que agrega Appointment (attended) y luego enriquece con
@@ -158,19 +164,26 @@ def _rfm_rows(*, tenant_id: Any, today: datetime.date) -> list[dict[str, Any]]:
     NO usa TenantManager de Appointment (aislamiento garantizado por tenant_id explícito
     en el filtro, lo que también previene que el contexto del manager interfiera con
     las aggregaciones cross-manager en tests).
+
+    sucursal_ids (multi-sede — Fase 3, privado por sede): acota tanto las
+    citas atendidas como los pagos considerados a las sedes permitidas del
+    usuario. None = todas las sedes (consolidado, dueño o tenant sin sedes).
     """
     cutoff_12m = today - datetime.timedelta(days=365)
 
-    attended_base = _attended_qs(tenant_id=tenant_id)
+    attended_base = _attended_qs(tenant_id=tenant_id, sucursal_ids=sucursal_ids)
 
     # Sub-query de pagos de los últimos 12m por paciente.
+    payment_filters: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "patient_id": OuterRef("patient_id"),
+        "deleted_at__isnull": True,
+        "received_at__date__gte": cutoff_12m,
+    }
+    if sucursal_ids is not None:
+        payment_filters["sucursal_id__in"] = sucursal_ids
     payment_sq = (
-        Payment.objects.filter(
-            tenant_id=tenant_id,
-            patient_id=OuterRef("patient_id"),
-            deleted_at__isnull=True,
-            received_at__date__gte=cutoff_12m,
-        )
+        Payment.objects.filter(**payment_filters)
         .values("patient_id")
         .annotate(total=Coalesce(Sum("amount"), Value(ZERO), output_field=_DEC))
         .values("total")
@@ -200,7 +213,7 @@ def _rfm_rows(*, tenant_id: Any, today: datetime.date) -> list[dict[str, Any]]:
         )
     )
 
-    today_dt = datetime.datetime.combine(today, datetime.time.min, tzinfo=datetime.timezone.utc)
+    today_dt = datetime.datetime.combine(today, datetime.time.min, tzinfo=datetime.UTC)
 
     result: list[dict[str, Any]] = []
     for row in rows:
@@ -299,7 +312,9 @@ def _classify_segment(
 # ---------------------------------------------------------------------------
 
 
-def retention_panel_build(*, tenant_id: Any) -> dict[str, Any]:
+def retention_panel_build(
+    *, tenant_id: Any, sucursal_ids: list[Any] | None = None
+) -> dict[str, Any]:
     """Construye el panel de retención RFM del tenant en vivo.
 
     Calcula RFM por paciente (solo lectura, sin modificar nada), clasifica en
@@ -308,9 +323,16 @@ def retention_panel_build(*, tenant_id: Any) -> dict[str, Any]:
     Todas las queries importantes ocurren en BD. El único bucle Python itera
     el resultado agregado (tamaño = nº de pacientes activos, razonable para una clínica).
 
+    Multi-sede — Fase 3 (privado por sede): `sucursal_ids` (ver
+    `sucursal_scope_ids`) acota TODO el panel (citas atendidas + pagos
+    considerados) a las sedes permitidas del usuario — un admin de Centro
+    analiza la retención de SU sede, no la del negocio completo. None = vista
+    consolidada (dueño sin sede activa, o tenant sin sucursales).
+
     Args:
-        tenant_id: UUID del tenant activo (pasado explícito para evitar dependencia
-                   del TenantManager en un contexto de selector).
+        tenant_id:    UUID del tenant activo (pasado explícito para evitar dependencia
+                      del TenantManager en un contexto de selector).
+        sucursal_ids: lista de sedes permitidas, o None para vista consolidada.
 
     Returns:
         dict con:
@@ -328,7 +350,7 @@ def retention_panel_build(*, tenant_id: Any) -> dict[str, Any]:
     # -----------------------------------------------------------------------
     # 1. Datos RFM por paciente (attended_qs)
     # -----------------------------------------------------------------------
-    rows = _rfm_rows(tenant_id=tenant_id, today=today)
+    rows = _rfm_rows(tenant_id=tenant_id, today=today, sucursal_ids=sucursal_ids)
 
     # -----------------------------------------------------------------------
     # 2. Precalcular visitas en el rango 12-24m atrás (para "en_riesgo")
@@ -336,7 +358,7 @@ def retention_panel_build(*, tenant_id: Any) -> dict[str, Any]:
     cutoff_24m = today - datetime.timedelta(days=730)
 
     past_visits_qs = (
-        _attended_qs(tenant_id=tenant_id)
+        _attended_qs(tenant_id=tenant_id, sucursal_ids=sucursal_ids)
         .filter(
             starts_at__date__lt=cutoff_12m,
             starts_at__date__gte=cutoff_24m,
@@ -344,9 +366,7 @@ def retention_panel_build(*, tenant_id: Any) -> dict[str, Any]:
         .values("patient_id")
         .annotate(past_count=Count("id"))
     )
-    past_visits_map: dict[Any, int] = {
-        r["patient_id"]: r["past_count"] for r in past_visits_qs
-    }
+    past_visits_map: dict[Any, int] = {r["patient_id"]: r["past_count"] for r in past_visits_qs}
 
     # Inyectar `past_visits_count` en cada row antes de clasificar.
     for row in rows:
@@ -433,7 +453,7 @@ def retention_panel_build(*, tenant_id: Any) -> dict[str, Any]:
     # -----------------------------------------------------------------------
     # 5. Métricas globales (todas en BD)
     # -----------------------------------------------------------------------
-    metrics = _compute_metrics(tenant_id=tenant_id, today=today)
+    metrics = _compute_metrics(tenant_id=tenant_id, today=today, sucursal_ids=sucursal_ids)
 
     return {
         "segments": segments_count,
@@ -446,7 +466,9 @@ def retention_panel_build(*, tenant_id: Any) -> dict[str, Any]:
     }
 
 
-def _compute_metrics(*, tenant_id: Any, today: datetime.date) -> dict[str, Any]:
+def _compute_metrics(
+    *, tenant_id: Any, today: datetime.date, sucursal_ids: list[Any] | None = None
+) -> dict[str, Any]:
     """Calcula métricas de retención, ticket, no-show y % con próxima cita.
 
     Todas las queries son en BD — sin bucles Python sobre filas individuales.
@@ -460,6 +482,9 @@ def _compute_metrics(*, tenant_id: Any, today: datetime.date) -> dict[str, Any]:
                              None si no hay citas en ese rango.
       pct_with_future_appt — % de pacientes activos (vistos en 12m) que tienen
                              al menos 1 cita futura SCHEDULED o CONFIRMED.
+
+    sucursal_ids (multi-sede — Fase 3, privado por sede): acota TODAS las
+    querys de citas/pagos a las sedes permitidas. None = consolidado.
     """
     cutoff_12m = today - datetime.timedelta(days=365)
     cutoff_24m = today - datetime.timedelta(days=730)
@@ -478,12 +503,13 @@ def _compute_metrics(*, tenant_id: Any, today: datetime.date) -> dict[str, Any]:
         starts_at__date__lt=cutoff_12m,
     )
 
+    if sucursal_ids is not None:
+        appts_12m = appts_12m.filter(sucursal_id__in=sucursal_ids)
+        appts_prev_12m = appts_prev_12m.filter(sucursal_id__in=sucursal_ids)
+
     # --- Tasa de retención ---
     patients_this_year: int = (
-        appts_12m.filter(status=Appointment.Status.ATTENDED)
-        .values("patient_id")
-        .distinct()
-        .count()
+        appts_12m.filter(status=Appointment.Status.ATTENDED).values("patient_id").distinct().count()
     )
     patients_prev_year: int = (
         appts_prev_12m.filter(status=Appointment.Status.ATTENDED)
@@ -491,10 +517,8 @@ def _compute_metrics(*, tenant_id: Any, today: datetime.date) -> dict[str, Any]:
         .distinct()
         .count()
     )
-    retention_rate: Optional[float] = (
-        round(patients_this_year / patients_prev_year, 4)
-        if patients_prev_year > 0
-        else None
+    retention_rate: float | None = (
+        round(patients_this_year / patients_prev_year, 4) if patients_prev_year > 0 else None
     )
 
     # --- Ticket promedio (payment promedio de los últimos 12m) ---
@@ -503,14 +527,14 @@ def _compute_metrics(*, tenant_id: Any, today: datetime.date) -> dict[str, Any]:
         deleted_at__isnull=True,
         received_at__date__gte=cutoff_12m,
     )
+    if sucursal_ids is not None:
+        payments_12m = payments_12m.filter(sucursal_id__in=sucursal_ids)
     pay_agg = payments_12m.aggregate(
         total=Coalesce(Sum("amount"), Value(ZERO), output_field=_DEC),
         count=Count("id"),
     )
     avg_ticket: Decimal = (
-        round(pay_agg["total"] / pay_agg["count"], 2)
-        if pay_agg["count"] > 0
-        else ZERO
+        round(pay_agg["total"] / pay_agg["count"], 2) if pay_agg["count"] > 0 else ZERO
     )
 
     # --- No-show rate (citas del último año) ---
@@ -520,7 +544,7 @@ def _compute_metrics(*, tenant_id: Any, today: datetime.date) -> dict[str, Any]:
         no_show=Count("id", filter=Q(status=Appointment.Status.NO_SHOW)),
         total=Count("id"),
     )
-    no_show_rate: Optional[float] = (
+    no_show_rate: float | None = (
         round(no_show_agg["no_show"] / no_show_agg["total"], 4)
         if no_show_agg["total"] > 0
         else None
@@ -537,23 +561,21 @@ def _compute_metrics(*, tenant_id: Any, today: datetime.date) -> dict[str, Any]:
 
     with_future: int = 0
     if active_patient_ids:
-        with_future = (
-            Appointment.objects.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                patient_id__in=active_patient_ids,
-                starts_at__date__gt=today,
-                status__in=[
-                    Appointment.Status.SCHEDULED,
-                    Appointment.Status.CONFIRMED,
-                ],
-            )
-            .values("patient_id")
-            .distinct()
-            .count()
+        future_qs = Appointment.objects.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            patient_id__in=active_patient_ids,
+            starts_at__date__gt=today,
+            status__in=[
+                Appointment.Status.SCHEDULED,
+                Appointment.Status.CONFIRMED,
+            ],
         )
+        if sucursal_ids is not None:
+            future_qs = future_qs.filter(sucursal_id__in=sucursal_ids)
+        with_future = future_qs.values("patient_id").distinct().count()
 
-    pct_with_future_appt: Optional[float] = (
+    pct_with_future_appt: float | None = (
         round(with_future / total_active, 4) if total_active > 0 else None
     )
 

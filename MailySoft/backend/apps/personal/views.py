@@ -12,7 +12,6 @@ Manejo de errores:
 - ValidationError (django.core.exceptions) → 400 con exc.messages.
 """
 
-import datetime
 import uuid
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -22,6 +21,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.clinica.models import Sucursal
+from apps.clinica.sucursal_scope import (
+    resolve_active_sucursal,
+    resolve_write_sucursal,
+    sucursal_scope_ids,
+)
 from apps.core.permissions import PersonalPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
@@ -46,13 +51,13 @@ from apps.personal.services import (
     doctor_create,
     doctor_deactivate,
     doctor_set_consultorios,
+    doctor_set_sucursales,
     doctor_update,
     schedule_create,
     schedule_deactivate,
 )
 from apps.tenancy.models import TenantMembership
 from apps.tenancy.selectors import membership_get
-
 
 # ---------------------------------------------------------------------------
 # Doctor
@@ -100,12 +105,21 @@ class DoctorListCreateApi(TenantAPIView):
             return value
 
     def get(self, request: Request) -> Response:
-        """Lista paginada de doctores activos del tenant actual."""
+        """Lista paginada de doctores activos del tenant actual.
+
+        Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+        alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+        header X-Sucursal-Id. Un usuario limitado a una sede ya NO puede ver
+        doctores de otra sede con solo omitir el header; el dueño (alcance
+        total) sigue viendo todo cuando no manda header.
+        """
         search: str = request.query_params.get("search", "")
         only_active_param: str = request.query_params.get("only_active", "true")
         only_active: bool = only_active_param.lower() != "false"
 
-        qs = doctor_list(search=search, only_active=only_active)
+        sucursal_ids = sucursal_scope_ids(request)
+
+        qs = doctor_list(search=search, only_active=only_active, sucursal_ids=sucursal_ids)
 
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
@@ -220,9 +234,16 @@ class DoctorDetailApi(TenantAPIView):
             allow_empty=True,
         )
 
-    def _get_doctor_or_404(
-        self, doctor_id: uuid.UUID
-    ) -> "tuple[Doctor | None, Response | None]":
+        # Asignación de sucursales (M2M, multi-sede — Fase 1): opcional.
+        # Si se provee, se llama a doctor_set_sucursales separado de doctor_update.
+        # Lista vacía = sin restricción de sede (compatibilidad retro).
+        sucursal_ids = serializers.ListField(
+            child=serializers.UUIDField(),
+            required=False,
+            allow_empty=True,
+        )
+
+    def _get_doctor_or_404(self, doctor_id: uuid.UUID) -> "tuple[Doctor | None, Response | None]":
         try:
             doctor = doctor_get(doctor_id=doctor_id)
             return doctor, None
@@ -253,10 +274,10 @@ class DoctorDetailApi(TenantAPIView):
             )
 
         try:
-            # Separar el campo M2M (no va a doctor_update que usa setattr sobre campos de modelo).
-            consultorio_ids: "list[uuid.UUID] | None" = s.validated_data.pop(
-                "consultorio_ids", None
-            )
+            # Separar los campos M2M (no van a doctor_update que usa setattr
+            # sobre campos escalares del modelo).
+            consultorio_ids: list[uuid.UUID] | None = s.validated_data.pop("consultorio_ids", None)
+            sucursal_ids: list[uuid.UUID] | None = s.validated_data.pop("sucursal_ids", None)
 
             # Actualizar campos escalares del doctor si vienen en el payload.
             if s.validated_data:
@@ -272,6 +293,14 @@ class DoctorDetailApi(TenantAPIView):
                     doctor=doctor,  # type: ignore[arg-type]
                     user=request.user,
                     consultorio_ids=consultorio_ids,
+                )
+
+            # Actualizar la asignación M2M de sucursales (multi-sede — Fase 1).
+            if sucursal_ids is not None:
+                doctor = doctor_set_sucursales(
+                    doctor=doctor,  # type: ignore[arg-type]
+                    user=request.user,
+                    sucursal_ids=sucursal_ids,
                 )
 
         except DjangoValidationError as exc:
@@ -320,13 +349,22 @@ class ConsultorioListCreateApi(TenantAPIView):
             allow_blank=True,
             error_messages={"invalid": "El color debe tener formato #RRGGBB (ej: #3B82F6)."},
         )
+        # Multi-sede — Fase 1: opcional, null = sin asignar (compatibilidad retro).
+        sucursal_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
     def get(self, request: Request) -> Response:
-        """Lista paginada de consultorios del tenant actual."""
+        """Lista paginada de consultorios del tenant actual.
+
+        Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+        alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+        header X-Sucursal-Id (ver DoctorListCreateApi.get).
+        """
         only_active_param: str = request.query_params.get("only_active", "true")
         only_active: bool = only_active_param.lower() != "false"
 
-        qs = consultorio_list(only_active=only_active)
+        sucursal_ids = sucursal_scope_ids(request)
+
+        qs = consultorio_list(only_active=only_active, sucursal_ids=sucursal_ids)
 
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
@@ -351,11 +389,21 @@ class ConsultorioListCreateApi(TenantAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        data = dict(s.validated_data)
+        sucursal_id: uuid.UUID | None = data.pop("sucursal_id", None)
+        active_sucursal = resolve_active_sucursal(request)
+
+        # A5 (seguridad): la sucursal destino se resuelve y autoriza con
+        # resolve_write_sucursal (valida contra allowed_sucursales del
+        # actor) EN VEZ de sucursal_get, que solo validaba tenant y por eso
+        # aceptaba un sucursal_id explícito de una sede ajena al actor.
         try:
             consultorio = consultorio_create(
                 tenant=tenant,
                 user=request.user,
-                **s.validated_data,
+                sucursal_id=sucursal_id,
+                active_sucursal_id=(active_sucursal.id if active_sucursal is not None else None),
+                **data,
             )
         except DjangoValidationError as exc:
             return Response(
@@ -392,12 +440,26 @@ class ConsultorioDetailApi(TenantAPIView):
             allow_blank=True,
             error_messages={"invalid": "El color debe tener formato #RRGGBB (ej: #3B82F6)."},
         )
+        # Multi-sede — Fase 1: opcional. allow_null permite desasignar (null).
+        # Sin `default`: solo se toca si el cliente lo envía explícitamente.
+        sucursal_id = serializers.UUIDField(required=False, allow_null=True)
 
     def _get_consultorio_or_404(
-        self, consultorio_id: uuid.UUID
+        self, request: Request, consultorio_id: uuid.UUID
     ) -> "tuple[Consultorio | None, Response | None]":
+        """Resuelve el consultorio acotado al alcance de sedes del actor.
+
+        A5 (seguridad): usa `sucursal_scope_ids(request)` — el MISMO criterio
+        que el listado (`ConsultorioListCreateApi.get`) — para que el
+        detalle/PATCH/DELETE por id acoten EXACTAMENTE igual que el listado.
+        Un admin acotado a Centro ya no puede tocar un consultorio de Norte
+        solo porque conoce su id (antes: 200/200/204; ahora: 404).
+        """
         try:
-            consultorio = consultorio_get(consultorio_id=consultorio_id)
+            consultorio = consultorio_get(
+                consultorio_id=consultorio_id,
+                sucursal_ids=sucursal_scope_ids(request),
+            )
             return consultorio, None
         except Consultorio.DoesNotExist:
             return None, Response(
@@ -406,13 +468,13 @@ class ConsultorioDetailApi(TenantAPIView):
             )
 
     def get(self, request: Request, consultorio_id: uuid.UUID) -> Response:
-        consultorio, error_response = self._get_consultorio_or_404(consultorio_id)
+        consultorio, error_response = self._get_consultorio_or_404(request, consultorio_id)
         if error_response is not None:
             return error_response
         return Response(ConsultorioOutputSerializer(consultorio).data)
 
     def patch(self, request: Request, consultorio_id: uuid.UUID) -> Response:
-        consultorio, error_response = self._get_consultorio_or_404(consultorio_id)
+        consultorio, error_response = self._get_consultorio_or_404(request, consultorio_id)
         if error_response is not None:
             return error_response
 
@@ -425,11 +487,48 @@ class ConsultorioDetailApi(TenantAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        tenant = get_current_tenant()
+        if tenant is None:
+            return Response(
+                {"detail": "No se encontró un tenant activo para este request."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        data = dict(s.validated_data)
+        sucursal_provided = "sucursal_id" in data
+        sucursal_id: uuid.UUID | None = data.pop("sucursal_id", None)
+
+        if sucursal_provided:
+            if sucursal_id is None:
+                # Desasignar explícitamente (null): el consultorio ya está
+                # dentro del alcance del actor (gate de
+                # _get_consultorio_or_404), así que limpiar su sede no
+                # otorga acceso a ninguna sucursal ajena.
+                data["sucursal"] = None
+            else:
+                # A5 (seguridad): resolver con resolve_write_sucursal EN VEZ
+                # DE sucursal_get — valida contra allowed_sucursales del
+                # actor y no solo contra el tenant. Sin esto, un admin de
+                # Centro podía reasignar el consultorio a Norte mandando el
+                # sucursal_id explícito de Norte.
+                try:
+                    resolved_sucursal: Sucursal | None = resolve_write_sucursal(
+                        tenant=tenant,
+                        user=request.user,
+                        sucursal_id=sucursal_id,
+                    )
+                except DjangoValidationError as exc:
+                    return Response(
+                        {"detail": exc.messages},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                data["sucursal"] = resolved_sucursal
+
         try:
             updated_consultorio = consultorio_update(
                 consultorio=consultorio,  # type: ignore[arg-type]
                 user=request.user,
-                **s.validated_data,
+                **data,
             )
         except DjangoValidationError as exc:
             return Response(
@@ -440,7 +539,7 @@ class ConsultorioDetailApi(TenantAPIView):
         return Response(ConsultorioOutputSerializer(updated_consultorio).data)
 
     def delete(self, request: Request, consultorio_id: uuid.UUID) -> Response:
-        consultorio, error_response = self._get_consultorio_or_404(consultorio_id)
+        consultorio, error_response = self._get_consultorio_or_404(request, consultorio_id)
         if error_response is not None:
             return error_response
 
@@ -474,10 +573,12 @@ class DoctorScheduleListCreateApi(TenantAPIView):
         )
         valid_from = serializers.DateField(required=False, allow_null=True, default=None)
         valid_until = serializers.DateField(required=False, allow_null=True, default=None)
+        # Multi-sede — Fase 2: sucursal EXPLÍCITA (opcional). Si no viene, se
+        # resuelve del consultorio, de la sede activa del request o de la
+        # predeterminada del tenant (ver schedule_create).
+        sucursal_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
-    def _get_doctor_or_404(
-        self, doctor_id: uuid.UUID
-    ) -> "tuple[Doctor | None, Response | None]":
+    def _get_doctor_or_404(self, doctor_id: uuid.UUID) -> "tuple[Doctor | None, Response | None]":
         try:
             doctor = doctor_get(doctor_id=doctor_id)
             return doctor, None
@@ -488,12 +589,21 @@ class DoctorScheduleListCreateApi(TenantAPIView):
             )
 
     def get(self, request: Request, doctor_id: uuid.UUID) -> Response:
-        """Lista los horarios activos del médico indicado."""
+        """Lista los horarios activos del médico indicado.
+
+        A4 (seguridad): se acota SIEMPRE por `sucursal_scope_ids(request)` —
+        un médico puede tener horarios en varias sedes; un admin/recepción
+        acotado a Centro ya no ve los horarios que ese médico tiene en Norte
+        solo por conocer su `doctor_id`.
+        """
         doctor, error_response = self._get_doctor_or_404(doctor_id)
         if error_response is not None:
             return error_response
 
-        qs = schedule_list_for_doctor(doctor=doctor)  # type: ignore[arg-type]
+        qs = schedule_list_for_doctor(
+            doctor=doctor,  # type: ignore[arg-type]
+            sucursal_ids=sucursal_scope_ids(request),
+        )
 
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
@@ -523,8 +633,8 @@ class DoctorScheduleListCreateApi(TenantAPIView):
             )
 
         # Resolver el consultorio si se proveyó un ID.
-        consultorio: "Consultorio | None" = None
-        consultorio_id: "uuid.UUID | None" = s.validated_data.get("consultorio_id")
+        consultorio: Consultorio | None = None
+        consultorio_id: uuid.UUID | None = s.validated_data.get("consultorio_id")
         if consultorio_id is not None:
             try:
                 consultorio = consultorio_get(consultorio_id=consultorio_id)
@@ -533,6 +643,8 @@ class DoctorScheduleListCreateApi(TenantAPIView):
                     {"detail": "Consultorio no encontrado en este tenant."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
+
+        active_sucursal = resolve_active_sucursal(request)
 
         try:
             schedule = schedule_create(
@@ -545,6 +657,8 @@ class DoctorScheduleListCreateApi(TenantAPIView):
                 consultorio=consultorio,
                 valid_from=s.validated_data.get("valid_from"),
                 valid_until=s.validated_data.get("valid_until"),
+                sucursal_id=s.validated_data.get("sucursal_id"),
+                active_sucursal_id=active_sucursal.id if active_sucursal is not None else None,
             )
         except DjangoValidationError as exc:
             return Response(
@@ -559,18 +673,24 @@ class DoctorScheduleListCreateApi(TenantAPIView):
 
 
 class DoctorScheduleDetailApi(TenantAPIView):
-    """DELETE /api/v1/personal/horarios/<uuid:schedule_id>/  — desactiva un horario (soft).
-    """
+    """DELETE /api/v1/personal/horarios/<uuid:schedule_id>/  — desactiva un horario (soft)."""
 
     permission_classes = [IsAuthenticated, PersonalPermission]
 
     def _get_schedule_or_404(
-        self, schedule_id: uuid.UUID
+        self, request: Request, schedule_id: uuid.UUID
     ) -> "tuple[DoctorSchedule | None, Response | None]":
         # FIX-F2: schedule_get usa TenantManager (.objects) para filtrar por tenant
         # activo; previene IDOR — un schedule de otro tenant devuelve 404, no 403.
+        # A4 (seguridad): además se acota por sucursal_scope_ids(request) — el
+        # MISMO criterio que el listado (schedule_list_for_doctor) — así que
+        # un admin acotado a Centro ya no puede borrar un horario de Norte
+        # solo porque conoce su id.
         try:
-            schedule = schedule_get(schedule_id=schedule_id)
+            schedule = schedule_get(
+                schedule_id=schedule_id,
+                sucursal_ids=sucursal_scope_ids(request),
+            )
             return schedule, None
         except DoctorSchedule.DoesNotExist:
             return None, Response(
@@ -580,7 +700,7 @@ class DoctorScheduleDetailApi(TenantAPIView):
 
     def delete(self, request: Request, schedule_id: uuid.UUID) -> Response:
         """Desactiva (soft) un bloque de horario."""
-        schedule, error_response = self._get_schedule_or_404(schedule_id)
+        schedule, error_response = self._get_schedule_or_404(request, schedule_id)
         if error_response is not None:
             return error_response
 

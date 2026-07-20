@@ -5,6 +5,7 @@ import type { DateRangeParams } from '../../api/finanzas'
 import { useCharges, useDashboard, usePayments } from '../../hooks/finanzas'
 import { formatMoney, formatDate, formatDateTime } from '../../lib/format'
 import KpiCards from './KpiCards'
+import SedeIndicador, { mensajeErrorSede } from './SedeIndicador'
 import IngresosPeriodoChart from './charts/IngresosPeriodoChart'
 import IngresosConceptoChart from './charts/IngresosConceptoChart'
 import MetodosPagoChart from './charts/MetodosPagoChart'
@@ -99,13 +100,18 @@ export default function DashboardTab({ range, onNavigate }: Props) {
   if (isError || !data) {
     return (
       <div className="glass-card rounded-2xl p-6 text-sm" style={{ color: '#B91C1C' }}>
-        No se pudo cargar el panel financiero. {(error as Error)?.message ?? ''}
+        {mensajeErrorSede(error, 'No se pudo cargar el panel financiero.')}
       </div>
     )
   }
 
   return (
     <div className="space-y-4">
+      {/* Los números del panel son los de la SEDE ACTIVA (o el consolidado). */}
+      <div className="flex items-center justify-end">
+        <SedeIndicador />
+      </div>
+
       <KpiCards kpis={data.kpis} onNavigate={onNavigate} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

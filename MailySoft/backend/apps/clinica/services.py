@@ -14,9 +14,11 @@ Principios:
 """
 
 import logging
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.utils import timezone
 
 from apps.audit.models import ActionType
@@ -29,9 +31,13 @@ from apps.clinica.models import (
     CredentialValidationStatus,
     DoctorCredential,
     DoctorUniversity,
+    MembershipSucursal,
     PatientCategory,
+    Sucursal,
 )
 from apps.clinica.selectors import clinic_settings_get
+from apps.clinica.sucursal_scope import allowed_sucursales
+from apps.tenancy.models import TenantMembership
 
 if TYPE_CHECKING:
     from apps.authn.models import User
@@ -1046,3 +1052,414 @@ def clinic_team_member_delete(*, member: ClinicTeamMember, user: "User") -> None
         resource_id=member.id,
         resource_repr=str(member),
     )
+
+
+# ---------------------------------------------------------------------------
+# Sucursal — multi-sede (Fase 1)
+# ---------------------------------------------------------------------------
+#
+# is_active e is_default NUNCA se exponen en el PATCH genérico (regla de
+# campos sensibles del proyecto): viven en _SUCURSAL_IMMUTABLE y solo se
+# cambian vía sucursal_activate / sucursal_deactivate / sucursal_set_default.
+
+_SUCURSAL_IMMUTABLE: frozenset[str] = frozenset(
+    {
+        "id",
+        "tenant",
+        "tenant_id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "is_active",
+        "is_default",
+    }
+)
+
+
+def sucursal_create(
+    *,
+    tenant: "Tenant",
+    user: "User",
+    name: str,
+    address: str = "",
+    phone: str = "",
+    color_hex: str = "",
+    is_default: bool = False,
+) -> Sucursal:
+    """Crea una sucursal para el tenant.
+
+    Valida que el nombre sea único en el tenant. Si `is_default=True`, marca
+    la nueva sucursal como predeterminada (desmarcando cualquier otra) vía
+    `sucursal_set_default` DESPUÉS de crearla, en la misma transacción.
+
+    Args:
+        tenant:     Clínica (negocio) a la que pertenece la sucursal.
+        user:       Usuario que crea el registro (auditoría).
+        name:       Nombre de la sucursal. Único por tenant.
+        address:    Dirección física (opcional).
+        phone:      Teléfono de contacto (opcional).
+        color_hex:  Color #RRGGBB para la agenda (opcional, uso futuro Fase 2).
+        is_default: Si True, la marca como predeterminada del tenant.
+
+    Returns:
+        Instancia Sucursal recién creada.
+
+    Raises:
+        ValidationError: si ya existe una sucursal con ese nombre en el tenant.
+    """
+    if Sucursal.all_objects.filter(tenant=tenant, name=name, deleted_at__isnull=True).exists():
+        raise ValidationError(f"Ya existe una sucursal con el nombre '{name}' en esta clínica.")
+
+    with transaction.atomic():
+        sucursal = Sucursal(
+            tenant=tenant,
+            created_by=user,
+            name=name,
+            address=address,
+            phone=phone,
+            color_hex=color_hex,
+            is_active=True,
+            is_default=False,
+        )
+        sucursal.full_clean(exclude=["tenant", "created_by"])
+        sucursal.save()
+
+        audit_record(
+            action=ActionType.SUCURSAL_CREATE,
+            resource_type="Sucursal",
+            actor=user,
+            tenant=tenant,
+            resource_id=sucursal.id,
+            resource_repr=sucursal.name,
+        )
+
+        if is_default:
+            sucursal = sucursal_set_default(sucursal=sucursal, user=user)
+
+    return sucursal
+
+
+def sucursal_update(
+    *,
+    sucursal: Sucursal,
+    user: "User",
+    **fields: Any,
+) -> Sucursal:
+    """Actualiza campos permitidos de una sucursal existente.
+
+    No permite modificar is_active ni is_default (solo vía sucursal_activate/
+    deactivate/set_default), ni campos de identidad. Si se cambia `name`,
+    revalida unicidad dentro del tenant.
+
+    Args:
+        sucursal: Instancia Sucursal a actualizar.
+        user:     Usuario que realiza el cambio (auditoría).
+        **fields: Campos a actualizar (name, address, phone, color_hex).
+
+    Returns:
+        La instancia Sucursal actualizada.
+
+    Raises:
+        ValidationError: si se intenta modificar un campo inmutable, o si el
+                         nuevo nombre ya existe en el tenant.
+    """
+    bad = _SUCURSAL_IMMUTABLE & set(fields)
+    if bad:
+        raise ValidationError(f"No se pueden modificar los campos: {', '.join(sorted(bad))}.")
+
+    new_name = fields.get("name")
+    if new_name is not None and new_name != sucursal.name:
+        duplicate_exists = (
+            Sucursal.all_objects.filter(
+                tenant=sucursal.tenant, name=new_name, deleted_at__isnull=True
+            )
+            .exclude(id=sucursal.id)
+            .exists()
+        )
+        if duplicate_exists:
+            raise ValidationError(
+                f"Ya existe una sucursal con el nombre '{new_name}' en esta clínica."
+            )
+
+    for field_name, value in fields.items():
+        setattr(sucursal, field_name, value)
+
+    update_fields = [*fields.keys(), "updated_at"]
+    sucursal.full_clean(exclude=["tenant", "created_by"])
+    sucursal.save(update_fields=update_fields)
+
+    audit_record(
+        action=ActionType.SUCURSAL_UPDATE,
+        resource_type="Sucursal",
+        actor=user,
+        tenant=sucursal.tenant,
+        resource_id=sucursal.id,
+        resource_repr=sucursal.name,
+        metadata={"changed_fields": sorted(fields.keys())},
+    )
+    return sucursal
+
+
+def sucursal_activate(*, sucursal: Sucursal, user: "User") -> Sucursal:
+    """Reactiva una sucursal desactivada (is_active=True)."""
+    sucursal.is_active = True
+    sucursal.save(update_fields=["is_active", "updated_at"])
+    audit_record(
+        action=ActionType.SUCURSAL_ACTIVATE,
+        resource_type="Sucursal",
+        actor=user,
+        tenant=sucursal.tenant,
+        resource_id=sucursal.id,
+        resource_repr=sucursal.name,
+    )
+    return sucursal
+
+
+def sucursal_deactivate(*, sucursal: Sucursal, user: "User") -> Sucursal:
+    """Desactiva una sucursal (soft — is_active=False, no borra el registro).
+
+    Regla de negocio: la sucursal predeterminada del tenant NO se puede
+    desactivar directamente (un tenant siempre debe tener una sede activa por
+    defecto). Hay que marcar otra como predeterminada primero.
+
+    Raises:
+        ValidationError: si `sucursal` es la predeterminada del tenant.
+    """
+    if sucursal.is_default:
+        raise ValidationError(
+            "No se puede desactivar la sucursal predeterminada. "
+            "Marca otra sucursal como predeterminada primero."
+        )
+
+    sucursal.is_active = False
+    sucursal.save(update_fields=["is_active", "updated_at"])
+    audit_record(
+        action=ActionType.SUCURSAL_DEACTIVATE,
+        resource_type="Sucursal",
+        actor=user,
+        tenant=sucursal.tenant,
+        resource_id=sucursal.id,
+        resource_repr=sucursal.name,
+    )
+    return sucursal
+
+
+def sucursal_set_default(*, sucursal: Sucursal, user: "User") -> Sucursal:
+    """Marca `sucursal` como la predeterminada del tenant; desmarca cualquier otra.
+
+    Solo una sucursal por tenant puede tener is_default=True (constraint
+    `sucursal_tenant_one_default_uniq`). Se desmarca la anterior ANTES de
+    marcar la nueva, dentro de la misma transacción, para nunca violar el
+    índice único parcial.
+
+    Raises:
+        ValidationError: si la sucursal está desactivada (no puede ser
+                         predeterminada una sede que no opera).
+    """
+    if not sucursal.is_active:
+        raise ValidationError("No se puede marcar como predeterminada una sucursal inactiva.")
+
+    with transaction.atomic():
+        Sucursal.all_objects.filter(tenant_id=sucursal.tenant_id, is_default=True).exclude(
+            id=sucursal.id
+        ).update(is_default=False, updated_at=timezone.now())
+
+        sucursal.is_default = True
+        sucursal.save(update_fields=["is_default", "updated_at"])
+
+    audit_record(
+        action=ActionType.SUCURSAL_SET_DEFAULT,
+        resource_type="Sucursal",
+        actor=user,
+        tenant=sucursal.tenant,
+        resource_id=sucursal.id,
+        resource_repr=sucursal.name,
+    )
+    return sucursal
+
+
+# ---------------------------------------------------------------------------
+# MembershipSucursal — asignación de sedes a un miembro (Fase 4)
+# ---------------------------------------------------------------------------
+#
+# Este es el service que HABILITA crear un "administrador de sucursal" desde
+# la app: asignarle a un admin solo la sede Centro lo acota a operar/ver
+# SOLO Centro (apps.clinica.sucursal_scope.allowed_sucursales); asignarle
+# TODAS las sedes activas del tenant lo convierte en "admin de negocio".
+#
+# Autorización — SEGURIDAD (cierre de escalada de privilegios):
+#   La vista (MembershipSucursalPermission) solo gatea por ROL: únicamente
+#   owner y admin pueden llegar aquí. La granularidad fina —qué sede puede
+#   tocar CADA admin— es lógica de negocio y vive en este service, no en la
+#   vista ni en el permiso DRF (mismo principio que
+#   sucursal_scope.resolve_write_sucursal, que también autoriza en la capa
+#   de servicio en vez de en el permiso method-aware):
+#     - owner: sin restricción adicional (más allá de que la sucursal sea del
+#       mismo tenant): puede otorgar/quitar CUALQUIER sede a cualquier miembro.
+#     - admin (no owner): solo puede TOCAR (otorgar U quitar) sucursales que
+#       él mismo tiene en su propio `allowed_sucursales`. Se calcula la
+#       diferencia simétrica entre el conjunto actual y el solicitado — las
+#       sedes que NO cambian no se validan (un admin de Centro puede dejar
+#       intacta una asignación a Norte que ya existía, hecha por el owner;
+#       lo que no puede es AGREGAR Norte ni QUITAR Norte).
+
+_MEMBERSHIP_SUCURSAL_ANTI_LOCKOUT_OWNER = (
+    "No se puede dejar al dueño de la clínica sin sucursales asignadas."
+)
+_MEMBERSHIP_SUCURSAL_ANTI_LOCKOUT_SELF_ADMIN = (
+    "No puedes quitarte a ti mismo todas las sucursales asignadas: perderías acceso a la sede."
+)
+
+
+def membership_sucursales_set(
+    *,
+    tenant: "Tenant",
+    actor: "User",
+    membership: TenantMembership,
+    sucursal_ids: list[uuid.UUID],
+) -> TenantMembership:
+    """Reemplaza el conjunto COMPLETO de sucursales asignadas a una membresía.
+
+    Es el service que permite crear un "administrador de sucursal": una
+    membresía con rol admin y UNA sola fila de MembershipSucursal queda
+    acotada a esa sede vía `apps.clinica.sucursal_scope.allowed_sucursales`.
+
+    Autorización (ver bloque de comentarios arriba en el módulo):
+        - `actor` debe tener una membresía activa en `tenant` (owner o admin;
+          cualquier otro rol ya fue rechazado por
+          `MembershipSucursalPermission` antes de llegar aquí, pero se
+          revalida — defensa en profundidad).
+        - Si `actor` es owner: sin restricción adicional sobre qué sedes toca.
+        - Si `actor` es admin (no owner): la diferencia simétrica entre el
+          conjunto ACTUAL y el conjunto NUEVO (`sucursal_ids`) —es decir, lo
+          que se agrega MÁS lo que se quita— debe estar contenida en
+          `allowed_sucursales(user=actor, tenant=tenant)`. Si el actor
+          intenta tocar una sede fuera de su alcance (otorgarla o quitarla),
+          se rechaza con un mensaje claro.
+
+    Validaciones de datos:
+        - `membership` debe pertenecer a `tenant` (defensa en profundidad;
+          la vista ya la resuelve tenant-scoped vía `membership_get`).
+        - Cada id de `sucursal_ids` debe existir, pertenecer a `tenant` y
+          estar activo.
+
+    Anti-lockout:
+        - Si `membership` es la del OWNER del tenant: `sucursal_ids` no puede
+          quedar vacío (el owner igual ve todas las sedes por rol —
+          `allowed_sucursales` no depende de MembershipSucursal para el
+          owner— pero se rechaza el intento explícito de vaciarlo).
+        - Si `actor` es admin y `membership` ES la propia membresía del
+          actor: `sucursal_ids` no puede quedar vacío (un admin SÍ depende
+          de MembershipSucursal para su alcance; vaciarlo lo autobloquearía
+          de operar cualquier sede).
+
+    Args:
+        tenant:       Tenant (negocio) de la membresía y de las sucursales.
+        actor:        Usuario que realiza la asignación (auditoría + autorización).
+        membership:   TenantMembership objetivo a la que se le fija el conjunto
+                      de sedes (ya resuelta tenant-scoped por el caller).
+        sucursal_ids: Conjunto COMPLETO de sucursales a dejar asignadas
+                      (reemplaza, no añade). Puede ser una lista vacía.
+
+    Returns:
+        La misma instancia TenantMembership (sin recargar; el caller relee
+        sus sucursales con `membership_sucursales_list`).
+
+    Raises:
+        ValidationError: membership de otro tenant, sucursal_ids con ids que
+            no existen/no son del tenant/están inactivos, un admin tocando
+            una sede fuera de su alcance, o violación de una regla anti-lockout.
+    """
+    if membership.tenant_id != tenant.id:
+        raise ValidationError("La membresía no pertenece a esta clínica.")
+
+    unique_ids: set[uuid.UUID] = set(sucursal_ids)
+
+    if unique_ids:
+        sucursales = list(
+            Sucursal.all_objects.filter(
+                id__in=unique_ids, tenant_id=tenant.id, deleted_at__isnull=True
+            )
+        )
+        found_ids = {s.id for s in sucursales}
+        missing = unique_ids - found_ids
+        if missing:
+            raise ValidationError(
+                "Una o más sucursales no existen en esta clínica: "
+                f"{', '.join(str(i) for i in sorted(missing, key=str))}."
+            )
+        inactive = [s for s in sucursales if not s.is_active]
+        if inactive:
+            names = ", ".join(s.name for s in inactive)
+            raise ValidationError(f"Las siguientes sucursales están inactivas: {names}.")
+
+    actor_membership = (
+        TenantMembership.objects.filter(
+            user=actor, tenant=tenant, is_active=True, deleted_at__isnull=True
+        )
+        .order_by("created_at")
+        .first()
+    )
+    if actor_membership is None:
+        raise ValidationError("No tienes una membresía activa en esta clínica.")
+
+    current_ids: set[uuid.UUID] = set(
+        MembershipSucursal.all_objects.filter(
+            tenant_id=tenant.id, membership=membership
+        ).values_list("sucursal_id", flat=True)
+    )
+
+    if actor_membership.role != TenantMembership.Role.OWNER:
+        admin_allowed_ids: set[uuid.UUID] = set(
+            allowed_sucursales(user=actor, tenant=tenant).values_list("id", flat=True)
+        )
+        touched = unique_ids.symmetric_difference(current_ids)
+        forbidden = touched - admin_allowed_ids
+        if forbidden:
+            raise ValidationError(
+                "No puedes otorgar ni quitar acceso a sucursales que tú mismo no tienes "
+                "asignadas."
+            )
+
+    if membership.role == TenantMembership.Role.OWNER and not unique_ids:
+        raise ValidationError(_MEMBERSHIP_SUCURSAL_ANTI_LOCKOUT_OWNER)
+
+    if (
+        actor_membership.role != TenantMembership.Role.OWNER
+        and membership.id == actor_membership.id
+        and not unique_ids
+    ):
+        raise ValidationError(_MEMBERSHIP_SUCURSAL_ANTI_LOCKOUT_SELF_ADMIN)
+
+    with transaction.atomic():
+        MembershipSucursal.all_objects.filter(tenant_id=tenant.id, membership=membership).exclude(
+            sucursal_id__in=unique_ids
+        ).delete()
+
+        existing_ids: set[uuid.UUID] = set(
+            MembershipSucursal.all_objects.filter(
+                tenant_id=tenant.id, membership=membership
+            ).values_list("sucursal_id", flat=True)
+        )
+        to_create = [
+            MembershipSucursal(
+                tenant=tenant,
+                created_by=actor,
+                membership=membership,
+                sucursal_id=sucursal_id,
+            )
+            for sucursal_id in unique_ids - existing_ids
+        ]
+        if to_create:
+            MembershipSucursal.all_objects.bulk_create(to_create)
+
+    audit_record(
+        action=ActionType.MEMBERSHIP_SUCURSALES_SET,
+        resource_type="TenantMembership",
+        actor=actor,
+        tenant=tenant,
+        resource_id=membership.id,
+        resource_repr=str(membership.id),
+        metadata={"sucursal_ids": [str(i) for i in sorted(unique_ids, key=str)]},
+    )
+    return membership

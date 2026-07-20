@@ -16,7 +16,6 @@ limpia el thread-local entre tests.
 """
 
 import datetime
-import uuid
 from typing import Any
 
 import pytest
@@ -35,7 +34,6 @@ from tests.factories import (
     TenantFactory,
     UserFactory,
 )
-
 
 # ===========================================================================
 # doctor_list — filtros básicos (sin contexto de tenant activo)
@@ -95,12 +93,8 @@ class TestDoctorListFilters:
 
         tenant = TenantFactory()
         user_target = UserFactory(first_name="Esperanza", last_name="Villanueva")
-        membership = TenantMembershipFactory(
-            tenant=tenant, user=user_target, role="doctor"
-        )
-        target = DoctorFactory(
-            tenant=tenant, membership=membership, is_active=True
-        )
+        membership = TenantMembershipFactory(tenant=tenant, user=user_target, role="doctor")
+        target = DoctorFactory(tenant=tenant, membership=membership, is_active=True)
         DoctorFactory(tenant=tenant, is_active=True)  # otro doctor, no debe aparecer
 
         # Act
@@ -128,23 +122,27 @@ class TestDoctorListFilters:
         """Listar N doctores NO debe disparar N queries extra.
 
         doctor_list() usa select_related('membership__user') y
-        prefetch_related('consultorios'). Se esperan exactamente 2 queries
-        para N doctores (una JOIN para el queryset + una para el prefetch M2M),
-        independientemente de N. Esto sigue siendo O(1) en queries, no O(N).
+        prefetch_related('consultorios', 'sucursales'). Se esperan exactamente
+        3 queries para N doctores (una JOIN para el queryset + una por cada
+        prefetch M2M), independientemente de N. Esto sigue siendo O(1) en
+        queries, no O(N). El prefetch de 'sucursales' se agregó en la Fase 1
+        de multi-sede (docs/design/sucursales-plan-implementacion.md).
         """
         # Arrange — 5 doctores en el mismo tenant
         tenant = TenantFactory()
         DoctorFactory.create_batch(5, tenant=tenant, is_active=True)
 
-        # Act & Assert — exactamente 2 queries para N doctores:
+        # Act & Assert — exactamente 3 queries para N doctores:
         #   1. SELECT personal_doctors JOIN tenancy_memberships JOIN authn_users
         #   2. SELECT personal_doctors_consultorios (prefetch M2M)
-        with django_assert_num_queries(2):
+        #   3. SELECT personal_doctor_sucursales (prefetch M2M)
+        with django_assert_num_queries(3):
             qs = doctor_list()
             # Forzar evaluación y acceso a la relación encadenada
             names = [d.full_name for d in qs]
-            # Acceso a consultorios (prefetchado, sin queries extra)
+            # Acceso a consultorios y sucursales (prefetchados, sin queries extra)
             _ = [list(d.consultorios.all()) for d in qs]
+            _ = [list(d.sucursales.all()) for d in qs]
 
         assert len(names) == 5
 

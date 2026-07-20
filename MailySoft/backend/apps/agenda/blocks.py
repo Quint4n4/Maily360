@@ -11,7 +11,6 @@ Convención: keyword-only args, nombrado acción+entidad, auditoría NOM-024.
 import datetime
 import logging
 import uuid
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -20,8 +19,9 @@ from django.utils import timezone
 from apps.agenda.models import AgendaBlock
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
+from apps.clinica.sucursal_scope import resolve_write_sucursal
 from apps.notificaciones.models import NotificationKind, NotificationTarget
-from apps.notificaciones.recipients import clinic_staff_users
+from apps.notificaciones.recipients import clinic_staff_users, filter_recipients_by_sucursal
 from apps.notificaciones.services import notification_fanout
 from apps.personal.models import Consultorio, Doctor
 from apps.personal.selectors import consultorio_get, doctor_get
@@ -40,14 +40,29 @@ def agenda_block_create(
     starts_at: datetime.datetime,
     ends_at: datetime.datetime,
     title: str = "",
-    doctor_id: Optional[uuid.UUID] = None,
-    consultorio_id: Optional[uuid.UUID] = None,
+    doctor_id: uuid.UUID | None = None,
+    consultorio_id: uuid.UUID | None = None,
     all_day: bool = False,
     notes: str = "",
+    sucursal_id: uuid.UUID | None = None,
+    active_sucursal_id: uuid.UUID | None = None,
 ) -> AgendaBlock:
     """Crea un evento de agenda (reunión o bloqueo).
 
-    doctor_id/consultorio_id son OPCIONALES; ambos en None = aplica a toda la clínica.
+    doctor_id/consultorio_id son OPCIONALES.
+
+    Alcance del bloqueo (multi-sede — Fase 2):
+      - doctor_id seteado      → aplica en TODAS las sedes de ese médico (global).
+      - consultorio_id seteado → aplica solo a ese consultorio (una sola sede).
+      - ambos en None          → "de toda la clínica" en v1, "de una sucursal"
+        desde la Fase 2. Se resuelve como cualquier otra escritura con sede
+        (ver `resolve_write_sucursal`): sucursal_id explícita > sede del
+        consultorio (n/a aquí) > sede activa del request > sede predeterminada.
+
+    Args:
+        sucursal_id:        Sucursal EXPLÍCITA del evento (opcional).
+        active_sucursal_id: Sucursal activa del request (header X-Sucursal-Id),
+                            que la vista resuelve y pasa aquí.
     """
     valid_kinds = [choice[0] for choice in AgendaBlock.Kind.choices]
     if kind not in valid_kinds:
@@ -73,6 +88,14 @@ def agenda_block_create(
         if consultorio.tenant_id != tenant.id:
             raise ValidationError("El consultorio no pertenece a esta clínica.")
 
+    sucursal = resolve_write_sucursal(
+        tenant=tenant,
+        user=user,
+        sucursal_id=sucursal_id,
+        consultorio_sucursal_id=consultorio.sucursal_id if consultorio is not None else None,
+        active_sucursal_id=active_sucursal_id,
+    )
+
     block = AgendaBlock.objects.create(
         tenant=tenant,
         created_by=user,
@@ -80,6 +103,7 @@ def agenda_block_create(
         title=title,
         doctor=doctor,
         consultorio=consultorio,
+        sucursal=sucursal,
         starts_at=starts_at,
         ends_at=ends_at,
         all_day=all_day,
@@ -109,7 +133,14 @@ def agenda_block_create(
                     ).select_related("membership__user")
                 ]
             else:
-                recipients = clinic_staff_users(tenant=tenant)
+                # Multi-sede: una reunión "de toda la clínica" sin médico ni
+                # consultorio se acota al staff de la sede del evento (o a todos
+                # si el evento no tiene sede — block.sucursal_id None).
+                recipients = filter_recipients_by_sucursal(
+                    tenant=tenant,
+                    recipients=clinic_staff_users(tenant=tenant),
+                    sucursal_id=block.sucursal_id,
+                )
             notification_fanout(
                 tenant=tenant,
                 recipients=recipients,

@@ -10,6 +10,7 @@ import MiniCalendario from './MiniCalendario'
 import { erroresDe } from '../../lib/apiErrors'
 import { INPUT, LABEL } from '../../lib/estilosForm'
 import { useAuth } from '../../auth/AuthContext'
+import { useSucursalActiva } from '../../auth/SucursalContext'
 import type { AppointmentModality, AppointmentSeriesResult, SeriesFrequency } from '../../types/agenda'
 
 type Modo = 'cita' | 'block' | 'meeting'
@@ -56,6 +57,19 @@ function addMin(hhmm: string, mins: number): string {
 }
 function toggle(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter(x => x !== id) : [...list, id]
+}
+
+/**
+ * Errores del backend, con el 400 de multi-sede traducido a algo accionable.
+ * El backend responde "El médico no atiende en esa sucursal" (regla de negocio F2);
+ * aquí le decimos al usuario QUÉ hacer (cambiar de médico o de sede).
+ */
+function erroresConSede(err: unknown, sede: string): string[] {
+  return erroresDe(err, 'No se pudo guardar.').map(m =>
+    /no atiende/i.test(m) && /sucursal|sede/i.test(m)
+      ? `El médico seleccionado no atiende en ${sede ? `la sucursal «${sede}»` : 'esta sucursal'}. Elige otro médico o cambia de sucursal en la barra superior.`
+      : m,
+  )
 }
 
 function Pill({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
@@ -169,10 +183,21 @@ export default function CrearEventoModal({
   const cotizaciones = cotizarPacienteId ? cotsData?.results ?? [] : []
 
   const { user } = useAuth()
+  // Sede activa (multi-sede F2): se agenda SIEMPRE en ella. No mandamos sucursal_id:
+  // el backend la deriva del consultorio o del header X-Sucursal-Id (él es la autoridad).
+  const { activeSucursal, activeSucursalId } = useSucursalActiva()
+  const sedeNombre = activeSucursal?.name ?? ''
   const soyDoctor = !!user?.doctor_id
   const pacientes = pacData?.results ?? []
-  const doctores = (docData?.results ?? []).filter(d => d.is_active)
-  const consultorios = (consData?.results ?? []).filter(c => c.is_active)
+  // Los catálogos YA vienen filtrados por sede desde el backend (header X-Sucursal-Id).
+  // Este segundo filtro es solo un cinturón de seguridad de UX: un médico sin sedes
+  // asignadas atiende en todas; uno con sedes, solo en las suyas. Igual para consultorios.
+  const doctores = (docData?.results ?? [])
+    .filter(d => d.is_active)
+    .filter(d => !activeSucursalId || d.sucursales.length === 0 || d.sucursales.some(s => s.id === activeSucursalId))
+  const consultorios = (consData?.results ?? [])
+    .filter(c => c.is_active)
+    .filter(c => !activeSucursalId || c.sucursal === null || c.sucursal.id === activeSucursalId)
   // Consultorios permitidos: si el médico seleccionado tiene asignados, solo esos.
   const docSel = doctores.find(d => d.id === doctorId)
   const consPermitidos = (docSel && docSel.consultorios.length > 0) ? docSel.consultorios : consultorios
@@ -347,7 +372,7 @@ export default function CrearEventoModal({
         await crearCita.mutateAsync({ ...base, quote_id: quoteId || null })
         onClose()
       }
-    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar.')) }
+    } catch (err) { setErrores(erroresConSede(err, sedeNombre)) }
   }
 
   const guardarEvento = async () => {
@@ -371,7 +396,7 @@ export default function CrearEventoModal({
     try {
       await Promise.all(objetivos.map(o => crearEvento.mutateAsync({ ...base, ...o })))
       onClose()
-    } catch (err) { setErrores(erroresDe(err, 'No se pudo guardar.')) } finally { setEnviando(false) }
+    } catch (err) { setErrores(erroresConSede(err, sedeNombre)) } finally { setEnviando(false) }
   }
 
   const guardar = () => (modo === 'cita' ? guardarCita() : guardarEvento())
@@ -401,6 +426,14 @@ export default function CrearEventoModal({
                 <p className="text-gray-500 text-sm italic mt-0.5">
                   {fechaLarga}{modo === 'cita' ? ` · ${to12h(horaInicio)}${consultorioName ? ` · ${consultorioName}` : ''}` : ''}
                 </p>
+                {/* Sede activa: se agenda AQUÍ (el backend deriva la sucursal). */}
+                {sedeNombre && (
+                  <span className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                    style={{ background: 'rgba(201,162,39,0.12)', color: '#9A7B1E' }}>
+                    <Building2 className="w-3.5 h-3.5" />
+                    {modo === 'cita' ? 'Se agenda en' : 'Aplica en'} {sedeNombre}
+                  </span>
+                )}
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors"><X className="w-6 h-6" /></button>
             </div>
@@ -751,10 +784,25 @@ export default function CrearEventoModal({
                   <div>
                     <label className={LABEL}>¿A qué aplica?</label>
                     <select className={INPUT} value={evAlcance} onChange={e => setEvAlcance(e.target.value as Alcance)}>
-                      <option value="clinica">Toda la clínica</option>
+                      <option value="clinica">
+                        {sedeNombre ? `Toda la sucursal ${sedeNombre}` : 'Toda la clínica'}
+                      </option>
                       <option value="consultorios">Uno o varios consultorios</option>
                       <option value="doctores">Uno o varios doctores</option>
                     </select>
+                    {/* Multi-sede (F2): un evento "de toda la clínica" aplica SOLO a la sede
+                        activa; uno de doctor sigue al médico a TODAS sus sedes. */}
+                    {evAlcance === 'clinica' && sedeNombre && (
+                      <p className="text-[11px] text-gray-500 mt-1.5 inline-flex items-start gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 mt-px shrink-0" style={{ color: '#C9A227' }} />
+                        Aplica solo a la sucursal <b>{sedeNombre}</b>. Las demás sedes no se ven afectadas.
+                      </p>
+                    )}
+                    {evAlcance === 'doctores' && (
+                      <p className="text-[11px] text-gray-500 mt-1.5">
+                        Un bloqueo de doctor aplica a ese médico en <b>todas sus sedes</b>.
+                      </p>
+                    )}
                     {evAlcance === 'consultorios' && (
                       <div className="flex flex-wrap gap-2 mt-2">
                         {consultorios.length === 0 ? <p className="text-xs text-gray-400">No hay consultorios.</p>

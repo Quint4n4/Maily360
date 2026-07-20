@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pencil, Trash2, Bell, Pin, Check, Megaphone, Eye, X } from 'lucide-react'
+import { Pencil, Trash2, Bell, Pin, Check, Megaphone, Eye, X, Building2, AlertTriangle } from 'lucide-react'
 import { formatMedio, formatFechaHora } from '../../lib/fecha'
 import type { Note } from '../../types/nota'
 
@@ -14,21 +14,28 @@ interface Props {
   onToggleDone?: () => void
 }
 
-/** Pie compartido por la tarjeta y el modal: recordatorio + etiqueta global. */
+/** Pie compartido por la tarjeta y el modal: recordatorio + sede + etiqueta global. */
 function PieNota({ note, color }: { note: Note; color: NotaColor }) {
   const esGlobal = note.scope !== 'personal'
+  // Multi-sede: los avisos muestran a qué sede van (o "Todas las sedes").
+  const etiquetaSede = note.sucursal ? note.sucursal.name : 'Todas las sedes'
   return (
-    <div className="flex items-center justify-between gap-2 mt-3 pt-2" style={{ borderTop: `1px solid ${color.ink}22` }}>
+    <div className="flex items-end justify-between gap-2 mt-3 pt-2" style={{ borderTop: `1px solid ${color.ink}22` }}>
       {note.remind_at ? (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium" style={{ color: color.ink }}>
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium shrink-0" style={{ color: color.ink }}>
           <Bell className="w-3.5 h-3.5" /> {formatFechaHora(note.remind_at)}
         </span>
       ) : <span />}
       {esGlobal && (
-        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${color.ink}22`, color: color.ink }}>
-          <Megaphone className="w-3 h-3" />
-          {note.scope === 'all' ? 'Para todos' : `Rol: ${note.target_role}`}
-        </span>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: `${color.ink}18`, color: color.ink }}>
+            <Building2 className="w-3 h-3" /> {etiquetaSede}
+          </span>
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${color.ink}22`, color: color.ink }}>
+            <Megaphone className="w-3 h-3" />
+            {note.scope === 'all' ? 'Para todos' : `Rol: ${note.target_role}`}
+          </span>
+        </div>
       )}
     </div>
   )
@@ -62,8 +69,19 @@ export default function NotaCard({ note, color, editable = false, onEdit, onDele
     <>
       <div
         className="group relative rounded-2xl p-5 flex flex-col min-h-[180px] transition-transform hover:-translate-y-0.5"
-        style={{ background: color.bg, boxShadow: '0 4px 16px rgba(60,42,12,0.08)' }}
+        style={{
+          background: color.bg,
+          boxShadow: note.is_important ? '0 4px 20px rgba(190,40,40,0.22)' : '0 4px 16px rgba(60,42,12,0.08)',
+          border: note.is_important ? '1.5px solid rgba(190,40,40,0.55)' : '1.5px solid transparent',
+        }}
       >
+        {/* aviso importante: banda destacada */}
+        {note.is_important && (
+          <span className="inline-flex items-center gap-1 self-start text-[10px] font-extrabold px-2 py-0.5 rounded-full mb-2 tracking-wide"
+            style={{ background: 'rgba(190,40,40,0.14)', color: '#B02828' }}>
+            <AlertTriangle className="w-3 h-3" /> IMPORTANTE
+          </span>
+        )}
         {/* fila superior: fecha + acciones */}
         <div className="flex items-start justify-between mb-2">
           <span className="text-[11px] font-medium" style={{ color: color.ink, opacity: 0.7 }}>

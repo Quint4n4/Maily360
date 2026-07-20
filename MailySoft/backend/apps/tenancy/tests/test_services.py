@@ -58,6 +58,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act
         membership = _create_member(tenant, actor, email="nuevo@clinic.test")
@@ -73,6 +74,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act
         membership = _create_member(tenant, actor, email="nuevo2@clinic.test")
@@ -87,6 +89,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act
         membership = _create_member(
@@ -104,6 +107,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         email = "logintest@clinic.test"
         password = _STRONG_PASSWORD
         _create_member(tenant, actor, email=email, password=password)
@@ -127,6 +131,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act / Assert
         with pytest.raises(ValidationError, match="[Rr]ol"):
@@ -141,6 +146,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         email = f"rol-{role}@clinic.test"
 
         # Act — no debe lanzar
@@ -156,6 +162,7 @@ class TestMemberCreate:
         existing_user = UserFactory(email="existente@clinic.test")
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act / Assert
         with pytest.raises(ValidationError, match="correo"):
@@ -166,6 +173,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act / Assert — "12345" es demasiado corta y totalmente numérica
         with pytest.raises(ValidationError):
@@ -176,6 +184,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act / Assert
         with pytest.raises(ValidationError):
@@ -186,6 +195,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act / Assert
         with pytest.raises(ValidationError):
@@ -196,6 +206,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act
         membership = _create_member(tenant, actor, email="audit@clinic.test")
@@ -215,6 +226,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         email = "nopersist@clinic.test"
         initial_count = User.objects.count()
 
@@ -230,6 +242,7 @@ class TestMemberCreate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act
         membership = _create_member(tenant, actor, email="MAYUS@CLINIC.TEST")
@@ -243,6 +256,7 @@ class TestMemberCreate:
         UserFactory(email="existente2@clinic.test")
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
 
         # Act / Assert
         with pytest.raises(ValidationError, match="correo"):
@@ -262,6 +276,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         membership = TenantMembershipFactory(
             tenant=tenant, role="doctor", is_active=True
         )
@@ -284,6 +299,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         membership = TenantMembershipFactory(tenant=tenant, role="doctor", is_active=True)
 
         # Act
@@ -298,6 +314,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         membership = TenantMembershipFactory(tenant=tenant, role="doctor", is_active=True)
 
         # Act / Assert
@@ -309,6 +326,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         membership = TenantMembershipFactory(tenant=tenant, is_active=True)
 
         new_password = "NuevaPassword2026$"
@@ -325,6 +343,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         membership = TenantMembershipFactory(tenant=tenant, is_active=True)
         # La contraseña original es "password-segura-123" (de UserFactory)
 
@@ -341,6 +360,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         target_user = UserFactory(is_active=True)
         membership = TenantMembershipFactory(
             user=target_user, tenant=tenant, is_active=True
@@ -358,6 +378,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         target_user = UserFactory(is_active=False)
         membership = TenantMembershipFactory(
             user=target_user, tenant=tenant, is_active=True
@@ -402,6 +423,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         target_user = UserFactory(email="bloqueado@clinic.test", is_active=True)
         # Establecer contraseña conocida para el login
         target_user.set_password("PasswordSegura2026$")
@@ -435,6 +457,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         target_user = UserFactory(is_active=True)
         membership = TenantMembershipFactory(
             user=target_user, tenant=tenant, is_active=True
@@ -453,6 +476,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         target_user = UserFactory(is_active=True)
         membership = TenantMembershipFactory(
             user=target_user, tenant=tenant, is_active=True
@@ -475,6 +499,7 @@ class TestMemberUpdate:
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
         membership = TenantMembershipFactory(tenant=tenant, is_active=True)
 
         # Act

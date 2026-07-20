@@ -16,6 +16,9 @@ Rutas:
     clinica/credenciales/<credential_id>/                DoctorCredentialDetailApi      [F2]
     clinica/equipo/                                      ClinicTeamMemberListCreateApi  [Fase 4]
     clinica/equipo/<member_id>/                          ClinicTeamMemberDetailApi      [Fase 4]
+    clinica/sucursales/                                   SucursalListCreateApi          [Fase 1]
+    clinica/sucursales/<sucursal_id>/                     SucursalDetailApi              [Fase 1]
+    clinica/membresias/<membership_id>/sucursales/        MembershipSucursalesApi        [Fase 4]
 """
 
 from django.urls import path
@@ -33,8 +36,11 @@ from apps.clinica.views import (
     DoctorProfileApi,
     DoctorUniversityDetailApi,
     DoctorUniversityListCreateApi,
+    MembershipSucursalesApi,
     PatientCategoryDetailApi,
     PatientCategoryListCreateApi,
+    SucursalDetailApi,
+    SucursalListCreateApi,
 )
 
 urlpatterns = [
@@ -115,5 +121,22 @@ urlpatterns = [
         "clinica/equipo/<uuid:member_id>/",
         ClinicTeamMemberDetailApi.as_view(),
         name="clinic-team-detail",
+    ),
+    # Sucursales (multi-sede — Fase 1)
+    path(
+        "clinica/sucursales/",
+        SucursalListCreateApi.as_view(),
+        name="sucursal-list-create",
+    ),
+    path(
+        "clinica/sucursales/<uuid:sucursal_id>/",
+        SucursalDetailApi.as_view(),
+        name="sucursal-detail",
+    ),
+    # Asignación de sucursales a un miembro (multi-sede — Fase 4)
+    path(
+        "clinica/membresias/<uuid:membership_id>/sucursales/",
+        MembershipSucursalesApi.as_view(),
+        name="membership-sucursales",
     ),
 ]

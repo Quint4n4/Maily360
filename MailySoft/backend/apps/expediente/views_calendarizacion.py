@@ -43,6 +43,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.clinica.sucursal_scope import resolve_active_sucursal, resolve_write_sucursal
 from apps.core.permissions import TreatmentPlanPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
@@ -364,9 +365,20 @@ class TreatmentPlanQuoteApi(TenantAPIView):
 
         actor_role: str = getattr(request, "active_role", "") or ""
 
+        # Multi-sede — Fase 3: la cotización se genera en la sede activa del
+        # request (header X-Sucursal-Id), cayendo a la sede predeterminada
+        # del tenant si no hay header. None si el tenant no tiene sucursales.
+        active_sucursal = resolve_active_sucursal(request)
+        sucursal = resolve_write_sucursal(
+            tenant=plan.tenant,
+            user=request.user,
+            sucursal_id=None,
+            active_sucursal_id=active_sucursal.id if active_sucursal is not None else None,
+        )
+
         try:
             quote = quote_create_from_treatment_plan(
-                plan=plan, user=request.user, actor_role=actor_role
+                plan=plan, user=request.user, actor_role=actor_role, sucursal=sucursal
             )
         except DjangoValidationError as exc:
             detail = exc.messages if hasattr(exc, "messages") else str(exc)
@@ -392,6 +404,14 @@ class TreatmentSessionScheduleApi(TenantAPIView):
     reglas de doctor/consultorio); ver services_calendarizacion.
     treatment_session_schedule para la decisión exacta de
     crear/reagendar/cancelar+crear.
+
+    Multi-sede (cierre de A8, docs/design/sucursales-hallazgos-seguridad.md):
+    POST valida la sede DESTINO (con `resolve_write_sucursal`, mismo helper
+    que el resto de la app) antes de tocar la cita, y el service valida la
+    sede ORIGEN de la cita ya agendada. DELETE valida la sede de la cita
+    ligada antes de cancelarla. Un actor acotado a una sede no puede
+    agendar/mover/cancelar citas de otra sede aunque conozca el `session_id`
+    (el estado de cuenta del paciente es compartido entre sedes por diseño).
     """
 
     permission_classes = [IsAuthenticated, TreatmentPlanPermission]
@@ -414,6 +434,33 @@ class TreatmentSessionScheduleApi(TenantAPIView):
         if not found:
             return _CONSULTORIO_NOT_FOUND
 
+        tenant = get_current_tenant()
+        if tenant is None:
+            return _NO_TENANT
+
+        # Multi-sede — cierre de A8 (docs/design/sucursales-hallazgos-
+        # seguridad.md): la sede DESTINO se resuelve con la MISMA precedencia
+        # que usa apps.agenda.services (consultorio elegido > sede activa del
+        # header > sede predeterminada del tenant) y se valida contra las
+        # sedes permitidas del actor ANTES de invocar el service. Esto cierra
+        # el hueco de `appointment_reschedule` (que hoy no valida sede) SIN
+        # reimplementar su lógica: reutiliza el mismo helper compartido que
+        # ya usa `TreatmentPlanQuoteApi` más arriba en este archivo.
+        active_sucursal = resolve_active_sucursal(request)
+        try:
+            resolve_write_sucursal(
+                tenant=tenant,
+                user=request.user,
+                sucursal_id=None,
+                consultorio_sucursal_id=(
+                    consultorio.sucursal_id if consultorio is not None else None
+                ),
+                active_sucursal_id=active_sucursal.id if active_sucursal is not None else None,
+            )
+        except DjangoValidationError as exc:
+            detail = exc.messages if hasattr(exc, "messages") else str(exc)
+            return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
+
         actor_role: str = getattr(request, "active_role", "") or ""
 
         try:
@@ -428,6 +475,7 @@ class TreatmentSessionScheduleApi(TenantAPIView):
                 scheduled_date=data["scheduled_date"],
                 scheduled_time=data["scheduled_time"],
                 duration_minutes=data["duration_minutes"],
+                active_sucursal_id=active_sucursal.id if active_sucursal is not None else None,
             )
         except DjangoValidationError as exc:
             detail = exc.messages if hasattr(exc, "messages") else str(exc)

@@ -4,17 +4,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createConsultorio,
   createDoctor,
+  createDoctorSchedule,
   deactivateConsultorio,
   deactivateDoctor,
+  deactivateDoctorSchedule,
   listConsultorios,
   listDoctors,
+  listDoctorSchedules,
   updateConsultorio,
   updateDoctor,
 } from '../api/personal'
+import { useSucursalActiva } from '../auth/SucursalContext'
 import type {
   ConsultorioCreateInput,
   ConsultorioUpdateInput,
   DoctorCreateInput,
+  DoctorScheduleCreateInput,
   DoctorUpdateInput,
 } from '../types/personal'
 
@@ -85,6 +90,41 @@ export function useDeactivateConsultorio() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deactivateConsultorio(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: personalRoot }),
+  })
+}
+
+// ── Horarios laborales del médico (por sede — multi-sede F2) ─────────────────
+
+/**
+ * Horarios de un médico. El backend filtra por la sede activa (header
+ * X-Sucursal-Id), así que la sede va en la queryKey: al cambiar de sucursal la
+ * lista se refetchea y NUNCA se sirve la caché de otra sede.
+ */
+export function useDoctorSchedules(doctorId: string | null) {
+  const { activeSucursalId } = useSucursalActiva()
+  return useQuery({
+    queryKey: ['personal', 'horarios', doctorId, activeSucursalId],
+    queryFn: () => listDoctorSchedules(doctorId as string),
+    enabled: !!doctorId,
+  })
+}
+
+/** Crea un bloque de horario (con su sede) para un médico. */
+export function useCreateDoctorSchedule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ doctorId, input }: { doctorId: string; input: DoctorScheduleCreateInput }) =>
+      createDoctorSchedule(doctorId, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: personalRoot }),
+  })
+}
+
+/** Desactiva (soft) un bloque de horario. */
+export function useDeactivateDoctorSchedule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (scheduleId: string) => deactivateDoctorSchedule(scheduleId),
     onSuccess: () => qc.invalidateQueries({ queryKey: personalRoot }),
   })
 }

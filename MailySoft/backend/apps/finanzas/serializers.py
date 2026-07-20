@@ -23,8 +23,27 @@ from apps.finanzas.models import (
 )
 
 
+class _SucursalNestedSerializer(serializers.Serializer):
+    """Representación mínima de la sucursal donde se generó el documento (Fase 3).
+
+    Puede ser None (dato legado sin backfillar, o tenant sin sucursales).
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    name = serializers.CharField(read_only=True)
+
+
 class ServiceConceptOutputSerializer(serializers.ModelSerializer):
-    """Salida de un concepto cobrable."""
+    """Salida de un concepto cobrable.
+
+    `sucursales` (multi-sede — decisión del dueño, 2026-07-16): lista
+    [{id, name}] de las sedes donde el servicio está disponible. VACÍA =
+    disponible en TODAS las sedes del tenant (convención del M2M vacío). El
+    PRECIO (`base_price`) es el mismo en todas las sedes; esto solo informa
+    disponibilidad.
+    """
+
+    sucursales = _SucursalNestedSerializer(many=True, read_only=True)
 
     class Meta:
         model = ServiceConcept
@@ -37,6 +56,7 @@ class ServiceConceptOutputSerializer(serializers.ModelSerializer):
             "sat_product_key",
             "sat_unit_key",
             "is_active",
+            "sucursales",
             "created_at",
         ]
         read_only_fields = fields
@@ -64,6 +84,7 @@ class QuoteOutputSerializer(serializers.ModelSerializer):
 
     items = QuoteItemOutputSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    sucursal = _SucursalNestedSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Quote
@@ -78,6 +99,7 @@ class QuoteOutputSerializer(serializers.ModelSerializer):
             "discount_total",
             "total",
             "items",
+            "sucursal",
             "created_at",
         ]
         read_only_fields = fields
@@ -115,14 +137,30 @@ class TreatmentPackageItemOutputSerializer(serializers.Serializer):
 
 
 class TreatmentPackageOutputSerializer(serializers.ModelSerializer):
-    """Detalle de un paquete de tratamientos, con sus líneas anidadas."""
+    """Detalle de un paquete de tratamientos, con sus líneas anidadas.
+
+    `sucursales` (multi-sede — decisión del dueño, 2026-07-16): lista
+    [{id, name}] de las sedes donde el paquete está disponible. VACÍA =
+    disponible en TODAS las sedes del tenant (convención del M2M vacío). El
+    PRECIO no cambia por sede; esto solo informa disponibilidad.
+    """
 
     price = serializers.SerializerMethodField()
     items = TreatmentPackageItemOutputSerializer(many=True, read_only=True)
+    sucursales = _SucursalNestedSerializer(many=True, read_only=True)
 
     class Meta:
         model = TreatmentPackage
-        fields = ["id", "name", "description", "is_active", "price", "items", "created_at"]
+        fields = [
+            "id",
+            "name",
+            "description",
+            "is_active",
+            "price",
+            "items",
+            "sucursales",
+            "created_at",
+        ]
         read_only_fields = fields
 
     def get_price(self, obj: TreatmentPackage) -> str:
@@ -135,6 +173,7 @@ class TreatmentPackageListItemSerializer(serializers.ModelSerializer):
     items_count = serializers.SerializerMethodField()
     sessions_total = serializers.SerializerMethodField()
     price = serializers.SerializerMethodField()
+    sucursales = _SucursalNestedSerializer(many=True, read_only=True)
 
     class Meta:
         model = TreatmentPackage
@@ -146,6 +185,7 @@ class TreatmentPackageListItemSerializer(serializers.ModelSerializer):
             "items_count",
             "sessions_total",
             "price",
+            "sucursales",
             "created_at",
         ]
         read_only_fields = fields
@@ -165,6 +205,7 @@ class ChargeOutputSerializer(serializers.ModelSerializer):
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    sucursal = _SucursalNestedSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Charge
@@ -181,6 +222,7 @@ class ChargeOutputSerializer(serializers.ModelSerializer):
             "status",
             "status_display",
             "issued_at",
+            "sucursal",
             "created_at",
         ]
         read_only_fields = fields
@@ -200,6 +242,7 @@ class PaymentOutputSerializer(serializers.ModelSerializer):
 
     allocations = PaymentAllocationOutputSerializer(many=True, read_only=True)
     method_display = serializers.CharField(source="get_method_display", read_only=True)
+    sucursal = _SucursalNestedSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Payment
@@ -213,6 +256,7 @@ class PaymentOutputSerializer(serializers.ModelSerializer):
             "received_at",
             "notes",
             "allocations",
+            "sucursal",
             "created_at",
         ]
         read_only_fields = fields
@@ -222,6 +266,7 @@ class CfdiDocumentOutputSerializer(serializers.ModelSerializer):
     """Salida de un comprobante CFDI."""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    sucursal = _SucursalNestedSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = CfdiDocument
@@ -249,6 +294,7 @@ class CfdiDocumentOutputSerializer(serializers.ModelSerializer):
             "cancellation_reason",
             "stamped_at",
             "cancelled_at",
+            "sucursal",
             "created_at",
         ]
         read_only_fields = fields

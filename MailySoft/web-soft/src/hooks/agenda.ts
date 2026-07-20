@@ -1,4 +1,13 @@
-/** Hooks de TanStack Query para Agenda (citas) y los catálogos de Personal. */
+/**
+ * Hooks de TanStack Query para Agenda (citas) y los catálogos de Personal.
+ *
+ * MULTI-SEDE (Fase 2): el backend filtra citas, bloqueos y disponibilidad por la
+ * sucursal activa (header `X-Sucursal-Id`, que ya manda src/lib/http.ts). Por eso
+ * el id de la sede activa forma parte de la QUERY KEY de todo lo que dependa de la
+ * sede: así, al cambiar de sucursal, TanStack Query trata los datos como otra
+ * entrada de caché (refetch) y jamás pinta el calendario de la sede anterior.
+ * El backend sigue siendo la autoridad del filtrado; la key solo cuida la caché.
+ */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -24,6 +33,7 @@ import {
   updateAppointmentType,
 } from '../api/agenda'
 import { listConsultorios, listDoctors } from '../api/personal'
+import { useSucursalActiva } from '../auth/SucursalContext'
 import { dayRangeUTC, toDayKey } from '../lib/fecha'
 import type {
   AgendaBlockCreateInput,
@@ -37,24 +47,27 @@ import type {
 
 export const agendaKeys = {
   all: ['agenda'] as const,
-  day: (dayKey: string) => ['agenda', 'citas', dayKey] as const,
+  /** Citas de un día EN UNA SEDE. La sede va en la key: al cambiarla, refetch. */
+  day: (dayKey: string, sucursalId: string | null) => ['agenda', 'citas', dayKey, sucursalId] as const,
 }
 
-/** Citas de un día (dayKey = 'yyyy-mm-dd' local). */
+/** Citas de un día (dayKey = 'yyyy-mm-dd' local) en la SEDE ACTIVA. */
 export function useAppointmentsForDay(dayKey: string) {
+  const { activeSucursalId } = useSucursalActiva()
   const { from, to } = dayRangeUTC(dayKey)
   return useQuery({
-    queryKey: agendaKeys.day(dayKey),
+    queryKey: agendaKeys.day(dayKey, activeSucursalId),
     queryFn: () => listAppointments({ date_from: from, date_to: to }),
   })
 }
 
 /** Citas de HOY en vivo (refresca cada 60s) para el vigilante de alertas de citas. */
 export function useTodayAppointmentsLive(enabled: boolean) {
+  const { activeSucursalId } = useSucursalActiva()
   const today = toDayKey(new Date())
   const { from, to } = dayRangeUTC(today)
   return useQuery({
-    queryKey: agendaKeys.day(today),
+    queryKey: agendaKeys.day(today, activeSucursalId),
     queryFn: () => listAppointments({ date_from: from, date_to: to }),
     enabled,
     refetchInterval: enabled ? 60_000 : false,
@@ -63,8 +76,9 @@ export function useTodayAppointmentsLive(enabled: boolean) {
 
 /** Citas de un paciente (para su expediente). Clave bajo ['agenda'] → se refresca al cambiar estados. */
 export function useAppointmentsForPatient(patientId: string | null) {
+  const { activeSucursalId } = useSucursalActiva()
   return useQuery({
-    queryKey: ['agenda', 'citas', 'paciente', patientId],
+    queryKey: ['agenda', 'citas', 'paciente', patientId, activeSucursalId],
     queryFn: () => listAppointments({ patient_id: patientId as string }),
     enabled: !!patientId,
   })
@@ -72,11 +86,15 @@ export function useAppointmentsForPatient(patientId: string | null) {
 
 // ── Eventos de agenda (reuniones / bloqueos) ────────────────────────────────
 
-/** Eventos (reuniones/bloqueos) de un día. Clave bajo ['agenda'] → se refresca junto con las citas. */
+/**
+ * Eventos (reuniones/bloqueos) de un día EN LA SEDE ACTIVA. Clave bajo ['agenda']
+ * → se refresca junto con las citas; la sede va en la key → refetch al cambiarla.
+ */
 export function useAgendaBlocksForDay(dayKey: string) {
+  const { activeSucursalId } = useSucursalActiva()
   const { from, to } = dayRangeUTC(dayKey)
   return useQuery({
-    queryKey: ['agenda', 'eventos', dayKey],
+    queryKey: ['agenda', 'eventos', dayKey, activeSucursalId],
     queryFn: () => listAgendaBlocks({ date_from: from, date_to: to }),
   })
 }
@@ -135,19 +153,25 @@ export function useDeleteAgendaItemNote() {
   })
 }
 
-/** Catálogo de doctores activos (cambia poco → staleTime alto). */
+/**
+ * Catálogo de doctores activos DE LA SEDE ACTIVA (el backend filtra por el header).
+ * La sede va en la key: con staleTime alto, sin ella se serviría la caché de la
+ * sede anterior y el modal ofrecería médicos de otra sucursal.
+ */
 export function useDoctors() {
+  const { activeSucursalId } = useSucursalActiva()
   return useQuery({
-    queryKey: ['personal', 'doctores', 'activos'],
+    queryKey: ['personal', 'doctores', 'activos', activeSucursalId],
     queryFn: () => listDoctors(true),
     staleTime: 5 * 60_000,
   })
 }
 
-/** Catálogo de consultorios activos (cambia poco → staleTime alto). */
+/** Catálogo de consultorios activos DE LA SEDE ACTIVA (mismo criterio que los doctores). */
 export function useConsultorios() {
+  const { activeSucursalId } = useSucursalActiva()
   return useQuery({
-    queryKey: ['personal', 'consultorios', 'activos'],
+    queryKey: ['personal', 'consultorios', 'activos', activeSucursalId],
     queryFn: () => listConsultorios(true),
     staleTime: 5 * 60_000,
   })
@@ -170,7 +194,13 @@ export function useCreateAppointmentSeries() {
   })
 }
 
-/** Intervalos ocupados de un médico/consultorio en un rango (para pintar disponibilidad). */
+/**
+ * Intervalos ocupados de un médico/consultorio en un rango (para pintar disponibilidad).
+ *
+ * OJO (regla de negocio F2): el MÉDICO ES GLOBAL entre sedes — si está ocupado en
+ * otra sucursal, el backend lo devuelve como ocupado también aquí. No asumas que
+ * otra sede está libre. La sede va en la key solo para no mezclar cachés.
+ */
 export function useAgendaDisponibilidad(params: {
   doctorId: string
   consultorioId: string | null
@@ -178,8 +208,9 @@ export function useAgendaDisponibilidad(params: {
   to: string // ISO
   enabled: boolean
 }) {
+  const { activeSucursalId } = useSucursalActiva()
   return useQuery({
-    queryKey: ['agenda', 'disponibilidad', params.doctorId, params.consultorioId, params.from, params.to],
+    queryKey: ['agenda', 'disponibilidad', params.doctorId, params.consultorioId, params.from, params.to, activeSucursalId],
     queryFn: () => getAgendaDisponibilidad({
       doctor_id: params.doctorId,
       consultorio_id: params.consultorioId,

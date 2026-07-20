@@ -13,13 +13,11 @@ Patrón: AAA. Todas tocan BD → fixture db.
 import uuid
 
 import pytest
-from django.core.exceptions import ObjectDoesNotExist
 
 from apps.core.tenant_context import set_current_tenant, set_tenant_context_active
 from apps.tenancy.models import TenantMembership
 from apps.tenancy.selectors import membership_get, membership_list
-from tests.factories import TenantFactory, TenantMembershipFactory, UserFactory
-
+from tests.factories import TenantFactory, TenantMembershipFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -104,8 +102,8 @@ class TestMembershipList:
         _activate_tenant(tenant)
 
         # Act — acceder a membership.user no debe generar queries extra
-        from django.test.utils import CaptureQueriesContext
         from django.db import connection
+        from django.test.utils import CaptureQueriesContext
 
         qs = list(membership_list())  # materializar
         with CaptureQueriesContext(connection) as ctx:
@@ -115,6 +113,33 @@ class TestMembershipList:
         assert len(ctx.captured_queries) == 0, (
             f"N+1 detectado: acceder a membership.user disparó {len(ctx.captured_queries)} queries. "
             "membership_list debe usar select_related('user')."
+        )
+
+    def test_membership_list_prefetches_sucursales_no_n_plus_1(self, db: None) -> None:
+        """Fase 4 — acceder a las sucursales asignadas de cada miembro no
+        dispara una query adicional por miembro (Prefetch en membership_list)."""
+        from apps.clinica.models import MembershipSucursal, Sucursal
+
+        # Arrange
+        tenant = TenantFactory()
+        members = TenantMembershipFactory.create_batch(3, tenant=tenant)
+        sucursal = Sucursal.all_objects.create(tenant=tenant, name="Centro", is_active=True)
+        for m in members:
+            MembershipSucursal.all_objects.create(tenant=tenant, membership=m, sucursal=sucursal)
+        _activate_tenant(tenant)
+
+        # Act — materializar y luego recorrer las sucursales de cada miembro
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        qs = list(membership_list())
+        with CaptureQueriesContext(connection) as ctx:
+            _ = [[ms.sucursal.name for ms in m.sucursales_asignadas.all()] for m in qs]
+
+        # Assert — 0 queries adicionales (ya prefetched)
+        assert len(ctx.captured_queries) == 0, (
+            f"N+1 detectado: recorrer sucursales_asignadas disparó "
+            f"{len(ctx.captured_queries)} queries. membership_list debe usar Prefetch."
         )
 
     def test_membership_list_empty_when_no_members(self, db: None) -> None:
@@ -190,12 +215,12 @@ class TestMembershipGet:
         result = membership_get(membership_id=membership.id)
 
         # Assert — acceder a user no dispara query adicional
-        from django.test.utils import CaptureQueriesContext
         from django.db import connection
+        from django.test.utils import CaptureQueriesContext
 
         with CaptureQueriesContext(connection) as ctx:
             _ = result.user.email
 
-        assert len(ctx.captured_queries) == 0, (
-            "membership_get debe usar select_related('user') para evitar N+1."
-        )
+        assert (
+            len(ctx.captured_queries) == 0
+        ), "membership_get debe usar select_related('user') para evitar N+1."

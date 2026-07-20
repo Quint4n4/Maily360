@@ -14,8 +14,9 @@ y _tenant_context (mock del TenantManager) igual que los tests de pacientes.
 Todos tocan BD → fixture db.
 """
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -111,7 +112,7 @@ class TestAuditEndpointAuth:
 
 
 class TestAuditEndpointAuthorizedRoles:
-    """Owner y admin pueden consultar la bitácora de su clínica."""
+    """Solo el owner puede consultar la bitácora de su clínica (multi-sede)."""
 
     def test_audit_endpoint_owner_can_view(self, db: None) -> None:
         """Owner recibe 200 al consultar la bitácora."""
@@ -127,8 +128,13 @@ class TestAuditEndpointAuthorizedRoles:
         # Assert
         assert response.status_code == 200
 
-    def test_audit_endpoint_admin_can_view(self, db: None) -> None:
-        """Admin recibe 200 al consultar la bitácora."""
+    def test_audit_endpoint_admin_now_forbidden(self, db: None) -> None:
+        """Multi-sede (2026-07-16): la bitácora es SOLO del dueño.
+
+        La bitácora no se acota por sede (AuditLog no tiene `sucursal`), así que
+        para no exponer la actividad de una sede a un admin de OTRA sede, ahora
+        SOLO el owner puede verla. Antes el admin recibía 200; ahora 403.
+        """
         # Arrange
         tenant = TenantFactory()
         AuditLogFactory(tenant=tenant)
@@ -139,7 +145,7 @@ class TestAuditEndpointAuthorizedRoles:
             response = client.get(AUDIT_URL)
 
         # Assert
-        assert response.status_code == 200
+        assert response.status_code == 403
 
     def test_audit_endpoint_returns_paginated_structure(self, db: None) -> None:
         """La respuesta incluye la estructura de paginación DRF."""
@@ -164,16 +170,16 @@ class TestAuditEndpointAuthorizedRoles:
 # ===========================================================================
 
 
-FORBIDDEN_ROLES = ["doctor", "nurse", "reception", "finance", "readonly"]
+# Multi-sede (2026-07-16): `admin` pasó a la lista de SIN acceso — la bitácora
+# es solo del dueño (ver TestAuditEndpointAuthorizedRoles).
+FORBIDDEN_ROLES = ["admin", "doctor", "nurse", "reception", "finance", "readonly"]
 
 
 class TestAuditEndpointForbiddenRoles:
-    """Todos los roles que no son owner/admin reciben 403."""
+    """Todos los roles que no son owner reciben 403."""
 
     @pytest.mark.parametrize("role", FORBIDDEN_ROLES)
-    def test_audit_endpoint_forbidden_for_role(
-        self, db: None, role: str
-    ) -> None:
+    def test_audit_endpoint_forbidden_for_role(self, db: None, role: str) -> None:
         """El rol indicado recibe 403 al intentar acceder a la bitácora."""
         # Arrange
         tenant = TenantFactory()
@@ -184,9 +190,9 @@ class TestAuditEndpointForbiddenRoles:
             response = client.get(AUDIT_URL)
 
         # Assert
-        assert response.status_code == 403, (
-            f"Se esperaba 403 para role='{role}', se obtuvo {response.status_code}"
-        )
+        assert (
+            response.status_code == 403
+        ), f"Se esperaba 403 para role='{role}', se obtuvo {response.status_code}"
 
 
 # ===========================================================================
@@ -198,9 +204,7 @@ class TestAuditEndpointReadOnly:
     """La bitácora no acepta POST, PATCH ni DELETE."""
 
     @pytest.mark.parametrize("method", ["post", "patch", "delete", "put"])
-    def test_audit_endpoint_write_methods_not_allowed(
-        self, db: None, method: str
-    ) -> None:
+    def test_audit_endpoint_write_methods_not_allowed(self, db: None, method: str) -> None:
         """Métodos de escritura reciben 405 (Method Not Allowed) o 403."""
         # Arrange
         tenant = TenantFactory()
@@ -213,8 +217,7 @@ class TestAuditEndpointReadOnly:
 
         # Assert — 405 o 403 (no 200/201)
         assert response.status_code in (403, 405), (
-            f"Método {method.upper()} debería ser rechazado, "
-            f"se obtuvo {response.status_code}"
+            f"Método {method.upper()} debería ser rechazado, " f"se obtuvo {response.status_code}"
         )
 
 
@@ -248,13 +251,11 @@ class TestAuditEndpointCrossTenantIsolation:
         ids_in_response = [str(r["id"]) for r in results]
 
         assert str(log_a.pk) in ids_in_response
-        assert str(log_b.pk) not in ids_in_response, (
-            "BUG: el owner de clínica A puede ver logs de clínica B (fuga cross-tenant)"
-        )
+        assert (
+            str(log_b.pk) not in ids_in_response
+        ), "BUG: el owner de clínica A puede ver logs de clínica B (fuga cross-tenant)"
 
-    def test_audit_endpoint_owner_of_b_cannot_see_logs_of_a(
-        self, db: None
-    ) -> None:
+    def test_audit_endpoint_owner_of_b_cannot_see_logs_of_a(self, db: None) -> None:
         """Owner de clínica B no ve logs de clínica A (prueba inversa)."""
         # Arrange
         tenant_a = TenantFactory()
@@ -275,9 +276,9 @@ class TestAuditEndpointCrossTenantIsolation:
         results = data.get("results", data) if isinstance(data, dict) else data
         ids_in_response = [str(r["id"]) for r in results]
 
-        assert str(log_a.pk) not in ids_in_response, (
-            "BUG: el owner de clínica B puede ver logs de clínica A (fuga cross-tenant)"
-        )
+        assert (
+            str(log_a.pk) not in ids_in_response
+        ), "BUG: el owner de clínica B puede ver logs de clínica A (fuga cross-tenant)"
 
 
 # ===========================================================================
@@ -325,9 +326,7 @@ class TestAuditEndpointQueryParams:
         assert len(results) == 1
         assert results[0]["resource_type"] == "Patient"
 
-    def test_audit_endpoint_malformed_actor_id_silently_ignored(
-        self, db: None
-    ) -> None:
+    def test_audit_endpoint_malformed_actor_id_silently_ignored(self, db: None) -> None:
         """?actor_id=not-a-uuid se ignora silenciosamente y devuelve todos los logs.
 
         Cubre la rama except ValueError del parseo de UUID en la vista (líneas 51-54).
@@ -346,9 +345,7 @@ class TestAuditEndpointQueryParams:
         # Assert — 200, no 400 ni 500
         assert response.status_code == 200
 
-    def test_audit_endpoint_malformed_resource_id_silently_ignored(
-        self, db: None
-    ) -> None:
+    def test_audit_endpoint_malformed_resource_id_silently_ignored(self, db: None) -> None:
         """?resource_id=bad devuelve 200 ignorando el parámetro inválido.
 
         Cubre la rama except ValueError del parseo de resource_id (líneas 59-62).
@@ -365,9 +362,7 @@ class TestAuditEndpointQueryParams:
         # Assert
         assert response.status_code == 200
 
-    def test_audit_endpoint_malformed_date_silently_ignored(
-        self, db: None
-    ) -> None:
+    def test_audit_endpoint_malformed_date_silently_ignored(self, db: None) -> None:
         """?date_from=noesunafecha devuelve 200 ignorando el parámetro inválido.
 
         Cubre la rama except ValueError del parseo de fechas (líneas 73, 76-78).

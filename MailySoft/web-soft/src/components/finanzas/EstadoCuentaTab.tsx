@@ -19,14 +19,27 @@ import {
   statementPdfFilename,
 } from '../../lib/exportEstadoCuenta'
 import PatientPicker from './PatientPicker'
+import { nombreSede } from './SedeIndicador'
+import { useSucursalActiva } from '../../auth/SucursalContext'
 import VisorPdf from '../VisorPdf'
 
 const GOLD = '#C9A227'
 
+/**
+ * Estado de cuenta del paciente — COMPARTIDO ENTRE SEDES (multi-sede, Fase 3).
+ *
+ * A diferencia de la caja/reportes (privados de cada sucursal), la cuenta del
+ * paciente incluye TODOS sus movimientos, sin importar dónde se le atendió: el
+ * backend NO la filtra por el header `X-Sucursal-Id`. La columna "Sede" muestra
+ * dónde se generó cada cargo/pago.
+ */
 export default function EstadoCuentaTab() {
   const [patient, setPatient] = useState<PatientLite | null>(null)
   const [verPdf, setVerPdf] = useState(false)
   const statement = useStatement(patient?.id ?? null)
+  // Solo para saber si tiene sentido explicar lo de "todas las sucursales".
+  const { sucursales } = useSucursalActiva()
+  const multiSede = sucursales.length > 1
 
   return (
     <div className="space-y-4">
@@ -50,6 +63,13 @@ export default function EstadoCuentaTab() {
               <p className="text-sm" style={{ color: '#7A756C' }}>
                 {statement.data.patient.full_name} · Exp. {statement.data.patient.record_number}
               </p>
+              {multiSede && (
+                <p className="text-xs mt-1" style={{ color: '#9A958C' }}>
+                  La cuenta del paciente es <strong>única para toda la clínica</strong>: incluye sus
+                  cargos y pagos de <strong>todas las sucursales</strong>, sin importar la sede que
+                  tengas seleccionada.
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <button className="btn-secondary" onClick={() => setVerPdf(true)}>
@@ -105,6 +125,7 @@ export default function EstadoCuentaTab() {
                 <tr className="text-left" style={{ color: '#9A958C' }}>
                   <th className="py-2 font-medium">Fecha</th>
                   <th className="py-2 font-medium">Concepto</th>
+                  <th className="py-2 font-medium">Sede</th>
                   <th className="py-2 font-medium text-right">Cargo</th>
                   <th className="py-2 font-medium text-right">Pago</th>
                   <th className="py-2 font-medium text-right">Saldo</th>
@@ -115,6 +136,7 @@ export default function EstadoCuentaTab() {
                   <tr key={m.id} className="border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }}>
                     <td className="py-2" style={{ color: '#7A756C' }}>{formatDate(m.date)}</td>
                     <td className="py-2" style={{ color: '#2A241B' }}>{m.description}</td>
+                    <td className="py-2" style={{ color: '#7A756C' }}>{nombreSede(m.sucursal)}</td>
                     <td className="py-2 text-right" style={{ color: '#7C3AED' }}>
                       {m.charge ? formatMoney(m.charge) : ''}
                     </td>
@@ -128,7 +150,7 @@ export default function EstadoCuentaTab() {
                 ))}
                 {statement.data.movements.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center" style={{ color: '#9A958C' }}>
+                    <td colSpan={6} className="py-8 text-center" style={{ color: '#9A958C' }}>
                       Este paciente no tiene movimientos.
                     </td>
                   </tr>

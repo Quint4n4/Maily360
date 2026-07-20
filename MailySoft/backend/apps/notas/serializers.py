@@ -24,6 +24,13 @@ class _AuthorNestedSerializer(serializers.Serializer):
         return getattr(obj, "full_name", "") or ""
 
 
+class _SucursalNestedSerializer(serializers.Serializer):
+    """Representación mínima de la sucursal de un aviso (puede ser null = todas las sedes)."""
+
+    id = serializers.UUIDField(read_only=True)
+    name = serializers.CharField(read_only=True)
+
+
 class NoteOutputSerializer(serializers.ModelSerializer):
     """Serializer de salida para Note.
 
@@ -32,6 +39,10 @@ class NoteOutputSerializer(serializers.ModelSerializer):
         scope           Valor interno ('personal', 'role', 'all').
         scope_display   Etiqueta legible del scope.
         target_role     Rol destinatario (vacío si scope != role).
+        sucursal        Objeto mínimo {id, name} de la sede del aviso, o
+                         null = "todas las sedes" (multi-sede — cierre de
+                         hueco 2026-07-16). Siempre null en notas personales.
+        is_important    Bool. Aviso destacado (solo lo marca el owner).
         is_task         Bool.
         done            Bool.
         remind_at       DateTime UTC o null.
@@ -43,6 +54,7 @@ class NoteOutputSerializer(serializers.ModelSerializer):
 
     author = _AuthorNestedSerializer(read_only=True)
     scope_display = serializers.CharField(source="get_scope_display", read_only=True)
+    sucursal = _SucursalNestedSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Note
@@ -54,6 +66,8 @@ class NoteOutputSerializer(serializers.ModelSerializer):
             "scope",
             "scope_display",
             "target_role",
+            "sucursal",
+            "is_important",
             "is_task",
             "done",
             "remind_at",

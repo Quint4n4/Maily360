@@ -21,7 +21,6 @@ Patrón: AAA. Todas tocan BD → fixture db.
 """
 
 import io
-import uuid as uuid_module
 from typing import Any
 
 import pytest
@@ -29,8 +28,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 from rest_framework.test import APIClient
 
-from tests.factories import TenantFactory, TenantMembershipFactory, UserFactory
 from apps.tenancy.tests.conftest import role_context
+from tests.factories import TenantFactory, TenantMembershipFactory, UserFactory
 
 # ---------------------------------------------------------------------------
 # URLs
@@ -129,9 +128,7 @@ class TestMemberListApi:
         "role",
         ["doctor", "nurse", "reception", "finance", "readonly"],
     )
-    def test_list_members_returns_403_for_non_admin_roles(
-        self, db: None, role: str
-    ) -> None:
+    def test_list_members_returns_403_for_non_admin_roles(self, db: None, role: str) -> None:
         """Roles no-admin (doctor, nurse, reception, finance, readonly) reciben 403."""
         # Arrange
         tenant = TenantFactory()
@@ -142,9 +139,9 @@ class TestMemberListApi:
             response = client.get(LIST_URL)
 
         # Assert
-        assert response.status_code == 403, (
-            f"GET /miembros/ con rol '{role}' esperaba 403, obtuvo {response.status_code}."
-        )
+        assert (
+            response.status_code == 403
+        ), f"GET /miembros/ con rol '{role}' esperaba 403, obtuvo {response.status_code}."
 
     def test_list_members_returns_401_without_auth(self, db: None) -> None:
         """Sin token devuelve 401."""
@@ -178,9 +175,9 @@ class TestMemberListApi:
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
-        assert len(data) == 3, (
-            f"Fuga cross-tenant: se obtuvieron {len(data)} miembros en lugar de 3 de A."
-        )
+        assert (
+            len(data) == 3
+        ), f"Fuga cross-tenant: se obtuvieron {len(data)} miembros en lugar de 3 de A."
 
     def test_list_members_response_includes_expected_fields(self, db: None) -> None:
         """Cada elemento de la lista incluye id, user, role, is_blocked."""
@@ -199,6 +196,50 @@ class TestMemberListApi:
         assert "user" in item
         assert "role" in item
         assert "is_blocked" in item
+        assert "sucursales" in item
+
+    def test_list_members_includes_assigned_sucursales(self, db: None) -> None:
+        """Fase 4 — el listado del equipo trae las sedes asignadas de cada miembro.
+
+        Es el endpoint que EquipoTab.tsx consume para mostrar qué sucursal(es)
+        administra cada usuario (apps.clinica.models.MembershipSucursal).
+        """
+        from apps.clinica.models import MembershipSucursal, Sucursal
+
+        # Arrange
+        tenant = TenantFactory()
+        client, _ = _make_member_client(tenant, "owner")
+        target = TenantMembershipFactory(tenant=tenant, role="admin", is_active=True)
+        sucursal = Sucursal.all_objects.create(
+            tenant=tenant, name="Sucursal Centro", is_active=True
+        )
+        MembershipSucursal.all_objects.create(tenant=tenant, membership=target, sucursal=sucursal)
+
+        # Act
+        with role_context(tenant, "owner"):
+            response = client.get(LIST_URL)
+
+        # Assert
+        assert response.status_code == 200
+        items = {item["id"]: item for item in response.json()}
+        assert items[str(target.id)]["sucursales"] == [
+            {"id": str(sucursal.id), "name": "Sucursal Centro"}
+        ]
+
+    def test_list_members_no_sucursales_returns_empty_list(self, db: None) -> None:
+        """Un miembro sin ninguna sede asignada trae sucursales=[] (no null, no error)."""
+        # Arrange
+        tenant = TenantFactory()
+        client, _ = _make_member_client(tenant, "owner")
+        target = TenantMembershipFactory(tenant=tenant, role="reception", is_active=True)
+
+        # Act
+        with role_context(tenant, "owner"):
+            response = client.get(LIST_URL)
+
+        # Assert
+        items = {item["id"]: item for item in response.json()}
+        assert items[str(target.id)]["sucursales"] == []
 
 
 # ===========================================================================
@@ -333,9 +374,7 @@ class TestMemberPatchApi:
 
         # Act
         with role_context(tenant, "owner"):
-            response = client.patch(
-                _detail_url(target.id), data={"role": "nurse"}, format="json"
-            )
+            response = client.patch(_detail_url(target.id), data={"role": "nurse"}, format="json")
 
         # Assert
         assert response.status_code == 200
@@ -382,9 +421,7 @@ class TestMemberPatchApi:
         target_user = UserFactory(email="reset@clinic.test")
         target_user.set_password("OldPassword123!")
         target_user.save()
-        target = TenantMembershipFactory(
-            user=target_user, tenant=tenant, is_active=True
-        )
+        target = TenantMembershipFactory(user=target_user, tenant=tenant, is_active=True)
         new_password = "NuevaPassword2026$$"
 
         # Act
@@ -405,13 +442,11 @@ class TestMemberPatchApi:
             data={"email": "reset@clinic.test", "password": new_password},
             format="json",
         )
-        assert login_response.status_code == 200, (
-            f"Login con nueva contraseña falló: {login_response.json()}"
-        )
+        assert (
+            login_response.status_code == 200
+        ), f"Login con nueva contraseña falló: {login_response.json()}"
 
-    def test_patch_blocked_true_deactivates_user_and_sets_is_blocked(
-        self, db: None
-    ) -> None:
+    def test_patch_blocked_true_deactivates_user_and_sets_is_blocked(self, db: None) -> None:
         """blocked=True → is_blocked=True en la respuesta; user.is_active=False en BD."""
         from django.contrib.auth import get_user_model
 
@@ -421,15 +456,11 @@ class TestMemberPatchApi:
         tenant = TenantFactory()
         client, actor_user = _make_member_client(tenant, "owner")
         target_user = UserFactory(is_active=True)
-        target = TenantMembershipFactory(
-            user=target_user, tenant=tenant, is_active=True
-        )
+        target = TenantMembershipFactory(user=target_user, tenant=tenant, is_active=True)
 
         # Act
         with role_context(tenant, "owner"):
-            response = client.patch(
-                _detail_url(target.id), data={"blocked": True}, format="json"
-            )
+            response = client.patch(_detail_url(target.id), data={"blocked": True}, format="json")
 
         # Assert — respuesta
         assert response.status_code == 200
@@ -485,9 +516,7 @@ class TestMemberPatchApi:
 
         # Act — contexto de A, intentando editar membresía de B
         with role_context(tenant_a, "owner"):
-            response = client.patch(
-                _detail_url(member_b.id), data={"role": "nurse"}, format="json"
-            )
+            response = client.patch(_detail_url(member_b.id), data={"role": "nurse"}, format="json")
 
         # Assert — 404, no 403 (no revelar existencia)
         assert response.status_code == 404, (
@@ -504,9 +533,7 @@ class TestMemberPatchApi:
 
         # Act
         with role_context(tenant, "doctor"):
-            response = client.patch(
-                _detail_url(target.id), data={"role": "nurse"}, format="json"
-            )
+            response = client.patch(_detail_url(target.id), data={"role": "nurse"}, format="json")
 
         # Assert
         assert response.status_code == 403
@@ -530,9 +557,7 @@ class TestMemberAvatarApi:
         tenant = TenantFactory()
         client, _ = _make_member_client(tenant, "owner")
         target_user = UserFactory()
-        target = TenantMembershipFactory(
-            user=target_user, tenant=tenant, is_active=True
-        )
+        target = TenantMembershipFactory(user=target_user, tenant=tenant, is_active=True)
 
         # Act
         with role_context(tenant, "owner"):
@@ -605,9 +630,7 @@ class TestMemberAvatarApi:
             "BUG CRÍTICO: validate_avatar debe atrapar TODAS las excepciones de Pillow."
         )
 
-    def test_upload_gif_returns_400(
-        self, db: None, tmp_path: "Any", settings: "Any"
-    ) -> None:
+    def test_upload_gif_returns_400(self, db: None, tmp_path: "Any", settings: "Any") -> None:
         """GIF (formato no permitido) devuelve 400."""
         settings.MEDIA_ROOT = str(tmp_path)
 
@@ -641,9 +664,7 @@ class TestMemberAvatarApi:
 
         # Act
         with role_context(tenant, "owner"):
-            response = client.post(
-                _avatar_url(target.id), data={}, format="multipart"
-            )
+            response = client.post(_avatar_url(target.id), data={}, format="multipart")
 
         # Assert
         assert response.status_code == 400

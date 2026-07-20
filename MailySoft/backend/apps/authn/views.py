@@ -366,6 +366,9 @@ class MeApi(APIView):
 
     def get(self, request: Request) -> Response:
         """Retorna el perfil del usuario autenticado."""
+        # Imports diferidos para evitar dependencia circular a nivel de módulo
+        # (mismo patrón que doctor_get_for_user, ver docstring de la clase).
+        from apps.clinica.sucursal_scope import allowed_sucursales
         from apps.personal.selectors import doctor_get_for_user
 
         user: User = request.user  # type: ignore[assignment]
@@ -400,7 +403,17 @@ class MeApi(APIView):
             if doctor is not None:
                 doctor_id = doctor.id
 
-        # 5. Serializar y devolver.
+        # 5. Resolver las sucursales permitidas del usuario en el tenant activo
+        #    (multi-sede — Fase 1): inicializa el selector de sucursal del
+        #    frontend. Lista vacía si no hay tenant activo.
+        sucursales_data: list[dict[str, object]] = []
+        if active_tenant is not None:
+            sucursales_data = [
+                {"id": str(s.id), "name": s.name, "is_default": s.is_default}
+                for s in allowed_sucursales(user=user, tenant=active_tenant)
+            ]
+
+        # 6. Serializar y devolver.
         serializer = MeSerializer(
             user,
             context={
@@ -408,6 +421,7 @@ class MeApi(APIView):
                 "active_membership": active_membership,
                 "memberships": memberships,
                 "doctor_id": doctor_id,
+                "sucursales": sucursales_data,
             },
         )
         return Response(serializer.data)

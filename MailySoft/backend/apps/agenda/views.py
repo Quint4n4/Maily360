@@ -62,6 +62,7 @@ from apps.agenda.services import (
     appointment_type_update,
     appointment_update,
 )
+from apps.clinica.sucursal_scope import resolve_active_sucursal, sucursal_scope_ids
 from apps.core.permissions import (
     AgendaConfigPermission,
     AgendaItemNotePermission,
@@ -71,6 +72,60 @@ from apps.core.permissions import (
 )
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+
+# ---------------------------------------------------------------------------
+# Helpers de scoping por sucursal para DETALLE/ACCIÓN por id (Clúster A —
+# ver docs/design/sucursales-hallazgos-seguridad.md, hallazgos A2/A3).
+#
+# REGLA de consistencia: el detalle/acción por id debe acotar EXACTAMENTE
+# igual que su listado (mismo `sucursal_scope_ids(request)`), para que "si
+# no lo veo en el listado, no lo puedo tocar por id". Antes de este fix, los
+# selectors `*_get` solo filtraban por tenant — un admin acotado a una sede
+# podía editar/cancelar/mover/reactivar (o borrar un bloqueo) de OTRA sede
+# del mismo tenant con solo conocer el id (obtenible del estado de cuenta
+# compartido del paciente).
+# ---------------------------------------------------------------------------
+
+
+def _appointment_get_or_404(
+    request: Request, appointment_id: uuid.UUID
+) -> "tuple[Appointment | None, Response | None]":
+    """Recupera una cita por id, acotada al alcance de sucursales del actor.
+
+    Mismo criterio que AppointmentListCreateApi.get (`sucursal_scope_ids` →
+    `appointment_get(sucursal_ids=...)`): si la cita existe en el tenant
+    pero cae fuera del alcance de sucursales del actor, 404 (nunca 403; no
+    se revela su existencia). Usado por TODOS los endpoints de detalle/
+    acción de cita (detalle, patch, cancelar, cambiar estado, reagendar,
+    reactivar, notas) para que ninguno quede desalineado del listado.
+    """
+    try:
+        appointment = appointment_get(
+            appointment_id=appointment_id, sucursal_ids=sucursal_scope_ids(request)
+        )
+        return appointment, None
+    except Appointment.DoesNotExist:
+        return None, Response(
+            {"detail": "Cita no encontrada."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+
+def _agenda_block_get_or_404(
+    request: Request, block_id: uuid.UUID
+) -> "tuple[AgendaBlock | None, Response | None]":
+    """Recupera un evento de agenda por id, acotado al alcance de sucursales.
+
+    Mismo criterio que AgendaBlockListCreateApi.get (`sucursal_scope_ids` →
+    `agenda_block_get(sucursal_ids=...)`): un bloqueo/reunión que cae fuera
+    del alcance del actor no existe para él (404). Usado por el detalle
+    (PATCH/DELETE) y por las notas del hilo de un evento.
+    """
+    try:
+        block = agenda_block_get(block_id=block_id, sucursal_ids=sucursal_scope_ids(request))
+        return block, None
+    except AgendaBlock.DoesNotExist:
+        return None, Response({"detail": "Evento no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +138,9 @@ class _NewPatientInputSerializer(serializers.Serializer):
 
     first_name = serializers.CharField(max_length=100)
     paternal_surname = serializers.CharField(max_length=100)
-    maternal_surname = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    maternal_surname = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, default=""
+    )
     phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
 
 
@@ -118,10 +175,16 @@ class AppointmentListCreateApi(TenantAPIView):
         starts_at = serializers.DateTimeField()
         ends_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
         reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
-        specialty = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+        specialty = serializers.CharField(
+            max_length=100, required=False, allow_blank=True, default=""
+        )
         notes = serializers.CharField(required=False, allow_blank=True, default="")
         # C-3: cotización vinculada. Debe estar ACCEPTED y ser del mismo paciente.
         quote_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+        # Multi-sede — Fase 2: sucursal EXPLÍCITA (opcional). Si no viene, se
+        # resuelve del consultorio, de la sede activa del request o de la
+        # predeterminada del tenant (ver appointment_create).
+        sucursal_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
         def validate(self, attrs: dict) -> dict:
             tiene_id = bool(attrs.get("patient_id"))
@@ -146,22 +209,29 @@ class AppointmentListCreateApi(TenantAPIView):
             status:         Estado de la cita (scheduled|confirmed|arrived|...).
             date_from:      ISO datetime UTC inicio de rango.
             date_to:        ISO datetime UTC fin de rango.
+
+        Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+        alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+        header X-Sucursal-Id. Un usuario limitado a una sede ya NO puede ver
+        citas de otra sede con solo omitir el header; el dueño (alcance
+        total) sigue viendo todo (consolidado) cuando no manda header.
         """
+
         # Parsear filtros de query params
         class _FilterSerializer(serializers.Serializer):
             doctor_id = serializers.UUIDField(required=False)
             patient_id = serializers.UUIDField(required=False)
             consultorio_id = serializers.UUIDField(required=False)
-            status = serializers.ChoiceField(
-                choices=Appointment.Status.choices, required=False
-            )
+            status = serializers.ChoiceField(choices=Appointment.Status.choices, required=False)
             date_from = serializers.DateTimeField(required=False)
             date_to = serializers.DateTimeField(required=False)
 
         filter_s = _FilterSerializer(data=request.query_params)
         filter_s.is_valid(raise_exception=True)
 
-        qs = appointment_list(**filter_s.validated_data)
+        sucursal_ids = sucursal_scope_ids(request)
+
+        qs = appointment_list(**filter_s.validated_data, sucursal_ids=sucursal_ids)
 
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
@@ -190,6 +260,11 @@ class AppointmentListCreateApi(TenantAPIView):
         data = dict(s.validated_data)
         new_patient = data.pop("new_patient", None)
         patient_id = data.pop("patient_id", None)
+
+        # Multi-sede — Fase 2: la sede activa del request (header X-Sucursal-Id)
+        # es un candidato más en la resolución de sucursal_id (ver appointment_create).
+        active_sucursal = resolve_active_sucursal(request)
+        data["active_sucursal_id"] = active_sucursal.id if active_sucursal is not None else None
 
         try:
             if new_patient:
@@ -251,7 +326,9 @@ class AppointmentSeriesCreateApi(TenantAPIView):
         starts_at = serializers.DateTimeField()
         ends_at = serializers.DateTimeField()
         reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
-        specialty = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+        specialty = serializers.CharField(
+            max_length=100, required=False, allow_blank=True, default=""
+        )
         notes = serializers.CharField(required=False, allow_blank=True, default="")
         # --- recurrencia: regla (weekly/biweekly/monthly + count|until)
         #     O lista explícita de fechas (Personalizado / vista previa editada) ---
@@ -268,6 +345,8 @@ class AppointmentSeriesCreateApi(TenantAPIView):
             required=False, allow_null=True, default=None, min_value=2, max_value=52
         )
         until = serializers.DateField(required=False, allow_null=True, default=None)
+        # Multi-sede — Fase 2: sucursal EXPLÍCITA (opcional), se propaga a toda la serie.
+        sucursal_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
         def validate(self, attrs: dict) -> dict:
             tiene_id = bool(attrs.get("patient_id"))
@@ -304,6 +383,9 @@ class AppointmentSeriesCreateApi(TenantAPIView):
 
         data = dict(s.validated_data)
         new_patient = data.pop("new_patient", None)
+
+        active_sucursal = resolve_active_sucursal(request)
+        data["active_sucursal_id"] = active_sucursal.id if active_sucursal is not None else None
 
         try:
             result = appointment_create_series(
@@ -344,6 +426,15 @@ class AgendaDisponibilidadApi(TenantAPIView):
     Devuelve los intervalos OCUPADOS del médico/consultorio en el rango (citas
     activas + reuniones/bloqueos aplicables). El frontend lo usa para pintar en
     rojo los días/horarios que chocan al armar una serie de citas.
+
+    Header X-Sucursal-Id (multi-sede — Fase 2): acota los bloqueos "de
+    sucursal" a la sede activa. Las citas del médico SIEMPRE son globales
+    entre sedes (ver agenda_busy_intervals) — el header nunca las filtra.
+
+    Multi-sede — Fase 3 (seguridad, Objetivo A): sin header, se acota al
+    alcance de sucursales del usuario (`sucursal_scope_ids`) en lugar de "sin
+    filtro" — un usuario limitado a una sede ya no considera ocupados los
+    bloqueos "de sucursal" de sedes que no le corresponden.
     """
 
     permission_classes = [IsAuthenticated, AppointmentPermission]
@@ -360,7 +451,9 @@ class AgendaDisponibilidadApi(TenantAPIView):
         filter_s = _FilterSerializer(data=request.query_params)
         filter_s.is_valid(raise_exception=True)
 
-        intervalos = agenda_busy_intervals(**filter_s.validated_data)
+        sucursal_ids = sucursal_scope_ids(request)
+
+        intervalos = agenda_busy_intervals(**filter_s.validated_data, sucursal_ids=sucursal_ids)
         return Response(
             {
                 "busy": [
@@ -399,21 +492,14 @@ class AppointmentDetailApi(TenantAPIView):
         notes = serializers.CharField(required=False, allow_blank=True)
 
     def _get_appointment_or_404(
-        self, appointment_id: uuid.UUID
+        self, request: Request, appointment_id: uuid.UUID
     ) -> "tuple[Appointment | None, Response | None]":
-        """Recupera la cita via selector o devuelve 404."""
-        try:
-            appointment = appointment_get(appointment_id=appointment_id)
-            return appointment, None
-        except Appointment.DoesNotExist:
-            return None, Response(
-                {"detail": "Cita no encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        """Recupera la cita acotada por sucursal (ver `_appointment_get_or_404`), o 404."""
+        return _appointment_get_or_404(request, appointment_id)
 
     def get(self, request: Request, appointment_id: uuid.UUID) -> Response:
         """Retorna el detalle de una cita."""
-        appointment, error = self._get_appointment_or_404(appointment_id)
+        appointment, error = self._get_appointment_or_404(request, appointment_id)
         if error is not None:
             return error
 
@@ -424,7 +510,7 @@ class AppointmentDetailApi(TenantAPIView):
 
         NO acepta status (use /estado/), ni horario (use /reagendar/).
         """
-        appointment, error = self._get_appointment_or_404(appointment_id)
+        appointment, error = self._get_appointment_or_404(request, appointment_id)
         if error is not None:
             return error
 
@@ -453,7 +539,7 @@ class AppointmentDetailApi(TenantAPIView):
 
     def delete(self, request: Request, appointment_id: uuid.UUID) -> Response:
         """Cancela una cita. NO la borra — llama appointment_change_status(CANCELLED)."""
-        appointment, error = self._get_appointment_or_404(appointment_id)
+        appointment, error = self._get_appointment_or_404(request, appointment_id)
         if error is not None:
             return error
 
@@ -509,13 +595,9 @@ class AppointmentChangeStatusApi(TenantAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        try:
-            appointment = appointment_get(appointment_id=appointment_id)
-        except Appointment.DoesNotExist:
-            return Response(
-                {"detail": "Cita no encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        appointment, error = _appointment_get_or_404(request, appointment_id)
+        if error is not None:
+            return error
 
         try:
             updated = appointment_change_status(
@@ -557,13 +639,9 @@ class AppointmentRescheduleApi(TenantAPIView):
         s = self.InputSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        try:
-            appointment = appointment_get(appointment_id=appointment_id)
-        except Appointment.DoesNotExist:
-            return Response(
-                {"detail": "Cita no encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        appointment, error = _appointment_get_or_404(request, appointment_id)
+        if error is not None:
+            return error
 
         try:
             updated = appointment_reschedule(
@@ -595,10 +673,9 @@ class AppointmentReactivateApi(TenantAPIView):
     permission_classes = [IsAuthenticated, AppointmentPermission]
 
     def post(self, request: Request, appointment_id: uuid.UUID) -> Response:
-        try:
-            appointment = appointment_get(appointment_id=appointment_id)
-        except Appointment.DoesNotExist:
-            return Response({"detail": "Cita no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        appointment, error = _appointment_get_or_404(request, appointment_id)
+        if error is not None:
+            return error
 
         try:
             appointment = appointment_reactivate(appointment=appointment, user=request.user)
@@ -814,9 +891,18 @@ class AgendaBlockListCreateApi(TenantAPIView):
         ends_at = serializers.DateTimeField()
         all_day = serializers.BooleanField(required=False, default=False)
         notes = serializers.CharField(required=False, allow_blank=True, default="")
+        # Multi-sede — Fase 2: sucursal EXPLÍCITA (opcional). Si no viene, se
+        # resuelve del consultorio, de la sede activa del request o de la
+        # predeterminada del tenant (ver agenda_block_create).
+        sucursal_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
     def get(self, request: Request) -> Response:
-        """Lista de eventos del tenant que solapan el rango [date_from, date_to]."""
+        """Lista de eventos del tenant que solapan el rango [date_from, date_to].
+
+        Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+        alcance de sucursales del usuario (`sucursal_scope_ids`, ver
+        `agenda_block_list`), con o sin header X-Sucursal-Id.
+        """
 
         class _FilterSerializer(serializers.Serializer):
             date_from = serializers.DateTimeField(required=False)
@@ -824,7 +910,10 @@ class AgendaBlockListCreateApi(TenantAPIView):
 
         filter_s = _FilterSerializer(data=request.query_params)
         filter_s.is_valid(raise_exception=True)
-        qs = agenda_block_list(**filter_s.validated_data)
+
+        sucursal_ids = sucursal_scope_ids(request)
+
+        qs = agenda_block_list(**filter_s.validated_data, sucursal_ids=sucursal_ids)
         return Response(AgendaBlockOutputSerializer(qs, many=True).data)
 
     def post(self, request: Request) -> Response:
@@ -839,11 +928,15 @@ class AgendaBlockListCreateApi(TenantAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        active_sucursal = resolve_active_sucursal(request)
+        data = dict(s.validated_data)
+        data["active_sucursal_id"] = active_sucursal.id if active_sucursal is not None else None
+
         try:
             block = agenda_block_create(
                 tenant=tenant,
                 user=request.user,
-                **s.validated_data,
+                **data,
             )
         except DjangoValidationError as exc:
             return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
@@ -868,14 +961,14 @@ class AgendaBlockDetailApi(TenantAPIView):
         all_day = serializers.BooleanField(required=False)
         notes = serializers.CharField(required=False, allow_blank=True)
 
-    def _get_or_404(self, block_id: uuid.UUID) -> "tuple[AgendaBlock | None, Response | None]":
-        try:
-            return agenda_block_get(block_id=block_id), None
-        except AgendaBlock.DoesNotExist:
-            return None, Response({"detail": "Evento no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+    def _get_or_404(
+        self, request: Request, block_id: uuid.UUID
+    ) -> "tuple[AgendaBlock | None, Response | None]":
+        """Recupera el evento acotado por sucursal (ver `_agenda_block_get_or_404`), o 404."""
+        return _agenda_block_get_or_404(request, block_id)
 
     def patch(self, request: Request, block_id: uuid.UUID) -> Response:
-        block, error = self._get_or_404(block_id)
+        block, error = self._get_or_404(request, block_id)
         if error is not None:
             return error
 
@@ -899,7 +992,7 @@ class AgendaBlockDetailApi(TenantAPIView):
         return Response(AgendaBlockOutputSerializer(updated).data)
 
     def delete(self, request: Request, block_id: uuid.UUID) -> Response:
-        block, error = self._get_or_404(block_id)
+        block, error = self._get_or_404(request, block_id)
         if error is not None:
             return error
 
@@ -926,19 +1019,14 @@ class AppointmentNotesApi(TenantAPIView):
         body = serializers.CharField(max_length=2_000)
 
     def _get_appointment_or_404(
-        self, appointment_id: uuid.UUID
+        self, request: Request, appointment_id: uuid.UUID
     ) -> "tuple[Appointment | None, Response | None]":
-        try:
-            return appointment_get(appointment_id=appointment_id), None
-        except Appointment.DoesNotExist:
-            return None, Response(
-                {"detail": "Cita no encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        """Recupera la cita acotada por sucursal (ver `_appointment_get_or_404`), o 404."""
+        return _appointment_get_or_404(request, appointment_id)
 
     def get(self, request: Request, appointment_id: uuid.UUID) -> Response:
         """Lista todas las notas del hilo de una cita, ordenadas por created_at ASC."""
-        appointment, error = self._get_appointment_or_404(appointment_id)
+        appointment, error = self._get_appointment_or_404(request, appointment_id)
         if error is not None:
             return error
 
@@ -947,7 +1035,7 @@ class AppointmentNotesApi(TenantAPIView):
 
     def post(self, request: Request, appointment_id: uuid.UUID) -> Response:
         """Agrega una nota al hilo de una cita."""
-        appointment, error = self._get_appointment_or_404(appointment_id)
+        appointment, error = self._get_appointment_or_404(request, appointment_id)
         if error is not None:
             return error
 
@@ -991,19 +1079,14 @@ class AgendaBlockNotesApi(TenantAPIView):
         body = serializers.CharField(max_length=2_000)
 
     def _get_block_or_404(
-        self, block_id: uuid.UUID
+        self, request: Request, block_id: uuid.UUID
     ) -> "tuple[AgendaBlock | None, Response | None]":
-        try:
-            return agenda_block_get(block_id=block_id), None
-        except AgendaBlock.DoesNotExist:
-            return None, Response(
-                {"detail": "Evento no encontrado."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        """Recupera el evento acotado por sucursal (ver `_agenda_block_get_or_404`), o 404."""
+        return _agenda_block_get_or_404(request, block_id)
 
     def get(self, request: Request, block_id: uuid.UUID) -> Response:
         """Lista todas las notas del hilo de un evento, ordenadas por created_at ASC."""
-        block, error = self._get_block_or_404(block_id)
+        block, error = self._get_block_or_404(request, block_id)
         if error is not None:
             return error
 
@@ -1012,7 +1095,7 @@ class AgendaBlockNotesApi(TenantAPIView):
 
     def post(self, request: Request, block_id: uuid.UUID) -> Response:
         """Agrega una nota al hilo de un evento de agenda."""
-        block, error = self._get_block_or_404(block_id)
+        block, error = self._get_block_or_404(request, block_id)
         if error is not None:
             return error
 

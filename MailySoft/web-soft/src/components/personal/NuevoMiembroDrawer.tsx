@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useCreateMember } from '../../hooks/miembros'
+import { useAuth } from '../../auth/AuthContext'
 import { erroresDe } from '../../lib/apiErrors'
 import { esEmailValido } from '../../lib/validacion'
 import { ROLES } from '../../auth/permisos'
@@ -21,6 +22,14 @@ export default function NuevoMiembroDrawer({ open, onClose }: Props) {
   const [verPass, setVerPass] = useState(false)
   const [errores, setErrores] = useState<string[]>([])
   const crear = useCreateMember()
+  const { clinicRole } = useAuth()
+
+  // Multi-sede (clúster F, jerarquía de roles): solo el dueño puede dar de alta
+  // dueños y administradores; un admin de sucursal solo crea equipo operativo.
+  // El backend es la autoridad (rechaza igual); esto es UX para no ofrecer un
+  // rol que va a fallar.
+  const rolesAsignables =
+    clinicRole === 'owner' ? ROLES : ROLES.filter(r => r.key !== 'owner' && r.key !== 'admin')
 
   useEffect(() => {
     if (open) { setForm(FORM_VACIO); setErrores([]); setVerPass(false) }
@@ -117,7 +126,7 @@ export default function NuevoMiembroDrawer({ open, onClose }: Props) {
                 <label className="label">Rol</label>
                 <select className="input" value={form.role} onChange={set('role')}>
                   <option value="">Selecciona un rol…</option>
-                  {ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+                  {rolesAsignables.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
                 </select>
               </div>
             </div>

@@ -24,14 +24,13 @@ Reglas críticas:
 import datetime
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.db.utils import IntegrityError
-from django.utils import timezone
 
 from apps.agenda.appointment_types import (  # noqa: F401
     appointment_type_create,
@@ -60,9 +59,7 @@ from apps.agenda.reminders import (  # noqa: F401
     schedule_reminders_for_appointment,
 )
 from apps.agenda.selectors import (
-    agenda_block_get,
     agenda_config_get,
-    appointment_get,
     appointment_type_get,
 )
 from apps.agenda.series import (
@@ -71,6 +68,8 @@ from apps.agenda.series import (
 )
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
+from apps.clinica.models import Sucursal
+from apps.clinica.sucursal_scope import allowed_sucursales, resolve_write_sucursal
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
 from apps.pacientes.services import patient_create_quick
@@ -113,6 +112,10 @@ _APPOINTMENT_IMMUTABLE_FIELDS: frozenset[str] = frozenset(
         "no_show_registered_by_id",
         # Gancho v2 — no exponer
         "series_id",
+        # Multi-sede — Fase 2: la sucursal solo cambia vía appointment_reschedule
+        # (sigue al consultorio), nunca por PATCH genérico.
+        "sucursal",
+        "sucursal_id",
     }
 )
 
@@ -130,7 +133,7 @@ _CONFIG_IMMUTABLE_FIELDS: frozenset[str] = frozenset(
 def _resolve_ends_at(
     *,
     starts_at: datetime.datetime,
-    ends_at: Optional[datetime.datetime],
+    ends_at: datetime.datetime | None,
     doctor: Doctor,
     config: TenantAgendaConfig,
 ) -> datetime.datetime:
@@ -168,7 +171,7 @@ def _check_doctor_overlap(
     doctor_id: uuid.UUID,
     starts_at: datetime.datetime,
     ends_at: datetime.datetime,
-    exclude_appointment_id: Optional[uuid.UUID] = None,
+    exclude_appointment_id: uuid.UUID | None = None,
 ) -> None:
     """Verifica que el médico no tenga una cita activa que se solape.
 
@@ -198,8 +201,7 @@ def _check_doctor_overlap(
 
     if qs.exists():
         raise ValidationError(
-            "El médico ya tiene una cita en ese horario. "
-            "Por favor elija otro horario o médico."
+            "El médico ya tiene una cita en ese horario. " "Por favor elija otro horario o médico."
         )
 
 
@@ -209,7 +211,7 @@ def _check_consultorio_overlap(
     consultorio_id: uuid.UUID,
     starts_at: datetime.datetime,
     ends_at: datetime.datetime,
-    exclude_appointment_id: Optional[uuid.UUID] = None,
+    exclude_appointment_id: uuid.UUID | None = None,
 ) -> None:
     """Verifica que el consultorio no tenga una cita activa que se solape.
 
@@ -246,19 +248,40 @@ def _check_block_overlap(
     *,
     tenant: Tenant,
     doctor_id: uuid.UUID,
-    consultorio_id: Optional[uuid.UUID],
+    consultorio_id: uuid.UUID | None,
+    sucursal_id: uuid.UUID | None,
     starts_at: datetime.datetime,
     ends_at: datetime.datetime,
 ) -> None:
     """Verifica que la cita no caiga sobre un evento (reunión/bloqueo) que le aplique.
 
-    Un AgendaBlock aplica si: es de toda la clínica (doctor y consultorio en null),
-    o su doctor es el de la cita, o su consultorio es el de la cita.
+    Alcance de un AgendaBlock (multi-sede — Fase 2 — REGLA CRÍTICA):
+      - Con `doctor` asignado: aplica en TODAS las sedes de ese médico. Un
+        médico no puede estar en dos lados a la vez — mismo principio que el
+        anti-empalme global de `_check_doctor_overlap`. NO se filtra por sede.
+      - Con `consultorio` asignado: aplica solo a ese consultorio (que ya
+        pertenece a una única sucursal por diseño).
+      - SIN doctor NI consultorio: es un bloqueo "de sucursal" (antes de la
+        Fase 2 era "de toda la clínica"). Aplica SOLO si su `sucursal_id`
+        coincide EXACTAMENTE con la sede de la cita que se está creando/
+        reagendando — un cierre en Centro ya NO bloquea Norte.
+        Compatibilidad retro: en un tenant que aún no adopta multi-sede (sin
+        ninguna Sucursal configurada), tanto el bloqueo como la cita resuelven
+        `sucursal_id=None`; `sucursal_id=None` en el filtro de Django se
+        traduce a `sucursal_id IS NULL`, así que el bloqueo sigue aplicando a
+        TODA la clínica exactamente como antes de la Fase 2.
+
+    Args:
+        sucursal_id: sucursal resuelta de la cita (puede ser None — tenant sin
+                     sucursales configuradas); determina qué bloqueos "de
+                     sede" aplican.
 
     Raises:
         ValidationError: si existe un evento que solapa y aplica.
     """
-    aplica = Q(doctor__isnull=True, consultorio__isnull=True) | Q(doctor_id=doctor_id)
+    aplica = Q(doctor_id=doctor_id) | Q(
+        doctor__isnull=True, consultorio__isnull=True, sucursal_id=sucursal_id
+    )
     if consultorio_id is not None:
         aplica |= Q(consultorio_id=consultorio_id)
 
@@ -286,15 +309,17 @@ def appointment_create(
     patient_id: uuid.UUID,
     doctor_id: uuid.UUID,
     starts_at: datetime.datetime,
-    ends_at: Optional[datetime.datetime] = None,
-    consultorio_id: Optional[uuid.UUID] = None,
-    appointment_type_id: Optional[uuid.UUID] = None,
+    ends_at: datetime.datetime | None = None,
+    consultorio_id: uuid.UUID | None = None,
+    appointment_type_id: uuid.UUID | None = None,
     modality: str = Appointment.Modality.OFFICE,
     reason: str = "",
     specialty: str = "",
     notes: str = "",
-    series_id: Optional[uuid.UUID] = None,
-    quote_id: Optional[uuid.UUID] = None,
+    series_id: uuid.UUID | None = None,
+    quote_id: uuid.UUID | None = None,
+    sucursal_id: uuid.UUID | None = None,
+    active_sucursal_id: uuid.UUID | None = None,
 ) -> Appointment:
     """Crea una cita médica validando disponibilidad (anti-empalme doble).
 
@@ -320,6 +345,12 @@ def appointment_create(
         notes:          Notas internas (opcional).
         quote_id:       UUID de la cotización a vincular (C-3, opcional). Si se provee,
                         la Quote debe pertenecer al mismo paciente y estar en estado ACCEPTED.
+        sucursal_id:        Sucursal EXPLÍCITA de la cita (multi-sede — Fase 2,
+                            opcional). Máxima precedencia en la resolución.
+        active_sucursal_id: Sucursal activa del request (header X-Sucursal-Id),
+                            que la vista resuelve con resolve_active_sucursal y
+                            pasa aquí. Precedencia menor que sucursal_id y que
+                            consultorio.sucursal. Ver resolve_write_sucursal.
 
     Returns:
         Instancia Appointment recién creada con status=SCHEDULED.
@@ -327,7 +358,9 @@ def appointment_create(
     Raises:
         ValidationError: si el paciente/doctor/consultorio no son del tenant,
                          si ends_at <= starts_at, si hay solapamiento, o si la
-                         cotización no es del paciente o no está aceptada (C-3).
+                         cotización no es del paciente o no está aceptada (C-3),
+                         o si la sucursal resuelta es incoherente con el
+                         consultorio, o el médico no atiende en esa sede.
     """
     # -- 1. Resolver FKs (selectors filtran por tenant activo vía TenantManager)
     try:
@@ -377,7 +410,7 @@ def appointment_create(
             is_active=True,
             deleted_at__isnull=True,
         )
-        caller_role: Optional[str] = caller_membership.role
+        caller_role: str | None = caller_membership.role
     except TenantMembership.DoesNotExist:
         caller_role = None
 
@@ -389,9 +422,7 @@ def appointment_create(
                 "No se encontró un perfil de médico activo para tu usuario en esta clínica."
             )
         if caller_doctor.id != doctor.id:
-            raise ValidationError(
-                "Como médico, solo puedes agendar citas para ti."
-            )
+            raise ValidationError("Como médico, solo puedes agendar citas para ti.")
 
     # -- 2d. Regla B — el consultorio de la cita debe estar asignado al médico.
     #
@@ -401,13 +432,43 @@ def appointment_create(
     # Si consultorio_id es None (telemedicina/fuera) → regla no aplica.
     if consultorio is not None:
         # Evaluamos la existencia de asignaciones sin traer objetos completos.
-        assigned_ids = set(
-            doctor.consultorios.values_list("id", flat=True)
-        )
+        assigned_ids = set(doctor.consultorios.values_list("id", flat=True))
         if assigned_ids and consultorio.id not in assigned_ids:
-            raise ValidationError(
-                "Ese consultorio no está asignado al médico."
-            )
+            raise ValidationError("Ese consultorio no está asignado al médico.")
+
+    # -- 2e. Resolver la sucursal (multi-sede — Fase 2).
+    #
+    # Precedencia: sucursal_id explícita > consultorio.sucursal > sucursal
+    # activa del request > sucursal predeterminada del tenant. Puede ser None
+    # (compatibilidad retro: tenant sin sucursales configuradas todavía — ver
+    # docstring de resolve_write_sucursal).
+    sucursal: Sucursal | None = resolve_write_sucursal(
+        tenant=tenant,
+        user=user,
+        sucursal_id=sucursal_id,
+        consultorio_sucursal_id=consultorio.sucursal_id if consultorio is not None else None,
+        active_sucursal_id=active_sucursal_id,
+    )
+
+    # Coherencia consultorio↔sucursal: solo puede fallar si `sucursal_id` fue
+    # EXPLÍCITO y contradice la sede del consultorio (si no fue explícito,
+    # resolve_write_sucursal ya usó consultorio.sucursal y siempre coinciden).
+    if (
+        consultorio is not None
+        and consultorio.sucursal_id is not None
+        and (sucursal is None or consultorio.sucursal_id != sucursal.id)
+    ):
+        raise ValidationError("El consultorio pertenece a otra sucursal distinta de la indicada.")
+
+    # Regla C — el médico debe atender en la sucursal resuelta.
+    # Mismo patrón que la Regla B (consultorios): si el doctor tiene
+    # sucursales asignadas (M2M no vacío) y la sede resuelta no está entre
+    # ellas (o no se pudo resolver ninguna) → error. Sin restricciones
+    # asignadas → sin restricción (compat. retro: clínicas de una sola sede
+    # no necesitan asignar nada).
+    assigned_sucursal_ids = set(doctor.sucursales.values_list("id", flat=True))
+    if assigned_sucursal_ids and (sucursal is None or sucursal.id not in assigned_sucursal_ids):
+        raise ValidationError("El médico no atiende en esa sucursal.")
 
     # -- 2f. Resolver y validar el tipo de cita (opcional)
     appointment_type = None
@@ -436,9 +497,7 @@ def appointment_create(
 
         # La cotización debe pertenecer al mismo paciente de la cita.
         if quote.patient_id != patient.id:
-            raise ValidationError(
-                "La cotización no corresponde al paciente de esta cita."
-            )
+            raise ValidationError("La cotización no corresponde al paciente de esta cita.")
 
         # Solo se puede vincular una cotización aceptada.
         if quote.status != Quote.Status.ACCEPTED:
@@ -458,9 +517,7 @@ def appointment_create(
 
     # -- 4. Validar rango temporal
     if ends_at <= starts_at:
-        raise ValidationError(
-            "La hora de fin debe ser posterior a la hora de inicio."
-        )
+        raise ValidationError("La hora de fin debe ser posterior a la hora de inicio.")
 
     try:
         with transaction.atomic():
@@ -484,6 +541,7 @@ def appointment_create(
                 tenant=tenant,
                 doctor_id=doctor_id,
                 consultorio_id=consultorio_id,
+                sucursal_id=sucursal.id if sucursal is not None else None,
                 starts_at=starts_at,
                 ends_at=ends_at,
             )
@@ -495,6 +553,7 @@ def appointment_create(
                 patient=patient,
                 doctor=doctor,
                 consultorio=consultorio,
+                sucursal=sucursal,
                 appointment_type=appointment_type,
                 modality=modality,
                 starts_at=starts_at,
@@ -547,6 +606,7 @@ def appointment_create(
         metadata={
             "doctor_id": str(doctor_id),
             "patient_id": str(patient_id),
+            "sucursal_id": str(sucursal.id) if sucursal is not None else "",
         },
     )
     return appointment
@@ -580,6 +640,7 @@ def appointment_create_with_new_patient(
 # appointment_create_series — citas recurrentes (multi-cita)
 # ---------------------------------------------------------------------------
 
+
 def appointment_create_series(
     *,
     tenant: Tenant,
@@ -587,19 +648,21 @@ def appointment_create_series(
     starts_at: datetime.datetime,
     ends_at: datetime.datetime,
     doctor_id: uuid.UUID,
-    frequency: Optional[str] = None,
-    explicit_starts: Optional[list[datetime.datetime]] = None,
-    patient_id: Optional[uuid.UUID] = None,
-    new_patient: Optional[dict] = None,
-    interval_days: Optional[int] = None,
-    count: Optional[int] = None,
-    until: Optional[datetime.date] = None,
-    consultorio_id: Optional[uuid.UUID] = None,
-    appointment_type_id: Optional[uuid.UUID] = None,
+    frequency: str | None = None,
+    explicit_starts: list[datetime.datetime] | None = None,
+    patient_id: uuid.UUID | None = None,
+    new_patient: dict | None = None,
+    interval_days: int | None = None,
+    count: int | None = None,
+    until: datetime.date | None = None,
+    consultorio_id: uuid.UUID | None = None,
+    appointment_type_id: uuid.UUID | None = None,
     modality: str = Appointment.Modality.OFFICE,
     reason: str = "",
     specialty: str = "",
     notes: str = "",
+    sucursal_id: uuid.UUID | None = None,
+    active_sucursal_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Crea una SERIE de citas recurrentes (multi-cita), best-effort.
 
@@ -621,6 +684,8 @@ def appointment_create_series(
         new_patient:        datos de un expediente provisional (XOR patient_id).
         interval_days:      días entre citas cuando frequency=custom.
         count / until:      tope de la serie (exactamente uno).
+        sucursal_id/active_sucursal_id: se propagan a cada cita de la serie
+                            (misma resolución de precedencia que appointment_create).
         resto:              mismos campos que appointment_create.
 
     Returns:
@@ -631,9 +696,7 @@ def appointment_create_series(
         ValidationError: parámetros inválidos, o paciente nuevo sin ninguna cita creada.
     """
     if (patient_id is None) == (new_patient is None):
-        raise ValidationError(
-            "Indica un paciente existente o uno nuevo, no ambos ni ninguno."
-        )
+        raise ValidationError("Indica un paciente existente o uno nuevo, no ambos ni ninguno.")
 
     duracion = ends_at - starts_at
     if duracion <= datetime.timedelta(0):
@@ -658,9 +721,7 @@ def appointment_create_series(
             until=until,
         )
     else:
-        raise ValidationError(
-            "Indica una frecuencia de repetición o una lista de fechas."
-        )
+        raise ValidationError("Indica una frecuencia de repetición o una lista de fechas.")
 
     series_id = uuid.uuid4()
     created: list[Appointment] = []
@@ -690,6 +751,8 @@ def appointment_create_series(
                     specialty=specialty,
                     notes=notes,
                     series_id=series_id,
+                    sucursal_id=sucursal_id,
+                    active_sucursal_id=active_sucursal_id,
                 )
                 created.append(appt)
             except ValidationError as exc:
@@ -809,8 +872,8 @@ def appointment_reschedule(
     appointment: Appointment,
     user: "User",  # type: ignore[valid-type]
     starts_at: datetime.datetime,
-    ends_at: Optional[datetime.datetime] = None,
-    consultorio_id: Optional[uuid.UUID] = None,
+    ends_at: datetime.datetime | None = None,
+    consultorio_id: uuid.UUID | None = None,
 ) -> Appointment:
     """Reagenda una cita (cambia horario y/o consultorio).
 
@@ -835,7 +898,10 @@ def appointment_reschedule(
 
     Raises:
         ValidationError: si la cita no está en un estado reagendable,
-                         si ends_at <= starts_at, o si hay solapamiento.
+                         si ends_at <= starts_at, si hay solapamiento, o si
+                         el actor no tiene acceso a la sucursal ACTUAL de la
+                         cita o a la sucursal DESTINO resuelta (hallazgo A1
+                         — ver docs/design/sucursales-hallazgos-seguridad.md).
     """
     # Se puede reagendar una cita activa (Agendada/Confirmada) o una CANCELADA
     # (reagendar una cancelada = reactivarla en el nuevo horario).
@@ -846,12 +912,28 @@ def appointment_reschedule(
     }
     if appointment.status not in reagendable_statuses:
         raise ValidationError(
-            f"No se puede reagendar una cita en estado "
-            f"'{appointment.get_status_display()}'."
+            f"No se puede reagendar una cita en estado " f"'{appointment.get_status_display()}'."
         )
     was_cancelled = appointment.status == Appointment.Status.CANCELLED
 
+    # -- Autorización de sede ORIGEN — hallazgo A1 (CRÍTICO, ver docs/design/
+    # sucursales-hallazgos-seguridad.md, clúster A). appointment_reschedule
+    # era el ÚNICO write de agenda que nunca validaba sede: la cita adoptaba
+    # la sede del consultorio nuevo sin comprobar nada. La sede ACTUAL de la
+    # cita debe estar entre las permitidas del actor ANTES de tocar nada —
+    # sin esto, un admin acotado a Centro podía reagendar (y de paso mover)
+    # una cita cuya sede es Norte con solo conocer su id (obtenible del
+    # estado de cuenta compartido del paciente). Compatibilidad retro: si la
+    # cita no tiene sucursal (tenant sin multi-sede), no aplica el chequeo.
+    if appointment.sucursal_id is not None and not (
+        allowed_sucursales(user=user, tenant=appointment.tenant)
+        .filter(id=appointment.sucursal_id)
+        .exists()
+    ):
+        raise ValidationError("No tienes acceso a la sucursal actual de esta cita.")
+
     # Resolver consultorio: usar el nuevo si se provee, o mantener el actual
+    consultorio: Consultorio | None = None
     if consultorio_id is not None:
         try:
             consultorio = consultorio_get(consultorio_id=consultorio_id)
@@ -860,11 +942,41 @@ def appointment_reschedule(
 
         if consultorio.tenant_id != appointment.tenant_id:
             raise ValidationError("El consultorio no pertenece a esta clínica.")
-        new_consultorio_id: Optional[uuid.UUID] = consultorio_id
+        new_consultorio_id: uuid.UUID | None = consultorio_id
     else:
-        new_consultorio_id = (
-            appointment.consultorio_id  # type: ignore[assignment]
+        new_consultorio_id = appointment.consultorio_id  # type: ignore[assignment]
+
+    # -- Sucursal (multi-sede — Fase 2): coherencia sucursal↔consultorio.
+    # Si cambia el consultorio Y ese consultorio tiene sede asignada, la
+    # sucursal de la cita LO SIGUE. Si no hay cambio de consultorio, o el
+    # nuevo consultorio no tiene sede asignada, la sucursal de la cita se
+    # conserva sin tocar.
+    #
+    # Autorización de sede DESTINO (hallazgo A1): se resuelve con
+    # `resolve_write_sucursal`, que valida la sede resultante contra
+    # `allowed_sucursales(user, tenant)` y levanta ValidationError si el
+    # actor no tiene acceso — cierra la ruta "mover una cita de Centro a un
+    # consultorio de Norte" aunque el actor sí tuviera acceso a la sede de
+    # origen de la cita.
+    sucursal_destino: Sucursal | None = resolve_write_sucursal(
+        tenant=appointment.tenant,
+        user=user,
+        sucursal_id=None,
+        consultorio_sucursal_id=consultorio.sucursal_id if consultorio is not None else None,
+        active_sucursal_id=appointment.sucursal_id,
+    )
+    new_sucursal_id: uuid.UUID | None = (
+        sucursal_destino.id if sucursal_destino is not None else None
+    )
+
+    # Regla C revalidada: si la sede resultante cambió y el médico tiene
+    # sucursales asignadas, debe seguir atendiendo en la nueva sede.
+    if new_sucursal_id is not None and new_sucursal_id != appointment.sucursal_id:
+        assigned_sucursal_ids = set(
+            appointment.doctor.sucursales.values_list("id", flat=True)  # type: ignore[union-attr]
         )
+        if assigned_sucursal_ids and new_sucursal_id not in assigned_sucursal_ids:
+            raise ValidationError("El médico no atiende en esa sucursal.")
 
     # Calcular ends_at
     config = agenda_config_get(tenant=appointment.tenant)
@@ -876,9 +988,7 @@ def appointment_reschedule(
     )
 
     if ends_at <= starts_at:
-        raise ValidationError(
-            "La hora de fin debe ser posterior a la hora de inicio."
-        )
+        raise ValidationError("La hora de fin debe ser posterior a la hora de inicio.")
 
     try:
         with transaction.atomic():
@@ -903,6 +1013,7 @@ def appointment_reschedule(
                 tenant=appointment.tenant,
                 doctor_id=appointment.doctor_id,  # type: ignore[arg-type]
                 consultorio_id=new_consultorio_id,
+                sucursal_id=new_sucursal_id,
                 starts_at=starts_at,
                 ends_at=ends_at,
             )
@@ -919,6 +1030,9 @@ def appointment_reschedule(
             update_fields = ["starts_at", "ends_at", "reschedule_count", "updated_at"]
             if consultorio_id is not None:
                 update_fields.append("consultorio")
+            if new_sucursal_id != appointment.sucursal_id:
+                appointment.sucursal_id = new_sucursal_id  # type: ignore[assignment]
+                update_fields.append("sucursal")
 
             # Si venía CANCELADA, reagendar la reactiva (vuelve a Agendada).
             if was_cancelled:
@@ -969,6 +1083,7 @@ def appointment_reschedule(
         metadata={
             "new_starts_at": appointment.starts_at.isoformat() if appointment.starts_at else "",
             "new_ends_at": appointment.ends_at.isoformat() if appointment.ends_at else "",
+            "sucursal_id": str(appointment.sucursal_id) if appointment.sucursal_id else "",
         },
     )
     return appointment
@@ -985,14 +1100,26 @@ def appointment_reactivate(
     pudo haberse ocupado mientras la cita estuvo cancelada. Si ya está ocupado,
     lanza ValidationError (el usuario deberá reagendar a otro horario).
 
+    También revalida la Regla C (multi-sede — Fase 2): si el médico tiene
+    sucursales asignadas, sigue debiendo atender en la sede de la cita —
+    pudo haber cambiado mientras la cita estuvo cancelada.
+
     Raises:
-        ValidationError: si la cita no está cancelada o el horario ya está ocupado.
+        ValidationError: si la cita no está cancelada, el horario ya está
+                         ocupado, o el médico ya no atiende en esa sucursal.
     """
     if appointment.status != Appointment.Status.CANCELLED:
         raise ValidationError(
             f"Solo se puede reactivar una cita cancelada. "
             f"La cita está en estado '{appointment.get_status_display()}'."
         )
+
+    if appointment.sucursal_id is not None:
+        assigned_sucursal_ids = set(
+            appointment.doctor.sucursales.values_list("id", flat=True)  # type: ignore[union-attr]
+        )
+        if assigned_sucursal_ids and appointment.sucursal_id not in assigned_sucursal_ids:
+            raise ValidationError("El médico no atiende en esa sucursal.")
 
     with transaction.atomic():
         _check_doctor_overlap(
@@ -1014,6 +1141,7 @@ def appointment_reactivate(
             tenant=appointment.tenant,
             doctor_id=appointment.doctor_id,  # type: ignore[arg-type]
             consultorio_id=appointment.consultorio_id,
+            sucursal_id=appointment.sucursal_id,
             starts_at=appointment.starts_at,
             ends_at=appointment.ends_at,
         )
@@ -1031,7 +1159,9 @@ def appointment_reactivate(
     except Exception as exc:  # noqa: BLE001
         logger.error(
             "appointment_reactivate: error reprogramando recordatorios para cita %s — %s",
-            appointment.id, exc, exc_info=True,
+            appointment.id,
+            exc,
+            exc_info=True,
         )
 
     audit_record(
@@ -1154,4 +1284,3 @@ def agenda_config_update(
         metadata={"changed_fields": sorted(fields.keys())},
     )
     return config
-

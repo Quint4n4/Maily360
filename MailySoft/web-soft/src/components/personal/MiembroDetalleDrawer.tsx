@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  X, Mail, ShieldCheck, Fingerprint, Stethoscope, FileText,
+  X, Mail, ShieldCheck, Fingerprint, Stethoscope, FileText, Building2,
   Lock, Unlock, KeyRound, Eye, EyeOff, Loader2, AlertCircle, Check,
 } from 'lucide-react'
 import { useUpdateMember, useUploadMemberAvatar } from '../../hooks/miembros'
 import { useDoctorsManage, useCreateDoctor, useUpdateDoctor, useConsultoriosManage } from '../../hooks/personal'
+import { useSucursales } from '../../hooks/sucursales'
 import { useAuth } from '../../auth/AuthContext'
 import AvatarUploader from '../common/AvatarUploader'
+import HorariosDoctor from './HorariosDoctor'
+import SucursalesMiembro from './SucursalesMiembro'
 import { useConfirm } from '../common/DialogProvider'
 import { erroresDe } from '../../lib/apiErrors'
 import { ROLES } from '../../auth/permisos'
@@ -62,15 +65,24 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
   const [duracion, setDuracion] = useState('30')
   const [bio, setBio] = useState('')
   const [consSel, setConsSel] = useState<string[]>([])
+  const [sucSel, setSucSel] = useState<string[]>([])
   const actualizar = useUpdateMember()
   const { data: docData } = useDoctorsManage()
   const { data: consData } = useConsultoriosManage()
+  const { data: sucData } = useSucursales()
   const consultorios = (consData?.results ?? []).filter(c => c.is_active)
+  const sucursales = (sucData?.results ?? []).filter(s => s.is_active)
   const crearDoctor = useCreateDoctor()
   const actualizarDoctor = useUpdateDoctor()
   const subirAvatar = useUploadMemberAvatar()
-  const { reloadMe } = useAuth()
+  const { reloadMe, clinicRole } = useAuth()
   const confirmar = useConfirm()
+
+  // Multi-sede (clúster F): un actor que no es dueño no puede ascender a nadie a
+  // Dueño ni Administrador (el backend lo rechaza). Gateamos las opciones del
+  // selector de rol para no ofrecer un cambio que va a fallar.
+  const rolesAsignables =
+    clinicRole === 'owner' ? ROLES : ROLES.filter(r => r.key !== 'owner' && r.key !== 'admin')
 
   // Perfil médico asociado (por email) si el miembro es médico.
   const doctorPerfil = miembro && miembro.role === 'doctor'
@@ -95,6 +107,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
     setDuracion(String(doctorPerfil?.default_appointment_duration ?? 30))
     setBio(doctorPerfil?.bio_short ?? '')
     setConsSel((doctorPerfil?.consultorios ?? []).map(c => c.id))
+    setSucSel((doctorPerfil?.sucursales ?? []).map(s => s.id))
   }, [doctorPerfil?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!miembro) return <AnimatePresence />
@@ -144,7 +157,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
     }
     try {
       if (doctorPerfil) {
-        await actualizarDoctor.mutateAsync({ id: doctorPerfil.id, input: { ...payload, consultorio_ids: consSel } })
+        await actualizarDoctor.mutateAsync({ id: doctorPerfil.id, input: { ...payload, consultorio_ids: consSel, sucursal_ids: sucSel } })
       } else {
         await crearDoctor.mutateAsync({ membership_id: miembro.id, ...payload })
       }
@@ -214,6 +227,23 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                 <Linea label="Miembro desde" value={formatMedio(new Date(miembro.created_at))} />
               </Card>
 
+              <Card title="Sucursales asignadas" icon={Building2}>
+                {miembro.role === 'owner' ? (
+                  <p className="text-sm text-gray-600">Dueño: ve y opera todas las sucursales.</p>
+                ) : miembro.sucursales.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {miembro.sucursales.map(s => (
+                      <span key={s.id} className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                        style={{ background: 'rgba(201,162,39,0.16)', color: '#8A6D12' }}>
+                        {s.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">Sin sedes asignadas: solo la sucursal principal.</p>
+                )}
+              </Card>
+
               {miembro.role === 'doctor' && (
                 <Card title="Datos profesionales" icon={Stethoscope}>
                   {doctorPerfil ? (
@@ -270,7 +300,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                     <div>
                       <label className="label">Rol</label>
                       <select className="input" value={rol} onChange={e => setRol(e.target.value as ClinicRole)}>
-                        {ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+                        {rolesAsignables.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
                       </select>
                     </div>
                     <button onClick={guardar} disabled={actualizar.isPending}
@@ -307,6 +337,10 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                   </div>
                 </div>
 
+                {/* Sedes que este usuario puede ver y operar (multi-sede F4).
+                    Solo owner/admin (el componente se auto-oculta al resto). */}
+                <SucursalesMiembro miembro={miembro} esYoMismo={esYoMismo} />
+
                 {/* Datos profesionales (solo si el miembro es médico) */}
                 {miembro.role === 'doctor' && (
                   <div className="mt-4 pt-4 border-t border-amber-900/10">
@@ -332,6 +366,25 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                       <label className="label">Biografía <span className="text-gray-400 font-normal">(opcional)</span></label>
                       <textarea className="input resize-none" rows={2} maxLength={4000} value={bio} onChange={e => setBio(e.target.value)} placeholder="Breve descripción profesional…" />
                     </div>
+                    {doctorPerfil && sucursales.length > 0 && (
+                      <div className="mt-3">
+                        <label className="label">Sucursales <span className="text-gray-400 font-normal">(vacío = todas las permitidas)</span></label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {sucursales.map(s => {
+                            const on = sucSel.includes(s.id)
+                            return (
+                              <button key={s.id} type="button"
+                                onClick={() => setSucSel(v => v.includes(s.id) ? v.filter(x => x !== s.id) : [...v, s.id])}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                                style={on ? { background: '#C9A227', color: '#fff' } : { background: 'rgba(255,255,255,0.6)', color: '#7A756C', border: '1px solid rgba(201,162,39,0.3)' }}>
+                                {on && <Check className="w-3.5 h-3.5" />} {s.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1.5">Sedes donde este médico atiende.</p>
+                      </div>
+                    )}
                     {doctorPerfil && (
                       <div className="mt-3">
                         <label className="label">Consultorios asignados <span className="text-gray-400 font-normal">(vacío = puede usar cualquiera)</span></label>
@@ -360,6 +413,9 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                       style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
                       {guardandoDoctor ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : (doctorPerfil ? 'Guardar datos profesionales' : 'Crear perfil médico')}
                     </button>
+
+                    {/* Horario laboral POR SEDE (multi-sede F2). Requiere perfil médico. */}
+                    {doctorPerfil && <HorariosDoctor doctorId={doctorPerfil.id} puedeEditar={puedeEditar} />}
                   </div>
                 )}
               </div>

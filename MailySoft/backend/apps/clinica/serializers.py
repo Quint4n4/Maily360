@@ -34,6 +34,7 @@ from apps.clinica.models import (
     DoctorCredential,
     DoctorUniversity,
     PatientCategory,
+    Sucursal,
 )
 from apps.core.files import validate_image
 
@@ -645,4 +646,127 @@ class ClinicTeamMemberOutputSerializer(serializers.ModelSerializer["ClinicTeamMe
     class Meta:
         model = ClinicTeamMember
         fields = ["id", "departamento", "nombre", "order", "is_active", "created_at"]
+        read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
+# Sucursal — multi-sede (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+class SucursalInputSerializer(serializers.Serializer):
+    """Entrada para POST de Sucursal.
+
+    is_default es opcional: si viene en True, el service la marca como
+    predeterminada del tenant (desmarcando la anterior) DESPUÉS de crearla.
+    is_active NO se expone aquí: toda sucursal nace activa.
+
+    M2: rechaza campos desconocidos vía validate().
+    """
+
+    name = serializers.CharField(max_length=160)
+    address = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    phone = serializers.CharField(max_length=40, required=False, allow_blank=True, default="")
+    color_hex = serializers.RegexField(
+        regex=r"^#[0-9A-Fa-f]{6}$",
+        max_length=7,
+        required=False,
+        allow_blank=True,
+        default="",
+        error_messages={"invalid": "El color debe tener formato #RRGGBB (ej: #3B82F6)."},
+    )
+    is_default = serializers.BooleanField(required=False, default=False)
+
+    def validate_phone(self, value: str) -> str:
+        """M3: valida formato de teléfono. Permite vacío."""
+        return _validate_phone_field(value, field_name="Teléfono")
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class SucursalPatchSerializer(serializers.Serializer):
+    """Entrada para PATCH (actualización parcial) de Sucursal.
+
+    is_active e is_default SÍ se aceptan aquí (igual que
+    ClinicTeamMemberPatchSerializer) pero la VISTA los enruta a
+    sucursal_activate/sucursal_deactivate/sucursal_set_default — nunca al
+    service de update genérico (regla de campos sensibles del proyecto).
+    """
+
+    name = serializers.CharField(max_length=160, required=False)
+    address = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    color_hex = serializers.RegexField(
+        regex=r"^#[0-9A-Fa-f]{6}$",
+        max_length=7,
+        required=False,
+        allow_blank=True,
+        error_messages={"invalid": "El color debe tener formato #RRGGBB (ej: #3B82F6)."},
+    )
+    is_active = serializers.BooleanField(required=False)
+    is_default = serializers.BooleanField(required=False)
+
+    def validate_phone(self, value: str) -> str:
+        """M3: valida formato de teléfono. Permite vacío."""
+        return _validate_phone_field(value, field_name="Teléfono")
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class SucursalOutputSerializer(serializers.ModelSerializer["Sucursal"]):
+    """Salida de Sucursal."""
+
+    class Meta:
+        model = Sucursal
+        fields = [
+            "id",
+            "name",
+            "address",
+            "phone",
+            "color_hex",
+            "is_active",
+            "is_default",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
+# MembershipSucursal — asignación de sedes a un miembro (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+class MembershipSucursalesInputSerializer(serializers.Serializer):
+    """Entrada de PUT /clinica/membresias/<id>/sucursales/.
+
+    `sucursal_ids` es el conjunto COMPLETO de sedes a dejar asignadas
+    (reemplaza, no añade). Lista vacía es válida a nivel de formato — las
+    reglas anti-lockout (owner sin sedes, admin auto-bloqueándose) se validan
+    en el service `membership_sucursales_set`, no aquí.
+    """
+
+    sucursal_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=True,
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """M2: rechaza campos desconocidos (D-EC-7)."""
+        _reject_unknown_fields(self, self.initial_data)  # type: ignore[arg-type]
+        return attrs
+
+
+class SucursalMiniOutputSerializer(serializers.ModelSerializer["Sucursal"]):
+    """Salida reducida de Sucursal para el detalle de asignación por miembro."""
+
+    class Meta:
+        model = Sucursal
+        fields = ["id", "name", "is_default"]
         read_only_fields = fields

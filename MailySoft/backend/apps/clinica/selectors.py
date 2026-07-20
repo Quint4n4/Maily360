@@ -9,6 +9,7 @@ Convención: keyword-only args, nombrado acción+entidad.
 """
 
 import uuid
+from typing import TYPE_CHECKING
 
 from django.db.models import QuerySet
 
@@ -19,7 +20,11 @@ from apps.clinica.models import (
     DoctorCredential,
     DoctorUniversity,
     PatientCategory,
+    Sucursal,
 )
+
+if TYPE_CHECKING:
+    from apps.tenancy.models import TenantMembership
 
 
 def clinic_settings_get(*, tenant_id: uuid.UUID) -> ClinicSettings | None:
@@ -232,3 +237,75 @@ def clinic_team_list(*, only_active: bool = True) -> QuerySet[ClinicTeamMember]:
     if only_active:
         qs = qs.filter(is_active=True)
     return qs.order_by("order", "departamento", "nombre")
+
+
+# ---------------------------------------------------------------------------
+# Sucursal — multi-sede (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+def sucursal_get(*, sucursal_id: uuid.UUID) -> Sucursal:
+    """Retorna una Sucursal por su UUID.
+
+    Usa el TenantManager: una sucursal de otro tenant → DoesNotExist → 404.
+    NO aplica el alcance de `allowed_sucursales` (eso es scoping operativo
+    para listados/selector, no para el detalle por id).
+
+    Args:
+        sucursal_id: UUID de la Sucursal.
+
+    Returns:
+        Instancia Sucursal.
+
+    Raises:
+        Sucursal.DoesNotExist: si no existe o no pertenece al tenant activo.
+    """
+    return Sucursal.objects.get(id=sucursal_id)
+
+
+def sucursal_list(*, only_active: bool = True) -> QuerySet[Sucursal]:
+    """Retorna TODAS las sucursales del tenant activo (sin scoping por rol).
+
+    Selector "plano" tenant-scoped, análogo a clinic_team_list. El endpoint
+    de listado (para el selector del frontend) usa en su lugar
+    `apps.clinica.sucursal_scope.allowed_sucursales`, que además filtra por
+    lo que el rol del usuario tiene permitido operar.
+
+    Args:
+        only_active: si True (default), excluye sucursales desactivadas.
+
+    Returns:
+        QuerySet[Sucursal] ordenado por nombre.
+    """
+    qs: QuerySet[Sucursal] = Sucursal.objects.all()
+    if only_active:
+        qs = qs.filter(is_active=True)
+    return qs.order_by("name")
+
+
+# ---------------------------------------------------------------------------
+# MembershipSucursal — asignación de sedes a un miembro (Fase 4)
+# ---------------------------------------------------------------------------
+
+
+def membership_sucursales_list(*, membership: "TenantMembership") -> QuerySet[Sucursal]:
+    """Retorna las sucursales asignadas a una membresía (gestión de sedes — Fase 4).
+
+    Usa el TenantManager de Sucursal (filtra por tenant activo del thread-local
+    + excluye soft-deleted) y solo atraviesa filas de MembershipSucursal no
+    eliminadas. A diferencia de `sucursal_scope.allowed_sucursales` (que
+    resuelve el ALCANCE operativo de un usuario, con reglas de rol/fallback),
+    este selector es el detalle CRUD "plano" de la asignación en sí: qué
+    sedes están, hoy, asociadas a esta membresía en la tabla
+    `tenancy_membership_sucursales`.
+
+    Args:
+        membership: TenantMembership cuyas sucursales asignadas se listan.
+
+    Returns:
+        QuerySet[Sucursal] asignadas a la membresía, ordenadas por nombre.
+    """
+    return Sucursal.objects.filter(
+        membresias__membership_id=membership.id,
+        membresias__deleted_at__isnull=True,
+    ).order_by("name")

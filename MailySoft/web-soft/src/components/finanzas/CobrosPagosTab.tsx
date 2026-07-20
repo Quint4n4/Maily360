@@ -7,6 +7,7 @@ import { can, type Role } from '../../auth/permisos'
 import { formatMoney, formatDateTime } from '../../lib/format'
 import { errorMsg } from '../../lib/apiErrors'
 import PatientPicker from './PatientPicker'
+import SedeIndicador, { mensajeErrorSede, nombreSede } from './SedeIndicador'
 
 interface Props {
   role: Role
@@ -29,7 +30,12 @@ export default function CobrosPagosTab({ role }: Props) {
   return (
     <div className="space-y-4">
       <div className="glass-card rounded-2xl p-4">
-        <label className="label">Paciente</label>
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <label className="label mb-0">Paciente</label>
+          {/* Estos listados son la CAJA de la sede: el backend los filtra por la
+              sede activa (o consolida si eliges "Todas las sucursales"). */}
+          <SedeIndicador />
+        </div>
         <PatientPicker value={patient} onChange={setPatient} />
         {!patient && (
           <p className="text-xs mt-2" style={{ color: '#9A958C' }}>
@@ -102,6 +108,12 @@ function ChargesPanel({
         </div>
       )}
 
+      {charges.isError && (
+        <p className="text-xs mb-2" style={{ color: '#B91C1C' }}>
+          {mensajeErrorSede(charges.error, 'No se pudieron cargar los cargos.')}
+        </p>
+      )}
+
       {charges.isLoading ? (
         <Loading />
       ) : (
@@ -110,6 +122,7 @@ function ChargesPanel({
             <thead>
               <tr className="text-left" style={{ color: '#9A958C' }}>
                 <th className="py-1.5 font-medium">Concepto</th>
+                <th className="py-1.5 font-medium">Sede</th>
                 <th className="py-1.5 font-medium">Estado</th>
                 <th className="py-1.5 font-medium text-right">Saldo</th>
                 <th />
@@ -119,6 +132,7 @@ function ChargesPanel({
               {(charges.data?.results ?? []).map((c) => (
                 <tr key={c.id} className="border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }}>
                   <td className="py-1.5" style={{ color: '#2A241B' }}>{c.description}</td>
+                  <td className="py-1.5" style={{ color: '#7A756C' }}>{nombreSede(c.sucursal)}</td>
                   <td className="py-1.5">
                     <span className={`badge ${STATUS_BADGE[c.status]}`}>{c.status_display}</span>
                   </td>
@@ -138,7 +152,7 @@ function ChargesPanel({
                   </td>
                 </tr>
               ))}
-              {(charges.data?.results?.length ?? 0) === 0 && <Empty cols={4} />}
+              {(charges.data?.results?.length ?? 0) === 0 && <Empty cols={5} />}
             </tbody>
           </table>
         </div>
@@ -240,6 +254,12 @@ function PaymentsPanel({
         </div>
       )}
 
+      {payments.isError && (
+        <p className="text-xs mb-2" style={{ color: '#B91C1C' }}>
+          {mensajeErrorSede(payments.error, 'No se pudieron cargar los pagos.')}
+        </p>
+      )}
+
       {payments.isLoading ? (
         <Loading />
       ) : (
@@ -248,6 +268,7 @@ function PaymentsPanel({
             <thead>
               <tr className="text-left" style={{ color: '#9A958C' }}>
                 <th className="py-1.5 font-medium">Fecha</th>
+                <th className="py-1.5 font-medium">Sede</th>
                 <th className="py-1.5 font-medium">Método</th>
                 <th className="py-1.5 font-medium text-right">Monto</th>
               </tr>
@@ -256,11 +277,12 @@ function PaymentsPanel({
               {(payments.data?.results ?? []).map((p) => (
                 <tr key={p.id} className="border-t" style={{ borderColor: 'rgba(0,0,0,0.05)' }}>
                   <td className="py-1.5" style={{ color: '#7A756C' }}>{formatDateTime(p.received_at)}</td>
+                  <td className="py-1.5" style={{ color: '#7A756C' }}>{nombreSede(p.sucursal)}</td>
                   <td className="py-1.5" style={{ color: '#2A241B' }}>{p.method_display}</td>
                   <td className="py-1.5 text-right font-medium" style={{ color: '#2A241B' }}>{formatMoney(p.amount)}</td>
                 </tr>
               ))}
-              {(payments.data?.results?.length ?? 0) === 0 && <Empty cols={3} />}
+              {(payments.data?.results?.length ?? 0) === 0 && <Empty cols={4} />}
             </tbody>
           </table>
         </div>

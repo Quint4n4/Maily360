@@ -44,6 +44,7 @@ from django.utils import timezone
 
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
+from apps.clinica.sucursal_scope import allowed_sucursales
 from apps.expediente.models import (
     DEFAULT_TREATMENT_PLAN_TITLE,
     TreatmentPlan,
@@ -662,7 +663,11 @@ def treatment_plan_delete(*, plan: TreatmentPlan, actor: Any, actor_role: str = 
 
 
 def quote_create_from_treatment_plan(
-    *, plan: TreatmentPlan, user: Any, actor_role: str = ""
+    *,
+    plan: TreatmentPlan,
+    user: Any,
+    actor_role: str = "",
+    sucursal: Any | None = None,
 ) -> Quote:
     """Genera una cotización (borrador) a partir de un esquema de calendarización.
 
@@ -683,13 +688,16 @@ def quote_create_from_treatment_plan(
         user:       Usuario que genera la cotización (auditoría).
         actor_role: Rol activo del actor (defensa en profundidad; el permiso
                     HTTP TreatmentPlanPermission ya filtra owner/admin/doctor).
+        sucursal:   sede DONDE SE GENERA la cotización (multi-sede — Fase 3).
+                    La vista la resuelve con `resolve_write_sucursal`. None =
+                    tenant sin sucursales configuradas (compatibilidad retro).
 
     Returns:
         La Quote recién creada (DRAFT), con sus items.
 
     Raises:
-        ValidationError: rol no permitido, o el plan no tiene tratamientos
-            que cotizar.
+        ValidationError: rol no permitido, el plan no tiene tratamientos
+            que cotizar, o la sucursal es de otro tenant.
     """
     _validate_actor_role(actor_role=actor_role)
 
@@ -715,6 +723,7 @@ def quote_create_from_treatment_plan(
             patient=plan.patient,
             items=quote_items,
             notes="Generada desde calendarización de tratamientos",
+            sucursal=sucursal,
         )
         plan.quote = quote
         plan.save(update_fields=["quote", "updated_at"])
@@ -836,6 +845,7 @@ def treatment_session_schedule(
     scheduled_date: datetime.date,
     scheduled_time: datetime.time | None = None,
     duration_minutes: int | None = None,
+    active_sucursal_id: uuid.UUID | None = None,
 ) -> TreatmentSession:
     """Agenda (o reagenda) una TreatmentSession como una cita real de agenda.
 
@@ -885,17 +895,26 @@ def treatment_session_schedule(
         duration_minutes:   Duración capturada por el usuario; se persiste
                             tal cual en la sesión (informativo — el cálculo
                             real de `ends_at` ya lo hizo agenda).
+        active_sucursal_id: Sucursal activa del request (header X-Sucursal-Id),
+                            resuelta por la vista con `resolve_active_sucursal`.
+                            Se reenvía a `appointment_create` (ramas "crear" y
+                            "cancelar+crear") para que la sede resuelta respete
+                            la sede activa del actor, igual que el resto de la
+                            agenda — multi-sede Fase 2/3.
 
     Returns:
         La TreatmentSession actualizada con su `appointment` ligado.
 
     Raises:
         ValidationError: rol no permitido, falta `doctor_id`, un doctor
-            intentando cancelar/reasignar la cita de OTRO médico, o
-            cualquier ValidationError que levanten `appointment_create`/
-            `appointment_reschedule` (paciente/doctor/consultorio de otro
-            tenant, inactivos, empalme de horario, bloqueo de agenda, etc.)
-            — se propaga tal cual para que la vista la mapee a 400.
+            intentando cancelar/reasignar la cita de OTRO médico, el actor no
+            tiene acceso a la sede de la cita YA agendada de la sesión
+            (multi-sede — cierre de A8, ver docs/design/sucursales-hallazgos-
+            seguridad.md), o cualquier ValidationError que levanten
+            `appointment_create`/`appointment_reschedule` (paciente/doctor/
+            consultorio de otro tenant, inactivos, empalme de horario,
+            bloqueo de agenda, etc.) — se propaga tal cual para que la vista
+            la mapee a 400.
     """
     from apps.agenda.services import appointment_create, appointment_reschedule  # noqa: PLC0415
 
@@ -907,9 +926,28 @@ def treatment_session_schedule(
     tenant = session.tenant
     plan = session.item.plan
     reason = session.item.description
+    existing_appointment = session.appointment
+
+    # Multi-sede — cierre de A8 (docs/design/sucursales-hallazgos-seguridad.md):
+    # defensa en profundidad. `TreatmentSessionScheduleApi.post` YA valida la
+    # sede DESTINO (con el consultorio elegido) antes de llamar a este
+    # service, pero un caller directo (management command, test, futura
+    # integración) podría saltarse esa vista. Aquí se valida la sede ORIGEN:
+    # si la sesión YA tiene una cita agendada en una sede fuera del alcance
+    # del actor, no se permite tocarla (ni reagendarla, ni reasignarla a otro
+    # médico, ni crear una de reemplazo) — corre ANTES de decidir la rama
+    # crear/reagendar/cancelar+crear, así protege las 3 por igual. Reutiliza
+    # `allowed_sucursales` (mismo helper que usa el resto de la app); NUNCA
+    # reimplementa el anti-empalme, que sigue siendo 100% de agenda.
+    if existing_appointment is not None and existing_appointment.sucursal_id is not None:
+        if (
+            not allowed_sucursales(user=actor, tenant=tenant)
+            .filter(id=existing_appointment.sucursal_id)
+            .exists()
+        ):
+            raise ValidationError("No tienes acceso a la sede de la cita actual de esta sesión.")
 
     with transaction.atomic():
-        existing_appointment = session.appointment
         if existing_appointment is None:
             appointment = appointment_create(
                 tenant=tenant,
@@ -920,6 +958,7 @@ def treatment_session_schedule(
                 ends_at=ends_at,
                 consultorio_id=consultorio_id,
                 reason=reason,
+                active_sucursal_id=active_sucursal_id,
             )
         elif existing_appointment.doctor_id == doctor_id:
             appointment = appointment_reschedule(
@@ -945,6 +984,7 @@ def treatment_session_schedule(
                 ends_at=ends_at,
                 consultorio_id=consultorio_id,
                 reason=reason,
+                active_sucursal_id=active_sucursal_id,
             )
 
         session.scheduled_date = scheduled_date
@@ -1000,15 +1040,31 @@ def treatment_session_unschedule(
 
     Raises:
         ValidationError: rol no permitido, un doctor intentando quitar de
-            agenda la cita de OTRO médico, o si la cita ligada ya está en un
-            estado terminal que no admite cancelación (p. ej. Atendida) —
-            la máquina de estados de agenda no permite esa transición; se
-            propaga tal cual.
+            agenda la cita de OTRO médico, el actor no tiene acceso a la sede
+            de la cita ligada (multi-sede — cierre de A8, ver docs/design/
+            sucursales-hallazgos-seguridad.md), o si la cita ligada ya está
+            en un estado terminal que no admite cancelación (p. ej.
+            Atendida) — la máquina de estados de agenda no permite esa
+            transición; se propaga tal cual.
     """
     _validate_actor_role(actor_role=actor_role)
 
     if session.appointment_id is None:
         return session
+
+    # Multi-sede — cierre de A8: un actor acotado a una sede no puede quitar
+    # de agenda (cancelar) una cita que vive en OTRA sede, aunque conozca el
+    # id de la sesión (el estado de cuenta del paciente es compartido entre
+    # sedes por diseño). Reutiliza `allowed_sucursales`, mismo patrón que
+    # `treatment_session_schedule`.
+    appointment = session.appointment
+    if appointment is not None and appointment.sucursal_id is not None:
+        if (
+            not allowed_sucursales(user=actor, tenant=session.tenant)
+            .filter(id=appointment.sucursal_id)
+            .exists()
+        ):
+            raise ValidationError("No tienes acceso a la sede de la cita actual de esta sesión.")
 
     _cancel_session_appointment_if_any(
         actor=actor,

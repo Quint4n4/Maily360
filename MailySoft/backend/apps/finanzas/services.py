@@ -17,6 +17,7 @@ módulo nunca llama al PAC directamente.
 """
 
 import datetime
+import uuid
 from decimal import Decimal
 from typing import Any
 
@@ -27,6 +28,8 @@ from django.utils import timezone
 from adapters.cfdi import get_cfdi_adapter
 from apps.audit.models import ActionType
 from apps.audit.services import audit_record
+from apps.clinica.models import Sucursal
+from apps.clinica.sucursal_scope import allowed_sucursales
 from apps.finanzas.models import (
     CfdiDocument,
     Charge,
@@ -66,6 +69,66 @@ def _q2(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"))
 
 
+def _resolve_tenant_sucursales(
+    *, tenant: Tenant, sucursal_ids: list[uuid.UUID] | None
+) -> list[Sucursal]:
+    """Resuelve y valida una lista de UUIDs de sucursal contra el tenant activo.
+
+    Multi-sede — decisión del dueño (2026-07-16): el owner elige en qué
+    sucursales está disponible cada servicio/paquete del catálogo. El PRECIO
+    no cambia por sede (sigue siendo `base_price`/suma de líneas); esto solo
+    resuelve el M2M `sucursales` de disponibilidad.
+
+    CONVENCIÓN: lista vacía o None → "todas las sedes" (M2M vacío). Se
+    retorna una lista vacía en ese caso (nunca se resuelven sucursales
+    "todas" a un listado explícito).
+
+    Args:
+        tenant:       tenant activo (dueño de la operación).
+        sucursal_ids: ids de sucursal indicados por el cliente, o None/[].
+
+    Returns:
+        Lista de instancias `Sucursal` del tenant (vacía = todas las sedes).
+
+    Raises:
+        ValidationError: si alguna sucursal indicada no existe en este
+                         tenant (sede ajena o inexistente) — rechaza la
+                         operación completa, no descarta en silencio.
+    """
+    if not sucursal_ids:
+        return []
+    ids = list(sucursal_ids)
+    sucursales = list(
+        Sucursal.all_objects.filter(id__in=ids, tenant_id=tenant.id, deleted_at__isnull=True)
+    )
+    if len(sucursales) != len(set(ids)):
+        raise ValidationError("Una o más sucursales indicadas no pertenecen a esta clínica.")
+    return sucursales
+
+
+def _ensure_sucursal_allowed(*, tenant: Tenant, user: Any, sucursal: Sucursal | None) -> None:
+    """Valida que `user` tenga acceso a `sucursal` (multi-sede — Fase 3, clúster D).
+
+    Defensa en profundidad para timbrar/cancelar CFDI (integridad fiscal ante
+    el SAT): un admin acotado a una sede no debe poder timbrar ni cancelar el
+    comprobante de otra, aunque haya conseguido el id del pago/CFDI por otra
+    vía (p. ej. el estado de cuenta compartido del paciente). La vista ya
+    hace el mismo chequeo con `sucursal_scope_ids` (404); esto cubre llamadas
+    directas al servicio (management commands, Celery, tests) que no pasan
+    por la vista.
+
+    Legado (`sucursal is None`) siempre pasa — compatibilidad retro, mismo
+    criterio que `resolve_write_sucursal`.
+
+    Raises:
+        ValidationError: si el actor no tiene esa sede entre sus permitidas.
+    """
+    if sucursal is None:
+        return
+    if not allowed_sucursales(user=user, tenant=tenant).filter(id=sucursal.id).exists():
+        raise ValidationError("No tienes acceso a la sucursal de este comprobante.")
+
+
 # ---------------------------------------------------------------------------
 # Conceptos (catálogo)
 # ---------------------------------------------------------------------------
@@ -81,6 +144,7 @@ def concept_create(
     clinical_description: str = "",
     sat_product_key: str = "",
     sat_unit_key: str = "E48",
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> ServiceConcept:
     """Crea un concepto cobrable en el catálogo del tenant.
 
@@ -88,13 +152,23 @@ def concept_create(
     comercial) que se sugiere al incluir este concepto en el esquema de
     tratamientos de un Plan Integral de Longevidad (apps.expediente).
 
+    Args:
+        sucursal_ids: sedes donde el servicio está disponible (multi-sede —
+                      decisión del dueño, 2026-07-16). El PRECIO no cambia
+                      por sede (sigue siendo `base_price`). Lista vacía o
+                      None = disponible en TODAS las sedes (convención: M2M
+                      vacío).
+
     Raises:
-        ValidationError: si ya existe un concepto con el mismo nombre.
+        ValidationError: si ya existe un concepto con el mismo nombre, o si
+                         alguna sucursal indicada no pertenece a este tenant.
     """
     if ServiceConcept.all_objects.filter(
         tenant=tenant, name=name, deleted_at__isnull=True
     ).exists():
         raise ValidationError("Ya existe un concepto con ese nombre en esta clínica.")
+
+    sucursales = _resolve_tenant_sucursales(tenant=tenant, sucursal_ids=sucursal_ids)
 
     concept = ServiceConcept.objects.create(
         tenant=tenant,
@@ -106,6 +180,7 @@ def concept_create(
         sat_product_key=sat_product_key,
         sat_unit_key=sat_unit_key,
     )
+    concept.sucursales.set(sucursales)
     audit_record(
         action=ActionType.CONCEPT_CREATE,
         resource_type="ServiceConcept",
@@ -126,13 +201,22 @@ def concept_update(
     *,
     concept: ServiceConcept,
     user: Any,
+    sucursal_ids: list[uuid.UUID] | None = None,
     **fields: object,
 ) -> ServiceConcept:
     """Actualiza campos permitidos de un concepto del catálogo.
 
+    Args:
+        sucursal_ids: si se provee (no None), REEMPLAZA por completo las
+                      sedes donde el servicio está disponible (lista vacía =
+                      todas las sedes — multi-sede, decisión del dueño,
+                      2026-07-16). None = no se modifica la disponibilidad
+                      actual (permite un PATCH que solo toque otros campos).
+
     Raises:
-        ValidationError: si se intenta modificar un campo inmutable o el nuevo
-                         nombre colisiona con otro concepto del tenant.
+        ValidationError: si se intenta modificar un campo inmutable, el nuevo
+                         nombre colisiona con otro concepto del tenant, o
+                         alguna sucursal indicada no pertenece a este tenant.
     """
     attempted = _CONCEPT_IMMUTABLE.intersection(fields.keys())
     if attempted:
@@ -149,9 +233,19 @@ def concept_update(
         ):
             raise ValidationError("Ya existe un concepto con ese nombre en esta clínica.")
 
+    # Validar sucursales ANTES de mutar nada (fields o M2M): si la validación
+    # falla, el PATCH no debe dejar el concepto a medio actualizar.
+    sucursales: list[Sucursal] | None = None
+    if sucursal_ids is not None:
+        sucursales = _resolve_tenant_sucursales(tenant=concept.tenant, sucursal_ids=sucursal_ids)
+
     for field_name, value in fields.items():
         setattr(concept, field_name, value)
-    concept.save(update_fields=list(fields.keys()) + ["updated_at"])
+    if fields:
+        concept.save(update_fields=list(fields.keys()) + ["updated_at"])
+
+    if sucursales is not None:
+        concept.sucursales.set(sucursales)
 
     audit_record(
         action=ActionType.CONCEPT_UPDATE,
@@ -160,7 +254,10 @@ def concept_update(
         tenant=concept.tenant,
         resource_id=concept.id,
         resource_repr=concept.name,
-        metadata={"changed_fields": sorted(fields.keys())},
+        metadata={
+            "changed_fields": sorted(fields.keys()),
+            "sucursales_changed": sucursal_ids is not None,
+        },
     )
     return concept
 
@@ -275,17 +372,25 @@ def quote_create(
     items: list[dict[str, Any]],
     valid_until: datetime.date | None = None,
     notes: str = "",
+    sucursal: Sucursal | None = None,
 ) -> Quote:
     """Crea una cotización en estado DRAFT con sus líneas.
 
     Cada item: {concept_id?, description, quantity, unit_price, discount?}.
     El `description` y `unit_price` se guardan como snapshot.
 
+    Args:
+        sucursal: sede DONDE SE GENERÓ la cotización (multi-sede — Fase 3).
+                  La vista la resuelve con `resolve_write_sucursal`. None =
+                  tenant sin sucursales configuradas (compatibilidad retro).
+
     Raises:
-        ValidationError: si el paciente es de otro tenant, no hay items, o un
-                         concepto referenciado es de otro tenant.
+        ValidationError: si el paciente es de otro tenant, no hay items, un
+                         concepto referenciado es de otro tenant, o la
+                         sucursal indicada es de otro tenant.
     """
     _ensure_same_tenant(tenant=tenant, obj=patient, label="El paciente")
+    _ensure_same_tenant(tenant=tenant, obj=sucursal, label="La sucursal")
     if not items:
         raise ValidationError("La cotización debe tener al menos una línea.")
 
@@ -297,6 +402,7 @@ def quote_create(
             status=Quote.Status.DRAFT,
             valid_until=valid_until,
             notes=notes,
+            sucursal=sucursal,
         )
         for raw in items:
             _create_quote_item(tenant=tenant, user=user, quote=quote, raw=raw)
@@ -403,6 +509,10 @@ def quote_accept(*, quote: Quote, user: Any) -> Quote:
                 amount_paid=ZERO,
                 status=Charge.Status.PENDING,
                 issued_at=now,
+                # El cargo hereda la sede DONDE SE GENERÓ la cotización que
+                # lo origina (multi-sede — Fase 3), no la sede activa de
+                # quien acepta la cotización.
+                sucursal=quote.sucursal,
             )
 
     audit_record(
@@ -495,15 +605,23 @@ def package_create(
     description: str = "",
     is_active: bool = True,
     items: list[dict[str, Any]],
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> TreatmentPackage:
     """Crea un paquete reutilizable de tratamientos con sus líneas.
 
     Cada item: {concept_id, sessions?, order?}. `concept_id` es obligatorio
     (el paquete es una plantilla del catálogo, no admite captura libre).
 
+    Args:
+        sucursal_ids: sedes donde el paquete está disponible (multi-sede —
+                      decisión del dueño, 2026-07-16). El PRECIO no cambia
+                      por sede. Lista vacía o None = disponible en TODAS las
+                      sedes (convención: M2M vacío).
+
     Raises:
         ValidationError: si ya existe un paquete con el mismo nombre, no hay
-                         items, o un item referencia un concepto inválido.
+                         items, un item referencia un concepto inválido, o
+                         alguna sucursal indicada no pertenece a este tenant.
     """
     if TreatmentPackage.all_objects.filter(
         tenant=tenant, name=name, deleted_at__isnull=True
@@ -511,6 +629,9 @@ def package_create(
         raise ValidationError("Ya existe un paquete con ese nombre en esta clínica.")
     if not items:
         raise ValidationError("El paquete debe tener al menos un tratamiento.")
+
+    # Validar sucursales ANTES de crear nada (misma razón que concept_update).
+    sucursales = _resolve_tenant_sucursales(tenant=tenant, sucursal_ids=sucursal_ids)
 
     with transaction.atomic():
         package = TreatmentPackage.objects.create(
@@ -522,6 +643,7 @@ def package_create(
         )
         for order, raw in enumerate(items):
             _create_package_item(tenant=tenant, user=user, package=package, raw=raw, order=order)
+        package.sucursales.set(sucursales)
 
     audit_record(
         action=ActionType.PACKAGE_CREATE,
@@ -543,6 +665,7 @@ def package_replace(
     description: str = "",
     is_active: bool = True,
     items: list[dict[str, Any]],
+    sucursal_ids: list[uuid.UUID] | None = None,
 ) -> TreatmentPackage:
     """Reemplaza nombre/descripción/estado/items de un paquete.
 
@@ -551,9 +674,17 @@ def package_replace(
     `TreatmentPlan`, que sí reconcilia por `id` para no perder citas ya
     agendadas).
 
+    Args:
+        sucursal_ids: si se provee (no None), REEMPLAZA por completo las
+                      sedes donde el paquete está disponible (lista vacía =
+                      todas las sedes — multi-sede, decisión del dueño,
+                      2026-07-16). None = no se modifica la disponibilidad
+                      actual.
+
     Raises:
         ValidationError: si el nuevo nombre colisiona con otro paquete del
-                         tenant, no hay items, o un item es inválido.
+                         tenant, no hay items, un item es inválido, o alguna
+                         sucursal indicada no pertenece a este tenant.
     """
     if not items:
         raise ValidationError("El paquete debe tener al menos un tratamiento.")
@@ -568,6 +699,11 @@ def package_replace(
     ):
         raise ValidationError("Ya existe un paquete con ese nombre en esta clínica.")
 
+    # Validar sucursales ANTES de mutar nada (misma razón que concept_update).
+    sucursales: list[Sucursal] | None = None
+    if sucursal_ids is not None:
+        sucursales = _resolve_tenant_sucursales(tenant=package.tenant, sucursal_ids=sucursal_ids)
+
     with transaction.atomic():
         package.name = name
         package.description = description
@@ -580,6 +716,9 @@ def package_replace(
                 tenant=package.tenant, user=user, package=package, raw=raw, order=order
             )
 
+        if sucursales is not None:
+            package.sucursales.set(sucursales)
+
     audit_record(
         action=ActionType.PACKAGE_UPDATE,
         resource_type="TreatmentPackage",
@@ -587,7 +726,7 @@ def package_replace(
         tenant=package.tenant,
         resource_id=package.id,
         resource_repr=package.name,
-        metadata={"items": len(items)},
+        metadata={"items": len(items), "sucursales_changed": sucursal_ids is not None},
     )
     return package_get(package_id=package.id)
 
@@ -621,15 +760,23 @@ def charge_create(
     concept: ServiceConcept | None = None,
     appointment: Any | None = None,
     issued_at: datetime.datetime | None = None,
+    sucursal: Sucursal | None = None,
 ) -> Charge:
     """Crea un cargo (cuenta por cobrar) para un paciente.
 
+    Args:
+        sucursal: sede DONDE SE GENERÓ el cargo (multi-sede — Fase 3). La
+                  vista la resuelve con `resolve_write_sucursal`. None =
+                  tenant sin sucursales configuradas (compatibilidad retro).
+
     Raises:
-        ValidationError: si el monto no es positivo o las relaciones son de otro tenant.
+        ValidationError: si el monto no es positivo o las relaciones (incluida
+                         la sucursal) son de otro tenant.
     """
     _ensure_same_tenant(tenant=tenant, obj=patient, label="El paciente")
     _ensure_same_tenant(tenant=tenant, obj=concept, label="El concepto")
     _ensure_same_tenant(tenant=tenant, obj=appointment, label="La cita")
+    _ensure_same_tenant(tenant=tenant, obj=sucursal, label="La sucursal")
 
     if amount is None or amount <= ZERO:
         raise ValidationError("El monto del cargo debe ser mayor a cero.")
@@ -647,6 +794,7 @@ def charge_create(
         amount_paid=ZERO,
         status=Charge.Status.PENDING,
         issued_at=issued_at or timezone.now(),
+        sucursal=sucursal,
     )
     audit_record(
         action=ActionType.CHARGE_CREATE,
@@ -712,18 +860,26 @@ def payment_register(
     notes: str = "",
     received_at: datetime.datetime | None = None,
     allocations: list[dict[str, Any]] | None = None,
+    sucursal: Sucursal | None = None,
 ) -> Payment:
     """Registra un pago y, opcionalmente, lo aplica a uno o varios cargos.
 
     `allocations`: lista de {charge_id, amount}. La suma de las aplicaciones no
     puede exceder `amount`. Cada cargo se actualiza (amount_paid + status).
 
+    Args:
+        sucursal: sede DONDE SE GENERÓ el pago (multi-sede — Fase 3). La
+                  vista la resuelve con `resolve_write_sucursal`. None =
+                  tenant sin sucursales configuradas (compatibilidad retro).
+
     Raises:
         ValidationError: si el monto no es positivo, un cargo es de otro tenant
-                         o ya está cancelado/pagado de más, o la suma de
-                         aplicaciones excede el monto del pago.
+                         o ya está cancelado/pagado de más, la sucursal es de
+                         otro tenant, o la suma de aplicaciones excede el
+                         monto del pago.
     """
     _ensure_same_tenant(tenant=tenant, obj=patient, label="El paciente")
+    _ensure_same_tenant(tenant=tenant, obj=sucursal, label="La sucursal")
     if amount is None or amount <= ZERO:
         raise ValidationError("El monto del pago debe ser mayor a cero.")
 
@@ -758,6 +914,7 @@ def payment_register(
             reference=reference,
             notes=notes,
             received_at=received_at or timezone.now(),
+            sucursal=sucursal,
         )
 
         allocated_total = ZERO
@@ -873,10 +1030,13 @@ def cfdi_issue(
          Si falla: deja el documento en DRAFT y eleva ValidationError.
 
     Raises:
-        ValidationError: si falta config fiscal, el pago es de otro tenant, o
-                         el PAC rechaza el timbrado.
+        ValidationError: si falta config fiscal, el pago es de otro tenant,
+                         el actor no tiene acceso a la sede del pago (multi-
+                         sede — integridad fiscal), o el PAC rechaza el
+                         timbrado.
     """
     _ensure_same_tenant(tenant=tenant, obj=payment, label="El pago")
+    _ensure_sucursal_allowed(tenant=tenant, user=user, sucursal=payment.sucursal)
 
     config = ClinicFiscalConfig.all_objects.filter(tenant=tenant).first()
     if config is None or not config.rfc:
@@ -908,6 +1068,10 @@ def cfdi_issue(
             payment_method=payment_method,
             subtotal=payment.amount,
             total=payment.amount,
+            # Hereda la sede DONDE SE GENERÓ el pago que comprueba (multi-
+            # sede — Fase 3, clúster D). None si el pago es legado/tenant
+            # sin sucursales.
+            sucursal=payment.sucursal,
         )
 
         adapter = get_cfdi_adapter()
@@ -969,11 +1133,13 @@ def cfdi_cancel(*, cfdi: CfdiDocument, user: Any, reason: str = "02") -> CfdiDoc
     """Cancela un CFDI timbrado, vía el PAC.
 
     Raises:
-        ValidationError: si el comprobante no está timbrado o el PAC rechaza
-                         la cancelación.
+        ValidationError: si el comprobante no está timbrado, el actor no
+                         tiene acceso a la sede del comprobante (multi-sede —
+                         integridad fiscal), o el PAC rechaza la cancelación.
     """
     if cfdi.status != CfdiDocument.Status.STAMPED:
         raise ValidationError("Solo se pueden cancelar comprobantes timbrados.")
+    _ensure_sucursal_allowed(tenant=cfdi.tenant, user=user, sucursal=cfdi.sucursal)
 
     adapter = get_cfdi_adapter()
     result = adapter.cancel(

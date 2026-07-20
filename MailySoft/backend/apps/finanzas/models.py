@@ -85,6 +85,17 @@ class ServiceConcept(TenantAwareModel):
         db_index=True,
         help_text="False = concepto desactivado (no aparece en nuevos documentos).",
     )
+    sucursales = models.ManyToManyField(
+        "clinica.Sucursal",
+        blank=True,
+        related_name="+",
+        help_text=(
+            "Sucursales donde este servicio está disponible (multi-sede — "
+            "decisión del dueño, 2026-07-16). El PRECIO es el mismo en todas "
+            "las sedes (base_price); esto solo controla disponibilidad. "
+            "CONVENCIÓN: vacío = disponible en TODAS las sedes del tenant."
+        ),
+    )
 
     class Meta:
         db_table = "finanzas_service_concepts"
@@ -221,6 +232,21 @@ class Quote(TenantAwareModel):
         default=ZERO,
         help_text="Total a pagar (subtotal - descuentos) (snapshot).",
     )
+    sucursal = models.ForeignKey(
+        "clinica.Sucursal",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Sucursal (sede) donde se GENERÓ la cotización (multi-sede — "
+            "Fase 3). Null = dato legado sin backfillar, o tenant sin "
+            "sucursales. NO se usa para filtrar el estado de cuenta del "
+            "paciente (compartido entre sedes); sí para acotar reportes/"
+            "caja por sede."
+        ),
+    )
 
     class Meta:
         db_table = "finanzas_quotes"
@@ -325,6 +351,18 @@ class TreatmentPackage(TenantAwareModel):
         default=True,
         db_index=True,
         help_text="False = paquete desactivado (no aparece en el catálogo).",
+    )
+    sucursales = models.ManyToManyField(
+        "clinica.Sucursal",
+        blank=True,
+        related_name="+",
+        help_text=(
+            "Sucursales donde este paquete está disponible (multi-sede — "
+            "decisión del dueño, 2026-07-16). El PRECIO es el mismo en todas "
+            "las sedes (suma de base_price de sus líneas); esto solo "
+            "controla disponibilidad. CONVENCIÓN: vacío = disponible en "
+            "TODAS las sedes del tenant."
+        ),
     )
 
     class Meta:
@@ -458,6 +496,20 @@ class Charge(TenantAwareModel):
         db_index=True,
         help_text="Fecha de emisión del cargo (para el aging de cuentas por cobrar).",
     )
+    sucursal = models.ForeignKey(
+        "clinica.Sucursal",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Sucursal (sede) donde se GENERÓ el cargo (multi-sede — Fase 3). "
+            "Null = dato legado sin backfillar, o tenant sin sucursales. NO "
+            "se usa para filtrar el estado de cuenta del paciente "
+            "(compartido entre sedes); sí para acotar reportes/caja por sede."
+        ),
+    )
 
     class Meta:
         db_table = "finanzas_charges"
@@ -533,6 +585,20 @@ class Payment(TenantAwareModel):
         blank=True,
         default="",
         help_text="Notas internas del pago.",
+    )
+    sucursal = models.ForeignKey(
+        "clinica.Sucursal",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Sucursal (sede) donde se GENERÓ el pago (multi-sede — Fase 3). "
+            "Null = dato legado sin backfillar, o tenant sin sucursales. NO "
+            "se usa para filtrar el estado de cuenta del paciente "
+            "(compartido entre sedes); sí para acotar reportes/caja por sede."
+        ),
     )
 
     class Meta:
@@ -735,6 +801,22 @@ class CfdiDocument(TenantAwareModel):
         null=True,
         blank=True,
         help_text="Fecha de cancelación.",
+    )
+    sucursal = models.ForeignKey(
+        "clinica.Sucursal",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Sucursal (sede) donde se GENERÓ el CFDI (multi-sede — Fase 3, "
+            "clúster D). Heredada de `payment.sucursal` al timbrar. Null = "
+            "dato legado sin backfillar, o tenant sin sucursales. Se usa "
+            "para acotar listado/detalle/timbrado/cancelación por sede "
+            "(integridad fiscal: un admin de una sede no debe timbrar ni "
+            "cancelar CFDI de otra)."
+        ),
     )
 
     class Meta:

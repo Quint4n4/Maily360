@@ -14,6 +14,7 @@
  */
 
 import type { ClinicRole } from '../auth/permisos'
+import type { SucursalBrief } from './sucursal'
 
 /** Estado de una clínica (Tenant.status en el backend). */
 export type TenantStatus = 'trial' | 'active' | 'suspended' | 'canceled'
@@ -56,6 +57,12 @@ export interface Me {
   active_role: ClinicRole | null
   active_role_display: string | null
   memberships: Membership[]
+  /**
+   * Sucursales (sedes) PERMITIDAS del usuario en el tenant activo. Multi-sede
+   * (Fase 1): el frontend inicializa la sucursal activa tomando la `is_default`.
+   * Puede venir vacío en clínicas aún sin sucursales configuradas.
+   */
+  sucursales: SucursalBrief[]
 }
 
 /** Respuesta de POST /api/v1/auth/login/ (patrón híbrido: solo access en el body). */

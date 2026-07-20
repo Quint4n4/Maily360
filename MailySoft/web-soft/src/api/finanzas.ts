@@ -7,11 +7,24 @@
  */
 
 import { http } from '../lib/http'
+import type { SucursalRef } from '../types/sucursal'
 import { pdfJobBlob } from './pdfs'
 
 // ---------------------------------------------------------------------------
 // Tipos compartidos
 // ---------------------------------------------------------------------------
+
+/**
+ * Multi-sede (Fase 3): dónde se generó el movimiento.
+ *
+ * Reglas de negocio (las respeta el backend; el front solo las refleja):
+ *  - Caja / reportes / dashboard / cierre diario / retención / antigüedad y el
+ *    listado GENERAL de cargos y pagos se filtran por el header `X-Sucursal-Id`.
+ *    Sin header, el backend consolida sobre las sedes PERMITIDAS del usuario.
+ *  - El ESTADO DE CUENTA POR PACIENTE devuelve TODOS sus movimientos, de todas
+ *    las sedes (la cuenta del paciente es compartida). No se filtra.
+ */
+export type { SucursalRef }
 
 export interface Paginated<T> {
   count: number
@@ -230,6 +243,13 @@ export interface DailySheetMovement {
   method?: PaymentMethod
   method_label?: string
   reference?: string
+  /**
+   * Sede donde se generó el movimiento (multi-sede). El cierre diario ya viene
+   * filtrado por la sede activa (header), pero se muestra la columna "Sede" para
+   * que el consolidado ("Todas las sucursales") sea legible. Opcional: los
+   * movimientos históricos (o un backend aún sin el campo) llegan sin él.
+   */
+  sucursal?: SucursalRef | null
 }
 
 /** Totales-resumen del cierre diario. */
@@ -347,6 +367,11 @@ export interface ServiceConcept {
   sat_unit_key: string
   is_active: boolean
   created_at: string
+  /**
+   * Sedes DONDE está disponible este servicio (multi-sede). **`[]` = todas las
+   * sedes.** El precio es el mismo en todas (no hay precio por sede).
+   */
+  sucursales: SucursalRef[]
 }
 
 export function fetchConcepts(
@@ -368,6 +393,11 @@ export interface ConceptInput {
   sat_unit_key?: string
   /** Solo en PATCH: reactivar un concepto previamente desactivado. */
   is_active?: boolean
+  /**
+   * Sedes DONDE queda disponible (multi-sede). **`[]` = todas las sedes.** En
+   * PATCH, omitirlo = no tocar la asignación actual. Solo el dueño puede enviarlo.
+   */
+  sucursal_ids?: string[]
 }
 
 export function createConcept(input: ConceptInput): Promise<ServiceConcept> {
@@ -410,6 +440,8 @@ export interface Quote {
   total: number
   items: QuoteItem[]
   created_at: string
+  /** Sede DONDE se generó la cotización. null en cotizaciones históricas. */
+  sucursal: SucursalRef | null
 }
 
 export interface QuoteItemInput {
@@ -496,6 +528,8 @@ export interface Charge {
   status_display: string
   issued_at: string
   created_at: string
+  /** Sede DONDE se generó el cargo. null en cargos históricos (pre-sucursales). */
+  sucursal: SucursalRef | null
 }
 
 export interface ChargeInput {
@@ -547,6 +581,8 @@ export interface Payment {
   notes: string
   allocations: PaymentAllocation[]
   created_at: string
+  /** Sede DONDE se cobró el pago. null en pagos históricos (pre-sucursales). */
+  sucursal: SucursalRef | null
 }
 
 export interface PaymentInput {
@@ -635,6 +671,13 @@ export interface StatementMovement {
   payment: number
   balance: number
   reference: string
+  /**
+   * Sede DONDE se generó el movimiento. El estado de cuenta del paciente es
+   * COMPARTIDO entre sedes (trae todos sus movimientos, de cualquier sucursal),
+   * por eso se muestra la sede de cada línea. Opcional: los movimientos
+   * históricos (o un backend aún sin el campo) llegan sin él.
+   */
+  sucursal?: SucursalRef | null
 }
 
 export interface AccountStatement {

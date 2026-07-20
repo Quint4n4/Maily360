@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, CalendarCheck, Cake, FileText, CircleDollarSign, UserX, Loader2, Users, Ban, Stethoscope, Phone, Video, MapPin, Clock, type LucideIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarCheck, Cake, FileText, CircleDollarSign, UserX, Loader2, Users, Ban, Stethoscope, Phone, Video, MapPin, Clock, Building2, type LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import CrearEventoModal from '../components/agenda/CrearEventoModal'
 import DetalleCitaModal, { CitaDetalle, EstadoCita } from '../components/agenda/DetalleCitaModal'
@@ -15,6 +15,7 @@ import { ApiError } from '../lib/http'
 import type { Appointment, AppointmentStatus, AgendaBlock, AppointmentModality } from '../types/agenda'
 import { useRole } from '../auth/RoleContext'
 import { useAuth } from '../auth/AuthContext'
+import { useSucursalActiva } from '../auth/SucursalContext'
 import { puedeAgendar, puedeCambiarEstadoCita, puedeCancelarCita } from '../auth/permisos'
 import { useAviso } from '../components/common/DialogProvider'
 
@@ -80,6 +81,10 @@ export default function AgendaPage() {
   const [modalMode, setModalMode] = useState<'cita' | 'block' | 'meeting'>('cita')
   const { role } = useRole()
   const { user } = useAuth()
+  // Sede activa (multi-sede F2). El calendario ya viene filtrado por ella desde el
+  // backend (header X-Sucursal-Id); aquí solo la nombramos en la UI.
+  const { activeSucursal } = useSucursalActiva()
+  const sedeNombre = activeSucursal?.name ?? ''
   const agendar = puedeAgendar(role)           // crear/reagendar/eventos (NO enfermería)
   const cambiarStatus = puedeCambiarEstadoCita(role) // cambiar estado (incluye enfermería)
   const cancelar = puedeCancelarCita(role)     // cancelar cita (NO enfermería)
@@ -168,6 +173,8 @@ export default function AgendaPage() {
       doctor: a.doctor.full_name,
       consultorioName: a.consultorio?.name ?? 'Sin consultorio',
       consultorioColor: col?.color ?? '#C9A227',
+      // Sede de la cita (multi-sede F2): null si la clínica no usa sucursales.
+      sucursalName: a.sucursal?.name ?? null,
       modalidad: a.modality_display,
       horario: `${localHHMM12(a.starts_at)} – ${localHHMM12(a.ends_at)}`,
       fecha: formatLargo(selectedDate),
@@ -335,9 +342,18 @@ export default function AgendaPage() {
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
-            <span className="text-xs text-gray-500 shrink-0">
-              {loadingCitas ? 'Cargando…' : `${citas.length} cita${citas.length === 1 ? '' : 's'}`}
-            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Sede activa: el calendario muestra SOLO esta sucursal. */}
+              {sedeNombre && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                  style={{ background: 'rgba(201,162,39,0.14)', color: '#9A7B1E' }}>
+                  <Building2 className="w-3.5 h-3.5" /> {sedeNombre}
+                </span>
+              )}
+              <span className="text-xs text-gray-500">
+                {loadingCitas ? 'Cargando…' : `${citas.length} cita${citas.length === 1 ? '' : 's'}`}
+              </span>
+            </div>
           </div>
 
           {(loadingCons || loadingCitas) && (
@@ -412,7 +428,13 @@ export default function AgendaPage() {
                   const ci = b.consultorio ? cols.findIndex(c => c.id === b.consultorio!.id) : -1
                   const gridColumn = ci >= 0 ? `${ci + 2}` : `2 / span ${Math.max(1, cols.length)}`
                   const esBloqueo = b.kind === 'block'
-                  const sub = b.doctor ? b.doctor.full_name : (b.consultorio ? b.consultorio.name : 'Toda la clínica')
+                  // Un evento sin doctor ni consultorio aplica a TODA LA SEDE ACTIVA (F2),
+                  // no a las demás sucursales: lo nombramos para que no se malinterprete.
+                  const sub = b.doctor
+                    ? b.doctor.full_name
+                    : b.consultorio
+                      ? b.consultorio.name
+                      : (sedeNombre ? `Toda la sucursal ${sedeNombre}` : 'Toda la clínica')
                   const Icono = esBloqueo ? Ban : Users
                   const tinta = esBloqueo ? '#A32D2D' : '#3A6EA5'
                   const subTinta = esBloqueo ? '#C0625C' : '#5B7DA8'

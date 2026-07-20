@@ -24,18 +24,21 @@ def _doctor_sello_path(instance: "Doctor", filename: str) -> str:
     """Ruta para el sello/firma del médico (importada condicionalmente por clinica)."""
     # Importación inline para evitar dependencia circular personal → clinica.
     from apps.clinica.models import doctor_sello_path
+
     return doctor_sello_path(instance, filename)
 
 
 def _doctor_foto_path(instance: "Doctor", filename: str) -> str:
     """Ruta para la fotografía del médico."""
     from apps.clinica.models import doctor_foto_path
+
     return doctor_foto_path(instance, filename)
 
 
 def _validate_doctor_image(file: object) -> None:
     """Valida imagen del médico (JPG/PNG/WEBP, máx 5 MB)."""
     from apps.core.files import validate_image
+
     validate_image(file)
 
 
@@ -94,6 +97,17 @@ class Doctor(TenantAwareModel):
             "Consultorios donde ESTE médico puede atender. "
             "Vacío = sin restricción (puede usar cualquiera). "
             "Todos deben pertenecer al mismo tenant que el doctor."
+        ),
+    )
+    sucursales = models.ManyToManyField(
+        "clinica.Sucursal",
+        blank=True,
+        related_name="doctores",
+        help_text=(
+            "Sucursales donde ESTE médico puede atender (multi-sede — Fase 1). "
+            "Vacío = sin restricción (compatibilidad retro: clínicas de una "
+            "sola sede no necesitan asignar nada). "
+            "Todas deben pertenecer al mismo tenant que el doctor."
         ),
     )
     # --- Campos agregados por módulo Mi Consultorio ---
@@ -175,6 +189,18 @@ class Consultorio(TenantAwareModel):
         db_index=True,
         help_text="False = consultorio inactivo (soft). No borra el registro.",
     )
+    sucursal = models.ForeignKey(
+        "clinica.Sucursal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="consultorios",
+        help_text=(
+            "Sucursal a la que pertenece este consultorio (multi-sede — Fase 1). "
+            "Null = sin asignar (compatibilidad retro; el backfill de la Fase 1 "
+            "asigna todos los consultorios existentes a la Sucursal Principal)."
+        ),
+    )
 
     class Meta:
         db_table = "personal_consultorios"
@@ -242,6 +268,19 @@ class DoctorSchedule(TenantAwareModel):
         related_name="schedules",
         help_text="Consultorio asignado a este bloque (opcional).",
     )
+    sucursal = models.ForeignKey(
+        "clinica.Sucursal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="doctor_schedules",
+        help_text=(
+            "Sucursal (sede) a la que pertenece este horario laboral "
+            "(multi-sede — Fase 2). Se resuelve del consultorio asignado, "
+            "de la sede activa del request, o de la predeterminada del "
+            "tenant si no se indica explícitamente."
+        ),
+    )
     valid_from = models.DateField(
         null=True,
         blank=True,
@@ -277,7 +316,4 @@ class DoctorSchedule(TenantAwareModel):
 
     def __str__(self) -> str:
         day_label = Weekday(self.day_of_week).label if self.day_of_week is not None else "?"
-        return (
-            f"{self.doctor} — {day_label} "
-            f"{self.start_time:%H:%M}-{self.end_time:%H:%M}"
-        )
+        return f"{self.doctor} — {day_label} " f"{self.start_time:%H:%M}-{self.end_time:%H:%M}"

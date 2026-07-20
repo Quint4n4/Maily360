@@ -20,10 +20,13 @@ import {
   useUpdateConcept,
 } from '../../hooks/finanzas'
 import type { ConceptInput, ServiceConcept } from '../../api/finanzas'
+import { useSucursalActiva } from '../../auth/SucursalContext'
 import { erroresDe } from '../../lib/apiErrors'
 import { formatMoney } from '../../lib/format'
 import { AlertaErrores, AvisoSoloLectura, Nota } from './Avisos'
 import { useConfirm } from '../common/DialogProvider'
+import { BadgeSedes, SelectorSedes } from '../common/SelectorSedes'
+import type { SucursalBrief } from '../../types/sucursal'
 
 interface Props {
   editable: boolean
@@ -38,10 +41,13 @@ interface Borrador {
   clinical_description: string
   sat_product_key: string
   sat_unit_key: string
+  /** Sedes donde estará disponible (multi-sede). Vacío = todas las sedes. */
+  sucursal_ids: string[]
 }
 
 const BORRADOR_VACIO: Borrador = {
   name: '', base_price: '', clinical_description: '', sat_product_key: '', sat_unit_key: '',
+  sucursal_ids: [],
 }
 
 function borradorDe(c: ServiceConcept): Borrador {
@@ -51,6 +57,7 @@ function borradorDe(c: ServiceConcept): Borrador {
     clinical_description: c.clinical_description,
     sat_product_key: c.sat_product_key,
     sat_unit_key: c.sat_unit_key,
+    sucursal_ids: c.sucursales.map((s) => s.id),
   }
 }
 
@@ -71,6 +78,8 @@ function aPayload(b: Borrador): { input: ConceptInput } | { errores: string[] } 
       clinical_description: b.clinical_description.trim(),
       sat_product_key: b.sat_product_key.trim(),
       sat_unit_key: b.sat_unit_key.trim(),
+      // Vacío = "todas las sedes" (convención del backend).
+      sucursal_ids: b.sucursal_ids,
     },
   }
 }
@@ -83,6 +92,9 @@ export default function SeccionServicios({ editable }: Props) {
   const actualizar = useUpdateConcept()
   const desactivar = useDeactivateConcept()
   const confirmar = useConfirm()
+  // Sedes permitidas del usuario (vacío = la clínica no usa multi-sede).
+  const { sucursales } = useSucursalActiva()
+  const usaSucursales = sucursales.length > 0
 
   const [errores, setErrores] = useState<string[]>([])
   const [agregando, setAgregando] = useState(false)
@@ -170,6 +182,7 @@ export default function SeccionServicios({ editable }: Props) {
         <EditorServicio
           borrador={nuevo}
           setBorrador={setNuevo}
+          sucursales={sucursales}
           guardando={crear.isPending}
           onGuardar={onCrear}
           onCancelar={() => { setAgregando(false); setNuevo(BORRADOR_VACIO); setErrores([]) }}
@@ -197,6 +210,7 @@ export default function SeccionServicios({ editable }: Props) {
                 key={c.id}
                 borrador={edicion}
                 setBorrador={setEdicion}
+                sucursales={sucursales}
                 guardando={actualizar.isPending}
                 onGuardar={onGuardarEdicion}
                 onCancelar={() => { setEditId(null); setErrores([]) }}
@@ -207,6 +221,7 @@ export default function SeccionServicios({ editable }: Props) {
                 key={c.id}
                 servicio={c}
                 editable={editable}
+                mostrarSedes={usaSucursales}
                 onEditar={() => iniciarEdicion(c)}
                 onDesactivar={() => onDesactivar(c)}
                 onReactivar={() => onReactivar(c)}
@@ -223,10 +238,12 @@ export default function SeccionServicios({ editable }: Props) {
 // ── Fila de un servicio (modo lectura) ───────────────────────────────────────
 
 function FilaServicio({
-  servicio, editable, onEditar, onDesactivar, onReactivar, ocupado,
+  servicio, editable, mostrarSedes, onEditar, onDesactivar, onReactivar, ocupado,
 }: {
   servicio: ServiceConcept
   editable: boolean
+  /** Muestra el badge de sedes (solo si la clínica usa multi-sede). */
+  mostrarSedes: boolean
   onEditar: () => void
   onDesactivar: () => void
   onReactivar: () => void
@@ -250,6 +267,11 @@ function FilaServicio({
           <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-400">
             {servicio.sat_product_key && <span>Clave SAT {servicio.sat_product_key}</span>}
             {servicio.sat_unit_key && <span>· Unidad {servicio.sat_unit_key}</span>}
+          </div>
+        )}
+        {mostrarSedes && (
+          <div className="mt-1">
+            <BadgeSedes sucursales={servicio.sucursales} />
           </div>
         )}
       </div>
@@ -295,10 +317,12 @@ function FilaServicio({
 // ── Editor de un servicio (alta o edición) ───────────────────────────────────
 
 function EditorServicio({
-  borrador, setBorrador, guardando, onGuardar, onCancelar, textoGuardar,
+  borrador, setBorrador, sucursales, guardando, onGuardar, onCancelar, textoGuardar,
 }: {
   borrador: Borrador
   setBorrador: (b: Borrador) => void
+  /** Sedes permitidas del usuario (para las casillas de disponibilidad). */
+  sucursales: SucursalBrief[]
   guardando: boolean
   onGuardar: () => void
   onCancelar: () => void
@@ -357,6 +381,14 @@ function EditorServicio({
           </p>
         </div>
       </div>
+
+      {/* Sucursales donde está disponible (solo si la clínica usa multi-sede) */}
+      <SelectorSedes
+        sucursales={sucursales}
+        seleccion={borrador.sucursal_ids}
+        onChange={(ids) => set('sucursal_ids', ids)}
+        disabled={guardando}
+      />
 
       {/* Claves SAT — opcionales, colapsadas */}
       <div>

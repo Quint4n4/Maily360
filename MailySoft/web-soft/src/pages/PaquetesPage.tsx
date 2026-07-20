@@ -3,6 +3,7 @@ import { Package, Lock, Plus, Trash2, Loader2, Save, X, Pencil } from 'lucide-re
 
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
+import { useSucursalActiva } from '../auth/SucursalContext'
 import { useConcepts } from '../hooks/finanzas'
 import type { ServiceConcept } from '../api/finanzas'
 import {
@@ -16,6 +17,7 @@ import type { PackageItemInput, PackageListItem } from '../types/paquetes'
 import { errorMsg } from '../lib/apiErrors'
 import { formatMoney } from '../lib/format'
 import { useAviso, useConfirm } from '../components/common/DialogProvider'
+import { BadgeSedes, SelectorSedes } from '../components/common/SelectorSedes'
 
 const ORO = '#C9A227'
 const MAX_SESIONES = 52
@@ -31,6 +33,8 @@ interface Draft {
   description: string
   is_active: boolean
   rows: DraftRow[]
+  /** Sedes donde estará disponible (multi-sede). Vacío = todas las sedes. */
+  sucursal_ids: string[]
 }
 
 const emptyRow = (): DraftRow => ({ concept_id: '', sessions: '1' })
@@ -40,11 +44,16 @@ const emptyDraft = (): Draft => ({
   description: '',
   is_active: true,
   rows: [emptyRow()],
+  sucursal_ids: [],
 })
 
 export default function PaquetesPage() {
   const { role } = useRole()
-  const puedeGestionar = role === 'owner' || role === 'admin'
+  // Ver (solo lectura) = dueño o admin; EDITAR (crear/editar/borrar) = solo dueño.
+  // El backend es la autoridad: al admin le da 403 en las mutaciones, pero GET
+  // sigue abierto para que pueda ver el catálogo al cotizar/calendarizar.
+  const puedeVer = role === 'owner' || role === 'admin'
+  const puedeEditar = role === 'owner'
 
   return (
     <div className="min-h-screen relative">
@@ -66,15 +75,15 @@ export default function PaquetesPage() {
           </div>
         </div>
 
-        {!puedeGestionar ? (
+        {!puedeVer ? (
           <div className="glass-card rounded-2xl p-10 text-center">
             <Lock className="w-8 h-8 mx-auto mb-3" style={{ color: '#9A958C' }} />
             <p className="text-sm" style={{ color: '#7A756C' }}>
-              Tu rol (<strong>{role}</strong>) no puede gestionar paquetes. Solo el Dueño y el Administrador.
+              Tu rol (<strong>{role}</strong>) no puede ver los paquetes. Solo el Dueño y el Administrador.
             </p>
           </div>
         ) : (
-          <PaquetesManager />
+          <PaquetesManager puedeEditar={puedeEditar} />
         )}
       </main>
     </div>
@@ -83,9 +92,12 @@ export default function PaquetesPage() {
 
 /* ── Gestión (solo owner/admin) ──────────────────────────────────────────────── */
 
-function PaquetesManager() {
+function PaquetesManager({ puedeEditar }: { puedeEditar: boolean }) {
   const aviso = useAviso()
   const confirmar = useConfirm()
+  // Sedes permitidas del usuario (vacío = la clínica no usa multi-sede).
+  const { sucursales } = useSucursalActiva()
+  const usaSucursales = sucursales.length > 0
 
   const lista = usePaquetes({ onlyActive: false })
   const conceptsQuery = useConcepts({ includeInactive: true })
@@ -123,6 +135,7 @@ function PaquetesManager() {
         rows: detalle.data.items.length
           ? detalle.data.items.map((it) => ({ concept_id: it.concept_id, sessions: String(it.sessions) }))
           : [emptyRow()],
+        sucursal_ids: detalle.data.sucursales.map((s) => s.id),
       })
       setLoadedId(detalle.data.id)
     }
@@ -180,9 +193,11 @@ function PaquetesManager() {
       void aviso({ mensaje: 'Agrega al menos un tratamiento al paquete.', tipo: 'info' })
       return
     }
+    // Vacío = "todas las sedes" (convención del backend).
+    const sucursal_ids = draft.sucursal_ids
     if (editId === 'new') {
       crear.mutate(
-        { name, description: draft.description.trim(), is_active: draft.is_active, items },
+        { name, description: draft.description.trim(), is_active: draft.is_active, items, sucursal_ids },
         {
           onSuccess: () => {
             void aviso({ mensaje: 'Paquete creado.', tipo: 'exito' })
@@ -193,7 +208,7 @@ function PaquetesManager() {
       )
     } else {
       guardar.mutate(
-        { name, description: draft.description.trim(), is_active: draft.is_active, items },
+        { name, description: draft.description.trim(), is_active: draft.is_active, items, sucursal_ids },
         {
           onSuccess: () => {
             void aviso({ mensaje: 'Paquete guardado.', tipo: 'exito' })
@@ -230,7 +245,7 @@ function PaquetesManager() {
         <h2 className="text-base font-bold" style={{ color: '#2A241B' }}>
           Catálogo de paquetes
         </h2>
-        {editId === null && (
+        {puedeEditar && editId === null && (
           <button
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
             style={{ background: ORO, boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
@@ -241,8 +256,8 @@ function PaquetesManager() {
         )}
       </div>
 
-      {/* Editor (alta o edición) */}
-      {editId !== null && (
+      {/* Editor (alta o edición) — solo el dueño */}
+      {puedeEditar && editId !== null && (
         <div
           className="rounded-2xl p-4 space-y-4"
           style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(201,162,39,0.18)' }}
@@ -299,6 +314,14 @@ function PaquetesManager() {
                   onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))}
                 />
               </div>
+
+              {/* Sucursales donde está disponible (solo si la clínica usa multi-sede) */}
+              <SelectorSedes
+                sucursales={sucursales}
+                seleccion={draft.sucursal_ids}
+                onChange={(ids) => setDraft((p) => ({ ...p, sucursal_ids: ids }))}
+                disabled={guardando}
+              />
 
               {/* Tabla de tratamientos */}
               <div className="space-y-2">
@@ -425,26 +448,33 @@ function PaquetesManager() {
                   <p className="text-[11px] mt-1" style={{ color: '#9A958C' }}>
                     {p.items_count} tratamiento{p.items_count === 1 ? '' : 's'} · {p.sessions_total} sesión{p.sessions_total === 1 ? '' : 'es'}
                   </p>
+                  {usaSucursales && (
+                    <div className="mt-1.5">
+                      <BadgeSedes sucursales={p.sucursales} />
+                    </div>
+                  )}
                 </div>
                 <span className="text-sm font-bold whitespace-nowrap" style={{ color: ORO }}>{formatMoney(p.price)}</span>
               </div>
-              <div className="flex items-center gap-2 mt-3 pt-2 border-t" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
-                <button
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-black/5"
-                  style={{ color: '#854F0B', border: '1px solid rgba(201,162,39,0.3)' }}
-                  onClick={() => setEditId(p.id)}
-                >
-                  <Pencil className="w-3.5 h-3.5" /> Editar
-                </button>
-                <button
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 disabled:opacity-60"
-                  style={{ color: '#B91C1C', border: '1px solid rgba(185,28,28,0.25)' }}
-                  onClick={() => onEliminar(p)}
-                  disabled={eliminar.isPending}
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar
-                </button>
-              </div>
+              {puedeEditar && (
+                <div className="flex items-center gap-2 mt-3 pt-2 border-t" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
+                  <button
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-black/5"
+                    style={{ color: '#854F0B', border: '1px solid rgba(201,162,39,0.3)' }}
+                    onClick={() => setEditId(p.id)}
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> Editar
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-red-50 disabled:opacity-60"
+                    style={{ color: '#B91C1C', border: '1px solid rgba(185,28,28,0.25)' }}
+                    onClick={() => onEliminar(p)}
+                    disabled={eliminar.isPending}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
