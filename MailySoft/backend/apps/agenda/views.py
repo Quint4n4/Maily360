@@ -24,7 +24,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.agenda.models import AgendaBlock, AgendaItemNote, Appointment, AppointmentType
+from apps.agenda.models import (
+    AgendaBlock,
+    AgendaItemNote,
+    Appointment,
+    AppointmentType,
+    TenantAgendaConfig,
+)
 from apps.agenda.selectors import (
     agenda_block_get,
     agenda_block_list,
@@ -701,6 +707,10 @@ class AgendaConfigApi(TenantAPIView):
         """Campos editables de TenantAgendaConfig.
 
         EXCLUIDO: id, tenant, created_at, updated_at, deleted_at (inmutables).
+
+        La coherencia agenda_end_hour > agenda_start_hour se valida en el
+        service (agenda_config_update), no aquí: el PATCH es parcial y este
+        serializer no conoce el valor ya guardado del campo no enviado.
         """
 
         record_number_format = serializers.CharField(max_length=50, required=False)
@@ -714,6 +724,11 @@ class AgendaConfigApi(TenantAPIView):
             allow_empty=True,
         )
         reminders_enabled = serializers.BooleanField(required=False)
+        agenda_start_hour = serializers.IntegerField(min_value=0, max_value=23, required=False)
+        agenda_end_hour = serializers.IntegerField(min_value=1, max_value=24, required=False)
+        slot_interval_minutes = serializers.ChoiceField(
+            choices=TenantAgendaConfig.SLOT_INTERVAL_CHOICES, required=False
+        )
 
     def get(self, request: Request) -> Response:
         """Retorna la configuración de agenda del tenant del request."""

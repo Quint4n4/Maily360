@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BadgeCheck, Building, Building2, DollarSign, FileText, FlaskConical, GraduationCap, LayoutTemplate, ListChecks, ScrollText, Tag, Users } from 'lucide-react'
+import { BadgeCheck, Building, Building2, Clock, DollarSign, FileText, FlaskConical, GraduationCap, LayoutTemplate, ListChecks, ScrollText, Tag, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
@@ -19,9 +19,10 @@ import SeccionPlantillasDocumento from '../components/consultorio/SeccionPlantil
 import SeccionAnalitos from '../components/consultorio/SeccionAnalitos'
 import SeccionEquipo from '../components/consultorio/SeccionEquipo'
 import SeccionSucursales from '../components/consultorio/SeccionSucursales'
+import SeccionHorarioAgenda from '../components/consultorio/SeccionHorarioAgenda'
 
 type SeccionKey =
-  | 'datos' | 'sucursales' | 'formatos' | 'plantillas' | 'categorias' | 'servicios'
+  | 'datos' | 'sucursales' | 'horario-agenda' | 'formatos' | 'plantillas' | 'categorias' | 'servicios'
   | 'plantillas-documento' | 'analitos' | 'equipo'
   | 'historia-clinica' | 'validar-credenciales' | 'perfil'
 
@@ -34,6 +35,7 @@ interface SeccionDef {
 const SECCIONES: SeccionDef[] = [
   { key: 'datos', label: 'Datos de la clínica', icon: Building2 },
   { key: 'sucursales', label: 'Sucursales', icon: Building },
+  { key: 'horario-agenda', label: 'Horario de la agenda', icon: Clock },
   { key: 'formatos', label: 'Configuración de recetas', icon: LayoutTemplate },
   { key: 'plantillas', label: 'Plantillas', icon: FileText },
   { key: 'categorias', label: 'Categorías de pacientes', icon: Tag },
@@ -68,6 +70,8 @@ export default function MiConsultorioPage() {
         return <SeccionDatosClinica editable={gestionable} />
       case 'sucursales':
         return <SeccionSucursales editable={esOwner} />
+      case 'horario-agenda':
+        return <SeccionHorarioAgenda editable={gestionable} />
       case 'formatos':
         return <SeccionFormatos editable={gestionable} />
       case 'plantillas':
@@ -96,7 +100,7 @@ export default function MiConsultorioPage() {
   // Gestión reservada a owner/admin (el backend es la autoridad):
   // credenciales, historia clínica, plantillas de documento, analitos y equipo.
   const soloGestion: SeccionKey[] = [
-    'validar-credenciales', 'historia-clinica', 'plantillas-documento', 'analitos', 'equipo',
+    'horario-agenda', 'validar-credenciales', 'historia-clinica', 'plantillas-documento', 'analitos', 'equipo',
   ]
   const seccionesVisibles = SECCIONES.filter((s) => {
     if (s.key === 'perfil') return editaPerfil

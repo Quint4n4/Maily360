@@ -1238,6 +1238,14 @@ def appointment_update(
 # ---------------------------------------------------------------------------
 
 
+#: Granularidades válidas para slot_interval_minutes (defensa en profundidad;
+#: el InputSerializer ya restringe con ChoiceField, pero el service puede
+#: llamarse directo desde commands/Celery/tests sin pasar por el serializer).
+_VALID_SLOT_INTERVALS: frozenset[int] = frozenset(
+    value for value, _label in TenantAgendaConfig.SLOT_INTERVAL_CHOICES
+)
+
+
 def agenda_config_update(
     *,
     tenant: Tenant,
@@ -1247,7 +1255,10 @@ def agenda_config_update(
     """Actualiza la configuración de agenda de una clínica.
 
     Obtiene (o crea con defaults) la config del tenant y aplica los campos
-    recibidos, rechazando los inmutables.
+    recibidos, rechazando los inmutables. Valida la coherencia del horario
+    de la agenda (agenda_start_hour/agenda_end_hour) contra el estado final
+    resultante, ya que el PATCH es parcial y un solo campo puede volver
+    inválida la combinación con el valor ya guardado.
 
     Args:
         tenant: Clínica cuya config se actualiza.
@@ -1258,7 +1269,9 @@ def agenda_config_update(
         Instancia TenantAgendaConfig actualizada.
 
     Raises:
-        ValidationError: si se intenta modificar un campo inmutable.
+        ValidationError: si se intenta modificar un campo inmutable, si
+            slot_interval_minutes no es un valor permitido, o si el horario
+            resultante tiene agenda_end_hour <= agenda_start_hour.
     """
     attempted_immutable = _CONFIG_IMMUTABLE_FIELDS.intersection(fields.keys())
     if attempted_immutable:
@@ -1266,10 +1279,19 @@ def agenda_config_update(
             f"No se pueden modificar los campos: {', '.join(sorted(attempted_immutable))}."
         )
 
+    if "slot_interval_minutes" in fields:
+        if fields["slot_interval_minutes"] not in _VALID_SLOT_INTERVALS:
+            valid_values = ", ".join(str(v) for v in sorted(_VALID_SLOT_INTERVALS))
+            raise ValidationError(f"slot_interval_minutes debe ser uno de: {valid_values}.")
+
     config = agenda_config_get(tenant=tenant)
 
     for field_name, value in fields.items():
         setattr(config, field_name, value)
+
+    if "agenda_start_hour" in fields or "agenda_end_hour" in fields:
+        if config.agenda_end_hour <= config.agenda_start_hour:
+            raise ValidationError("La hora de cierre debe ser posterior a la de apertura.")
 
     update_fields = list(fields.keys()) + ["updated_at"]
     config.save(update_fields=update_fields)

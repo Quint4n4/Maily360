@@ -1062,8 +1062,14 @@ class TestAgendaConfigPermissionGET:
         "role",
         ["doctor", "nurse", "reception", "finance", "readonly"],
     )
-    def test_get_agenda_config_denied_for_non_manage_roles(self, db: None, role: str) -> None:
-        """doctor, nurse, reception, finance, readonly reciben 403 en GET /agenda/config/."""
+    def test_get_agenda_config_permitido_para_todos_los_roles(self, db: None, role: str) -> None:
+        """Todos los roles pueden LEER la config de agenda (2026-07-21).
+
+        El horario de apertura/cierre y el intervalo de la rejilla definen cómo se
+        DIBUJA la agenda; si un médico o recepción no pudiera leerlos, su agenda se
+        pintaría con los defaults y vería un horario distinto al de la clínica.
+        EDITAR sigue siendo solo owner/admin (ver TestAgendaConfigPermissionPATCH).
+        """
         # Arrange
         tenant = TenantFactory()
         client, user = _make_member_client(tenant, role)
@@ -1073,9 +1079,9 @@ class TestAgendaConfigPermissionGET:
             response = client.get(AGENDA_CONFIG_URL)
 
         # Assert
-        assert response.status_code == 403, (
-            f"GET /agenda/config/ con rol '{role}' esperaba 403, obtuvo {response.status_code}. "
-            "BUG: solo owner/admin pueden ver la config de agenda segun la matriz."
+        assert response.status_code == 200, (
+            f"GET /agenda/config/ con rol '{role}' esperaba 200, obtuvo {response.status_code}. "
+            "El staff necesita leer el horario para pintar la agenda."
         )
 
 

@@ -29,6 +29,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.agenda.models import Appointment
+from apps.agenda.selectors import agenda_config_get
 from tests.factories import (
     AppointmentFactory,
     ConsultorioFactory,
@@ -124,9 +125,7 @@ def _get_jwt_token(user: Any, password: str = "password-segura-123") -> str:
         data={"email": user.email, "password": password},
         format="json",
     )
-    assert response.status_code == 200, (
-        f"Login fallido para {user.email}: {response.json()}"
-    )
+    assert response.status_code == 200, f"Login fallido para {user.email}: {response.json()}"
     return response.json()["access"]
 
 
@@ -199,9 +198,9 @@ class TestAppointmentCreateApi:
             response = client.post(CITAS_LIST_URL, data=payload, format="json")
 
         # Assert
-        assert response.status_code == 201, (
-            f"Esperado 201, obtenido {response.status_code}: {response.json()}"
-        )
+        assert (
+            response.status_code == 201
+        ), f"Esperado 201, obtenido {response.status_code}: {response.json()}"
         data = response.json()
         assert data["status"] == Appointment.Status.SCHEDULED
         assert data["reason"] == "Consulta inicial"
@@ -234,9 +233,7 @@ class TestAppointmentCreateApi:
         # Assert
         assert response.status_code == 403
 
-    def test_create_appointment_missing_required_fields_returns_400(
-        self, db: None
-    ) -> None:
+    def test_create_appointment_missing_required_fields_returns_400(self, db: None) -> None:
         """POST sin campos requeridos (reason, patient_id) devuelve 400.
 
         Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentPermission (POST).
@@ -262,9 +259,7 @@ class TestAppointmentCreateApi:
         # Assert
         assert response.status_code == 400
 
-    def test_create_appointment_ends_before_starts_returns_400(
-        self, db: None
-    ) -> None:
+    def test_create_appointment_ends_before_starts_returns_400(self, db: None) -> None:
         """POST con ends_at < starts_at devuelve 400 (ValidationError del service).
 
         Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentPermission (POST).
@@ -343,7 +338,10 @@ class TestAppointmentListApi:
             consultorio=None,
         )
         AppointmentFactory(
-            tenant=tenant_b, doctor=doctor_b, patient=patient_b, consultorio=None,
+            tenant=tenant_b,
+            doctor=doctor_b,
+            patient=patient_b,
+            consultorio=None,
             starts_at=_BASE_DT + datetime.timedelta(days=1),
         )
 
@@ -382,7 +380,10 @@ class TestAppointmentChangeStatusApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
@@ -411,7 +412,10 @@ class TestAppointmentChangeStatusApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
@@ -435,8 +439,12 @@ class TestAppointmentChangeStatusApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
-            status=Appointment.Status.SCHEDULED, starts_at=_BASE_DT,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
+            status=Appointment.Status.SCHEDULED,
+            starts_at=_BASE_DT,
         )
         client = _make_member_client(tenant, role="nurse")
 
@@ -460,8 +468,12 @@ class TestAppointmentChangeStatusApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
-            status=Appointment.Status.SCHEDULED, starts_at=_BASE_DT,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
+            status=Appointment.Status.SCHEDULED,
+            starts_at=_BASE_DT,
         )
         client = _make_member_client(tenant, role="reception")
 
@@ -477,9 +489,7 @@ class TestAppointmentChangeStatusApi:
         assert response.status_code == 200
         assert response.json()["status"] == Appointment.Status.CANCELLED
 
-    def test_change_status_nonexistent_appointment_returns_404(
-        self, db: None
-    ) -> None:
+    def test_change_status_nonexistent_appointment_returns_404(self, db: None) -> None:
         """UUID inexistente devuelve 404.
 
         Ajuste Paso 4: el user tiene rol 'reception' para pasar AppointmentStatusPermission.
@@ -512,7 +522,10 @@ class TestAppointmentChangeStatusApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
         client = _make_member_client(tenant, role="reception")
@@ -551,7 +564,10 @@ class TestAppointmentPatchApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
@@ -582,7 +598,10 @@ class TestAppointmentPatchApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             reason="Consulta inicial",
             notes="",
             starts_at=_BASE_DT,
@@ -644,7 +663,10 @@ class TestAppointmentDeleteApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
@@ -674,7 +696,10 @@ class TestAppointmentDeleteApi:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.CANCELLED,
             starts_at=_BASE_DT,
         )
@@ -716,7 +741,10 @@ class TestAppointmentDeleteApi:
         doctor_b = DoctorFactory(tenant=tenant_b)
         patient_b = PatientFactory(tenant=tenant_b)
         appt_b = AppointmentFactory(
-            tenant=tenant_b, doctor=doctor_b, patient=patient_b, consultorio=None,
+            tenant=tenant_b,
+            doctor=doctor_b,
+            patient=patient_b,
+            consultorio=None,
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
@@ -767,11 +795,17 @@ class TestAppointmentJWTIsolation:
 
         # 2 citas del tenant A (las que SÍ debe ver)
         AppointmentFactory(
-            tenant=tenant_a, doctor=doctor_a, patient=patient_a, consultorio=None,
+            tenant=tenant_a,
+            doctor=doctor_a,
+            patient=patient_a,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
         AppointmentFactory(
-            tenant=tenant_a, doctor=doctor_a, patient=patient_a, consultorio=None,
+            tenant=tenant_a,
+            doctor=doctor_a,
+            patient=patient_a,
+            consultorio=None,
             starts_at=_BASE_DT + datetime.timedelta(hours=2),
         )
 
@@ -781,7 +815,10 @@ class TestAppointmentJWTIsolation:
         patient_b = PatientFactory(tenant=tenant_b)
         for i in range(3):
             AppointmentFactory(
-                tenant=tenant_b, doctor=doctor_b, patient=patient_b, consultorio=None,
+                tenant=tenant_b,
+                doctor=doctor_b,
+                patient=patient_b,
+                consultorio=None,
                 starts_at=_BASE_DT + datetime.timedelta(days=1, hours=i * 2),
             )
 
@@ -792,9 +829,9 @@ class TestAppointmentJWTIsolation:
         response = api_client.get(CITAS_LIST_URL)
 
         # Assert — 200 y solo 2 citas del tenant A
-        assert response.status_code == 200, (
-            f"Esperado 200, obtenido {response.status_code}: {response.json()}"
-        )
+        assert (
+            response.status_code == 200
+        ), f"Esperado 200, obtenido {response.status_code}: {response.json()}"
         data = response.json()
         results = data.get("results", data) if isinstance(data, dict) else data
         assert len(results) == 2, (
@@ -817,12 +854,18 @@ class TestAppointmentJWTIsolation:
         patient_b = PatientFactory(tenant=tenant_b)
 
         AppointmentFactory(
-            tenant=tenant_a, doctor=doctor_a, patient=patient_a, consultorio=None,
+            tenant=tenant_a,
+            doctor=doctor_a,
+            patient=patient_a,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
         for i in range(5):
             AppointmentFactory(
-                tenant=tenant_b, doctor=doctor_b, patient=patient_b, consultorio=None,
+                tenant=tenant_b,
+                doctor=doctor_b,
+                patient=patient_b,
+                consultorio=None,
                 starts_at=_BASE_DT + datetime.timedelta(days=1, hours=i * 2),
             )
 
@@ -841,9 +884,7 @@ class TestAppointmentJWTIsolation:
             f"citas en lugar de 1 del tenant A."
         )
 
-    def test_jwt_auth_without_membership_returns_403(
-        self, db: None
-    ) -> None:
+    def test_jwt_auth_without_membership_returns_403(self, db: None) -> None:
         """Usuario con JWT pero SIN membresía activa recibe 403.
 
         CAMBIO POST-ENFORCEMENT: antes de activar los permisos por rol, este
@@ -857,7 +898,10 @@ class TestAppointmentJWTIsolation:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
 
@@ -868,6 +912,253 @@ class TestAppointmentJWTIsolation:
         response = api_client.get(CITAS_LIST_URL)
 
         # Assert — 403: sin membresía activa, HasClinicRole deniega el acceso
-        assert response.status_code == 403, (
-            f"Sin membresía activa esperamos 403, obtuvo {response.status_code}."
-        )
+        assert (
+            response.status_code == 403
+        ), f"Sin membresía activa esperamos 403, obtuvo {response.status_code}."
+
+
+# ===========================================================================
+# GET/PATCH /agenda/config/ — horario y granularidad de la rejilla
+# ===========================================================================
+
+
+class TestAgendaConfigApiGet:
+    """GET /agenda/config/ — lectura de la configuración de agenda."""
+
+    def test_get_returns_new_grid_fields_with_defaults(self, db: None) -> None:
+        """GET devuelve agenda_start_hour/agenda_end_hour/slot_interval_minutes
+        con sus defaults (9/18/30) para un tenant que nunca configuró nada."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="owner")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.get(AGENDA_CONFIG_URL)
+
+        # Assert
+        assert response.status_code == 200, response.json()
+        data = response.json()
+        assert data["agenda_start_hour"] == 9
+        assert data["agenda_end_hour"] == 18
+        assert data["slot_interval_minutes"] == 30
+
+    def test_get_permitido_para_recepcion(self, db: None) -> None:
+        """Recepción SÍ puede leer la config (2026-07-21).
+
+        El horario y el intervalo definen cómo se dibuja la agenda, así que
+        cualquier rol que la vea necesita leerlos. Editarla sigue siendo
+        exclusivo de owner/admin (ver TestAgendaConfigApiPatch).
+        """
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="reception")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.get(AGENDA_CONFIG_URL)
+
+        # Assert
+        assert response.status_code == 200
+        assert "agenda_start_hour" in response.json()
+
+
+class TestAgendaConfigApiPatch:
+    """PATCH /agenda/config/ — actualización del horario y la rejilla."""
+
+    def test_patch_valid_updates_grid_fields(self, db: None) -> None:
+        """PATCH con horario/rejilla válidos (8/20/15) persiste los 3 campos."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="owner")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={
+                    "agenda_start_hour": 8,
+                    "agenda_end_hour": 20,
+                    "slot_interval_minutes": 15,
+                },
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 200, response.json()
+        data = response.json()
+        assert data["agenda_start_hour"] == 8
+        assert data["agenda_end_hour"] == 20
+        assert data["slot_interval_minutes"] == 15
+
+        config = agenda_config_get(tenant=tenant)
+        assert config.agenda_start_hour == 8
+        assert config.agenda_end_hour == 20
+        assert config.slot_interval_minutes == 15
+
+    def test_patch_allowed_for_admin_role(self, db: None) -> None:
+        """El rol admin también puede configurar el horario (200)."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="admin")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_start_hour": 7},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 200, response.json()
+
+    def test_patch_end_hour_not_greater_than_start_hour_returns_400(self, db: None) -> None:
+        """agenda_end_hour <= agenda_start_hour devuelve 400 con mensaje claro."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="owner")
+
+        # Act — cierre igual a la apertura
+        with _tenant_context(tenant):
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_start_hour": 10, "agenda_end_hour": 10},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 400
+        assert "posterior" in str(response.json()).lower()
+
+    def test_patch_end_hour_less_than_start_hour_returns_400(self, db: None) -> None:
+        """agenda_end_hour < agenda_start_hour también devuelve 400."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="owner")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_start_hour": 15, "agenda_end_hour": 9},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 400
+
+    def test_patch_end_hour_conflicts_with_existing_start_hour_returns_400(self, db: None) -> None:
+        """PATCH parcial que solo manda agenda_start_hour, pero vuelve inválida
+        la combinación con el agenda_end_hour ya guardado, también da 400.
+
+        Cubre la validación de estado final en el service (no solo en el
+        serializer), que no conoce el valor ya persistido en un PATCH parcial.
+        """
+        # Arrange — config existente con horario default (9-18)
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="owner")
+        with _tenant_context(tenant):
+            client.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_end_hour": 10},
+                format="json",
+            )
+
+            # Act — solo sube el inicio a 12, que ya no es < 10 (el cierre guardado)
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_start_hour": 12},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 400
+
+    def test_patch_slot_interval_minutes_out_of_choices_returns_400(self, db: None) -> None:
+        """slot_interval_minutes fuera de choices (ej. 45) devuelve 400."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="owner")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={"slot_interval_minutes": 45},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 400
+
+    def test_patch_agenda_start_hour_out_of_range_returns_400(self, db: None) -> None:
+        """agenda_start_hour fuera de rango (ej. 25) devuelve 400."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="owner")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_start_hour": 25},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 400
+
+    def test_patch_agenda_end_hour_out_of_range_returns_400(self, db: None) -> None:
+        """agenda_end_hour fuera de rango (ej. 25) devuelve 400."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="owner")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_end_hour": 25},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 400
+
+    def test_patch_forbidden_for_role_without_config_access(self, db: None) -> None:
+        """Un rol sin derecho a configurar (ej. reception) recibe 403."""
+        # Arrange
+        tenant = TenantFactory()
+        client = _make_member_client(tenant, role="reception")
+
+        # Act
+        with _tenant_context(tenant):
+            response = client.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_start_hour": 8},
+                format="json",
+            )
+
+        # Assert
+        assert response.status_code == 403
+
+    def test_patch_does_not_affect_other_tenants_config(self, db: None) -> None:
+        """PATCH de un tenant no cambia la config de otro tenant (aislamiento)."""
+        # Arrange
+        tenant_a = TenantFactory()
+        tenant_b = TenantFactory()
+        client_a = _make_member_client(tenant_a, role="owner")
+
+        # Act
+        with _tenant_context(tenant_a):
+            client_a.patch(
+                AGENDA_CONFIG_URL,
+                data={"agenda_start_hour": 7, "agenda_end_hour": 22},
+                format="json",
+            )
+
+        # Assert — tenant B conserva los defaults
+        config_b = agenda_config_get(tenant=tenant_b)
+        assert config_b.agenda_start_hour == 9
+        assert config_b.agenda_end_hour == 18

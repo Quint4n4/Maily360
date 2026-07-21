@@ -250,14 +250,21 @@ class AppointmentTypePermission(HasClinicRole):
 class AgendaConfigPermission(HasClinicRole):
     """Permisos para GET/PATCH /agenda/config/.
 
-    La configuración de agenda es administrativa; solo owner y admin la ven y editan.
+    EDITAR la configuración es administrativo (solo owner y admin). LEERLA, en
+    cambio, la necesita CUALQUIER rol que vea la agenda: el horario de apertura/
+    cierre y el intervalo de la rejilla (`agenda_start_hour`, `agenda_end_hour`,
+    `slot_interval_minutes`) definen cómo se DIBUJA la agenda. Si un médico o
+    recepción no pudiera leerlos, su agenda se pintaría con los defaults (9–18,
+    30') aunque la clínica tenga otro horario — dos personas verían agendas
+    distintas. La config no contiene datos sensibles (son ajustes de la clínica).
+
     Matriz:
-        GET   → solo owner y admin.
+        GET   → todos los roles (necesario para pintar la agenda).
         PATCH → solo owner y admin.
     """
 
     policy: dict[str, frozenset[str]] = {
-        "GET": MANAGE_ROLES,
+        "GET": ALL_ROLES,
         "PATCH": MANAGE_ROLES,
     }
 

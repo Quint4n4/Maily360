@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, CalendarCheck, Cake, FileText, CircleDollarSign, UserX, Loader2, Users, Ban, Stethoscope, Phone, Video, MapPin, Clock, Building2, type LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import CrearEventoModal from '../components/agenda/CrearEventoModal'
@@ -18,15 +18,33 @@ import { useAuth } from '../auth/AuthContext'
 import { useSucursalActiva } from '../auth/SucursalContext'
 import { puedeAgendar, puedeCambiarEstadoCita, puedeCancelarCita } from '../auth/permisos'
 import { useAviso } from '../components/common/DialogProvider'
+import { useAgendaConfig } from '../hooks/agendaConfig'
 
-/* ─── Rejilla horaria 9:00–17:30 ─────────────────────────────────────────── */
-const SLOTS = Array.from({ length: 18 }, (_, i) => {
-  const h = 9 + Math.floor(i / 2)
-  const m = i % 2 === 0 ? 0 : 30
-  const label = `${h}:${m === 0 ? '00' : '30'}` // valor REAL en 24h (para guardar)
-  return { h, m, label, display: to12h(label) } // texto en 12h (solo para mostrar)
-})
+/* ─── Rejilla horaria (CONFIGURABLE desde Mi Consultorio) ─────────────────
+ * El horario que abarca la agenda y cada cuántos minutos hay una línea salen
+ * de la configuración de la clínica (TenantAgendaConfig). Antes estaban
+ * hardcodeados a 9:00–17:30 en slots de 30 min.
+ *
+ * Modelo de dibujo (estilo Google Calendar): la REJILLA es fija (una línea cada
+ * `intervalo` minutos) y cada cita/evento se posiciona y se le da alto por sus
+ * MINUTOS REALES — así una consulta de 14 min a las 9:14 se ve exactamente ahí,
+ * sin encajarla a bloques de 30.
+ */
 const ROW_H = 60
+
+/** Franjas de la rejilla a partir de la configuración de la clínica. */
+function construirSlots(horaInicio: number, horaFin: number, intervalo: number) {
+  const totalMin = Math.max(0, (horaFin - horaInicio) * 60)
+  const n = Math.max(1, Math.ceil(totalMin / intervalo))
+  return Array.from({ length: n }, (_, i) => {
+    const mins = horaInicio * 60 + i * intervalo
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    // valor REAL en 24h (para guardar); `display` es el texto en 12h (solo para mostrar)
+    const label = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    return { h, m, label, display: to12h(label) }
+  })
+}
 const DIAS_SEMANA = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
 /* Líneas de la cuadrícula — tono cálido VISIBLE (antes eran blancas casi invisibles). */
@@ -68,6 +86,39 @@ function iconoModalidad(m: AppointmentModality): LucideIcon {
 const NONE_COL = '__none__'
 
 export default function AgendaPage() {
+  // Horario e intervalo de la rejilla: configurables por el dueño/admin desde
+  // Mi Consultorio. Los defaults replican el comportamiento anterior (9–18, 30').
+  const { data: agendaCfg } = useAgendaConfig()
+  const horaInicio = agendaCfg?.agenda_start_hour ?? 9
+  const horaFin = agendaCfg?.agenda_end_hour ?? 18
+  const intervalo = agendaCfg?.slot_interval_minutes ?? 30
+  const SLOTS = useMemo(
+    () => construirSlots(horaInicio, horaFin, intervalo),
+    [horaInicio, horaFin, intervalo],
+  )
+  /** Píxeles por minuto: convierte minutos reales a alto/posición en la rejilla. */
+  const pxPorMin = ROW_H / intervalo
+  const totalMinutos = Math.max(0, (horaFin - horaInicio) * 60)
+
+  /**
+   * Coloca un elemento por sus MINUTOS REALES dentro de la ventana visible.
+   * Devuelve null si cae completamente fuera del horario configurado.
+   * Recorta lo que se salga por arriba o por abajo.
+   */
+  const ubicar = (startISO: string, durMin: number): { top: number; alto: number } | null => {
+    const { h, m } = localHM(startISO)
+    const desde = (h - horaInicio) * 60 + m
+    const hasta = desde + durMin
+    if (hasta <= 0 || desde >= totalMinutos) return null
+    const visibleDesde = Math.max(0, desde)
+    const visibleHasta = Math.min(hasta, totalMinutos)
+    return {
+      top: visibleDesde * pxPorMin,
+      // mínimo legible: una cita muy corta (5–10 min) igual debe poder leerse
+      alto: Math.max(20, (visibleHasta - visibleDesde) * pxPorMin),
+    }
+  }
+
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [modalOpen, setModalOpen] = useState(false)
   // Confirmación al agendar en un horario que ya pasó (modal glass, no alert nativo).
@@ -209,7 +260,9 @@ export default function AgendaPage() {
     )
   }
 
-  const gridCols = `60px repeat(${Math.max(1, cols.length)}, minmax(132px, 1fr))`
+  // La columna de horas necesita caber "12:30 pm" en UNA línea (con 60px se
+  // partía en dos: "10:00" / "am").
+  const gridCols = `76px repeat(${Math.max(1, cols.length)}, minmax(132px, 1fr))`
 
   return (
     <div className="min-h-screen relative">
@@ -393,7 +446,7 @@ export default function AgendaPage() {
                   const pasado = slotEsPasado(s)
                   return (
                     <div key={`row-${r}`} className="contents">
-                      <div className="flex items-start justify-center pt-1 text-xs sm:text-sm border-b"
+                      <div className="flex items-start justify-center pt-1 text-xs sm:text-sm border-b whitespace-nowrap tabular-nums"
                         style={{ gridColumn: 1, gridRow: r + 1, borderColor: GRID_LINE, color: pasado ? '#C4BFB6' : '#6B7280' }}>
                         {s.display}
                       </div>
@@ -418,13 +471,11 @@ export default function AgendaPage() {
 
                 {/* Bloqueos / Reuniones (bandas) */}
                 {bloques.map(b => {
-                  const { h, m } = localHM(b.starts_at)
-                  const startIdx = b.all_day ? 0 : (h - 9) * 2 + (m >= 30 ? 1 : 0)
-                  if (startIdx >= SLOTS.length) return null
-                  const safeStart = Math.max(0, startIdx)
-                  const span = b.all_day
-                    ? SLOTS.length
-                    : Math.max(1, Math.min(SLOTS.length - safeStart, Math.round((durationMin(b.starts_at, b.ends_at) || 30) / 30)))
+                  // Posición por minutos reales; un evento de todo el día cubre la ventana completa.
+                  const pos = b.all_day
+                    ? { top: 0, alto: totalMinutos * pxPorMin }
+                    : ubicar(b.starts_at, durationMin(b.starts_at, b.ends_at) || intervalo)
+                  if (!pos) return null
                   const ci = b.consultorio ? cols.findIndex(c => c.id === b.consultorio!.id) : -1
                   const gridColumn = ci >= 0 ? `${ci + 2}` : `2 / span ${Math.max(1, cols.length)}`
                   const esBloqueo = b.kind === 'block'
@@ -441,37 +492,46 @@ export default function AgendaPage() {
                   return (
                     <div
                       key={b.id}
+                      // Capa que ocupa la columna completa; solo el bloque interno recibe clics.
+                      style={{ gridColumn, gridRow: `1 / span ${SLOTS.length}`, position: 'relative', pointerEvents: 'none', zIndex: 3 }}
+                    >
+                    <div
                       onClick={() => setEventoSel(b)}
                       title="Ver / editar evento"
-                      className="relative m-0.5 rounded-xl px-3 py-1 overflow-hidden flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer"
+                      className="absolute rounded-xl px-3 py-1 overflow-hidden flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer"
                       style={{
-                        gridColumn,
-                        gridRow: `${safeStart + 1} / span ${span}`,
+                        top: pos.top,
+                        height: pos.alto,
+                        left: 2,
+                        right: 2,
+                        pointerEvents: 'auto',
                         background: esBloqueo
                           ? 'repeating-linear-gradient(45deg, rgba(192,57,43,0.12), rgba(192,57,43,0.12) 8px, rgba(192,57,43,0.24) 8px, rgba(192,57,43,0.24) 16px)'
                           : 'rgba(58,110,165,0.16)',
                         border: esBloqueo ? '1px dashed rgba(192,57,43,0.6)' : '1px solid rgba(58,110,165,0.45)',
-                        zIndex: 3,
                       }}
                     >
-                      <Icono className="w-5 h-5 shrink-0" style={{ color: tinta }} strokeWidth={2.2} />
+                      {pos.alto >= 44 && <Icono className="w-5 h-5 shrink-0" style={{ color: tinta }} strokeWidth={2.2} />}
                       <p className="text-sm font-bold truncate w-full leading-tight" style={{ color: tinta }}>
                         {b.title || b.kind_display}
                       </p>
-                      <p className="text-xs font-medium truncate w-full" style={{ color: subTinta }}>
-                        {esBloqueo ? 'Bloqueado' : 'Reunión'} · {sub}
-                      </p>
+                      {pos.alto >= 60 && (
+                        <p className="text-xs font-medium truncate w-full" style={{ color: subTinta }}>
+                          {esBloqueo ? 'Bloqueado' : 'Reunión'} · {sub}
+                        </p>
+                      )}
+                    </div>
                     </div>
                   )
                 })}
 
                 {/* Citas */}
                 {citas.map(a => {
-                  const { h, m } = localHM(a.starts_at)
-                  const startIdx = (h - 9) * 2 + (m >= 30 ? 1 : 0)
-                  if (startIdx < 0 || startIdx >= SLOTS.length) return null
-                  const dur = durationMin(a.starts_at, a.ends_at) || 30
-                  const span = Math.max(1, Math.min(SLOTS.length - startIdx, Math.round(dur / 30)))
+                  // La cita ocupa EXACTAMENTE lo que dura (una de 14 min a las 9:14
+                  // se dibuja ahí, no encajada al bloque de las 9:00).
+                  const dur = durationMin(a.starts_at, a.ends_at) || intervalo
+                  const pos = ubicar(a.starts_at, dur)
+                  if (!pos) return null
                   const ci = colIndexDe(a)
                   if (ci < 0) return null
                   const col = cols[ci]
@@ -484,36 +544,50 @@ export default function AgendaPage() {
                   return (
                     <div
                       key={a.id}
+                      // Capa que ocupa la columna completa; solo la tarjeta recibe clics.
+                      style={{ gridColumn: ci + 2, gridRow: `1 / span ${SLOTS.length}`, position: 'relative', pointerEvents: 'none', zIndex: 5 }}
+                    >
+                    <div
                       onClick={() => setCitaSel(a)}
-                      className="relative m-1 rounded-3xl px-3 py-1.5 overflow-hidden cursor-pointer transition-transform hover:scale-[1.01] flex flex-col items-center justify-center text-center leading-tight"
+                      className="absolute rounded-3xl px-3 py-1 overflow-hidden cursor-pointer transition-transform hover:scale-[1.01] flex flex-col items-center justify-center text-center leading-tight"
                       style={{
-                        gridColumn: ci + 2,
-                        gridRow: `${startIdx + 1} / span ${span}`,
+                        top: pos.top,
+                        height: pos.alto,
+                        left: 4,
+                        right: 4,
+                        pointerEvents: 'auto',
                         background: esCancelada
                           ? 'repeating-linear-gradient(45deg, rgba(192,57,43,0.12), rgba(192,57,43,0.12) 8px, rgba(192,57,43,0.24) 8px, rgba(192,57,43,0.24) 16px)'
                           : `${tipoColor}3D`,
                         borderLeft: `5px solid ${esCancelada ? '#C0392B' : tipoColor}`,
                         backdropFilter: 'blur(6px)',
                         boxShadow: '0 2px 10px rgba(60,42,12,0.12)',
-                        zIndex: 5,
                       }}
                     >
                       {esCancelada ? (
                         <>
                           <p className="text-xs font-medium text-gray-500 line-through truncate w-full px-2">{a.patient.full_name}</p>
-                          <p className="font-extrabold" style={{ color: '#C0392B', fontSize: span >= 2 ? '1.1rem' : '0.8rem', letterSpacing: '0.06em' }}>CANCELADA</p>
+                          <p className="font-extrabold" style={{ color: '#C0392B', fontSize: pos.alto >= 70 ? '1.1rem' : '0.8rem', letterSpacing: '0.06em' }}>CANCELADA</p>
                         </>
                       ) : (
                         <>
                           {/* punto del consultorio (la columna también lo indica) */}
-                          <span className="absolute top-2 right-2.5 w-2.5 h-2.5 rounded-full"
-                            style={{ background: col.color, boxShadow: `0 0 0 3px ${col.color}22` }} />
+                          {pos.alto >= 40 && (
+                            <span className="absolute top-2 right-2.5 w-2.5 h-2.5 rounded-full"
+                              style={{ background: col.color, boxShadow: `0 0 0 3px ${col.color}22` }} />
+                          )}
                           <div className="flex items-center justify-center gap-1.5 w-full px-2 min-w-0">
-                            <ModIcon className="w-4 h-4 shrink-0" style={{ color: tipoColor }} strokeWidth={2.2} />
-                            <p className="text-sm font-bold text-gray-900 leading-tight truncate min-w-0">{a.patient.full_name}</p>
+                            {pos.alto >= 34 && <ModIcon className="w-4 h-4 shrink-0" style={{ color: tipoColor }} strokeWidth={2.2} />}
+                            <p className="font-bold text-gray-900 leading-tight truncate min-w-0"
+                              style={{ fontSize: pos.alto >= 40 ? '0.875rem' : '0.72rem' }}>
+                              {a.patient.full_name}
+                            </p>
                           </div>
-                          {subtitulo && <p className="text-xs font-semibold truncate w-full" style={{ color: tipoColor }}>{subtitulo}</p>}
-                          {span >= 2 && (
+                          {/* El subtítulo y el estado solo si hay alto suficiente (citas cortas). */}
+                          {subtitulo && pos.alto >= 56 && (
+                            <p className="text-xs font-semibold truncate w-full" style={{ color: tipoColor }}>{subtitulo}</p>
+                          )}
+                          {pos.alto >= 86 && (
                             <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
                               style={{ background: est.bg, color: est.color }}>
                               {a.status_display}
@@ -521,6 +595,7 @@ export default function AgendaPage() {
                           )}
                         </>
                       )}
+                    </div>
                     </div>
                   )
                 })}

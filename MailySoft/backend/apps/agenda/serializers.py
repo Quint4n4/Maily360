@@ -264,6 +264,9 @@ class TenantAgendaConfigOutputSerializer(serializers.ModelSerializer):
             "default_appointment_duration",
             "reminder_offsets_minutes",
             "reminders_enabled",
+            "agenda_start_hour",
+            "agenda_end_hour",
+            "slot_interval_minutes",
             "created_at",
             "updated_at",
         ]

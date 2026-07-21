@@ -70,15 +70,24 @@ class TestAppointmentListFilters:
         patient = PatientFactory(tenant=tenant)
 
         appt_a1 = AppointmentFactory(
-            tenant=tenant, doctor=doctor_a, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor_a,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
         appt_a2 = AppointmentFactory(
-            tenant=tenant, doctor=doctor_a, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor_a,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT + datetime.timedelta(hours=2),
         )
         AppointmentFactory(
-            tenant=tenant, doctor=doctor_b, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor_b,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT + datetime.timedelta(hours=4),
         )  # no debe aparecer
 
@@ -100,17 +109,26 @@ class TestAppointmentListFilters:
         patient = PatientFactory(tenant=tenant)
 
         in_range = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
         # Fuera del rango (en el pasado relativo a _BASE_DT)
         AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT - datetime.timedelta(hours=2),
         )
         # Fuera del rango (demasiado en el futuro)
         AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT + datetime.timedelta(hours=5),
         )
 
@@ -134,12 +152,18 @@ class TestAppointmentListFilters:
         patient = PatientFactory(tenant=tenant)
 
         scheduled = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
         )
         AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.CANCELLED,
             starts_at=_BASE_DT + datetime.timedelta(hours=2),
         )
@@ -161,15 +185,24 @@ class TestAppointmentListFilters:
         patient = PatientFactory(tenant=tenant)
 
         appt_last = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT + datetime.timedelta(hours=3),
         )
         appt_first = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
         appt_middle = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT + datetime.timedelta(hours=1),
         )
 
@@ -179,9 +212,9 @@ class TestAppointmentListFilters:
 
         # Assert — orden ASC
         expected_order = [appt_first.id, appt_middle.id, appt_last.id]
-        assert result_ids == expected_order, (
-            f"Orden esperado {expected_order}, obtenido {result_ids}"
-        )
+        assert (
+            result_ids == expected_order
+        ), f"Orden esperado {expected_order}, obtenido {result_ids}"
 
 
 # ===========================================================================
@@ -209,11 +242,17 @@ class TestAppointmentListTenantIsolation:
 
         # 2 citas en tenant_a
         appt_a1 = AppointmentFactory(
-            tenant=tenant_a, doctor=doctor_a, patient=patient_a, consultorio=None,
+            tenant=tenant_a,
+            doctor=doctor_a,
+            patient=patient_a,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
         appt_a2 = AppointmentFactory(
-            tenant=tenant_a, doctor=doctor_a, patient=patient_a, consultorio=None,
+            tenant=tenant_a,
+            doctor=doctor_a,
+            patient=patient_a,
+            consultorio=None,
             starts_at=_BASE_DT + datetime.timedelta(hours=2),
         )
 
@@ -235,9 +274,9 @@ class TestAppointmentListTenantIsolation:
         # Assert — solo las 2 citas del tenant A
         assert appt_a1.id in ids
         assert appt_a2.id in ids
-        assert len(ids) == 2, (
-            f"Fuga cross-tenant: se obtuvieron {len(ids)} citas en lugar de 2 del tenant A."
-        )
+        assert (
+            len(ids) == 2
+        ), f"Fuga cross-tenant: se obtuvieron {len(ids)} citas en lugar de 2 del tenant A."
 
     def test_appointment_list_empty_without_tenant_context(self, db: None) -> None:
         """Sin contexto de tenant activo, appointment_list no retorna datos ajenos.
@@ -252,7 +291,10 @@ class TestAppointmentListTenantIsolation:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
 
@@ -288,6 +330,30 @@ class TestAgendaConfigGet:
         assert config.default_appointment_duration == 30
         assert config.reminder_offsets_minutes == [1440]
         assert config.reminders_enabled is True
+        assert config.agenda_start_hour == 9
+        assert config.agenda_end_hour == 18
+        assert config.slot_interval_minutes == 30
+
+    def test_agenda_config_get_existing_tenant_keeps_grid_defaults(self, db: None) -> None:
+        """Un tenant con config creada ANTES de esta feature (solo campos viejos
+        explícitos) conserva el comportamiento actual: rejilla 9-18 cada 30 min.
+
+        Simula el caso real: la migración es aditiva con default, así que un
+        registro existente adquiere agenda_start_hour=9/agenda_end_hour=18/
+        slot_interval_minutes=30 sin que nadie los haya tocado.
+        """
+        # Arrange — factory sin pasar los 3 campos nuevos explícitamente
+        tenant = TenantFactory()
+        existing = TenantAgendaConfigFactory(tenant=tenant, default_appointment_duration=45)
+
+        # Act
+        config = agenda_config_get(tenant=tenant)
+
+        # Assert — la rejilla sigue siendo la de siempre (9 a 18, cada 30 min)
+        assert config.pk == existing.pk
+        assert config.agenda_start_hour == 9
+        assert config.agenda_end_hour == 18
+        assert config.slot_interval_minutes == 30
 
     def test_agenda_config_get_is_idempotent(self, db: None) -> None:
         """Llamar agenda_config_get dos veces retorna el mismo registro."""
@@ -307,9 +373,7 @@ class TestAgendaConfigGet:
         # Arrange
         tenant = TenantFactory()
         # Crear config con valor personalizado
-        existing = TenantAgendaConfigFactory(
-            tenant=tenant, default_appointment_duration=60
-        )
+        existing = TenantAgendaConfigFactory(tenant=tenant, default_appointment_duration=60)
 
         # Act
         config = agenda_config_get(tenant=tenant)
@@ -335,7 +399,10 @@ class TestAppointmentGetTenantIsolation:
         doctor_b = DoctorFactory(tenant=tenant_b)
         patient_b = PatientFactory(tenant=tenant_b)
         appt_b = AppointmentFactory(
-            tenant=tenant_b, doctor=doctor_b, patient=patient_b, consultorio=None,
+            tenant=tenant_b,
+            doctor=doctor_b,
+            patient=patient_b,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
 
@@ -351,7 +418,10 @@ class TestAppointmentGetTenantIsolation:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             starts_at=_BASE_DT,
         )
 
@@ -403,5 +473,3 @@ class TestAppointmentListNoNPlusOne:
                     _ = appt.doctor_id
                     _ = appt.patient_id
                     _ = list(appt.reminders.all())  # usa el prefetch, 0 queries extra
-
-

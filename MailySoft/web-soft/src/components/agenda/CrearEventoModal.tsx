@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertCircle, Loader2, Search, Info, Users, Ban, CalendarPlus, Check, Building2, Phone, Video, MapPin, ChevronLeft, ChevronRight, Repeat, Plus, ScrollText } from 'lucide-react'
 import { usePatients } from '../../hooks/pacientes'
 import { useDoctors, useConsultorios, useCreateAppointment, useCreateAppointmentSeries, useAppointmentTypes, useCreateAgendaBlock, useAgendaDisponibilidad } from '../../hooks/agenda'
 import { useQuotes } from '../../hooks/finanzas'
+import { useAgendaConfig } from '../../hooks/agendaConfig'
 import { combineToISO, to12h, formatFechaHora, fromDayKey, toDayKey, addDays, seriesDates } from '../../lib/fecha'
 import { formatMoney } from '../../lib/format'
 import MiniCalendario from './MiniCalendario'
@@ -42,7 +43,18 @@ interface CrearEventoModalProps {
   initialReason?: string
 }
 
-const DURACIONES = [30, 45, 60, 90]
+/**
+ * Duraciones ofrecidas al agendar. Antes eran fijas [30,45,60,90], lo que impedía
+ * agendar consultas cortas. Ahora se ofrece un abanico amplio y, además, se le
+ * suma la duración propia del médico si no está en la lista (p. ej. 14 min),
+ * porque `Doctor.default_appointment_duration` manda sobre la de la clínica.
+ */
+const DURACIONES_BASE = [10, 15, 20, 30, 40, 45, 60, 90, 120]
+
+/** Lista final de duraciones: las comunes + la del médico, ordenadas y sin repetir. */
+function duracionesPara(duracionMedico: number): number[] {
+  return Array.from(new Set([...DURACIONES_BASE, duracionMedico])).sort((a, b) => a - b)
+}
 
 function partirNombre(texto: string): { nombre: string; paterno: string; materno: string } {
   const w = texto.trim().split(/\s+/).filter(Boolean)
@@ -201,6 +213,16 @@ export default function CrearEventoModal({
   // Consultorios permitidos: si el médico seleccionado tiene asignados, solo esos.
   const docSel = doctores.find(d => d.id === doctorId)
   const consPermitidos = (docSel && docSel.consultorios.length > 0) ? docSel.consultorios : consultorios
+
+  // Horario/rejilla de la clínica (Mi Consultorio → Horario de la agenda).
+  const { data: agendaCfg } = useAgendaConfig()
+  const cfgInicio = agendaCfg?.agenda_start_hour ?? 9
+  const cfgFin = agendaCfg?.agenda_end_hour ?? 18
+  const cfgPaso = agendaCfg?.slot_interval_minutes ?? 30
+  // Duración: la propia del médico manda sobre la de la clínica.
+  const duracionMedico = docSel?.default_appointment_duration
+    ?? agendaCfg?.default_appointment_duration ?? 30
+  const duraciones = useMemo(() => duracionesPara(duracionMedico), [duracionMedico])
   const guardando = crearCita.isPending || crearSerie.isPending || enviando
 
   useEffect(() => {
@@ -233,6 +255,13 @@ export default function CrearEventoModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctorId])
+
+  // Al elegir médico, precargar SU duración de consulta (manda sobre la de la
+  // clínica). Así no hay que corregirla a mano en cada cita.
+  useEffect(() => {
+    if (docSel) setDuracion(duracionMedico)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctorId, duracionMedico])
 
   // La cotización pertenece a UN paciente: si cambia el paciente (o el modo), se deselecciona.
   useEffect(() => { setQuoteId('') }, [pacienteId, modoPaciente])
@@ -281,15 +310,21 @@ export default function CrearEventoModal({
     const eISO = new Date(new Date(sISO).getTime() + duracion * 60_000).toISOString()
     return slotOcupado(sISO, eISO)
   }
-  // Slots horarios del día (9:00–17:30, cada 30 min).
-  const SLOTS_HORA = Array.from({ length: 18 }, (_, i) => {
-    const h = 9 + Math.floor(i / 2)
-    return `${String(h).padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`
-  })
+  // Horas de inicio del día: salen de la configuración de la clínica (Mi
+  // Consultorio → Horario de la agenda). Antes estaban fijas a 9:00–17:30/30min,
+  // así que no respetaban el horario configurado.
+  const SLOTS_HORA = useMemo(() => {
+    const total = Math.max(0, (cfgFin - cfgInicio) * 60)
+    const n = Math.max(1, Math.ceil(total / cfgPaso))
+    return Array.from({ length: n }, (_, i) => {
+      const mins = cfgInicio * 60 + i * cfgPaso
+      return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
+    })
+  }, [cfgInicio, cfgFin, cfgPaso])
   const horaCorta = (t: string) => {
     const [h, m] = t.split(':').map(Number)
     const h12 = h % 12 === 0 ? 12 : h % 12
-    return `${h12}${m === 30 ? ':30' : ''}`
+    return m === 0 ? `${h12}` : `${h12}:${String(m).padStart(2, '0')}`
   }
 
   const activarNuevoPaciente = () => {
@@ -622,7 +657,11 @@ export default function CrearEventoModal({
                     <div>
                       <label className={LABEL}>Duración</label>
                       <select value={duracion} onChange={e => setDuracion(Number(e.target.value))} className={`${INPUT} w-36`}>
-                        {DURACIONES.map(d => <option key={d} value={d}>{d} min</option>)}
+                        {duraciones.map(d => (
+                          <option key={d} value={d}>
+                            {d} min{d === duracionMedico ? ' (del médico)' : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

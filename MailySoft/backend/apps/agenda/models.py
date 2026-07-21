@@ -21,7 +21,6 @@ Anti-empalme:
                  NO se modelan en Meta de Django (requieren btree_gist + sintaxis raw).
 """
 
-
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -62,7 +61,26 @@ class TenantAgendaConfig(TenantAwareModel):
         reminder_offsets_minutes:   Lista de minutos antes de la cita para recordatorios.
                                     Default [1440] = 24 horas. Ejemplo [1440, 120] = 24h y 2h.
         reminders_enabled:          Interruptor global de recordatorios de la clínica.
+        agenda_start_hour:          Hora (0-23) a la que ABRE la rejilla de la agenda.
+                                    Default 9 (9:00 am).
+        agenda_end_hour:            Hora (1-24) a la que CIERRA la rejilla, EXCLUSIVA:
+                                    la última franja mostrada termina a esta hora.
+                                    Default 18 (la agenda cierra a las 18:00).
+                                    Debe ser mayor que agenda_start_hour.
+        slot_interval_minutes:      Granularidad de la rejilla en minutos (cada cuánto
+                                    hay una línea). Default 30. Solo acepta
+                                    SLOT_INTERVAL_CHOICES.
     """
+
+    #: Granularidades válidas para la rejilla de la agenda.
+    SLOT_INTERVAL_CHOICES = [
+        (5, "5 minutos"),
+        (10, "10 minutos"),
+        (15, "15 minutos"),
+        (20, "20 minutos"),
+        (30, "30 minutos"),
+        (60, "60 minutos"),
+    ]
 
     record_number_format = models.CharField(
         max_length=50,
@@ -95,6 +113,23 @@ class TenantAgendaConfig(TenantAwareModel):
         default=True,
         help_text="Interruptor global de recordatorios de la clínica.",
     )
+    agenda_start_hour = models.PositiveSmallIntegerField(
+        default=9,
+        help_text="Hora (0-23) a la que abre la rejilla de la agenda. Ejemplo: 9 = 9:00 am.",
+    )
+    agenda_end_hour = models.PositiveSmallIntegerField(
+        default=18,
+        help_text=(
+            "Hora (1-24) a la que cierra la rejilla de la agenda. EXCLUSIVA: la "
+            "última franja mostrada termina a esta hora. Ejemplo: 18 = cierra a "
+            "las 18:00. Debe ser mayor que agenda_start_hour."
+        ),
+    )
+    slot_interval_minutes = models.PositiveSmallIntegerField(
+        default=30,
+        choices=SLOT_INTERVAL_CHOICES,
+        help_text="Cada cuántos minutos hay una línea en la rejilla de la agenda.",
+    )
 
     class Meta:
         db_table = "agenda_tenant_config"
@@ -102,6 +137,25 @@ class TenantAgendaConfig(TenantAwareModel):
             models.UniqueConstraint(
                 fields=["tenant"],
                 name="agenda_config_tenant_uniq",
+            ),
+            # Defensa en profundidad — la validación de negocio vive en
+            # agenda_config_update (services.py); esta constraint solo protege
+            # contra escrituras que no pasen por ahí (ej. fixtures, SQL directo).
+            models.CheckConstraint(
+                condition=Q(agenda_start_hour__gte=0) & Q(agenda_start_hour__lte=23),
+                name="agenda_config_start_hour_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(agenda_end_hour__gte=1) & Q(agenda_end_hour__lte=24),
+                name="agenda_config_end_hour_range",
+            ),
+            models.CheckConstraint(
+                condition=Q(agenda_end_hour__gt=models.F("agenda_start_hour")),
+                name="agenda_config_end_after_start",
+            ),
+            models.CheckConstraint(
+                condition=Q(slot_interval_minutes__in=[5, 10, 15, 20, 30, 60]),
+                name="agenda_config_slot_interval_choices",
             ),
         ]
 

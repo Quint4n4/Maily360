@@ -161,9 +161,7 @@ class TestAppointmentCreateEndsAtAutoCalc:
         expected_ends = starts + datetime.timedelta(minutes=45)
         assert appt.ends_at == expected_ends
 
-    def test_appointment_create_uses_config_duration_when_doctor_has_zero(
-        self, db: None
-    ) -> None:
+    def test_appointment_create_uses_config_duration_when_doctor_has_zero(self, db: None) -> None:
         """Cuando doctor.default_appointment_duration es 0/falsy, usa config de la clínica."""
         # Arrange
         tenant = TenantFactory()
@@ -184,9 +182,7 @@ class TestAppointmentCreateEndsAtAutoCalc:
         expected_ends = starts + datetime.timedelta(minutes=60)
         assert appt.ends_at == expected_ends
 
-    def test_appointment_create_uses_explicit_ends_at_when_provided(
-        self, db: None
-    ) -> None:
+    def test_appointment_create_uses_explicit_ends_at_when_provided(self, db: None) -> None:
         """Si se provee ends_at explícito, no se sobreescribe con duración del médico."""
         # Arrange
         tenant = TenantFactory()
@@ -287,9 +283,7 @@ class TestAppointmentCreateAntiEmpalme:
         ends = starts + datetime.timedelta(hours=1)  # 10:00-11:00
 
         # Primera cita ocupa 10:00-11:00
-        _make_appointment(
-            tenant, doctor, patient1, user, starts_at=starts, ends_at=ends
-        )
+        _make_appointment(tenant, doctor, patient1, user, starts_at=starts, ends_at=ends)
 
         # Act & Assert — segunda cita 10:15-11:15 solapa dentro del rango
         with pytest.raises(ValidationError, match="médico"):
@@ -357,13 +351,9 @@ class TestAppointmentCreateAntiEmpalme:
         ends2 = starts2 + datetime.timedelta(hours=1)  # 12:00
 
         # Act — primera cita 10:00-11:00
-        appt1 = _make_appointment(
-            tenant, doctor, patient1, user, starts_at=starts1, ends_at=ends1
-        )
+        appt1 = _make_appointment(tenant, doctor, patient1, user, starts_at=starts1, ends_at=ends1)
         # Segunda cita 11:00-12:00 (consecutiva, no solapada)
-        appt2 = _make_appointment(
-            tenant, doctor, patient2, user, starts_at=starts2, ends_at=ends2
-        )
+        appt2 = _make_appointment(tenant, doctor, patient2, user, starts_at=starts2, ends_at=ends2)
 
         # Assert — ambas creadas sin error
         assert appt1.pk is not None
@@ -393,9 +383,7 @@ class TestAppointmentCreateAntiEmpalme:
         assert appt.pk is not None
         assert appt.consultorio_id is None
 
-    def test_appointment_create_overlap_only_with_active_statuses(
-        self, db: None
-    ) -> None:
+    def test_appointment_create_overlap_only_with_active_statuses(self, db: None) -> None:
         """Una cita cancelada NO bloquea el mismo horario (no está en ACTIVE_STATUSES)."""
         # Arrange
         tenant = TenantFactory()
@@ -426,9 +414,7 @@ class TestAppointmentCreateAntiEmpalme:
 class TestAppointmentCreateTenantValidation:
     """Defensa en profundidad: FKs deben pertenecer al mismo tenant."""
 
-    def test_appointment_create_rejects_patient_from_other_tenant(
-        self, db: None
-    ) -> None:
+    def test_appointment_create_rejects_patient_from_other_tenant(self, db: None) -> None:
         """Paciente de otro tenant lanza ValidationError (defensa en profundidad)."""
         # Arrange
         tenant_a = TenantFactory()
@@ -449,9 +435,7 @@ class TestAppointmentCreateTenantValidation:
                     reason="Cross-tenant patient",
                 )
 
-    def test_appointment_create_rejects_doctor_from_other_tenant(
-        self, db: None
-    ) -> None:
+    def test_appointment_create_rejects_doctor_from_other_tenant(self, db: None) -> None:
         """Médico de otro tenant lanza ValidationError."""
         # Arrange
         tenant_a = TenantFactory()
@@ -472,9 +456,7 @@ class TestAppointmentCreateTenantValidation:
                     reason="Cross-tenant doctor",
                 )
 
-    def test_appointment_create_rejects_consultorio_from_other_tenant(
-        self, db: None
-    ) -> None:
+    def test_appointment_create_rejects_consultorio_from_other_tenant(self, db: None) -> None:
         """Consultorio de otro tenant lanza ValidationError."""
         # Arrange
         tenant_a = TenantFactory()
@@ -562,9 +544,7 @@ class TestAppointmentChangeStatusValidTransitions:
         user = UserFactory()
 
         # Act
-        updated = appointment_change_status(
-            appointment=appt, user=user, new_status=to_status
-        )
+        updated = appointment_change_status(appointment=appt, user=user, new_status=to_status)
 
         # Assert
         assert updated.status == to_status
@@ -595,33 +575,31 @@ class TestAppointmentChangeStatusInvalidTransitions:
 
         # Act & Assert
         with pytest.raises(ValidationError, match="[Tt]ransición"):
-            appointment_change_status(
-                appointment=appt, user=user, new_status=to_status
-            )
+            appointment_change_status(appointment=appt, user=user, new_status=to_status)
 
 
 class TestAppointmentChangeStatusSideEffects:
     """Efectos secundarios al cancelar y registrar no-show."""
 
-    def test_change_status_cancelled_sets_cancelled_by_and_reason(
-        self, db: None
-    ) -> None:
+    def test_change_status_cancelled_sets_cancelled_by_and_reason(self, db: None) -> None:
         """Al cancelar, cancelled_by y cancellation_reason se guardan."""
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
-            status=Appointment.Status.SCHEDULED
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
+            status=Appointment.Status.SCHEDULED,
         )
         user = UserFactory()
         motivo = "Paciente no puede asistir."
 
         # Act
         appointment_change_status(
-            appointment=appt, user=user,
-            new_status=Appointment.Status.CANCELLED, reason=motivo
+            appointment=appt, user=user, new_status=Appointment.Status.CANCELLED, reason=motivo
         )
 
         # Assert
@@ -637,8 +615,11 @@ class TestAppointmentChangeStatusSideEffects:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
-            status=Appointment.Status.SCHEDULED
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
+            status=Appointment.Status.SCHEDULED,
         )
         user = UserFactory()
 
@@ -660,17 +641,14 @@ class TestAppointmentChangeStatusSideEffects:
             Appointment.Status.NO_SHOW,
         ],
     )
-    def test_terminal_states_cannot_transition(
-        self, db: None, terminal_status: str
-    ) -> None:
+    def test_terminal_states_cannot_transition(self, db: None, terminal_status: str) -> None:
         """Estados terminales (attended, cancelled, no_show) no permiten ninguna transición."""
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
-            status=terminal_status
+            tenant=tenant, doctor=doctor, patient=patient, consultorio=None, status=terminal_status
         )
         user = UserFactory()
 
@@ -680,21 +658,21 @@ class TestAppointmentChangeStatusSideEffects:
         # Act & Assert — intentar cualquier transición desde un terminal
         with pytest.raises(ValidationError):
             appointment_change_status(
-                appointment=appt, user=user,
-                new_status=Appointment.Status.SCHEDULED
+                appointment=appt, user=user, new_status=Appointment.Status.SCHEDULED
             )
 
-    def test_change_status_cancelled_does_not_set_no_show_fields(
-        self, db: None
-    ) -> None:
+    def test_change_status_cancelled_does_not_set_no_show_fields(self, db: None) -> None:
         """Al cancelar, no_show_registered_by permanece None."""
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
-            status=Appointment.Status.SCHEDULED
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
+            status=Appointment.Status.SCHEDULED,
         )
         user = UserFactory()
 
@@ -707,17 +685,18 @@ class TestAppointmentChangeStatusSideEffects:
         appt.refresh_from_db()
         assert appt.no_show_registered_by_id is None
 
-    def test_change_status_no_show_does_not_set_cancelled_fields(
-        self, db: None
-    ) -> None:
+    def test_change_status_no_show_does_not_set_cancelled_fields(self, db: None) -> None:
         """Al registrar no-show, cancelled_by permanece None."""
         # Arrange
         tenant = TenantFactory()
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
-            status=Appointment.Status.SCHEDULED
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
+            status=Appointment.Status.SCHEDULED,
         )
         user = UserFactory()
 
@@ -747,7 +726,10 @@ class TestAppointmentReschedule:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
             ends_at=_BASE_DT + datetime.timedelta(hours=1),
@@ -758,8 +740,7 @@ class TestAppointmentReschedule:
 
         # Act
         updated = appointment_reschedule(
-            appointment=appt, user=user,
-            starts_at=new_starts, ends_at=new_ends
+            appointment=appt, user=user, starts_at=new_starts, ends_at=new_ends
         )
 
         # Assert
@@ -774,7 +755,10 @@ class TestAppointmentReschedule:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.CONFIRMED,
             starts_at=_BASE_DT,
             ends_at=_BASE_DT + datetime.timedelta(hours=1),
@@ -783,9 +767,7 @@ class TestAppointmentReschedule:
         new_starts = _BASE_DT + datetime.timedelta(days=2)
 
         # Act
-        updated = appointment_reschedule(
-            appointment=appt, user=user, starts_at=new_starts
-        )
+        updated = appointment_reschedule(appointment=appt, user=user, starts_at=new_starts)
 
         # Assert
         assert updated.starts_at == new_starts
@@ -812,7 +794,10 @@ class TestAppointmentReschedule:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=non_reagendable_status,
             starts_at=_BASE_DT,
             ends_at=_BASE_DT + datetime.timedelta(hours=1),
@@ -822,8 +807,7 @@ class TestAppointmentReschedule:
         # Act & Assert
         with pytest.raises(ValidationError, match="reagendar"):
             appointment_reschedule(
-                appointment=appt, user=user,
-                starts_at=_BASE_DT + datetime.timedelta(days=1)
+                appointment=appt, user=user, starts_at=_BASE_DT + datetime.timedelta(days=1)
             )
 
     def test_appointment_reschedule_reactivates_cancelled(self, db: None) -> None:
@@ -832,7 +816,10 @@ class TestAppointmentReschedule:
         doctor = DoctorFactory(tenant=tenant)
         patient = PatientFactory(tenant=tenant)
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.CANCELLED,
             cancellation_reason="me equivoqué",
             starts_at=_BASE_DT,
@@ -841,7 +828,8 @@ class TestAppointmentReschedule:
         user = UserFactory()
 
         nuevo = appointment_reschedule(
-            appointment=appt, user=user,
+            appointment=appt,
+            user=user,
             starts_at=_BASE_DT + datetime.timedelta(days=1),
         )
 
@@ -853,9 +841,12 @@ class TestAppointmentReschedule:
         """Reactivar una cita cancelada la vuelve a Agendada en su mismo horario."""
         tenant = TenantFactory()
         appt = AppointmentFactory(
-            tenant=tenant, consultorio=None,
-            status=Appointment.Status.CANCELLED, cancellation_reason="error",
-            starts_at=_BASE_DT, ends_at=_BASE_DT + datetime.timedelta(hours=1),
+            tenant=tenant,
+            consultorio=None,
+            status=Appointment.Status.CANCELLED,
+            cancellation_reason="error",
+            starts_at=_BASE_DT,
+            ends_at=_BASE_DT + datetime.timedelta(hours=1),
         )
         reactivada = appointment_reactivate(appointment=appt, user=UserFactory())
         assert reactivada.status == Appointment.Status.SCHEDULED
@@ -870,8 +861,11 @@ class TestAppointmentReschedule:
         """Solo se reactiva una cita CANCELADA; otros estados lanzan ValidationError."""
         tenant = TenantFactory()
         appt = AppointmentFactory(
-            tenant=tenant, consultorio=None, status=estado,
-            starts_at=_BASE_DT, ends_at=_BASE_DT + datetime.timedelta(hours=1),
+            tenant=tenant,
+            consultorio=None,
+            status=estado,
+            starts_at=_BASE_DT,
+            ends_at=_BASE_DT + datetime.timedelta(hours=1),
         )
         with pytest.raises(ValidationError, match="cancelada"):
             appointment_reactivate(appointment=appt, user=UserFactory())
@@ -890,26 +884,33 @@ class TestAppointmentReschedule:
 
         # Cita en slot_a (ocupado por el mismo médico)
         _make_appointment(
-            tenant, doctor, patient1, user, starts_at=slot_a,
-            ends_at=slot_a + datetime.timedelta(hours=1)
+            tenant,
+            doctor,
+            patient1,
+            user,
+            starts_at=slot_a,
+            ends_at=slot_a + datetime.timedelta(hours=1),
         )
         # Cita a reagendar (actualmente en slot_b)
         appt_to_move = _make_appointment(
-            tenant, doctor, patient2, user, starts_at=slot_b,
-            ends_at=slot_b + datetime.timedelta(hours=1)
+            tenant,
+            doctor,
+            patient2,
+            user,
+            starts_at=slot_b,
+            ends_at=slot_b + datetime.timedelta(hours=1),
         )
 
         # Act & Assert — intentar mover la segunda cita al slot_a (ya ocupado)
         with pytest.raises(ValidationError, match="médico"):
             appointment_reschedule(
-                appointment=appt_to_move, user=user,
+                appointment=appt_to_move,
+                user=user,
                 starts_at=slot_a,
                 ends_at=slot_a + datetime.timedelta(hours=1),
             )
 
-    def test_appointment_reschedule_self_exclusion_allows_same_slot(
-        self, db: None
-    ) -> None:
+    def test_appointment_reschedule_self_exclusion_allows_same_slot(self, db: None) -> None:
         """Reagendar a su propio slot no lanza ValidationError (self-exclusion correcto)."""
         # Arrange
         tenant = TenantFactory()
@@ -919,9 +920,7 @@ class TestAppointmentReschedule:
         starts = _BASE_DT
         ends = starts + datetime.timedelta(hours=1)
 
-        appt = _make_appointment(
-            tenant, doctor, patient, user, starts_at=starts, ends_at=ends
-        )
+        appt = _make_appointment(tenant, doctor, patient, user, starts_at=starts, ends_at=ends)
 
         # Act — "reagendar" al mismo slot (no debe chocar consigo misma)
         updated = appointment_reschedule(
@@ -942,7 +941,11 @@ class TestAppointmentReschedule:
         user = UserFactory()
 
         appt = _make_appointment(
-            tenant, doctor, patient, user, starts_at=_BASE_DT,
+            tenant,
+            doctor,
+            patient,
+            user,
+            starts_at=_BASE_DT,
             ends_at=_BASE_DT + datetime.timedelta(hours=1),
             consultorio=consultorio_old,
         )
@@ -952,8 +955,10 @@ class TestAppointmentReschedule:
 
         # Act — cambiar horario y consultorio
         updated = appointment_reschedule(
-            appointment=appt, user=user,
-            starts_at=new_starts, ends_at=new_ends,
+            appointment=appt,
+            user=user,
+            starts_at=new_starts,
+            ends_at=new_ends,
             consultorio_id=consultorio_new.id,
         )
 
@@ -969,7 +974,10 @@ class TestAppointmentReschedule:
         patient = PatientFactory(tenant=tenant)
         user = UserFactory()
         appt = AppointmentFactory(
-            tenant=tenant, doctor=doctor, patient=patient, consultorio=None,
+            tenant=tenant,
+            doctor=doctor,
+            patient=patient,
+            consultorio=None,
             status=Appointment.Status.SCHEDULED,
             starts_at=_BASE_DT,
             ends_at=_BASE_DT + datetime.timedelta(hours=1),
@@ -981,13 +989,10 @@ class TestAppointmentReschedule:
         # Act & Assert
         with pytest.raises(ValidationError, match="posterior"):
             appointment_reschedule(
-                appointment=appt, user=user,
-                starts_at=bad_starts, ends_at=bad_ends
+                appointment=appt, user=user, starts_at=bad_starts, ends_at=bad_ends
             )
 
-    def test_appointment_reschedule_rejects_consultorio_from_other_tenant(
-        self, db: None
-    ) -> None:
+    def test_appointment_reschedule_rejects_consultorio_from_other_tenant(self, db: None) -> None:
         """Reagendar con consultorio de otro tenant lanza ValidationError."""
         # Arrange
         tenant_a = TenantFactory()
@@ -998,7 +1003,11 @@ class TestAppointmentReschedule:
         user = UserFactory()
 
         appt = _make_appointment(
-            tenant_a, doctor, patient, user, starts_at=_BASE_DT,
+            tenant_a,
+            doctor,
+            patient,
+            user,
+            starts_at=_BASE_DT,
             ends_at=_BASE_DT + datetime.timedelta(hours=1),
         )
 
@@ -1008,14 +1017,13 @@ class TestAppointmentReschedule:
         with _tenant_context(tenant_a):
             with pytest.raises(ValidationError):
                 appointment_reschedule(
-                    appointment=appt, user=user,
+                    appointment=appt,
+                    user=user,
                     starts_at=new_starts,
                     consultorio_id=consultorio_b.id,
                 )
 
-    def test_appointment_reschedule_blocks_consultorio_overlap(
-        self, db: None
-    ) -> None:
+    def test_appointment_reschedule_blocks_consultorio_overlap(self, db: None) -> None:
         """Reagendar a un consultorio ya ocupado lanza ValidationError."""
         # Arrange
         tenant = TenantFactory()
@@ -1031,22 +1039,33 @@ class TestAppointmentReschedule:
 
         # Cita en slot_a del consultorio (ocupado)
         _make_appointment(
-            tenant, doctor1, patient1, user, starts_at=slot_a, ends_at=ends_a,
+            tenant,
+            doctor1,
+            patient1,
+            user,
+            starts_at=slot_a,
+            ends_at=ends_a,
             consultorio=consultorio,
         )
         # Segunda cita del mismo doctor2, en otro horario
         slot_b = slot_a + datetime.timedelta(hours=2)
         appt_to_move = _make_appointment(
-            tenant, doctor2, patient2, user,
-            starts_at=slot_b, ends_at=slot_b + datetime.timedelta(hours=1),
+            tenant,
+            doctor2,
+            patient2,
+            user,
+            starts_at=slot_b,
+            ends_at=slot_b + datetime.timedelta(hours=1),
             consultorio=None,  # sin consultorio inicialmente
         )
 
         # Act & Assert — intentar mover al mismo consultorio en slot_a (ocupado)
         with pytest.raises(ValidationError, match="[Cc]onsultorio"):
             appointment_reschedule(
-                appointment=appt_to_move, user=user,
-                starts_at=slot_a, ends_at=ends_a,
+                appointment=appt_to_move,
+                user=user,
+                starts_at=slot_a,
+                ends_at=ends_a,
                 consultorio_id=consultorio.id,
             )
 
@@ -1079,9 +1098,7 @@ class TestAgendaConfigUpdate:
         updated.refresh_from_db()
         assert updated.default_appointment_duration == 45
 
-    def test_agenda_config_update_rejects_immutable_field_tenant_id(
-        self, db: None
-    ) -> None:
+    def test_agenda_config_update_rejects_immutable_field_tenant_id(self, db: None) -> None:
         """Intentar cambiar 'tenant_id' lanza ValidationError."""
         # Arrange
         tenant = TenantFactory()
@@ -1090,13 +1107,9 @@ class TestAgendaConfigUpdate:
 
         # Act & Assert — tenant_id es campo inmutable en _CONFIG_IMMUTABLE_FIELDS
         with pytest.raises(ValidationError, match="tenant_id"):
-            agenda_config_update(
-                tenant=tenant, user=user, tenant_id=other_tenant.id
-            )
+            agenda_config_update(tenant=tenant, user=user, tenant_id=other_tenant.id)
 
-    def test_agenda_config_update_rejects_immutable_field_id(
-        self, db: None
-    ) -> None:
+    def test_agenda_config_update_rejects_immutable_field_id(self, db: None) -> None:
         """Intentar cambiar 'id' lanza ValidationError."""
         # Arrange
         tenant = TenantFactory()
@@ -1105,6 +1118,79 @@ class TestAgendaConfigUpdate:
         # Act & Assert
         with pytest.raises(ValidationError, match="id"):
             agenda_config_update(tenant=tenant, user=user, id=uuid.uuid4())  # type: ignore[call-arg]
+
+    def test_agenda_config_update_applies_grid_fields(self, db: None) -> None:
+        """Cambiar agenda_start_hour/agenda_end_hour/slot_interval_minutes a
+        valores válidos (8/20/15) persiste los 3 campos."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+
+        # Act
+        updated = agenda_config_update(
+            tenant=tenant,
+            user=user,
+            agenda_start_hour=8,
+            agenda_end_hour=20,
+            slot_interval_minutes=15,
+        )
+
+        # Assert
+        assert updated.agenda_start_hour == 8
+        assert updated.agenda_end_hour == 20
+        assert updated.slot_interval_minutes == 15
+        updated.refresh_from_db()
+        assert updated.agenda_start_hour == 8
+        assert updated.agenda_end_hour == 20
+        assert updated.slot_interval_minutes == 15
+
+    def test_agenda_config_update_rejects_end_hour_equal_to_start_hour(self, db: None) -> None:
+        """agenda_end_hour == agenda_start_hour lanza ValidationError."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+
+        # Act & Assert
+        with pytest.raises(ValidationError, match="posterior"):
+            agenda_config_update(tenant=tenant, user=user, agenda_start_hour=9, agenda_end_hour=9)
+
+    def test_agenda_config_update_rejects_end_hour_before_start_hour(self, db: None) -> None:
+        """agenda_end_hour < agenda_start_hour lanza ValidationError."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+
+        # Act & Assert
+        with pytest.raises(ValidationError, match="posterior"):
+            agenda_config_update(tenant=tenant, user=user, agenda_start_hour=15, agenda_end_hour=8)
+
+    def test_agenda_config_update_rejects_new_start_hour_against_saved_end_hour(
+        self, db: None
+    ) -> None:
+        """Un PATCH parcial que solo manda agenda_start_hour, pero que vuelve
+        inválida la combinación contra el agenda_end_hour YA GUARDADO, también
+        se rechaza (el service valida el estado final, no solo el campo que
+        llega)."""
+        # Arrange — config con cierre a las 10
+        tenant = TenantFactory()
+        user = UserFactory()
+        agenda_config_update(tenant=tenant, user=user, agenda_end_hour=10)
+
+        # Act & Assert — subir el inicio a 12 deja start(12) >= end(10)
+        with pytest.raises(ValidationError, match="posterior"):
+            agenda_config_update(tenant=tenant, user=user, agenda_start_hour=12)
+
+    def test_agenda_config_update_rejects_slot_interval_out_of_choices(self, db: None) -> None:
+        """slot_interval_minutes fuera de los choices permitidos lanza
+        ValidationError (defensa en profundidad; el InputSerializer ya lo
+        restringe, pero el service puede llamarse directo)."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+
+        # Act & Assert
+        with pytest.raises(ValidationError, match="slot_interval_minutes"):
+            agenda_config_update(tenant=tenant, user=user, slot_interval_minutes=45)
 
 
 # ===========================================================================
@@ -1304,9 +1390,7 @@ class TestAppointmentCreateActiveChecks:
                     reason="Consultorio inactivo",
                 )
 
-    def test_appointment_create_allows_active_doctor_and_consultorio(
-        self, db: None
-    ) -> None:
+    def test_appointment_create_allows_active_doctor_and_consultorio(self, db: None) -> None:
         """Doctor y consultorio activos crean cita sin error."""
         # Arrange
         tenant = TenantFactory()
@@ -1360,9 +1444,7 @@ class TestAttendedDoesNotBlockSlot:
         )
 
         # Act — nueva cita en el mismo slot con el mismo médico
-        appt2 = _make_appointment(
-            tenant, doctor, patient2, user, starts_at=starts, ends_at=ends
-        )
+        appt2 = _make_appointment(tenant, doctor, patient2, user, starts_at=starts, ends_at=ends)
 
         # Assert — debe crearse sin error
         assert appt2.pk is not None
