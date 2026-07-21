@@ -156,6 +156,7 @@
     }
     .items-table tbody td.right  { text-align: right; }
     .items-table tbody td.center { text-align: center; }
+    .items-table tbody td.discount-cell { white-space: nowrap; font-size: 7.8pt; }
     .items-table tfoot td {
       padding: 4pt 6pt;
       font-size: 8.5pt;
@@ -275,10 +276,10 @@
 <table class="items-table">
   <thead>
     <tr>
-      <th style="width:40%;">Servicio / Descripción</th>
-      <th class="center" style="width:10%;">Cant.</th>
-      <th class="right"  style="width:17%;">Precio Unit.</th>
-      <th class="right"  style="width:15%;">Descuento</th>
+      <th style="width:34%;">Servicio / Descripción</th>
+      <th class="center" style="width:8%;">Cant.</th>
+      <th class="right"  style="width:16%;">Precio Unit.</th>
+      <th class="right"  style="width:24%;">Descuento</th>
       <th class="right"  style="width:18%;">Importe</th>
     </tr>
   </thead>
@@ -288,7 +289,7 @@
       <td>{{ item.description }}</td>
       <td class="center">{{ item.quantity }}</td>
       <td class="right">{{ item.unit_price }}</td>
-      <td class="right">{% if item.discount != "0.00" %}-{{ item.discount }}{% else %}—{% endif %}</td>
+      <td class="right discount-cell">{{ item.discount_cell }}</td>
       <td class="right"><strong>{{ item.line_total }}</strong></td>
     </tr>
     {% empty %}
@@ -304,10 +305,16 @@
       <td colspan="4" class="right" style="color:#555;">Subtotal</td>
       <td class="right">{{ subtotal }}</td>
     </tr>
-    {% if has_discounts %}
+    {% if has_line_discounts %}
     <tr>
-      <td colspan="4" class="right" style="color:#c92a2a;">Descuentos</td>
-      <td class="right" style="color:#c92a2a;">-{{ discount_total }}</td>
+      <td colspan="4" class="right" style="color:#c92a2a;">Descuento por renglón</td>
+      <td class="right" style="color:#c92a2a;">-{{ line_discount_total }}</td>
+    </tr>
+    {% endif %}
+    {% if has_global_discount %}
+    <tr>
+      <td colspan="4" class="right" style="color:#c92a2a;">{{ global_discount_label }}</td>
+      <td class="right" style="color:#c92a2a;">-{{ global_discount_amount }}</td>
     </tr>
     {% endif %}
     <tr class="total">

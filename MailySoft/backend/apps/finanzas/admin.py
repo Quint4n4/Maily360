@@ -72,7 +72,16 @@ class QuoteAdmin(_PlatformStaffAdmin):
 
 @admin.register(QuoteItem)
 class QuoteItemAdmin(_PlatformStaffAdmin):
-    list_display = ["description", "quantity", "unit_price", "line_total", "quote"]
+    list_display = [
+        "description",
+        "quantity",
+        "unit_price",
+        "discount_type",
+        "discount",
+        "discount_amount",
+        "line_total",
+        "quote",
+    ]
 
 
 @admin.register(Charge)

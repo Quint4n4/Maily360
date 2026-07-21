@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Package, Lock, Plus, Trash2, Loader2, Save, X, Pencil } from 'lucide-react'
+import { Package, Lock, Plus, Trash2, Loader2, Save, X, Pencil, AlertTriangle } from 'lucide-react'
 
 import Topbar from '../components/Topbar'
 import { useRole } from '../auth/RoleContext'
@@ -445,9 +445,18 @@ function PaquetesManager({ puedeEditar }: { puedeEditar: boolean }) {
                   {p.description && (
                     <p className="text-xs mt-0.5 line-clamp-2" style={{ color: '#7A756C' }}>{p.description}</p>
                   )}
-                  <p className="text-[11px] mt-1" style={{ color: '#9A958C' }}>
-                    {p.items_count} tratamiento{p.items_count === 1 ? '' : 's'} · {p.sessions_total} sesión{p.sessions_total === 1 ? '' : 'es'}
-                  </p>
+                  {/* Un paquete sin tratamientos no sirve para cotizar: se avisa
+                      aquí en vez de dejar solo un "$0.00" que pasa desapercibido. */}
+                  {p.items_count === 0 ? (
+                    <p className="text-[11px] mt-1 inline-flex items-center gap-1 font-semibold" style={{ color: '#B45309' }}>
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      Sin tratamientos — edítalo para agregarlos
+                    </p>
+                  ) : (
+                    <p className="text-[11px] mt-1" style={{ color: '#9A958C' }}>
+                      {p.items_count} tratamiento{p.items_count === 1 ? '' : 's'} · {p.sessions_total} sesión{p.sessions_total === 1 ? '' : 'es'}
+                    </p>
+                  )}
                   {usaSucursales && (
                     <div className="mt-1.5">
                       <BadgeSedes sucursales={p.sucursales} />

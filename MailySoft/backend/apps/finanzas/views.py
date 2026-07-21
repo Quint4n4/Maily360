@@ -54,6 +54,7 @@ from apps.finanzas import selectors, services
 from apps.finanzas.models import (
     CfdiDocument,
     Charge,
+    DiscountType,
     Payment,
     Quote,
     ServiceConcept,
@@ -505,6 +506,11 @@ class QuoteListCreateApi(TenantAPIView):
 
     permission_classes = [IsAuthenticated, QuotePermission]
 
+    # NOTA: este ItemSerializer documenta la forma esperada de cada línea,
+    # pero `InputSerializer.items` (abajo) usa un ListField/DictField suelto:
+    # la validación real de cada renglón ocurre en el servicio
+    # (`apps.finanzas.services._create_quote_item` / `_validate_discount_value`),
+    # que es quien lanza ValidationError → 400. Preexistente a este cambio.
     class ItemSerializer(serializers.Serializer):
         concept_id = serializers.UUIDField(required=False, allow_null=True)
         description = serializers.CharField(max_length=200, required=False, allow_blank=True)
@@ -513,6 +519,9 @@ class QuoteListCreateApi(TenantAPIView):
         )
         unit_price = serializers.DecimalField(
             max_digits=12, decimal_places=2, default=Decimal("0.00")
+        )
+        discount_type = serializers.ChoiceField(
+            choices=DiscountType.choices, default=DiscountType.AMOUNT
         )
         discount = serializers.DecimalField(
             max_digits=12, decimal_places=2, default=Decimal("0.00")
@@ -523,6 +532,33 @@ class QuoteListCreateApi(TenantAPIView):
         valid_until = serializers.DateField(required=False, allow_null=True)
         notes = serializers.CharField(default="", allow_blank=True)
         items = serializers.ListField(child=serializers.DictField(), allow_empty=False)
+        global_discount_type = serializers.ChoiceField(
+            choices=DiscountType.choices, default=DiscountType.AMOUNT
+        )
+        global_discount_value = serializers.DecimalField(
+            max_digits=12, decimal_places=2, default=Decimal("0.00"), min_value=Decimal("0.00")
+        )
+
+        def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+            """Rango del descuento general: porcentaje solo entre 0 y 100.
+
+            La validación de NEGATIVO ya la cubre `min_value` del campo; el
+            servicio (`quote_create` → `_validate_discount_value`) repite
+            ambas validaciones como defensa en profundidad (se puede llamar
+            sin pasar por este serializer, p. ej. desde
+            `apps.expediente.services_calendarizacion`).
+            """
+            is_percent = attrs.get("global_discount_type") == DiscountType.PERCENT
+            value = attrs.get("global_discount_value", Decimal("0.00"))
+            if is_percent and value > Decimal("100"):
+                raise serializers.ValidationError(
+                    {
+                        "global_discount_value": (
+                            "El descuento general en porcentaje no puede superar 100."
+                        )
+                    }
+                )
+            return attrs
 
     def get(self, request: Request) -> Response:
         """Lista cotizaciones del tenant actual.
@@ -562,6 +598,8 @@ class QuoteListCreateApi(TenantAPIView):
                 valid_until=s.validated_data.get("valid_until"),
                 notes=s.validated_data.get("notes", ""),
                 sucursal=_resolve_write_sucursal(request, tenant),
+                global_discount_type=s.validated_data["global_discount_type"],
+                global_discount_value=s.validated_data["global_discount_value"],
             )
         except DjangoValidationError as exc:
             return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)

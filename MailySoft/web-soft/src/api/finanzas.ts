@@ -444,12 +444,17 @@ export interface Quote {
   sucursal: SucursalRef | null
 }
 
+/** Tipo de descuento: monto fijo en $ o porcentaje sobre la base del renglón. */
+export type DiscountType = 'amount' | 'percent'
+
 export interface QuoteItemInput {
   concept_id?: string | null
   description?: string
   quantity?: number
   unit_price?: number
+  /** VALOR capturado: pesos si discount_type='amount', porcentaje si 'percent'. */
   discount?: number
+  discount_type?: DiscountType
 }
 
 export interface QuoteInput {
@@ -457,6 +462,9 @@ export interface QuoteInput {
   valid_until?: string | null
   notes?: string
   items: QuoteItemInput[]
+  /** Descuento GENERAL sobre la suma de los renglones ya descontados. */
+  global_discount_type?: DiscountType
+  global_discount_value?: number
 }
 
 export function fetchQuotes(params: { patient_id?: string; status?: string } = {}): Promise<

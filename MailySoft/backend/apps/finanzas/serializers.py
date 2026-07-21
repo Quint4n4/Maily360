@@ -63,7 +63,13 @@ class ServiceConceptOutputSerializer(serializers.ModelSerializer):
 
 
 class QuoteItemOutputSerializer(serializers.ModelSerializer):
-    """Salida de una línea de cotización."""
+    """Salida de una línea de cotización.
+
+    `discount` es el VALOR CAPTURADO (monto en $ o porcentaje, según
+    `discount_type`); `discount_amount` es el descuento EFECTIVO ya
+    calculado en $ (snapshot) — úsalo para mostrar/sumar sin reinterpretar
+    `discount_type`.
+    """
 
     class Meta:
         model = QuoteItem
@@ -73,18 +79,27 @@ class QuoteItemOutputSerializer(serializers.ModelSerializer):
             "description",
             "quantity",
             "unit_price",
+            "discount_type",
             "discount",
+            "discount_amount",
             "line_total",
         ]
         read_only_fields = fields
 
 
 class QuoteOutputSerializer(serializers.ModelSerializer):
-    """Salida de una cotización con sus items."""
+    """Salida de una cotización con sus items.
+
+    `discount_total` = descuento de renglón + descuento general (el total
+    rebajado, en $). `global_discount_amount` desglosa cuánto de ese total
+    corresponde SOLO al descuento general (derivado, no almacenado, para no
+    duplicar el snapshot: `discount_total - Σ item.discount_amount`).
+    """
 
     items = QuoteItemOutputSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     sucursal = _SucursalNestedSerializer(read_only=True, allow_null=True)
+    global_discount_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Quote
@@ -97,12 +112,24 @@ class QuoteOutputSerializer(serializers.ModelSerializer):
             "notes",
             "subtotal",
             "discount_total",
+            "global_discount_type",
+            "global_discount_value",
+            "global_discount_amount",
             "total",
             "items",
             "sucursal",
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_global_discount_amount(self, obj: Quote) -> str:
+        """Descuento general EFECTIVO en $ (derivado de snapshots ya calculados).
+
+        Requiere que `items` venga precargado (`quote_get`/`quote_list` ya lo
+        hacen vía `prefetch_related("items")`) para no disparar una query extra.
+        """
+        line_discounts = sum((item.discount_amount for item in obj.items.all()), Decimal("0.00"))
+        return str(obj.discount_total - line_discounts)
 
 
 def _package_price(package: TreatmentPackage) -> Decimal:

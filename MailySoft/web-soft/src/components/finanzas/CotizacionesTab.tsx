@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Plus, Loader2, Send, Check, Trash2, FileDown, Info, Package } from 'lucide-react'
 
 import type { PatientLite } from '../../api/pacientes'
-import type { QuoteItemInput, ServiceConcept } from '../../api/finanzas'
+import type { DiscountType, QuoteItemInput, ServiceConcept } from '../../api/finanzas'
 import { fetchQuotePdfBlob } from '../../api/finanzas'
 import { getPaquete } from '../../api/paquetes'
 import { errorMsg } from '../../lib/apiErrors'
@@ -40,6 +40,8 @@ interface DraftItem {
   quantity: string
   unit_price: string
   discount: string
+  /** 'amount' = $ fijos · 'percent' = % sobre la base del renglón. */
+  discount_type: DiscountType
 }
 
 const emptyItem = (): DraftItem => ({
@@ -48,12 +50,32 @@ const emptyItem = (): DraftItem => ({
   quantity: '1',
   unit_price: '',
   discount: '0',
+  discount_type: 'amount',
 })
 
-/** Total en vivo de un renglón: cantidad * precio - descuento (nunca < 0). */
+/** Base del renglón antes de descuento. */
+function lineBase(it: DraftItem): number {
+  return Number(it.quantity || 0) * Number(it.unit_price || 0)
+}
+
+/** Descuento efectivo en $ de un renglón (recortado a la base, nunca negativo). */
+function lineDiscount(it: DraftItem): number {
+  const base = lineBase(it)
+  const valor = Number(it.discount || 0)
+  const bruto = it.discount_type === 'percent' ? (base * valor) / 100 : valor
+  return Math.min(Math.max(bruto, 0), base)
+}
+
+/** Total en vivo de un renglón: base - descuento (nunca < 0). */
 function lineTotal(it: DraftItem): number {
-  const raw = Number(it.quantity || 0) * Number(it.unit_price || 0) - Number(it.discount || 0)
-  return raw > 0 ? raw : 0
+  return lineBase(it) - lineDiscount(it)
+}
+
+/** Descuento GENERAL efectivo en $ sobre la suma de los renglones. */
+function globalDiscount(sumaRenglones: number, valor: string, tipo: DiscountType): number {
+  const v = Number(valor || 0)
+  const bruto = tipo === 'percent' ? (sumaRenglones * v) / 100 : v
+  return Math.min(Math.max(bruto, 0), sumaRenglones)
 }
 
 export default function CotizacionesTab({ role }: Props) {
@@ -66,6 +88,9 @@ export default function CotizacionesTab({ role }: Props) {
   const [pkgId, setPkgId] = useState('')
   const [addingPkg, setAddingPkg] = useState(false)
   const [pkgError, setPkgError] = useState<string | null>(null)
+  // Descuento GENERAL de la cotización (sobre la suma de los renglones).
+  const [globalDisc, setGlobalDisc] = useState('0')
+  const [globalDiscType, setGlobalDiscType] = useState<DiscountType>('amount')
 
   const quotes = useQuotes(patient ? { patient_id: patient.id } : {})
   const conceptsQuery = useConcepts()
@@ -79,7 +104,10 @@ export default function CotizacionesTab({ role }: Props) {
 
   const concepts: ServiceConcept[] = conceptsQuery.data?.results ?? []
 
-  const total = items.reduce((acc, it) => acc + lineTotal(it), 0)
+  // Suma de renglones (ya con su descuento) → descuento general → total final.
+  const sumaRenglones = items.reduce((acc, it) => acc + lineTotal(it), 0)
+  const descGeneral = globalDiscount(sumaRenglones, globalDisc, globalDiscType)
+  const total = sumaRenglones - descGeneral
 
   const setItem = (i: number, patch: Partial<DraftItem>) =>
     setItems((p) => p.map((x, j) => (j === i ? { ...x, ...patch } : x)))
@@ -116,8 +144,18 @@ export default function CotizacionesTab({ role }: Props) {
         quantity: String(it.sessions),
         unit_price: it.unit_price,
         discount: '0',
+        discount_type: 'amount',
       }))
-      if (nuevos.length > 0) setItems((p) => [...p, ...nuevos])
+      if (nuevos.length === 0) {
+        // El paquete no tiene tratamientos: antes se limpiaba el selector en
+        // silencio y parecía que "no hacía nada". Ahora se dice qué pasó y
+        // se conserva la selección para que el usuario no la vuelva a buscar.
+        setPkgError(
+          `«${detail.name}» no tiene tratamientos todavía. Agrégaselos en la sección Paquetes y vuelve a intentarlo.`,
+        )
+        return
+      }
+      setItems((p) => [...p, ...nuevos])
       setPkgId('')
     } catch (e) {
       setPkgError(errorMsg(e))
@@ -128,6 +166,8 @@ export default function CotizacionesTab({ role }: Props) {
 
   const resetForm = () => {
     setItems([emptyItem()])
+    setGlobalDisc('0')
+    setGlobalDiscType('amount')
     setPkgId('')
     setPkgError(null)
     setOpen(false)
@@ -143,10 +183,16 @@ export default function CotizacionesTab({ role }: Props) {
         quantity: Number(it.quantity || 1),
         unit_price: Number(it.unit_price),
         discount: Number(it.discount || 0),
+        discount_type: it.discount_type,
       }))
     if (payloadItems.length === 0) return
     createQuote.mutate(
-      { patient_id: patient.id, items: payloadItems },
+      {
+        patient_id: patient.id,
+        items: payloadItems,
+        global_discount_type: globalDiscType,
+        global_discount_value: Number(globalDisc || 0),
+      },
       { onSuccess: resetForm },
     )
   }
@@ -227,16 +273,30 @@ export default function CotizacionesTab({ role }: Props) {
                     value={it.unit_price}
                     onChange={(e) => setItem(i, { unit_price: e.target.value })}
                   />
-                  <input
-                    className="input text-right"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    max={Number(it.quantity || 0) * Number(it.unit_price || 0)}
-                    placeholder="Desc."
-                    value={it.discount}
-                    onChange={(e) => setItem(i, { discount: e.target.value })}
-                  />
+                  {/* Descuento: valor + interruptor $ / % */}
+                  <div className="flex items-center gap-1">
+                    <input
+                      className="input text-right min-w-0 flex-1"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      max={it.discount_type === 'percent' ? 100 : lineBase(it)}
+                      placeholder="Desc."
+                      value={it.discount}
+                      onChange={(e) => setItem(i, { discount: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setItem(i, { discount_type: it.discount_type === 'percent' ? 'amount' : 'percent' })}
+                      title={it.discount_type === 'percent' ? 'Porcentaje — clic para cambiar a pesos' : 'Pesos — clic para cambiar a porcentaje'}
+                      className="w-7 h-7 shrink-0 rounded-md text-xs font-bold transition-colors"
+                      style={it.discount_type === 'percent'
+                        ? { background: '#C9A227', color: '#fff' }
+                        : { background: 'rgba(0,0,0,0.06)', color: '#7A756C' }}
+                    >
+                      {it.discount_type === 'percent' ? '%' : '$'}
+                    </button>
+                  </div>
                   <span className="text-sm text-right font-medium" style={{ color: '#2A241B' }}>
                     {formatMoney(lineTotal(it))}
                   </span>
@@ -288,6 +348,37 @@ export default function CotizacionesTab({ role }: Props) {
               {pkgError && (
                 <p className="text-xs" style={{ color: '#B91C1C' }}>{pkgError}</p>
               )}
+
+              {/* Descuento GENERAL sobre el total de la cotización */}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <span className="text-xs font-medium" style={{ color: '#7A756C' }}>
+                  Descuento general
+                </span>
+                <input
+                  className="input text-right"
+                  style={{ width: 90 }}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  max={globalDiscType === 'percent' ? 100 : sumaRenglones}
+                  value={globalDisc}
+                  onChange={(e) => setGlobalDisc(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setGlobalDiscType(globalDiscType === 'percent' ? 'amount' : 'percent')}
+                  title={globalDiscType === 'percent' ? 'Porcentaje — clic para cambiar a pesos' : 'Pesos — clic para cambiar a porcentaje'}
+                  className="w-7 h-7 shrink-0 rounded-md text-xs font-bold transition-colors"
+                  style={globalDiscType === 'percent'
+                    ? { background: '#C9A227', color: '#fff' }
+                    : { background: 'rgba(0,0,0,0.06)', color: '#7A756C' }}
+                >
+                  {globalDiscType === 'percent' ? '%' : '$'}
+                </button>
+                {descGeneral > 0 && (
+                  <span className="text-xs" style={{ color: '#B91C1C' }}>−{formatMoney(descGeneral)}</span>
+                )}
+              </div>
 
               <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
                 <span className="text-sm font-semibold" style={{ color: '#2A241B' }}>

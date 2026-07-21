@@ -34,6 +34,7 @@ from apps.finanzas.models import (
     CfdiDocument,
     Charge,
     ClinicFiscalConfig,
+    DiscountType,
     Payment,
     PaymentAllocation,
     Quote,
@@ -67,6 +68,47 @@ def _ensure_same_tenant(*, tenant: Tenant, obj: Any, label: str) -> None:
 def _q2(value: Decimal) -> Decimal:
     """Cuantiza a 2 decimales (centavos)."""
     return value.quantize(Decimal("0.01"))
+
+
+_HUNDRED = Decimal("100")
+
+
+def _validate_discount_value(*, discount_type: str, discount_value: Decimal, label: str) -> None:
+    """Valida el rango del valor de descuento capturado según su tipo.
+
+    Reglas de negocio (decisión del dueño, 2026-07-21): un descuento por
+    PORCENTAJE debe estar entre 0 y 100; uno por MONTO solo debe ser no
+    negativo (el recorte a la base, si lo excede, lo hace `_effective_discount`).
+
+    Raises:
+        ValidationError: tipo desconocido, valor negativo, o porcentaje fuera
+                         de 0-100.
+    """
+    if discount_type not in (DiscountType.AMOUNT, DiscountType.PERCENT):
+        raise ValidationError(f"Tipo de descuento inválido en {label}.")
+    if discount_value < ZERO:
+        raise ValidationError(f"El descuento de {label} no puede ser negativo.")
+    if discount_type == DiscountType.PERCENT and discount_value > _HUNDRED:
+        raise ValidationError(f"El descuento porcentual de {label} no puede superar 100%.")
+
+
+def _effective_discount(*, base: Decimal, discount_type: str, discount_value: Decimal) -> Decimal:
+    """Calcula el descuento EFECTIVO en $ a partir del valor capturado.
+
+    Si `discount_type` es 'percent', el descuento es `base * discount_value / 100`.
+    Si es 'amount', el descuento es el valor capturado tal cual. En ambos
+    casos se recorta para no superar `base` ni ser negativo (nunca deja un
+    importe/total negativo — se recorta a 0, no se rechaza).
+
+    Asume que `discount_value` ya pasó por `_validate_discount_value`.
+    """
+    raw = (
+        (base * discount_value / _HUNDRED)
+        if discount_type == DiscountType.PERCENT
+        else discount_value
+    )
+    clipped = max(ZERO, min(raw, base))
+    return _q2(clipped)
 
 
 def _resolve_tenant_sucursales(
@@ -352,15 +394,36 @@ def clinic_fiscal_config_update(
 
 
 def _recalc_quote_totals(*, quote: Quote) -> None:
-    """Recalcula subtotal/descuento/total de una cotización desde sus items."""
+    """Recalcula subtotal/descuento/total de una cotización desde sus items.
+
+    - `subtotal`       = suma de (quantity * unit_price) de los renglones,
+                         SIN ningún descuento.
+    - Descuento GENERAL = se aplica sobre la suma de los `line_total` ya
+                          descontados por renglón (ver `QuoteItem`), según
+                          `quote.global_discount_type`/`global_discount_value`.
+    - `discount_total` = descuentos de renglón + descuento general (el total
+                         rebajado, en $).
+    - `total`          = subtotal - discount_total, nunca negativo (el
+                         descuento general se recorta si excede la suma de
+                         renglones ya descontados).
+    """
     subtotal = ZERO
-    discount = ZERO
+    line_discount_total = ZERO
+    net_lines_total = ZERO
     for item in quote.items.all():
         subtotal += item.quantity * item.unit_price
-        discount += item.discount
+        line_discount_total += item.discount_amount
+        net_lines_total += item.line_total
+
+    global_discount_amount = _effective_discount(
+        base=net_lines_total,
+        discount_type=quote.global_discount_type,
+        discount_value=quote.global_discount_value,
+    )
+
     quote.subtotal = _q2(subtotal)
-    quote.discount_total = _q2(discount)
-    quote.total = _q2(subtotal - discount)
+    quote.discount_total = _q2(line_discount_total + global_discount_amount)
+    quote.total = _q2(net_lines_total - global_discount_amount)
     quote.save(update_fields=["subtotal", "discount_total", "total", "updated_at"])
 
 
@@ -373,26 +436,44 @@ def quote_create(
     valid_until: datetime.date | None = None,
     notes: str = "",
     sucursal: Sucursal | None = None,
+    global_discount_type: str = DiscountType.AMOUNT,
+    global_discount_value: Decimal = ZERO,
 ) -> Quote:
     """Crea una cotización en estado DRAFT con sus líneas.
 
-    Cada item: {concept_id?, description, quantity, unit_price, discount?}.
-    El `description` y `unit_price` se guardan como snapshot.
+    Cada item: {concept_id?, description, quantity, unit_price, discount?,
+    discount_type?}. El `description` y `unit_price` se guardan como snapshot.
+    `discount_type` default 'amount' (compatibilidad retro: `discount` se
+    interpreta como monto en $ si no se especifica).
+
+    Descuento GENERAL (además del descuento por renglón): se aplica sobre la
+    SUMA de los `line_total` ya descontados. Default 'amount'/0 —
+    compatibilidad retro (una cotización creada sin estos parámetros da
+    exactamente los mismos totales que antes).
 
     Args:
         sucursal: sede DONDE SE GENERÓ la cotización (multi-sede — Fase 3).
                   La vista la resuelve con `resolve_write_sucursal`. None =
                   tenant sin sucursales configuradas (compatibilidad retro).
+        global_discount_type:  'amount' (monto en $) o 'percent' (0-100).
+        global_discount_value: valor capturado del descuento general.
 
     Raises:
         ValidationError: si el paciente es de otro tenant, no hay items, un
-                         concepto referenciado es de otro tenant, o la
-                         sucursal indicada es de otro tenant.
+                         concepto referenciado es de otro tenant, la
+                         sucursal indicada es de otro tenant, o el descuento
+                         general/de algún renglón está fuera de rango
+                         (porcentaje fuera de 0-100, o monto negativo).
     """
     _ensure_same_tenant(tenant=tenant, obj=patient, label="El paciente")
     _ensure_same_tenant(tenant=tenant, obj=sucursal, label="La sucursal")
     if not items:
         raise ValidationError("La cotización debe tener al menos una línea.")
+    _validate_discount_value(
+        discount_type=global_discount_type,
+        discount_value=global_discount_value,
+        label="general de la cotización",
+    )
 
     with transaction.atomic():
         quote = Quote.objects.create(
@@ -403,6 +484,8 @@ def quote_create(
             valid_until=valid_until,
             notes=notes,
             sucursal=sucursal,
+            global_discount_type=global_discount_type,
+            global_discount_value=_q2(global_discount_value),
         )
         for raw in items:
             _create_quote_item(tenant=tenant, user=user, quote=quote, raw=raw)
@@ -427,7 +510,23 @@ def _create_quote_item(
     quote: Quote,
     raw: dict[str, Any],
 ) -> QuoteItem:
-    """Crea una línea de cotización a partir de un dict de entrada (con snapshot)."""
+    """Crea una línea de cotización a partir de un dict de entrada (con snapshot).
+
+    `raw["discount_type"]` default 'amount' (compatibilidad retro): si no se
+    envía, `raw["discount"]` se interpreta como monto en $, igual que antes.
+
+    Descuento por renglón (elegible monto/porcentaje):
+        base = quantity * unit_price
+        descuento efectivo = base * discount / 100   si discount_type='percent'
+                            = discount                 si discount_type='amount'
+        line_total = base - descuento efectivo, recortado a >= 0 (si el
+                     descuento excede la base, NO se rechaza: se recorta).
+
+    Raises:
+        ValidationError: concepto no encontrado, falta descripción, o el
+                         descuento está fuera de rango (porcentaje fuera de
+                         0-100, o monto negativo).
+    """
     concept: ServiceConcept | None = None
     concept_id = raw.get("concept_id")
     if concept_id:
@@ -437,14 +536,20 @@ def _create_quote_item(
 
     quantity = Decimal(str(raw.get("quantity", "1")))
     unit_price = Decimal(str(raw.get("unit_price", concept.base_price if concept else "0")))
-    discount = Decimal(str(raw.get("discount", "0")))
+    discount_type = raw.get("discount_type") or DiscountType.AMOUNT
+    discount_value = Decimal(str(raw.get("discount", "0")))
     description = raw.get("description") or (concept.name if concept else "")
     if not description:
         raise ValidationError("Cada línea requiere una descripción o un concepto.")
+    _validate_discount_value(
+        discount_type=discount_type, discount_value=discount_value, label="la línea"
+    )
 
-    line_total = _q2(quantity * unit_price - discount)
-    if line_total < ZERO:
-        raise ValidationError("El descuento no puede superar el importe de la línea.")
+    base = _q2(quantity * unit_price)
+    discount_amount = _effective_discount(
+        base=base, discount_type=discount_type, discount_value=discount_value
+    )
+    line_total = _q2(base - discount_amount)
 
     return QuoteItem.objects.create(
         tenant=tenant,
@@ -454,7 +559,9 @@ def _create_quote_item(
         description=description,
         quantity=quantity,
         unit_price=_q2(unit_price),
-        discount=_q2(discount),
+        discount_type=discount_type,
+        discount=_q2(discount_value),
+        discount_amount=discount_amount,
         line_total=line_total,
     )
 

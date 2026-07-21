@@ -51,6 +51,7 @@ from apps.finanzas.models import (
     CfdiDocument,
     Charge,
     ClinicFiscalConfig,
+    DiscountType,
     Payment,
     Quote,
     QuoteItem,
@@ -267,6 +268,9 @@ class TenantAgendaConfigFactory(DjangoModelFactory):
     default_appointment_duration = 30
     reminder_offsets_minutes = factory.LazyFunction(lambda: [1440])
     reminders_enabled = True
+    agenda_start_hour = 9
+    agenda_end_hour = 18
+    slot_interval_minutes = 30
 
 
 class AppointmentFactory(DjangoModelFactory):
@@ -1021,6 +1025,8 @@ class QuoteFactory(DjangoModelFactory):
     notes = ""
     subtotal = factory.LazyFunction(lambda: Decimal("0.00"))
     discount_total = factory.LazyFunction(lambda: Decimal("0.00"))
+    global_discount_type = DiscountType.AMOUNT
+    global_discount_value = factory.LazyFunction(lambda: Decimal("0.00"))
     total = factory.LazyFunction(lambda: Decimal("0.00"))
     sucursal = None
 
@@ -1038,7 +1044,9 @@ class QuoteItemFactory(DjangoModelFactory):
     description = factory.Sequence(lambda n: f"Servicio {n}")
     quantity = factory.LazyFunction(lambda: Decimal("1.00"))
     unit_price = factory.LazyFunction(lambda: Decimal("500.00"))
+    discount_type = DiscountType.AMOUNT
     discount = factory.LazyFunction(lambda: Decimal("0.00"))
+    discount_amount = factory.LazyFunction(lambda: Decimal("0.00"))
     line_total = factory.LazyFunction(lambda: Decimal("500.00"))
 
 

@@ -173,6 +173,19 @@ class ClinicFiscalConfig(TenantAwareModel):
 # ---------------------------------------------------------------------------
 
 
+class DiscountType(models.TextChoices):
+    """Tipo de descuento aplicable a un renglón (QuoteItem) o al total (Quote).
+
+    Compartido entre ambos modelos: el valor CAPTURADO (`discount` /
+    `global_discount_value`) se interpreta distinto según este tipo:
+      - AMOUNT:  el valor es un monto fijo en $.
+      - PERCENT: el valor es un porcentaje (0-100) sobre la base.
+    """
+
+    AMOUNT = "amount", "Monto"
+    PERCENT = "percent", "Porcentaje"
+
+
 class Quote(TenantAwareModel):
     """Cotización (presupuesto) para un paciente.
 
@@ -182,6 +195,11 @@ class Quote(TenantAwareModel):
     Los totales (subtotal, discount_total, total) son snapshots calculados a
     partir de los QuoteItem por el servicio; no se editan a mano vía API.
     Al aceptarse, `quote_accept` genera un Charge por cada item.
+
+    Descuento GENERAL (además del descuento por renglón — ver QuoteItem):
+    `global_discount_type` + `global_discount_value` se aplican sobre la SUMA
+    de los `line_total` ya descontados por renglón. `discount_total` incluye
+    el descuento de renglón MÁS el general (el total rebajado, en $).
     """
 
     class Status(models.TextChoices):
@@ -232,6 +250,28 @@ class Quote(TenantAwareModel):
         default=ZERO,
         help_text="Total a pagar (subtotal - descuentos) (snapshot).",
     )
+    global_discount_type = models.CharField(
+        max_length=10,
+        choices=DiscountType.choices,
+        default=DiscountType.AMOUNT,
+        help_text=(
+            "Tipo del descuento GENERAL de la cotización (además del "
+            "descuento por renglón). 'amount' = monto fijo en $, "
+            "'percent' = porcentaje sobre la suma de los renglones ya "
+            "descontados. Default 'amount' — compatibilidad retro."
+        ),
+    )
+    global_discount_value = models.DecimalField(
+        max_digits=_MONEY_MAX_DIGITS,
+        decimal_places=_MONEY_DECIMALS,
+        default=ZERO,
+        help_text=(
+            "Valor CAPTURADO del descuento general: monto en $ o "
+            "porcentaje (0-100) según `global_discount_type`. Default 0 — "
+            "compatibilidad retro (cotizaciones existentes no cambian de "
+            "total)."
+        ),
+    )
     sucursal = models.ForeignKey(
         "clinica.Sucursal",
         on_delete=models.SET_NULL,
@@ -267,7 +307,17 @@ class QuoteItem(TenantAwareModel):
 
     `description` y `unit_price` son snapshots: si el concepto del catálogo
     cambia luego, la cotización conserva los valores con los que se creó.
-    `line_total` = quantity * unit_price - discount (lo calcula el servicio).
+
+    Descuento por renglón (elegible monto/porcentaje):
+      base = quantity * unit_price
+      descuento efectivo = base * discount / 100      si discount_type='percent'
+                          = discount                    si discount_type='amount'
+      line_total = base - descuento efectivo, NUNCA negativo (si el
+                   descuento excede la base, se recorta a la base y
+                   line_total queda en 0).
+    El servicio (`apps.finanzas.services._create_quote_item`) calcula y
+    guarda tanto `discount_amount` (snapshot del descuento EFECTIVO en $,
+    para no recalcular en cada lectura/PDF) como `line_total`.
     """
 
     quote = models.ForeignKey(
@@ -300,17 +350,46 @@ class QuoteItem(TenantAwareModel):
         default=ZERO,
         help_text="Precio unitario (snapshot).",
     )
+    discount_type = models.CharField(
+        max_length=10,
+        choices=DiscountType.choices,
+        default=DiscountType.AMOUNT,
+        help_text=(
+            "Tipo de descuento del renglón: 'amount' = monto fijo en $, "
+            "'percent' = porcentaje (0-100) sobre `quantity * unit_price`. "
+            "Default 'amount' — compatibilidad retro."
+        ),
+    )
     discount = models.DecimalField(
         max_digits=_MONEY_MAX_DIGITS,
         decimal_places=_MONEY_DECIMALS,
         default=ZERO,
-        help_text="Descuento aplicado a la línea (monto, no porcentaje).",
+        help_text=(
+            "Valor CAPTURADO del descuento: monto en $ o porcentaje "
+            "(0-100), según `discount_type`. NO es directamente el "
+            "descuento en pesos cuando discount_type='percent' — usar "
+            "`discount_amount` para el monto efectivo."
+        ),
+    )
+    discount_amount = models.DecimalField(
+        max_digits=_MONEY_MAX_DIGITS,
+        decimal_places=_MONEY_DECIMALS,
+        default=ZERO,
+        help_text=(
+            "Descuento EFECTIVO en $ ya aplicado a la línea (calculado por "
+            "el servicio desde `discount`/`discount_type`, recortado a la "
+            "base si la excede). Snapshot para no recalcular en cada "
+            "lectura/reporte/PDF."
+        ),
     )
     line_total = models.DecimalField(
         max_digits=_MONEY_MAX_DIGITS,
         decimal_places=_MONEY_DECIMALS,
         default=ZERO,
-        help_text="Importe de la línea = cantidad * precio - descuento (calculado).",
+        help_text=(
+            "Importe de la línea = (cantidad * precio) - discount_amount "
+            "(calculado). Nunca negativo."
+        ),
     )
 
     class Meta:

@@ -287,6 +287,22 @@ def _fmt_qty(value: "Decimal") -> str:
     return f"{normalized:f}"
 
 
+def _fmt_discount_cell(item: "Any") -> str:
+    """Texto de la celda 'Descuento' de un renglón.
+
+    Descuento por PORCENTAJE: muestra el porcentaje capturado + el monto
+    efectivo entre paréntesis (p. ej. "10% (-$100.00)"), para que se lea
+    correctamente en vez de un monto suelto que confundía al dueño con el
+    valor capturado (10 → ¿$10 o 10%?). Descuento por MONTO: solo el monto
+    efectivo, igual que antes. Sin descuento: em dash.
+    """
+    if item.discount_amount <= ZERO:
+        return "—"
+    if item.discount_type == "percent":
+        return f"{_fmt_qty(item.discount)}% (-{_fmt_money(item.discount_amount)})"
+    return f"-{_fmt_money(item.discount_amount)}"
+
+
 def quote_pdf_build(*, quote: "Any", clinic_settings: Any) -> bytes:
     """Genera el PDF de una cotización con WeasyPrint.
 
@@ -315,16 +331,28 @@ def quote_pdf_build(*, quote: "Any", clinic_settings: Any) -> bytes:
 
     # Formatear items — todos los montos incluyen '$' (formato _fmt_money).
     items_ctx: list[dict[str, Any]] = []
+    line_discount_total = ZERO
     for item in quote.items.all():
+        line_discount_total += item.discount_amount
         items_ctx.append(
             {
                 "description": item.description,
                 "quantity": _fmt_qty(item.quantity),
                 "unit_price": _fmt_money(item.unit_price),
-                "discount": _fmt_money(item.discount) if item.discount > ZERO else "0.00",
+                "discount_cell": _fmt_discount_cell(item),
                 "line_total": _fmt_money(item.line_total),
             }
         )
+
+    # Descuento GENERAL: derivado de los snapshots ya guardados
+    # (discount_total - Σ descuentos de renglón), sin recalcular la fórmula
+    # de negocio aquí. Se muestra como su PROPIO renglón del resumen (en vez
+    # de mezclarse con el descuento por renglón), con el porcentaje si aplica.
+    global_discount_amount = quote.discount_total - line_discount_total
+    if quote.global_discount_type == "percent" and quote.global_discount_value > ZERO:
+        global_discount_label = f"Descuento general ({_fmt_qty(quote.global_discount_value)}%)"
+    else:
+        global_discount_label = "Descuento general"
 
     # Folio corto: primeros 8 caracteres del UUID (legible para el paciente).
     folio_short = str(quote.id).replace("-", "")[:8].upper()
@@ -345,8 +373,13 @@ def quote_pdf_build(*, quote: "Any", clinic_settings: Any) -> bytes:
         # Montos — ya formateados con '$'; el template NO agrega signo.
         "subtotal": _fmt_money(quote.subtotal),
         "discount_total": _fmt_money(quote.discount_total),
-        "total": _fmt_money(quote.total),
         "has_discounts": quote.discount_total > ZERO,
+        "has_line_discounts": line_discount_total > ZERO,
+        "line_discount_total": _fmt_money(line_discount_total),
+        "has_global_discount": global_discount_amount > ZERO,
+        "global_discount_label": global_discount_label,
+        "global_discount_amount": _fmt_money(global_discount_amount),
+        "total": _fmt_money(quote.total),
         "notes": quote.notes,
         "items": items_ctx,
     }
