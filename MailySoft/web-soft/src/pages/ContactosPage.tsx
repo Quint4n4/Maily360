@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Plus, Phone, CalendarDays, CalendarPlus, Loader2, AlertCircle, AlertTriangle, Star, Crown, CalendarRange, Tag } from 'lucide-react'
+import { Search, Plus, Phone, CalendarDays, CalendarPlus, Loader2, AlertCircle, AlertTriangle, Star, Crown, CalendarRange, Tag, LayoutGrid, List } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import NuevoPacienteDrawer from '../components/contactos/NuevoPacienteDrawer'
 import ExpedienteDrawer from '../components/contactos/ExpedienteDrawer'
@@ -45,6 +45,9 @@ function mensajeVacio(segment: PatientSegment, hayBusqueda: boolean): string {
   }
 }
 
+/** Clave de la preferencia de vista (tarjetas vs lista) en localStorage. */
+const VISTA_KEY = 'maily.pacientes.vista'
+
 export default function ContactosPage() {
   const [query, setQuery]         = useState('')
   const [debounced, setDebounced] = useState('')
@@ -52,6 +55,16 @@ export default function ContactosPage() {
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [dateFrom, setDateFrom]   = useState('')
   const [dateTo, setDateTo]       = useState('')
+  // Vista de la lista de pacientes: tarjetas (por defecto) o lista compacta.
+  // La preferencia se recuerda entre sesiones, como el selector de sucursal.
+  const [vista, setVistaState] = useState<'cards' | 'lista'>(() => {
+    const guardada = localStorage.getItem(VISTA_KEY)
+    return guardada === 'lista' ? 'lista' : 'cards'
+  })
+  const setVista = (v: 'cards' | 'lista') => {
+    setVistaState(v)
+    localStorage.setItem(VISTA_KEY, v)
+  }
   const [nuevoOpen, setNuevo]     = useState(false)
   const [verPaciente, setVer]     = useState<PatientOut | null>(null)
   // Paciente para "Volver a agendar" (abre CrearEventoModal precargado). Null = cerrado.
@@ -191,7 +204,28 @@ export default function ContactosPage() {
           </div>
 
           {/* Chips de segmento (dorado) + etiquetas del catálogo (verde) */}
-          <div className="flex flex-wrap gap-2 mt-4">
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            {/* Selector de vista: tarjetas o lista (se recuerda entre sesiones) */}
+            <div className="order-last ml-auto flex items-center rounded-full p-0.5"
+              style={{ background: 'rgba(255,255,255,0.6)' }}>
+              <button type="button" onClick={() => setVista('cards')} title="Ver en tarjetas"
+                aria-pressed={vista === 'cards'}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                style={vista === 'cards'
+                  ? { background: '#C9A227', color: '#fff', boxShadow: '0 2px 8px rgba(201,162,39,0.35)' }
+                  : { color: '#7A756C' }}>
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button type="button" onClick={() => setVista('lista')} title="Ver en lista"
+                aria-pressed={vista === 'lista'}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                style={vista === 'lista'
+                  ? { background: '#C9A227', color: '#fff', boxShadow: '0 2px 8px rgba(201,162,39,0.35)' }
+                  : { color: '#7A756C' }}>
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+
             {SEGMENTOS.map(s => {
               const activo = categoryId === null && segment === s.key
               return (
@@ -279,6 +313,88 @@ export default function ContactosPage() {
 
         {/* ════ Cuadrícula de carpetas (folders) ════ */}
         {!isLoading && !isError && !esperandoFechas && (
+          vista === 'lista' ? (
+          /* ════ Vista LISTA: filas compactas (más pacientes a la vista) ════ */
+          <div className="glass-card rounded-2xl mt-7 overflow-hidden">
+            {lista.length === 0 && (
+              <div className="py-16 text-center">
+                <p className="text-gray-500 text-sm">{mensajeVacio(segment, !!debounced)}</p>
+              </div>
+            )}
+            {lista.map((p, i) => (
+              <div
+                key={p.id}
+                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/40"
+                style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.55)' }}
+              >
+                <button onClick={() => setVer(p)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                  <span className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{
+                      background: 'rgba(201,162,39,0.16)',
+                      color: '#B8860B',
+                      outline: p.is_vip ? '2px solid #C9A227' : 'none',
+                      outlineOffset: 1,
+                    }}>
+                    {p.avatar ? <img src={p.avatar} alt="" className="w-full h-full object-cover" /> : initialsOf(p)}
+                  </span>
+
+                  <span className="flex-1 min-w-0">
+                    <span className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-900 truncate">{p.full_name}</span>
+                      {p.is_vip && <span className="badge shrink-0" style={{ background: '#FBF1D9', color: '#9A7B1E' }}>VIP</span>}
+                      {p.categories.map(c => (
+                        <span key={c.id} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{ background: 'rgba(29,111,92,0.12)', color: '#1D6F5C' }}>
+                          <Tag className="w-2.5 h-2.5" />{c.name}
+                        </span>
+                      ))}
+                    </span>
+                    <span className="flex items-center gap-3 text-[11px] text-gray-500 mt-0.5 flex-wrap">
+                      <span style={{ color: '#B8860B' }} className="font-semibold">{p.record_number}</span>
+                      <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{p.phone || '—'}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3" />
+                        {p.last_seen_at ? formatFechaCorta(p.last_seen_at) : 'Sin citas'}
+                      </span>
+                      {p.is_provisional && (
+                        <span className="inline-flex items-center gap-1" style={{ color: '#9A7B1E' }}>
+                          <AlertTriangle className="w-3 h-3" /> Falta completar datos
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+
+                {/* Mismas acciones rápidas que en las tarjetas */}
+                {editar && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button type="button" title={p.is_favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                      onClick={() => toggleFavorito(p)}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-amber-50">
+                      <Star className="w-4 h-4" style={{ fill: p.is_favorite ? '#C9A227' : 'transparent', color: p.is_favorite ? '#C9A227' : '#9aa0a6' }} />
+                    </button>
+                    <button type="button" title={p.is_vip ? 'Quitar VIP' : 'Marcar como VIP'}
+                      onClick={() => toggleVip(p)}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-amber-50">
+                      <Crown className="w-4 h-4" style={{ fill: p.is_vip ? '#C9A227' : 'transparent', color: p.is_vip ? '#B8860B' : '#9aa0a6' }} />
+                    </button>
+                    <EtiquetasQuickMenu patient={p} categorias={categorias} />
+                  </div>
+                )}
+
+                {/* Clientes potenciales: acción directa para reagendarlos. */}
+                {segment === 'potential' && puedeAgendar && (
+                  <button type="button" onClick={() => setReagendar(p)}
+                    title={p.last_reason ? `A qué venía: ${p.last_reason}` : undefined}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110"
+                    style={{ background: '#C9A227' }}>
+                    <CalendarPlus className="w-3.5 h-3.5" /> Reagendar
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          ) : (
           <div className="grid gap-5 mt-7" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {lista.map(p => (
               <div key={p.id} className="group relative pt-6 transition-transform duration-200 hover:-translate-y-1.5">
@@ -389,6 +505,7 @@ export default function ContactosPage() {
               </div>
             )}
           </div>
+          )
         )}
       </div>
 
