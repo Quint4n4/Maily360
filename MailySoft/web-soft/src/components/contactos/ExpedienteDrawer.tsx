@@ -1,25 +1,24 @@
 /**
- * ExpedienteDrawer — expediente del paciente "CENTRADO EN LA VISITA" (rediseño Fase 1).
+ * ExpedienteDrawer — expediente del paciente, "CENTRADO EN LA VISITA".
  *
  *   Header (franja superior, ancho completo): avatar + nombre + nº de expediente
- *     + chips (Activo/Inactivo, VIP, Finado) + acciones (Agendar, Dar de baja, X).
+ *     + chips (Activo/Inactivo, VIP, Finado, saldo) + acciones (Agendar, Plan
+ *     Integral, Dar de baja, X).
  *
  *   Cuerpo (dos columnas con scroll independiente):
- *     Izquierda (fija ~360px): FichaPaciente — identificación, alergias,
- *       indicaciones de enfermería + botón "Editar datos" (lo que ya existía).
- *     Derecha  (flex-1):
- *       - "Visita de hoy" (VisitaDeHoy): ① Enfermería → ② Evolución SOAP → ③ Receta.
- *       - Historial (HistorialExpediente): franja de citas + Libro clínico.
+ *     Izquierda (fija ~380px): FichaPaciente — quién es el paciente: alergias,
+ *       datos generales, próxima consulta, historia clínica, enfermería y
+ *       observaciones.
+ *     Derecha (flex-1): qué se le hace.
+ *       - Portada: "Visita de hoy" (① Enfermería → ② Evolución SOAP → ③ Receta)
+ *         + IndiceSecciones, la lista de secciones con su contador.
+ *       - Al abrir una sección, esta sustituye a la portada con un botón
+ *         "Volver". Antes eran tres pestañas sueltas (Expediente / Estado de
+ *         cuenta / Calendarización) y, dentro de la primera, una pila vertical
+ *         de bloques que obligaba a hacer scroll para saber qué había.
  *
- * Se eliminó la pila de acordeones (Acordeon/AcordeonItem, SignosTab, HistoriaTab,
- * EvolucionTab, DiagnosticosTab, RecetasTab, CitasSection en ese formato). TODAS
- * las funciones siguen accesibles:
- *   - Signos → paso ① de la visita (VisitaSignos, mismos hooks).
- *   - Evolución + exploración + imágenes + addenda → SOAP guiado / libro clínico.
- *   - Recetas → botón directo "+ Receta" en la visita (mismo NuevaReceta).
- *   - Historia clínica viva + evoluciones → Libro clínico (sin cambios).
- *   - Citas → franja-recordatorio del historial.
- *   - Diagnósticos formales (CIE-10) → ver "Pendientes" del reporte (Fase 2).
+ * El índice devolvió a la superficie SignosTab y DiagnosticosTab, que estaban
+ * implementados pero sin ninguna ruta de acceso desde la interfaz.
  *
  * Las secciones clínicas solo se muestran si puedeVerExpedienteClinico(role).
  * Los botones de captura/edición se ocultan según los permisos de rol (solo UX;
@@ -28,7 +27,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, CalendarPlus, UserX, Loader2, AlertTriangle, CalendarClock, Wallet, ListChecks, Sparkles } from 'lucide-react'
+import { X, CalendarPlus, UserX, Loader2, AlertTriangle, ArrowLeft, Sparkles } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { initialsOf } from '../../lib/paciente'
 import { useUploadPatientAvatar } from '../../hooks/pacientes'
@@ -45,12 +44,26 @@ import AvatarUploader from '../common/AvatarUploader'
 import { useAviso } from '../common/DialogProvider'
 import FichaPaciente from '../expediente/FichaPaciente'
 import VisitaDeHoy from '../expediente/VisitaDeHoy'
-import HistorialExpediente from '../expediente/HistorialExpediente'
+import IndiceSecciones, { type SeccionId } from '../expediente/IndiceSecciones'
+import LibroClinico from '../expediente/LibroClinico'
+import SignosTab from '../expediente/SignosTab'
+import DiagnosticosTab from '../expediente/DiagnosticosTab'
 import RecetasTab from '../expediente/RecetasTab'
 import CitasSection from '../expediente/CitasSection'
 import EstadoCuentaExpediente from '../expediente/EstadoCuentaExpediente'
 import CalendarizacionTab from '../expediente/CalendarizacionTab'
 import PlanIntegralModal from '../expediente/PlanIntegralModal'
+
+/** Título de cada sección al abrirla desde el índice. */
+const SECCION_TITULO: Record<SeccionId, string> = {
+  libro: 'Libro clínico',
+  signos: 'Signos y mediciones',
+  diagnosticos: 'Diagnósticos',
+  recetas: 'Recetas',
+  citas: 'Citas',
+  cuenta: 'Estado de cuenta',
+  calendarizacion: 'Calendarización',
+}
 
 interface ExpedienteDrawerProps {
   paciente: PatientOut | null
@@ -85,17 +98,23 @@ export default function ExpedienteDrawer({
   // clínico editable (owner/admin/doctor). El backend es la autoridad (403).
   const puedeCalendarizar = accesoClinico && editarClinico
 
-  // Pestaña activa del panel derecho: expediente / estado de cuenta / calendarización.
-  const [tab, setTab] = useState<'expediente' | 'cuenta' | 'calendarizacion'>('expediente')
+  // Sección abierta del panel derecho. null = portada: "Visita de hoy" + índice.
+  const [seccion, setSeccion] = useState<SeccionId | null>(null)
+
+  // Al cambiar de paciente se vuelve a la portada. Este componente no se
+  // desmonta al cerrar el expediente, así que sin esto el siguiente paciente
+  // se abriría en la sección que quedó abierta del anterior — con el riesgo de
+  // creer que estás viendo las recetas de uno cuando son las de otro.
+  const [pacienteVisible, setPacienteVisible] = useState<string | null>(null)
+  if (paciente && paciente.id !== pacienteVisible) {
+    setPacienteVisible(paciente.id)
+    setSeccion(null)
+  }
 
   // Plan Integral (constancia a nivel paciente): solo roles clínicos editables
   // (owner/admin/doctor). El backend es la autoridad y responde 403 al resto.
   const [planIntegralAbierto, setPlanIntegralAbierto] = useState(false)
   const puedeVerPlanIntegral = accesoClinico && editarClinico
-
-  // El selector de pestañas se muestra si hay al menos una pestaña extra además
-  // del expediente (estado de cuenta y/o calendarización).
-  const mostrarTabs = verEstadoCuenta || puedeCalendarizar
 
   // Saldo para el badge del encabezado. Solo se consulta si el rol puede verlo.
   const statement = useStatement(verEstadoCuenta && paciente ? paciente.id : null)
@@ -227,72 +246,68 @@ export default function ExpedienteDrawer({
                 />
               </aside>
 
-              {/* Columna central/derecha: pestañas Expediente / Estado de cuenta */}
+              {/* Columna derecha: visita de hoy + índice, o la sección abierta */}
               <section className="flex-1 min-w-0 lg:h-full lg:overflow-y-auto lg:pr-1 space-y-6">
-                {/* Selector de pestañas (solo si hay más de una disponible) */}
-                {mostrarTabs && (
-                  <div className="flex flex-wrap gap-2">
-                    <TabButton
-                      activo={tab === 'expediente'}
-                      onClick={() => setTab('expediente')}
-                      icon={<CalendarClock className="w-4 h-4" />}
-                    >
-                      Expediente
-                    </TabButton>
-                    {verEstadoCuenta && (
-                      <TabButton
-                        activo={tab === 'cuenta'}
-                        onClick={() => setTab('cuenta')}
-                        icon={<Wallet className="w-4 h-4" />}
-                      >
-                        Estado de cuenta
-                      </TabButton>
-                    )}
-                    {puedeCalendarizar && (
-                      <TabButton
-                        activo={tab === 'calendarizacion'}
-                        onClick={() => setTab('calendarizacion')}
-                        icon={<ListChecks className="w-4 h-4" />}
-                      >
-                        Calendarización
-                      </TabButton>
-                    )}
-                  </div>
-                )}
-
-                {/* Pestaña: estado de cuenta / calendarización / expediente */}
-                {verEstadoCuenta && tab === 'cuenta' ? (
-                  <EstadoCuentaExpediente paciente={paciente} puedeCobrar={cobrar} />
-                ) : puedeCalendarizar && tab === 'calendarizacion' ? (
-                  <CalendarizacionTab paciente={paciente} />
-                ) : accesoClinico ? (
+                {seccion === null ? (
                   <>
-                    <VisitaDeHoy
+                    {/* La captura de la visita va primero: es a lo que se entra */}
+                    {accesoClinico && (
+                      <VisitaDeHoy
+                        paciente={paciente}
+                        puedeCapturarSignos={capturarSignos}
+                        puedeEditarClinico={editarClinico}
+                        puedeEmitirReceta={emitirReceta}
+                      />
+                    )}
+                    <IndiceSecciones
                       paciente={paciente}
-                      puedeCapturarSignos={capturarSignos}
-                      puedeEditarClinico={editarClinico}
-                      puedeEmitirReceta={emitirReceta}
-                    />
-                    <HistorialExpediente
-                      paciente={paciente}
-                      verClinico={accesoClinico}
+                      accesoClinico={accesoClinico}
                       verEstadoCuenta={verEstadoCuenta}
-                    />
-                    {/* Historial de recetas emitidas (ver PDF / copiar a nueva / anular). */}
-                    <RecetasTab
-                      paciente={paciente}
-                      puedeEmitir={emitirReceta}
-                      puedeAnular={puedeAnularReceta(role)}
+                      puedeCalendarizar={puedeCalendarizar}
+                      onAbrir={setSeccion}
                     />
                   </>
                 ) : (
-                  // Roles sin acceso clínico (recepción/finanzas): solo citas.
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <CalendarClock className="w-4 h-4" style={{ color: '#C9A227' }} />
-                      <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-700/80">Citas</h3>
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSeccion(null)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all hover:brightness-105"
+                        style={{
+                          background: 'rgba(255,255,255,0.75)',
+                          color: '#854F0B',
+                          border: '1px solid rgba(201,162,39,0.4)',
+                        }}
+                      >
+                        <ArrowLeft className="w-4 h-4" /> Volver
+                      </button>
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-700/80">
+                        {SECCION_TITULO[seccion]}
+                      </h3>
                     </div>
-                    <CitasSection paciente={paciente} />
+
+                    {seccion === 'libro' && (
+                      <LibroClinico paciente={paciente} verEstadoCuenta={verEstadoCuenta} />
+                    )}
+                    {seccion === 'signos' && (
+                      <SignosTab paciente={paciente} puedeCapturar={capturarSignos} />
+                    )}
+                    {seccion === 'diagnosticos' && (
+                      <DiagnosticosTab paciente={paciente} puedeEditar={editarClinico} />
+                    )}
+                    {seccion === 'recetas' && (
+                      <RecetasTab
+                        paciente={paciente}
+                        puedeEmitir={emitirReceta}
+                        puedeAnular={puedeAnularReceta(role)}
+                      />
+                    )}
+                    {seccion === 'citas' && <CitasSection paciente={paciente} />}
+                    {seccion === 'cuenta' && (
+                      <EstadoCuentaExpediente paciente={paciente} puedeCobrar={cobrar} />
+                    )}
+                    {seccion === 'calendarizacion' && <CalendarizacionTab paciente={paciente} />}
                   </div>
                 )}
               </section>
@@ -333,30 +348,4 @@ function SaldoBadge({ balance }: { balance: number }) {
     )
   }
   return <span className="badge badge-success">Sin adeudo</span>
-}
-
-/** Botón de pestaña del panel derecho (activo en dorado). */
-function TabButton({
-  activo, onClick, icon, children,
-}: {
-  activo: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-      style={{
-        background: activo ? '#C9A227' : 'rgba(255,255,255,0.7)',
-        color: activo ? '#fff' : '#854F0B',
-        border: activo ? '1px solid #C9A227' : '1px solid rgba(201,162,39,0.3)',
-        boxShadow: activo ? '0 4px 14px rgba(201,162,39,0.35)' : 'none',
-      }}
-    >
-      {icon} {children}
-    </button>
-  )
 }

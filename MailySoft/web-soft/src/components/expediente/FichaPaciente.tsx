@@ -1,35 +1,44 @@
 /**
  * FichaPaciente — columna fija (izquierda) del expediente.
- * Siempre visible: banderas de Alergias (solo roles clínicos) + Contacto +
- * Identificación + Datos NOM-004 + Notas (solo clínico).
  *
- * Edición INLINE: si el usuario puede editar (puedeEditar), un botón "Editar"
- * arriba convierte la ficha en campos editables (reusando los grupos y la lógica
- * del modal grande vía ../contactos/pacienteForm). Las alergias NO entran en este
- * modo (siguen con su propio alta/resolver).
+ * Orden fijo, de lo que no se puede pasar por alto a lo que se consulta de vez
+ * en cuando:
+ *   ① Alergias        — hasta arriba, en rojo (solo roles clínicos).
+ *   ② Datos generales — rejilla de 2 columnas, VISIBLE sin desplegar.
+ *   ③ Próxima consulta.
+ *   ④ Bloques plegables: Historia clínica (abre modal), Indicaciones para
+ *      enfermería y Observaciones.
  *
- * El bloque de alergias se movió tal cual desde ResumenTab (misma lógica de
- * alta/resolver); no se duplica nada.
+ * Antes ② eran tres tarjetas apiladas (Contacto / Identificación / NOM-004) que
+ * empujaban todo lo demás fuera de la pantalla.
+ *
+ * Edición INLINE: si el usuario puede editar (puedeEditar), el botón "Editar" de
+ * Datos generales convierte la columna en el formulario completo (reusando los
+ * grupos y la lógica del modal grande vía ../contactos/pacienteForm). Las
+ * alergias NO entran en este modo (siguen con su propio alta/resolver).
  */
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Phone, Mail, Fingerprint, StickyNote, User,
-  AlertTriangle, Plus, X, Loader2, MapPin, Heart,
+  Phone, Mail, Fingerprint, StickyNote, User, CalendarClock,
+  AlertTriangle, Plus, X, Loader2, MapPin, ChevronDown, ChevronRight,
   Droplet, GraduationCap, Briefcase, Cake, Calendar, Tag, Users, BookOpen, Baby,
   Pencil, AlertCircle, ClipboardList, FileHeart,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type { Allergy, AllergyInput, AllergySeverity } from '../../types/expediente'
+import type { Appointment } from '../../types/agenda'
 import {
   useAllergies, useCreateAllergy, useNursingInstructions, useResolveAllergy,
 } from '../../hooks/expediente'
+import { useAppointmentsForPatient } from '../../hooks/agenda'
 import { formatFechaHora } from '../../lib/fecha'
 import { useUpdatePatient } from '../../hooks/pacientes'
 import { edad } from '../../lib/paciente'
 import { errorMsg } from '../../lib/apiErrors'
-import { Card, Cargando, SEVERITY_OPTIONS } from './ui'
+import { Card, Cargando, ESTADOS_CITA_INACTIVOS, estadoCitaChip, SEVERITY_OPTIONS } from './ui'
 import HistoriaTab from './HistoriaTab'
 import {
   CamposContacto, CamposDatosPersonales, CamposDomicilio, CamposNom004,
@@ -41,19 +50,6 @@ function severidadColor(sev: AllergySeverity): { bg: string; border: string; col
   if (sev === 'severa') return { bg: 'rgba(192,57,43,0.12)', border: 'rgba(192,57,43,0.4)', color: '#C0392B' }
   if (sev === 'moderada') return { bg: 'rgba(214,124,30,0.12)', border: 'rgba(214,124,30,0.4)', color: '#B8620B' }
   return { bg: 'rgba(201,162,39,0.12)', border: 'rgba(201,162,39,0.35)', color: '#9A7B1E' }
-}
-
-/** Una línea de dato con su icono de color (estilo ficha del legacy). */
-function DatoIcono({
-  icon: Icon, color, label, value,
-}: { icon: typeof Phone; color: string; label: string; value: string | null | undefined }) {
-  if (!value) return null
-  return (
-    <div className="flex items-center gap-2.5" title={label}>
-      <Icon className="w-4 h-4 shrink-0" style={{ color }} />
-      <span className="text-sm text-gray-800">{value}</span>
-    </div>
-  )
 }
 
 interface FichaPacienteProps {
@@ -72,24 +68,51 @@ export default function FichaPaciente({
   const [editando, setEditando] = useState(false)
   const [hcAbierta, setHcAbierta] = useState(false)
 
+  // En modo edición la columna se convierte en el formulario completo; los
+  // bloques de consulta (alergias, próxima cita, plegables) se ocultan para no
+  // competir con el guardado.
+  if (editando) {
+    return (
+      <FichaEditar
+        paciente={paciente}
+        verClinico={verClinico}
+        onCancelar={() => setEditando(false)}
+        onGuardado={() => setEditando(false)}
+      />
+    )
+  }
+
   return (
     <div className="space-y-4">
-      {/* Banderas de alergias (solo roles clínicos) — fuera del modo edición */}
+      {/* ① Alergias — siempre hasta arriba: es lo que no se puede pasar por alto */}
       {verClinico && <AlergiasBlock patientId={paciente.id} puedeEditar={puedeEditarClinico} />}
 
-      {/* Indicaciones para enfermería (solo roles clínicos) */}
-      {verClinico && <IndicacionesEnfermeriaBlock patientId={paciente.id} />}
+      {/* ② Datos generales — visibles de entrada, sin desplegar */}
+      <DatosGenerales
+        paciente={paciente}
+        puedeEditar={puedeEditar}
+        onEditar={() => setEditando(true)}
+      />
 
-      {/* Acceso a la Historia Clínica (se llena una vez y se actualiza) */}
-      {verClinico && !editando && (
-        <button
-          type="button"
-          onClick={() => setHcAbierta(true)}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
-          style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
-        >
-          <FileHeart className="w-4 h-4" /> Historia clínica
-        </button>
+      {/* ③ Próxima consulta */}
+      <ProximaConsulta patientId={paciente.id} />
+
+      {/* ④ Bloques plegables (lo que se consulta de vez en cuando) */}
+      {verClinico && (
+        <>
+          <BloqueEnlace
+            titulo="Historia clínica"
+            icon={FileHeart}
+            descripcion="Antecedentes, padecimiento actual y exploración basal"
+            onClick={() => setHcAbierta(true)}
+          />
+          <IndicacionesEnfermeriaBlock patientId={paciente.id} />
+          <BloquePlegable titulo="Observaciones" icon={StickyNote}>
+            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+              {paciente.notes || 'Sin observaciones registradas.'}
+            </p>
+          </BloquePlegable>
+        </>
       )}
 
       {verClinico && (
@@ -100,23 +123,92 @@ export default function FichaPaciente({
           onClose={() => setHcAbierta(false)}
         />
       )}
-
-      {editando ? (
-        <FichaEditar
-          paciente={paciente}
-          verClinico={verClinico}
-          onCancelar={() => setEditando(false)}
-          onGuardado={() => setEditando(false)}
-        />
-      ) : (
-        <FichaLectura
-          paciente={paciente}
-          verClinico={verClinico}
-          puedeEditar={puedeEditar}
-          onEditar={() => setEditando(true)}
-        />
-      )}
     </div>
+  )
+}
+
+// ── Bloques plegables de la columna ──────────────────────────────────────────
+
+const BLOQUE_STYLE = {
+  background: 'rgba(255,255,255,0.72)',
+  backdropFilter: 'blur(14px)',
+  border: '1px solid rgba(255,255,255,0.7)',
+  boxShadow: '0 6px 20px rgba(60,42,12,0.10)',
+} as const
+
+/**
+ * Bloque que se abre/cierra en su sitio. El contador va en el encabezado para
+ * que se sepa si hay contenido SIN necesidad de desplegarlo.
+ */
+function BloquePlegable({
+  titulo, icon: Icon, contador, color = '#9A7B1E', abiertoInicial = false, children,
+}: {
+  titulo: string
+  icon: LucideIcon
+  contador?: number
+  color?: string
+  abiertoInicial?: boolean
+  children: React.ReactNode
+}) {
+  const [abierto, setAbierto] = useState(abiertoInicial)
+  return (
+    <div className="rounded-2xl overflow-hidden" style={BLOQUE_STYLE}>
+      <button
+        type="button"
+        onClick={() => setAbierto(a => !a)}
+        aria-expanded={abierto}
+        className="w-full flex items-center justify-between gap-2 px-5 py-4 text-left hover:bg-white/50 transition-colors"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <Icon className="w-4 h-4 shrink-0" style={{ color }} />
+          <span className="text-xs font-semibold uppercase tracking-wide truncate" style={{ color }}>
+            {titulo}
+          </span>
+          {contador !== undefined && contador > 0 && (
+            <span
+              className="text-[11px] font-bold px-1.5 rounded-full shrink-0"
+              style={{ background: 'rgba(201,162,39,0.16)', color: '#9A7B1E' }}
+            >
+              {contador}
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${abierto ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {abierto && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  )
+}
+
+/** Bloque que en vez de desplegarse abre una pantalla aparte (modal). */
+function BloqueEnlace({
+  titulo, icon: Icon, descripcion, onClick,
+}: {
+  titulo: string
+  icon: LucideIcon
+  descripcion: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center justify-between gap-2 rounded-2xl px-5 py-4 text-left hover:bg-white/50 transition-colors"
+      style={BLOQUE_STYLE}
+    >
+      <span className="flex items-center gap-2 min-w-0">
+        <Icon className="w-4 h-4 shrink-0" style={{ color: '#9A7B1E' }} />
+        <span className="min-w-0">
+          <span className="block text-xs font-semibold uppercase tracking-wide" style={{ color: '#9A7B1E' }}>
+            {titulo}
+          </span>
+          <span className="block text-[11px] text-gray-400 truncate">{descripcion}</span>
+        </span>
+      </span>
+      <ChevronRight className="w-4 h-4 shrink-0 text-gray-400" />
+    </button>
   )
 }
 
@@ -179,13 +271,42 @@ function HistoriaClinicaModal({
   )
 }
 
-// ── Modo lectura ─────────────────────────────────────────────────────────────
+// ── Datos generales (siempre visibles, sin desplegar) ───────────────────────
 
-function FichaLectura({
-  paciente, verClinico, puedeEditar, onEditar,
+/**
+ * Una celda etiqueta–valor de la rejilla de datos generales, con el icono de
+ * color que identifica al campo (los mismos de la ficha anterior: el color
+ * ayuda a encontrar el dato sin leer la etiqueta).
+ */
+function Dato({
+  icon: Icon, color, label, value, full = false,
+}: {
+  icon: LucideIcon
+  color: string
+  label: string
+  value: string | null | undefined
+  full?: boolean
+}) {
+  return (
+    <div className={`flex items-start gap-2 min-w-0 ${full ? 'col-span-2' : ''}`}>
+      <Icon className="w-4 h-4 shrink-0 mt-0.5" style={{ color }} />
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+        <p className="text-sm text-gray-800 break-words">{value || '—'}</p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Identificación + contacto + datos NOM-004 en una sola rejilla de dos columnas.
+ * Antes eran tres tarjetas apiladas que empujaban el resto de la columna hacia
+ * abajo; el médico necesita esto de un vistazo al abrir el expediente.
+ */
+function DatosGenerales({
+  paciente, puedeEditar, onEditar,
 }: {
   paciente: PatientOut
-  verClinico: boolean
   puedeEditar: boolean
   onEditar: () => void
 }) {
@@ -195,85 +316,95 @@ function FichaLectura({
     .filter(Boolean)
     .join(', ')
 
+  const telefono = paciente.phone_secondary
+    ? `${paciente.phone || '—'} · ${paciente.phone_secondary}${paciente.phone_label ? ` (${paciente.phone_label})` : ''}`
+    : paciente.phone
+
   return (
-    <div className="space-y-4">
-      {puedeEditar && (
+    <Card
+      title="Datos generales"
+      icon={User}
+      action={puedeEditar && (
         <button
           type="button"
           onClick={onEditar}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:brightness-105"
-          style={{
-            background: 'rgba(255,255,255,0.72)',
-            border: '1px solid rgba(201,162,39,0.45)',
-            color: '#9A7B1E',
-            boxShadow: '0 4px 14px rgba(201,162,39,0.18)',
-          }}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800"
         >
-          <Pencil className="w-4 h-4" /> Editar
+          <Pencil className="w-3.5 h-3.5" /> Editar
         </button>
       )}
-
-      <Card title="Contacto" icon={Phone}>
-        <div className="space-y-2.5">
-          <div className="flex items-center gap-2.5">
-            <Phone className="w-4 h-4 text-gray-400 shrink-0" />
-            <span className="text-sm text-gray-800">{paciente.phone || '—'}</span>
-          </div>
-          {paciente.phone_secondary && (
-            <div className="flex items-center gap-2.5">
-              <Phone className="w-4 h-4 text-gray-400 shrink-0" />
-              <span className="text-sm text-gray-800">
-                {paciente.phone_secondary}
-                {paciente.phone_label ? ` (${paciente.phone_label})` : ''}
-              </span>
-            </div>
-          )}
-          <div className="flex items-center gap-2.5">
-            <Mail className="w-4 h-4 text-gray-400 shrink-0" />
-            <span className="text-sm text-gray-800 truncate">{paciente.email || '—'}</span>
-          </div>
-          {domicilio && (
-            <div className="flex items-start gap-2.5">
-              <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-              <span className="text-sm text-gray-800">
-                {domicilio}{paciente.postal_code ? ` · CP ${paciente.postal_code}` : ''}
-              </span>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      <Card title="Identificación" icon={Fingerprint}>
-        <div className="space-y-2.5">
-          <DatoIcono icon={Fingerprint} color="#64748b" label="CURP" value={paciente.curp} />
-          <DatoIcono icon={Calendar} color="#7c3aed" label="Fecha de nacimiento" value={paciente.date_of_birth} />
-          <DatoIcono icon={Cake} color="#db2777" label="Edad" value={years !== null ? `${years} años` : null} />
-          <DatoIcono icon={User} color="#0284c7" label="Sexo" value={paciente.sex_display} />
-          <DatoIcono icon={Baby} color="#059669" label="Lugar de nacimiento" value={paciente.birthplace} />
-        </div>
-      </Card>
-
-      <Card title="Datos NOM-004" icon={Heart}>
-        <div className="space-y-2.5">
-          <DatoIcono icon={Users} color="#e11d48" label="Estado civil" value={paciente.marital_status_display} />
-          <DatoIcono icon={GraduationCap} color="#4f46e5" label="Escolaridad" value={paciente.education_display} />
-          <DatoIcono icon={Briefcase} color="#b45309" label="Ocupación" value={paciente.occupation} />
-          <DatoIcono icon={BookOpen} color="#7c3aed" label="Religión" value={paciente.religion} />
-          <DatoIcono icon={Droplet} color="#dc2626" label="Tipo de sangre" value={paciente.blood_type_display} />
-          <DatoIcono icon={Tag} color="#0d9488" label="Categoría" value={paciente.category} />
-          <DatoIcono
+    >
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        <Dato icon={Cake} color="#db2777" label="Edad" value={years !== null ? `${years} años` : null} />
+        <Dato icon={Calendar} color="#7c3aed" label="Nacimiento" value={paciente.date_of_birth} />
+        <Dato icon={User} color="#0284c7" label="Sexo" value={paciente.sex_display} />
+        <Dato icon={Users} color="#e11d48" label="Estado civil" value={paciente.marital_status_display} />
+        <Dato icon={Briefcase} color="#b45309" label="Ocupación" value={paciente.occupation} />
+        <Dato icon={Droplet} color="#dc2626" label="Tipo de sangre" value={paciente.blood_type_display} />
+        <Dato icon={GraduationCap} color="#4f46e5" label="Escolaridad" value={paciente.education_display} />
+        <Dato icon={BookOpen} color="#7c3aed" label="Religión" value={paciente.religion} />
+        <Dato icon={Fingerprint} color="#64748b" label="CURP" value={paciente.curp} full />
+        <Dato icon={Phone} color="#0891b2" label="Teléfono" value={telefono} full />
+        <Dato icon={Mail} color="#2563eb" label="Correo" value={paciente.email} full />
+        <Dato icon={Baby} color="#059669" label="Lugar de nacimiento" value={paciente.birthplace} full />
+        <Dato
+          icon={MapPin} color="#ea580c" label="Domicilio"
+          value={domicilio ? `${domicilio}${paciente.postal_code ? ` · CP ${paciente.postal_code}` : ''}` : null}
+          full
+        />
+        {paciente.category && (
+          <Dato icon={Tag} color="#0d9488" label="Categoría" value={paciente.category} full />
+        )}
+        {paciente.is_deceased && (
+          <Dato
             icon={AlertTriangle} color="#6b7280" label="Defunción"
-            value={paciente.is_deceased ? (paciente.deceased_at ? `Finado · ${paciente.deceased_at}` : 'Finado') : null}
+            value={paciente.deceased_at ? `Finado · ${paciente.deceased_at}` : 'Finado'}
+            full
           />
-        </div>
-      </Card>
+        )}
+      </div>
+    </Card>
+  )
+}
 
-      {verClinico && (
-        <Card title="Notas" icon={StickyNote}>
-          <p className="text-sm text-gray-600 leading-relaxed">{paciente.notes || 'Sin notas registradas.'}</p>
-        </Card>
+// ── Próxima consulta ─────────────────────────────────────────────────────────
+
+/**
+ * Próxima cita agendada del paciente. Misma regla que la sección de citas: la
+ * más cercana que no esté atendida/cancelada/no-asistió.
+ */
+function ProximaConsulta({ patientId }: { patientId: string }) {
+  const { data, isLoading } = useAppointmentsForPatient(patientId)
+  const citas: Appointment[] = data?.results ?? []
+  const proxima =
+    [...citas]
+      .filter(c => !ESTADOS_CITA_INACTIVOS.has(c.status))
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0] ?? null
+
+  return (
+    <Card title="Próxima consulta" icon={CalendarClock}>
+      {isLoading ? (
+        <p className="text-sm text-gray-400 italic">Cargando…</p>
+      ) : proxima ? (
+        <div>
+          <p className="text-base font-bold text-gray-900">{formatFechaHora(proxima.starts_at)}</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {proxima.doctor.full_name}{proxima.consultorio ? ` · ${proxima.consultorio.name}` : ''}
+          </p>
+          <span
+            className="badge mt-2"
+            style={{
+              background: estadoCitaChip(proxima.status).bg,
+              color: estadoCitaChip(proxima.status).color,
+            }}
+          >
+            {proxima.status_display}
+          </span>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400 italic">Sin cita próxima.</p>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -509,9 +640,13 @@ function AlergiasBlock({ patientId, puedeEditar }: { patientId: string; puedeEdi
 // ── Indicaciones para enfermería ──────────────────────────────────────────────
 
 /**
- * Panel destacado (acento teal) con las indicaciones para enfermería más
- * recientes derivadas de las notas de evolución. Solo lectura; se nutre del
- * endpoint GET /expediente/<id>/indicaciones-enfermeria/.
+ * Indicaciones para enfermería más recientes derivadas de las notas de
+ * evolución. Solo lectura; se nutre del endpoint
+ * GET /expediente/<id>/indicaciones-enfermeria/.
+ *
+ * Es un bloque plegable: el contador del encabezado avisa si hay indicaciones
+ * pendientes de leer sin ocupar la columna cuando no las hay. Se abre solo
+ * cuando existen, para que enfermería no tenga que buscarlas.
  */
 function IndicacionesEnfermeriaBlock({ patientId }: { patientId: string }) {
   const { data, isLoading, isError } = useNursingInstructions(patientId)
@@ -520,22 +655,14 @@ function IndicacionesEnfermeriaBlock({ patientId }: { patientId: string }) {
   const TEAL = '#0E7C7B'
 
   return (
-    <div
-      className="rounded-2xl p-5"
-      style={{
-        background: 'rgba(14,124,123,0.06)',
-        backdropFilter: 'blur(14px)',
-        border: '1px solid rgba(14,124,123,0.28)',
-        boxShadow: '0 6px 20px rgba(14,124,123,0.10)',
-      }}
+    <BloquePlegable
+      titulo="Indicaciones para enfermería"
+      icon={ClipboardList}
+      color={TEAL}
+      contador={indicaciones.length}
+      abiertoInicial={indicaciones.length > 0}
+      key={`enf-${indicaciones.length > 0}`}
     >
-      <div className="flex items-center gap-2 mb-3">
-        <ClipboardList className="w-4 h-4" style={{ color: TEAL }} />
-        <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: TEAL }}>
-          Indicaciones para Enfermería {indicaciones.length > 0 && `(${indicaciones.length})`}
-        </h4>
-      </div>
-
       {isLoading ? (
         <div className="flex items-center justify-center gap-2 py-4 text-sm" style={{ color: TEAL }}>
           <Loader2 className="w-4 h-4 animate-spin" /> Cargando…
@@ -561,6 +688,6 @@ function IndicacionesEnfermeriaBlock({ patientId }: { patientId: string }) {
           ))}
         </div>
       )}
-    </div>
+    </BloquePlegable>
   )
 }

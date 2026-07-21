@@ -6,19 +6,10 @@
 
 import { CalendarClock, ClipboardList, User } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
-import type { Appointment, AppointmentStatus } from '../../types/agenda'
+import type { Appointment } from '../../types/agenda'
 import { useAppointmentsForPatient } from '../../hooks/agenda'
 import { formatFechaHora } from '../../lib/fecha'
-import { Card } from './ui'
-
-/** Estilo del chip de estado de una cita. */
-function estadoChip(s: AppointmentStatus): { bg: string; color: string } {
-  if (s === 'attended') return { bg: '#DCF3E6', color: '#1F6E47' }
-  if (s === 'confirmed' || s === 'arrived' || s === 'in_progress') return { bg: '#E7F6EE', color: '#2E7D5B' }
-  if (s === 'cancelled' || s === 'no_show') return { bg: '#FDE8E8', color: '#C0392B' }
-  return { bg: '#FBF1D9', color: '#9A7B1E' }
-}
-const ESTADOS_INACTIVOS = new Set<AppointmentStatus>(['attended', 'cancelled', 'no_show'])
+import { Card, ESTADOS_CITA_INACTIVOS as ESTADOS_INACTIVOS, estadoCitaChip as estadoChip } from './ui'
 
 interface CitasSectionProps {
   paciente: PatientOut

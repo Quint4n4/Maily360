@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { Activity, Loader2, Check, Plus } from 'lucide-react'
+import { Activity, Loader2, Check } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import type { VitalSignsInput, VitalSignsRecord } from '../../types/expediente'
 import { useCreateVitalSigns, useVitalSigns } from '../../hooks/expediente'
@@ -62,16 +62,21 @@ const CAMPOS: { key: VitalKey; label: string; unidad: string; placeholder: strin
 
 interface VisitaSignosProps {
   paciente: PatientOut
-  /** owner/admin/doctor/nurse pueden capturar (UX; el backend manda). */
-  puedeCapturar: boolean
+  /**
+   * Formulario de captura abierto. Lo controla VisitaDeHoy, que mantiene un
+   * solo paso abierto a la vez para que la tarjeta de la visita quepa en
+   * pantalla junto al índice de secciones.
+   */
+  abierto: boolean
+  /** Cerrar el paso (al cancelar o después de guardar). */
+  onCerrar: () => void
 }
 
-export default function VisitaSignos({ paciente, puedeCapturar }: VisitaSignosProps) {
+export default function VisitaSignos({ paciente, abierto, onCerrar }: VisitaSignosProps) {
   const { data: tomasData, isLoading } = useVitalSigns(paciente.id)
   const crear = useCreateVitalSigns(paciente.id)
   const [form, setForm] = useState<SignosForm>(FORM_VACIO)
   const [errores, setErrores] = useState<string[]>([])
-  const [abierto, setAbierto] = useState(false)
 
   const tomas: VitalSignsRecord[] = useMemo(() => tomasData?.results ?? [], [tomasData])
   const ultima: VitalSignsRecord | null = tomas[0] ?? null
@@ -108,7 +113,7 @@ export default function VisitaSignos({ paciente, puedeCapturar }: VisitaSignosPr
     try {
       await crear.mutateAsync(input)
       setForm(FORM_VACIO)
-      setAbierto(false)
+      onCerrar()
     } catch (err) {
       setErrores(erroresDe(err))
     }
@@ -118,96 +123,70 @@ export default function VisitaSignos({ paciente, puedeCapturar }: VisitaSignosPr
     ? `${ultima.systolic}/${ultima.diastolic} mmHg`
     : null
 
+  // Cerrado: resumen de una línea con la última toma. Los signos del día son
+  // dato de consulta constante, así que siguen a la vista sin abrir el paso.
+  if (!abierto) {
+    if (isLoading) return <p className="text-xs text-gray-400 italic">Cargando signos…</p>
+    if (!ultima) return <p className="text-xs text-gray-400 italic">Sin signos capturados aún.</p>
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <ResumenDato label="PA" value={pa} />
+        <ResumenDato label="Temp" value={ultima.temperature_c} unidad="°C" />
+        <ResumenDato label="Peso" value={ultima.weight_kg} unidad="kg" />
+        <ResumenDato label="Glucosa" value={ultima.glucose} unidad="mg/dL" />
+        <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
+          <Check className="w-3 h-3" style={{ color: '#0E7C7B' }} />
+          {formatFechaHora(ultima.measured_at)}
+          {ultima.created_by_name ? ` · ${ultima.created_by_name}` : ''}
+        </span>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-3">
-      {/* Resumen "guardada ✓" de la última toma */}
-      {!isLoading && ultima && (
-        <div
-          className="rounded-xl px-3.5 py-3"
-          style={{ background: 'rgba(14,124,123,0.07)', border: '1px solid rgba(14,124,123,0.25)' }}
-        >
-          <div className="flex items-center gap-1.5 mb-2">
-            <Check className="w-3.5 h-3.5" style={{ color: '#0E7C7B' }} />
-            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#0E7C7B' }}>
-              Signos guardados · {formatFechaHora(ultima.measured_at)}
-            </p>
-          </div>
-          {ultima.created_by_name && (
-            <p className="text-[10px] text-gray-400 mb-2">Capturado por {ultima.created_by_name}</p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <ResumenDato label="PA" value={pa} />
-            <ResumenDato label="Temp" value={ultima.temperature_c} unidad="°C" />
-            <ResumenDato label="Peso" value={ultima.weight_kg} unidad="kg" />
-            <ResumenDato label="Glucosa" value={ultima.glucose} unidad="mg/dL" />
-          </div>
-        </div>
-      )}
-
-      {!isLoading && !ultima && !abierto && (
-        <p className="text-sm text-gray-400 italic">Sin signos capturados aún para este paciente.</p>
-      )}
-
-      {/* Botón de captura / formulario compacto */}
-      {puedeCapturar && (
-        <>
-          {!abierto ? (
-            <button
-              type="button"
-              onClick={() => setAbierto(true)}
-              className="inline-flex items-center gap-1.5 text-sm font-semibold transition-colors"
-              style={{ color: '#0E7C7B' }}
-            >
-              <Plus className="w-4 h-4" /> {ultima ? 'Nueva toma' : 'Capturar signos'}
-            </button>
-          ) : (
-            <div className="space-y-3 rounded-xl p-3.5" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(14,124,123,0.2)' }}>
-              <ErroresAlerta errores={errores} />
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
-                {CAMPOS.map(c => {
-                  const error = errorDeSignoVital(c.key, form[c.key])
-                  const [min, max] = VITAL_RANGES[c.key]
-                  return (
-                    <div key={c.key}>
-                      <label className="label">
-                        {c.label} <span className="text-gray-400 font-normal">({c.unidad})</span>
-                      </label>
-                      <input
-                        className={`input${error ? ' input-error' : ''}`}
-                        type="number" step="any" inputMode="decimal"
-                        min={min} max={max}
-                        placeholder={c.placeholder}
-                        value={form[c.key]}
-                        onChange={set(c.key)}
-                        aria-invalid={error ? true : undefined}
-                      />
-                      {error && <p className="text-[11px] text-red-600 mt-0.5">{error}</p>}
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setAbierto(false); setErrores([]); setForm(FORM_VACIO) }}
-                  className="btn-secondary text-xs px-3 py-1.5"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button" onClick={guardar} disabled={crear.isPending}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-white px-4 py-1.5 rounded-lg disabled:opacity-60"
-                  style={{ background: '#0E7C7B' }}
-                >
-                  {crear.isPending
-                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Guardando…</>
-                    : <><Activity className="w-3.5 h-3.5" /> Guardar signos</>}
-                </button>
-              </div>
+    <div className="space-y-3 rounded-xl p-3.5" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(14,124,123,0.2)' }}>
+      <ErroresAlerta errores={errores} />
+      <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+        {CAMPOS.map(c => {
+          const error = errorDeSignoVital(c.key, form[c.key])
+          const [min, max] = VITAL_RANGES[c.key]
+          return (
+            <div key={c.key}>
+              <label className="label">
+                {c.label} <span className="text-gray-400 font-normal">({c.unidad})</span>
+              </label>
+              <input
+                className={`input${error ? ' input-error' : ''}`}
+                type="number" step="any" inputMode="decimal"
+                min={min} max={max}
+                placeholder={c.placeholder}
+                value={form[c.key]}
+                onChange={set(c.key)}
+                aria-invalid={error ? true : undefined}
+              />
+              {error && <p className="text-[11px] text-red-600 mt-0.5">{error}</p>}
             </div>
-          )}
-        </>
-      )}
+          )
+        })}
+      </div>
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => { onCerrar(); setErrores([]); setForm(FORM_VACIO) }}
+          className="btn-secondary text-xs px-3 py-1.5"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button" onClick={guardar} disabled={crear.isPending}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-white px-4 py-1.5 rounded-lg disabled:opacity-60"
+          style={{ background: '#0E7C7B' }}
+        >
+          {crear.isPending
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Guardando…</>
+            : <><Activity className="w-3.5 h-3.5" /> Guardar signos</>}
+        </button>
+      </div>
     </div>
   )
 }
