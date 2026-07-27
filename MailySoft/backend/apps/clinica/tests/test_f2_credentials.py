@@ -1058,25 +1058,44 @@ class TestCedulasAdicionalesValidation:
     """Prueba directa del serializer DoctorProfileImageInputSerializer.cedulas_adicionales.
 
     Se prueba el serializer de forma aislada (sin HTTP) para cubrir exactamente la
-    lógica de validate_cedulas_adicionales: split por coma, strip, isdigit por token.
+    lógica de validate_cedulas_adicionales, que delega en apps/core/validators.py:
+    split por coma, strip y formato (5-10 dígitos) por token.
 
     Casos cubiertos:
-    - Todos los tokens son dígitos → válido.
-    - Al menos un token contiene letras → ValidationError con mensaje "dígitos".
+    - Todos los tokens son cédulas con formato válido → válido.
+    - Al menos un token contiene letras → ValidationError.
+    - Token demasiado corto para ser una cédula real → ValidationError.
     - Valor vacío → válido (campo opcional).
     - Solo espacios/comas → válido (filtra tokens vacíos antes de validar).
     """
 
     def test_cedulas_adicionales_solo_digitos_acepta(self) -> None:
-        """value="1234,5678,9012" — todos los tokens son dígitos → is_valid() True."""
+        """Tres cédulas con formato válido (7-8 dígitos) → is_valid() True."""
         # Arrange
         from apps.clinica.serializers import DoctorProfileImageInputSerializer
 
         # Act
-        s = DoctorProfileImageInputSerializer(data={"cedulas_adicionales": "1234,5678,9012"})
+        s = DoctorProfileImageInputSerializer(
+            data={"cedulas_adicionales": "1234567,7654321,12345678"}
+        )
 
         # Assert
         assert s.is_valid(), s.errors
+
+    def test_cedulas_adicionales_muy_cortas_rechaza(self) -> None:
+        """value="1234" — 4 dígitos no es una cédula real → ValidationError.
+
+        Antes solo se exigía isdigit(), así que "1" pasaba y terminaba impreso en
+        una receta (NOM-004 / Art. 83 LGS exige la cédula del emisor).
+        """
+        # Arrange
+        from apps.clinica.serializers import DoctorProfileImageInputSerializer
+
+        # Act
+        s = DoctorProfileImageInputSerializer(data={"cedulas_adicionales": "1234"})
+
+        # Assert
+        assert not s.is_valid()
 
     def test_cedulas_adicionales_con_letras_rechaza(self) -> None:
         """value="1234,ABC,5678" — token "ABC" contiene letras → ValidationError."""

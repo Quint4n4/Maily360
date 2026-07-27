@@ -29,7 +29,9 @@ from apps.clinica.sucursal_scope import (
 )
 from apps.core.permissions import PersonalPermission
 from apps.core.tenant_context import get_current_tenant
+from apps.core.validators import validar_cedula_profesional
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresPersonal
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule, Weekday
 from apps.personal.selectors import (
     consultorio_get,
@@ -69,7 +71,7 @@ class DoctorListCreateApi(TenantAPIView):
     POST /api/v1/personal/doctores/       — crea un nuevo perfil de médico.
     """
 
-    permission_classes = [IsAuthenticated, PersonalPermission]
+    permission_classes = [IsAuthenticated, PersonalPermission, RequiresPersonal]
 
     class InputSerializer(serializers.Serializer):
         membership_id = serializers.UUIDField(
@@ -97,12 +99,8 @@ class DoctorListCreateApi(TenantAPIView):
         )
 
         def validate_cedula_profesional(self, value: str) -> str:
-            """Valida que la cédula profesional solo contenga dígitos (si no está vacía)."""
-            if value and not value.isdigit():
-                raise serializers.ValidationError(
-                    "La cédula profesional solo puede contener dígitos (0-9)."
-                )
-            return value
+            """Valida el formato de la cédula profesional (vacío es válido)."""
+            return validar_cedula_profesional(value)
 
     def get(self, request: Request) -> Response:
         """Lista paginada de doctores activos del tenant actual.
@@ -188,7 +186,7 @@ class DoctorDetailApi(TenantAPIView):
     asignados al médico. Una lista vacía [] elimina todas las restricciones.
     """
 
-    permission_classes = [IsAuthenticated, PersonalPermission]
+    permission_classes = [IsAuthenticated, PersonalPermission, RequiresPersonal]
 
     class InputSerializer(serializers.Serializer):
         cedula_profesional = serializers.CharField(
@@ -213,12 +211,8 @@ class DoctorDetailApi(TenantAPIView):
         )
 
         def validate_cedula_profesional(self, value: str) -> str:
-            """Valida que la cédula profesional solo contenga dígitos (si no está vacía)."""
-            if value and not value.isdigit():
-                raise serializers.ValidationError(
-                    "La cédula profesional solo puede contener dígitos (0-9)."
-                )
-            return value
+            """Valida el formato de la cédula profesional (vacío es válido)."""
+            return validar_cedula_profesional(value)
 
         # FIX-F1: is_active se eliminó de este serializer.
         # La (des)activación solo ocurre vía DELETE → doctor_deactivate.
@@ -332,7 +326,7 @@ class ConsultorioListCreateApi(TenantAPIView):
     POST /api/v1/personal/consultorios/  — crea un consultorio nuevo.
     """
 
-    permission_classes = [IsAuthenticated, PersonalPermission]
+    permission_classes = [IsAuthenticated, PersonalPermission, RequiresPersonal]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=100)
@@ -423,7 +417,7 @@ class ConsultorioDetailApi(TenantAPIView):
     DELETE /api/v1/personal/consultorios/<uuid:consultorio_id>/  — desactivación (soft).
     """
 
-    permission_classes = [IsAuthenticated, PersonalPermission]
+    permission_classes = [IsAuthenticated, PersonalPermission, RequiresPersonal]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=100, required=False)
@@ -560,7 +554,7 @@ class DoctorScheduleListCreateApi(TenantAPIView):
     POST /api/v1/personal/doctores/<uuid:doctor_id>/horarios/  — crea un horario.
     """
 
-    permission_classes = [IsAuthenticated, PersonalPermission]
+    permission_classes = [IsAuthenticated, PersonalPermission, RequiresPersonal]
 
     class InputSerializer(serializers.Serializer):
         day_of_week = serializers.ChoiceField(choices=Weekday.choices)
@@ -675,7 +669,7 @@ class DoctorScheduleListCreateApi(TenantAPIView):
 class DoctorScheduleDetailApi(TenantAPIView):
     """DELETE /api/v1/personal/horarios/<uuid:schedule_id>/  — desactiva un horario (soft)."""
 
-    permission_classes = [IsAuthenticated, PersonalPermission]
+    permission_classes = [IsAuthenticated, PersonalPermission, RequiresPersonal]
 
     def _get_schedule_or_404(
         self, request: Request, schedule_id: uuid.UUID
