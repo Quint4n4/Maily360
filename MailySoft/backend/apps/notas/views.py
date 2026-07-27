@@ -46,6 +46,7 @@ from apps.clinica.sucursal_scope import resolve_active_sucursal, sucursal_scope_
 from apps.core.permissions import NotePermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresNotas
 from apps.notas.models import Note, NoteScope
 from apps.notas.selectors import note_get, note_list_visible, note_reminders_for_user
 from apps.notas.serializers import NoteOutputSerializer
@@ -91,7 +92,7 @@ class NoteListCreateApi(TenantAPIView):
     POST /api/v1/notas/  — crear una nota o tarea.
     """
 
-    permission_classes = [IsAuthenticated, NotePermission]
+    permission_classes = [IsAuthenticated, NotePermission, RequiresNotas]
 
     class InputSerializer(serializers.Serializer):
         """Campos para crear una nota (POST).
@@ -209,7 +210,7 @@ class NoteDetailApi(TenantAPIView):
     DELETE /api/v1/notas/<note_id>/  — borrado (soft-delete).
     """
 
-    permission_classes = [IsAuthenticated, NotePermission]
+    permission_classes = [IsAuthenticated, NotePermission, RequiresNotas]
 
     class InputSerializer(serializers.Serializer):
         """Campos editables de una nota (PATCH).
@@ -294,7 +295,7 @@ class NoteDetailApi(TenantAPIView):
 class NoteToggleDoneApi(TenantAPIView):
     """POST /api/v1/notas/<note_id>/done/  — alterna done de una tarea."""
 
-    permission_classes = [IsAuthenticated, NotePermission]
+    permission_classes = [IsAuthenticated, NotePermission, RequiresNotas]
 
     def post(self, request: Request, note_id: uuid.UUID) -> Response:
         """Alterna el estado done/pendiente de una tarea (is_task=True).
@@ -327,7 +328,7 @@ class NoteRemindersApi(TenantAPIView):
     Usado por el widget "Mis recordatorios" de la barra lateral de Agenda.
     """
 
-    permission_classes = [IsAuthenticated, NotePermission]
+    permission_classes = [IsAuthenticated, NotePermission, RequiresNotas]
 
     def get(self, request: Request) -> Response:
         """Lista notas con recordatorio en el rango [date_from, date_to).

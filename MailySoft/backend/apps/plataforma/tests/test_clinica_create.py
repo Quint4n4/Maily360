@@ -17,18 +17,21 @@ import uuid
 
 import pytest
 from django.contrib.auth import authenticate
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.audit.models import ActionType, AuditLog
-from apps.personal.models import Consultorio
+from apps.personal.models import Consultorio, Doctor
+from apps.personal.selectors import doctor_get_for_user
 from apps.agenda.models import AppointmentType
 from apps.plataforma.services import _generar_password_temporal, tenant_and_owner_create
-from apps.tenancy.models import Tenant, TenantMembership
+from apps.tenancy.models import Tenant, TenantMembership, TenantSubscription
 from tests.factories import (
     AppointmentFactory,
     PatientFactory,
+    PlanFactory,
     TenantFactory,
     TenantMembershipFactory,
     UserFactory,
@@ -579,3 +582,126 @@ def test_create_rechaza_email_invalido(super_admin):
     }
     response = client.post(url, payload, format="json")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+# ---------------------------------------------------------------------------
+# (9) Alta con plan y con médico dueño (Fase 0 — planes/entitlements)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_alta_con_cedula_crea_medico_del_dueno(super_admin):
+    """Con cédula, el dueño queda con perfil de médico y la clínica opera.
+
+    Regresión: antes el alta creaba consultorio y tipos de cita pero NINGÚN
+    Doctor, y como el dueño no podía tener perfil, la clínica no podía agendar
+    ni una cita (Appointment.doctor es obligatorio).
+    """
+    resultado = tenant_and_owner_create(
+        actor=super_admin,
+        name="Consultorio Dra. Ana",
+        owner_email="ana@consultorio.test",
+        owner_first_name="Ana",
+        owner_last_name="López",
+        owner_cedula="12345678",
+        owner_specialty="Medicina General",
+    )
+
+    doctor = resultado["doctor"]
+    assert doctor is not None
+    assert doctor.cedula_profesional == "12345678"
+    assert doctor.specialty == "Medicina General"
+    assert doctor.membership_id == resultado["owner"].id
+    assert resultado["needs_doctor"] is False
+
+    # El selector que usan agenda y recetas lo encuentra.
+    assert (
+        doctor_get_for_user(
+            user=resultado["owner"].user, tenant_id=resultado["tenant"].id
+        )
+        is not None
+    )
+
+
+@pytest.mark.django_db
+def test_alta_sin_cedula_avisa_que_falta_medico(super_admin):
+    """Sin cédula no se crea perfil, pero el resultado lo advierte."""
+    resultado = tenant_and_owner_create(
+        actor=super_admin,
+        name="Clínica Sin Médico",
+        owner_email="admin@sinmedico.test",
+        owner_first_name="Carlos",
+        owner_last_name="Ruiz",
+    )
+
+    assert resultado["doctor"] is None
+    assert resultado["needs_doctor"] is True
+    assert Doctor.all_objects.filter(tenant=resultado["tenant"]).count() == 0
+
+
+@pytest.mark.django_db
+def test_alta_con_plan_crea_suscripcion(super_admin):
+    """El plan elegido se suscribe en la misma transacción que el alta."""
+    plan = PlanFactory(is_active=True)
+
+    resultado = tenant_and_owner_create(
+        actor=super_admin,
+        name="Clínica Con Plan",
+        owner_email="due@conplan.test",
+        owner_first_name="Luis",
+        owner_last_name="Pérez",
+        plan_id=plan.id,
+    )
+
+    suscripcion = resultado["subscription"]
+    assert suscripcion is not None
+    assert suscripcion.plan_id == plan.id
+    assert TenantSubscription.objects.filter(
+        tenant=resultado["tenant"], plan=plan
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_alta_con_plan_inexistente_no_deja_clinica_huerfana(super_admin):
+    """Plan inválido → falla todo el alta; no queda tenant a medias."""
+    antes = Tenant.objects.count()
+
+    with pytest.raises(DjangoValidationError):
+        tenant_and_owner_create(
+            actor=super_admin,
+            name="Clínica Plan Fantasma",
+            owner_email="x@fantasma.test",
+            owner_first_name="X",
+            owner_last_name="Y",
+            plan_id=uuid.uuid4(),
+        )
+
+    assert Tenant.objects.count() == antes
+    assert not Tenant.objects.filter(name="Clínica Plan Fantasma").exists()
+
+
+@pytest.mark.django_db
+def test_api_alta_con_plan_y_cedula(super_admin):
+    """El endpoint acepta plan_id y cédula, y devuelve needs_doctor."""
+    plan = PlanFactory(is_active=True)
+    client = APIClient()
+    client.force_authenticate(user=super_admin)
+
+    response = client.post(
+        reverse("platform-clinicas-list"),
+        {
+            "name": "Clínica API Completa",
+            "owner_email": "api@completa.test",
+            "owner_first_name": "Sofía",
+            "owner_last_name": "Gómez",
+            "plan_id": str(plan.id),
+            "owner_cedula": "99887766",
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["needs_doctor"] is False
+    tenant = Tenant.objects.get(name="Clínica API Completa")
+    assert TenantSubscription.objects.filter(tenant=tenant, plan=plan).exists()
+    assert Doctor.all_objects.filter(tenant=tenant).count() == 1

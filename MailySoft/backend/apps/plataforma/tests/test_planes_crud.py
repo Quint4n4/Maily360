@@ -552,6 +552,14 @@ def test_contrato_campos_respuesta_post(db: Any, super_admin: Any) -> None:
         "price_monthly",
         "is_featured",
         "features",
+        # Entitlements: lo que el plan concede de verdad (features es marketing).
+        "modules",
+        "max_sucursales",
+        "max_consultorios",
+        "max_usuarios",
+        # Ofrecidos = lo que el super-admin marca; roles = efectivo (∩ módulos).
+        "roles_ofrecidos",
+        "roles",
         "is_active",
         "order",
     }
@@ -573,6 +581,14 @@ def test_contrato_campos_respuesta_patch(db: Any, super_admin: Any) -> None:
         "price_monthly",
         "is_featured",
         "features",
+        # Entitlements: lo que el plan concede de verdad (features es marketing).
+        "modules",
+        "max_sucursales",
+        "max_consultorios",
+        "max_usuarios",
+        # Ofrecidos = lo que el super-admin marca; roles = efectivo (∩ módulos).
+        "roles_ofrecidos",
+        "roles",
         "is_active",
         "order",
     }

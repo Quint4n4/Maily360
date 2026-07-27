@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from apps.core.permissions import MedicalHistoryQuestionPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.selectors import (
     medical_history_question_get,
     medical_history_questions_list,
@@ -42,7 +43,7 @@ class MedicalHistoryQuestionListCreateApi(TenantAPIView):
                                   Default: False (solo activas).
     """
 
-    permission_classes = [IsAuthenticated, MedicalHistoryQuestionPermission]
+    permission_classes = [IsAuthenticated, MedicalHistoryQuestionPermission, RequiresExpediente]
 
     def get(self, request: Request) -> Response:
         """Lista las preguntas extra de la clínica (activas por defecto)."""
@@ -90,7 +91,7 @@ class MedicalHistoryQuestionDetailApi(TenantAPIView):
     Recurso de otro tenant → DoesNotExist → 404 (no 403).
     """
 
-    permission_classes = [IsAuthenticated, MedicalHistoryQuestionPermission]
+    permission_classes = [IsAuthenticated, MedicalHistoryQuestionPermission, RequiresExpediente]
 
     def patch(self, request: Request, question_id: uuid.UUID) -> Response:
         """Edita campos mutables de la pregunta (label, field_type, options, section, order, is_required)."""

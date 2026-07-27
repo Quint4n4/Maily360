@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from apps.core.permissions import EvolutionPermission, NursingInstructionPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.models import EvolutionImage, EvolutionNote
 from apps.expediente.selectors import (
     evolution_image_get,
@@ -58,7 +59,7 @@ class NursingInstructionListApi(TenantAPIView):
         Recepción y finanzas NO tienen acceso (contenido clínico sensible).
     """
 
-    permission_classes = [IsAuthenticated, NursingInstructionPermission]
+    permission_classes = [IsAuthenticated, NursingInstructionPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista las indicaciones de enfermería del paciente (máx. últimas 20).
@@ -104,7 +105,7 @@ class EvolutionImageListCreateApi(TenantAPIView):
     el campo 'image' como archivo binario.
     """
 
-    permission_classes = [IsAuthenticated, EvolutionPermission]
+    permission_classes = [IsAuthenticated, EvolutionPermission, RequiresExpediente]
 
     def get(self, request: Request, evolution_id: uuid.UUID) -> Response:
         """Lista las imágenes activas de la nota de evolución."""
@@ -181,7 +182,7 @@ class EvolutionImageDeleteApi(TenantAPIView):
     Permiso: escritura clínica (EvolutionPermission.DELETE = owner/admin/doctor).
     """
 
-    permission_classes = [IsAuthenticated, EvolutionPermission]
+    permission_classes = [IsAuthenticated, EvolutionPermission, RequiresExpediente]
 
     def delete(self, request: Request, image_id: uuid.UUID) -> Response:
         """Baja lógica de la imagen (sin borrado físico, D-EC-5)."""

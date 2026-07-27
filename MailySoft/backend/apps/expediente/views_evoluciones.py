@@ -25,6 +25,7 @@ from apps.core.permissions import (
 )
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.models import Diagnosis, EvolutionNote
 from apps.expediente.selectors import (
     diagnosis_get,
@@ -95,7 +96,7 @@ class EvolutionNoteListCreateApi(TenantAPIView):
         POST → owner, admin, doctor (D-EC-2; nurse y readonly NO crean evoluciones).
     """
 
-    permission_classes = [IsAuthenticated, EvolutionPermission]
+    permission_classes = [IsAuthenticated, EvolutionPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista las notas de evolución del paciente (-created_at), paginadas.
@@ -264,7 +265,7 @@ class AddendumCreateApi(TenantAPIView):
         POST → owner, admin, doctor.
     """
 
-    permission_classes = [IsAuthenticated, AddendumPermission]
+    permission_classes = [IsAuthenticated, AddendumPermission, RequiresExpediente]
 
     def post(self, request: Request, evolution_id: uuid.UUID) -> Response:
         """Agrega un addendum a la nota de evolución indicada."""
@@ -331,7 +332,7 @@ class DiagnosisListCreateApi(TenantAPIView):
         POST → owner, admin, doctor.
     """
 
-    permission_classes = [IsAuthenticated, DiagnosisPermission]
+    permission_classes = [IsAuthenticated, DiagnosisPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista diagnósticos del paciente.
@@ -458,7 +459,7 @@ class DiagnosisResolveApi(TenantAPIView):
         POST → owner, admin, doctor.
     """
 
-    permission_classes = [IsAuthenticated, DiagnosisPermission]
+    permission_classes = [IsAuthenticated, DiagnosisPermission, RequiresExpediente]
 
     def post(self, request: Request, diagnosis_id: uuid.UUID) -> Response:
         """Marca el diagnóstico como resuelto (baja lógica)."""

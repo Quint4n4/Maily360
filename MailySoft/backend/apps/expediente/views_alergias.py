@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from apps.core.permissions import AllergyPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.models import Allergy
 from apps.expediente.selectors import allergy_get, allergy_list
 from apps.expediente.serializers import (
@@ -36,7 +37,7 @@ class AllergyListCreateApi(TenantAPIView):
                                   Default: False (solo vigentes).
     """
 
-    permission_classes = [IsAuthenticated, AllergyPermission]
+    permission_classes = [IsAuthenticated, AllergyPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista las alergias del paciente (vigentes por defecto)."""
@@ -102,7 +103,7 @@ class AllergyResolveApi(TenantAPIView):
     Responde 204 No Content en éxito.
     """
 
-    permission_classes = [IsAuthenticated, AllergyPermission]
+    permission_classes = [IsAuthenticated, AllergyPermission, RequiresExpediente]
 
     def delete(self, request: Request, allergy_id: uuid.UUID) -> Response:
         """Marca la alergia como resuelta (baja lógica, sin borrado físico)."""

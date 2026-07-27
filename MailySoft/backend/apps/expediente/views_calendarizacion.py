@@ -47,6 +47,7 @@ from apps.clinica.sucursal_scope import resolve_active_sucursal, resolve_write_s
 from apps.core.permissions import TreatmentPlanPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresCalendarizacion
 from apps.expediente.models import TreatmentPlan, TreatmentSession
 from apps.expediente.selectors import (
     treatment_plan_get,
@@ -133,7 +134,7 @@ class TreatmentPlanListCreateApi(TenantAPIView):
     POST /api/v1/expediente/<patient_id>/calendarizaciones/ — crea. 201 detalle.
     """
 
-    permission_classes = [IsAuthenticated, TreatmentPlanPermission]
+    permission_classes = [IsAuthenticated, TreatmentPlanPermission, RequiresCalendarizacion]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista los esquemas de tratamientos del paciente (paginado)."""
@@ -196,7 +197,7 @@ class TreatmentPlanFromPackageApi(TenantAPIView):
     tratamientos del catálogo (Fase 3). Body: {package_id}. 201 detalle.
     """
 
-    permission_classes = [IsAuthenticated, TreatmentPlanPermission]
+    permission_classes = [IsAuthenticated, TreatmentPlanPermission, RequiresCalendarizacion]
 
     class InputSerializer(serializers.Serializer):
         package_id = serializers.UUIDField()
@@ -238,7 +239,7 @@ class TreatmentPlanDetailApi(TenantAPIView):
     DELETE /api/v1/expediente/calendarizaciones/<plan_id>/ — baja lógica.
     """
 
-    permission_classes = [IsAuthenticated, TreatmentPlanPermission]
+    permission_classes = [IsAuthenticated, TreatmentPlanPermission, RequiresCalendarizacion]
 
     def get(self, request: Request, plan_id: uuid.UUID) -> Response:
         """Devuelve el detalle del esquema (items + sesiones anidadas)."""
@@ -317,7 +318,7 @@ class TreatmentPlanPdfApi(TenantAPIView):
     marcadas como aplicadas), así que cada pedido genera un PDF nuevo.
     """
 
-    permission_classes = [IsAuthenticated, TreatmentPlanPermission]
+    permission_classes = [IsAuthenticated, TreatmentPlanPermission, RequiresCalendarizacion]
 
     def get(self, request: Request, plan_id: uuid.UUID) -> Response:
         """Encola la generación del PDF del esquema de tratamientos."""
@@ -354,7 +355,7 @@ class TreatmentPlanQuoteApi(TenantAPIView):
     `services_calendarizacion.quote_create_from_treatment_plan`.
     """
 
-    permission_classes = [IsAuthenticated, TreatmentPlanPermission]
+    permission_classes = [IsAuthenticated, TreatmentPlanPermission, RequiresCalendarizacion]
 
     def post(self, request: Request, plan_id: uuid.UUID) -> Response:
         """Genera la cotización y la liga al esquema."""
@@ -414,7 +415,7 @@ class TreatmentSessionScheduleApi(TenantAPIView):
     (el estado de cuenta del paciente es compartido entre sedes por diseño).
     """
 
-    permission_classes = [IsAuthenticated, TreatmentPlanPermission]
+    permission_classes = [IsAuthenticated, TreatmentPlanPermission, RequiresCalendarizacion]
 
     def post(self, request: Request, session_id: uuid.UUID) -> Response:
         """Agenda (o reagenda) la sesión como cita real de agenda."""

@@ -260,7 +260,7 @@ def test_asignar_plan_get_not_allowed(db: Any, super_admin: Any) -> None:
 
 
 def test_listado_incluye_tenants_sin_suscripcion(db: Any, super_admin: Any) -> None:
-    tenant_sin_plan = TenantFactory(status="active")
+    tenant_sin_plan = TenantFactory(sin_plan=True, status="active")
     client = APIClient()
     client.force_authenticate(user=super_admin)
 
@@ -344,6 +344,7 @@ def test_contrato_campos_fila_suscripcion(db: Any, super_admin: Any) -> None:
 @freeze_time("2026-07-02 12:00:00")
 def test_alerta_trial_vencido(db: Any, super_admin: Any) -> None:
     tenant = TenantFactory(
+        sin_plan=True,
         status="trial",
         trial_ends_at=timezone.now() - timedelta(days=1),
     )
@@ -359,6 +360,7 @@ def test_alerta_trial_vencido(db: Any, super_admin: Any) -> None:
 @freeze_time("2026-07-02 12:00:00")
 def test_alerta_trial_por_vencer(db: Any, super_admin: Any) -> None:
     tenant = TenantFactory(
+        sin_plan=True,
         status="trial",
         trial_ends_at=timezone.now() + timedelta(days=3),
     )
@@ -374,6 +376,7 @@ def test_alerta_trial_por_vencer(db: Any, super_admin: Any) -> None:
 @freeze_time("2026-07-02 12:00:00")
 def test_alerta_trial_vigente_sin_alerta(db: Any, super_admin: Any) -> None:
     tenant = TenantFactory(
+        sin_plan=True,
         status="trial",
         trial_ends_at=timezone.now() + timedelta(days=30),
     )
@@ -389,7 +392,7 @@ def test_alerta_trial_vigente_sin_alerta(db: Any, super_admin: Any) -> None:
 @freeze_time("2026-07-02 12:00:00")
 def test_alerta_periodo_vencido(db: Any, super_admin: Any) -> None:
     sub = TenantSubscriptionFactory(
-        tenant=TenantFactory(status="active"),
+        tenant=TenantFactory(sin_plan=True, status="active"),
         current_period_end=date(2026, 6, 1),
     )
     client = APIClient()
@@ -404,7 +407,7 @@ def test_alerta_periodo_vencido(db: Any, super_admin: Any) -> None:
 @freeze_time("2026-07-02 12:00:00")
 def test_alerta_periodo_por_vencer(db: Any, super_admin: Any) -> None:
     sub = TenantSubscriptionFactory(
-        tenant=TenantFactory(status="active"),
+        tenant=TenantFactory(sin_plan=True, status="active"),
         current_period_end=date(2026, 7, 5),
     )
     client = APIClient()
@@ -419,7 +422,7 @@ def test_alerta_periodo_por_vencer(db: Any, super_admin: Any) -> None:
 @freeze_time("2026-07-02 12:00:00")
 def test_alerta_periodo_vigente_sin_alerta(db: Any, super_admin: Any) -> None:
     sub = TenantSubscriptionFactory(
-        tenant=TenantFactory(status="active"),
+        tenant=TenantFactory(sin_plan=True, status="active"),
         current_period_end=date(2026, 12, 1),
     )
     client = APIClient()
@@ -435,6 +438,7 @@ def test_alerta_periodo_vigente_sin_alerta(db: Any, super_admin: Any) -> None:
 def test_alerta_prioridad_vencido_sobre_por_vencer(db: Any, super_admin: Any) -> None:
     """Trial vencido Y periodo por vencer a la vez → prioriza trial_vencido."""
     tenant = TenantFactory(
+        sin_plan=True,
         status="trial",
         trial_ends_at=timezone.now() - timedelta(days=1),
     )
@@ -525,13 +529,13 @@ def test_filtro_alerta_invalido_400(db: Any, super_admin: Any) -> None:
 def test_resumen_conteos_y_mrr(db: Any, super_admin: Any) -> None:
     plan = PlanFactory(slug="plan-resumen", price_monthly=Decimal("1000.00"))
 
-    activo_con_plan = TenantFactory(status="active")
+    activo_con_plan = TenantFactory(sin_plan=True, status="active")
     TenantSubscriptionFactory(tenant=activo_con_plan, plan=plan)
 
-    trial_con_plan = TenantFactory(status="trial")
+    trial_con_plan = TenantFactory(sin_plan=True, status="trial")
     TenantSubscriptionFactory(tenant=trial_con_plan, plan=plan)
 
-    TenantFactory(status="active")  # activo SIN plan: no debe sumar a mrr
+    TenantFactory(sin_plan=True, status="active")  # activo SIN plan: no debe sumar a mrr
 
     client = APIClient()
     client.force_authenticate(user=super_admin)
