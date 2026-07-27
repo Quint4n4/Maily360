@@ -142,6 +142,9 @@ class ActionType(models.TextChoices):
     PLAN_CREATE = "PLAN_CREATE", "Crear plan del catálogo"
     PLAN_UPDATE = "PLAN_UPDATE", "Actualizar plan del catálogo"
 
+    # Plataforma — Ajustes a la medida por clínica (planes/entitlements Fase 6)
+    TENANT_ENTITLEMENTS_SET = "TENANT_ENTITLEMENTS_SET", "Ajustar derechos de una clínica"
+
     # Plataforma — Equipo de plataforma (Fase 4)
     STAFF_CREATE = "STAFF_CREATE", "Crear usuario de plataforma"
     STAFF_UPDATE = "STAFF_UPDATE", "Actualizar usuario de plataforma"
