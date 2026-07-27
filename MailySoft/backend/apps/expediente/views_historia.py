@@ -19,6 +19,7 @@ from apps.audit.services import audit_record
 from apps.core.permissions import MedicalHistoryPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.selectors import medical_history_get_for_patient
 from apps.expediente.serializers import (
     MedicalHistoryInputSerializer,
@@ -48,7 +49,7 @@ class MedicalHistoryApi(TenantAPIView):
     Validación estricta D-EC-7: campos desconocidos → 400.
     """
 
-    permission_classes = [IsAuthenticated, MedicalHistoryPermission]
+    permission_classes = [IsAuthenticated, MedicalHistoryPermission, RequiresExpediente]
 
     @staticmethod
     def _empty_history() -> dict:

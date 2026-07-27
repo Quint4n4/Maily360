@@ -37,6 +37,7 @@ from apps.clinica.models import (
 )
 from apps.clinica.selectors import clinic_settings_get
 from apps.clinica.sucursal_scope import allowed_sucursales
+from apps.core.entitlement_guards import assert_within_limit
 from apps.tenancy.models import TenantMembership
 
 if TYPE_CHECKING:
@@ -1109,6 +1110,14 @@ def sucursal_create(
     """
     if Sucursal.all_objects.filter(tenant=tenant, name=name, deleted_at__isnull=True).exists():
         raise ValidationError(f"Ya existe una sucursal con el nombre '{name}' en esta clínica.")
+
+    # Límite del plan. Con max_sucursales=1 la clínica opera en "modo sede única"
+    # y esta guarda es la que impide crear la segunda.
+    assert_within_limit(
+        tenant=tenant,
+        limite="max_sucursales",
+        actual=Sucursal.all_objects.filter(tenant=tenant, deleted_at__isnull=True).count(),
+    )
 
     with transaction.atomic():
         sucursal = Sucursal(

@@ -78,6 +78,7 @@ from apps.core.permissions import (
 )
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresAgenda
 
 # ---------------------------------------------------------------------------
 # Helpers de scoping por sucursal para DETALLE/ACCIÓN por id (Clúster A —
@@ -155,7 +156,7 @@ class AppointmentListCreateApi(TenantAPIView):
     POST /api/v1/agenda/citas/    — crea una cita nueva.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentPermission]
+    permission_classes = [IsAuthenticated, AppointmentPermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         """Campos para crear una cita (POST).
@@ -312,7 +313,7 @@ class AppointmentSeriesCreateApi(TenantAPIView):
     saltaron (horario ocupado, bloqueo, etc.) para reacomodarlas a mano.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentPermission]
+    permission_classes = [IsAuthenticated, AppointmentPermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         """Misma cita base que la creación simple + la regla de repetición."""
@@ -443,7 +444,7 @@ class AgendaDisponibilidadApi(TenantAPIView):
     bloqueos "de sucursal" de sedes que no le corresponden.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentPermission]
+    permission_classes = [IsAuthenticated, AppointmentPermission, RequiresAgenda]
 
     def get(self, request: Request) -> Response:
         """Devuelve {"busy": [{"start": iso, "end": iso}, ...]}."""
@@ -481,7 +482,7 @@ class AppointmentDetailApi(TenantAPIView):
     DELETE /api/v1/agenda/citas/<appointment_id>/   — cancela la cita (no borra).
     """
 
-    permission_classes = [IsAuthenticated, AppointmentPermission]
+    permission_classes = [IsAuthenticated, AppointmentPermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         """Campos editables de una cita por PATCH.
@@ -579,7 +580,7 @@ class AppointmentChangeStatusApi(TenantAPIView):
     Valida la transición contra la máquina de estados.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentStatusPermission]
+    permission_classes = [IsAuthenticated, AppointmentStatusPermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         status = serializers.ChoiceField(choices=Appointment.Status.choices)
@@ -633,7 +634,7 @@ class AppointmentRescheduleApi(TenantAPIView):
     Revalida anti-empalme excluyendo la propia cita.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentPermission]
+    permission_classes = [IsAuthenticated, AppointmentPermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         starts_at = serializers.DateTimeField()
@@ -676,7 +677,7 @@ class AppointmentReactivateApi(TenantAPIView):
     Revalida anti-empalme; si el hueco ya está ocupado, 400.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentPermission]
+    permission_classes = [IsAuthenticated, AppointmentPermission, RequiresAgenda]
 
     def post(self, request: Request, appointment_id: uuid.UUID) -> Response:
         appointment, error = _appointment_get_or_404(request, appointment_id)
@@ -701,7 +702,7 @@ class AgendaConfigApi(TenantAPIView):
     PATCH /api/v1/agenda/config/   — actualizar configuración.
     """
 
-    permission_classes = [IsAuthenticated, AgendaConfigPermission]
+    permission_classes = [IsAuthenticated, AgendaConfigPermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         """Campos editables de TenantAgendaConfig.
@@ -785,7 +786,7 @@ class AppointmentTypeListCreateApi(TenantAPIView):
     POST /api/v1/agenda/tipos-cita/   — crea un tipo de cita.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentTypePermission]
+    permission_classes = [IsAuthenticated, AppointmentTypePermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=80)
@@ -836,7 +837,7 @@ class AppointmentTypeDetailApi(TenantAPIView):
     DELETE /api/v1/agenda/tipos-cita/<id>/  — desactivación (soft).
     """
 
-    permission_classes = [IsAuthenticated, AppointmentTypePermission]
+    permission_classes = [IsAuthenticated, AppointmentTypePermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=80, required=False)
@@ -895,7 +896,7 @@ class AgendaBlockListCreateApi(TenantAPIView):
     POST /api/v1/agenda/eventos/   — crea un evento de agenda.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentPermission]
+    permission_classes = [IsAuthenticated, AppointmentPermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         kind = serializers.ChoiceField(choices=AgendaBlock.Kind.choices)
@@ -967,7 +968,7 @@ class AgendaBlockDetailApi(TenantAPIView):
     DELETE /api/v1/agenda/eventos/<id>/  — elimina un evento de agenda.
     """
 
-    permission_classes = [IsAuthenticated, AppointmentPermission]
+    permission_classes = [IsAuthenticated, AppointmentPermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         title = serializers.CharField(max_length=120, required=False, allow_blank=True)
@@ -1028,7 +1029,7 @@ class AppointmentNotesApi(TenantAPIView):
     No se pagina: el hilo de una cita es corto (diseño D-B).
     """
 
-    permission_classes = [IsAuthenticated, AgendaItemNotePermission]
+    permission_classes = [IsAuthenticated, AgendaItemNotePermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         body = serializers.CharField(max_length=2_000)
@@ -1088,7 +1089,7 @@ class AgendaBlockNotesApi(TenantAPIView):
     No se pagina: el hilo de un evento es corto (diseño D-B).
     """
 
-    permission_classes = [IsAuthenticated, AgendaItemNotePermission]
+    permission_classes = [IsAuthenticated, AgendaItemNotePermission, RequiresAgenda]
 
     class InputSerializer(serializers.Serializer):
         body = serializers.CharField(max_length=2_000)
@@ -1147,7 +1148,7 @@ class AgendaItemNoteDetailApi(TenantAPIView):
     El service valida quién puede borrar (author / owner / admin).
     """
 
-    permission_classes = [IsAuthenticated, AgendaItemNotePermission]
+    permission_classes = [IsAuthenticated, AgendaItemNotePermission, RequiresAgenda]
 
     def delete(self, request: Request, note_id: uuid.UUID) -> Response:
         """Soft-delete de una nota del hilo de agenda."""

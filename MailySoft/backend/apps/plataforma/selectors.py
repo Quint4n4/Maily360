@@ -26,7 +26,9 @@ from django.utils.timezone import now
 from apps.agenda.models import Appointment
 from apps.audit.models import AuditLog
 from apps.authn.models import User
+from apps.clinica.models import Sucursal
 from apps.pacientes.models import Patient
+from apps.personal.models import Consultorio
 from apps.tenancy.models import Plan, Tenant, TenantMembership, TenantSubscription
 
 
@@ -248,6 +250,43 @@ def platform_clinica_detail(*, tenant_id: uuid.UUID) -> dict[str, Any]:
         for m in memberships
     ]
 
+    # Entitlements efectivos (plan + ajustes) y consumo vs límite, para que el
+    # super-admin vea de un vistazo si a la clínica le queda cupo (upsell) y
+    # qué módulos tiene realmente encendidos.
+    from apps.core.modules import Module
+    from apps.tenancy.entitlements import entitlements_for_tenant
+    from apps.tenancy.models import TenantEntitlements
+
+    ent = entitlements_for_tenant(tenant=tenant)
+    ajustes = TenantEntitlements.objects.filter(tenant=tenant).first()
+    sucursal_count = Sucursal.all_objects.filter(
+        tenant=tenant, deleted_at__isnull=True
+    ).count()
+    consultorio_count = Consultorio.all_objects.filter(
+        tenant=tenant, deleted_at__isnull=True
+    ).count()
+
+    entitlements = {
+        "plan_slug": ent.plan_slug,
+        "plan_name": ent.plan_name,
+        "modules": sorted(ent.modules),
+        "all_modules": list(Module.values),
+        "roles": sorted(ent.roles),
+        # Consumo actual vs límite (None = ilimitado).
+        "usuarios": {"actual": member_count, "limite": ent.max_usuarios},
+        "consultorios": {"actual": consultorio_count, "limite": ent.max_consultorios},
+        "sucursales": {"actual": sucursal_count, "limite": ent.max_sucursales},
+        # Ajustes a la medida vigentes (para la UI de override).
+        "override": {
+            "modules_on": list(ajustes.modules_on) if ajustes else [],
+            "modules_off": list(ajustes.modules_off) if ajustes else [],
+            "max_sucursales": ajustes.max_sucursales if ajustes else None,
+            "max_consultorios": ajustes.max_consultorios if ajustes else None,
+            "max_usuarios": ajustes.max_usuarios if ajustes else None,
+            "notes": ajustes.notes if ajustes else "",
+        },
+    }
+
     return {
         "id": str(tenant.id),
         "name": tenant.name,
@@ -261,6 +300,7 @@ def platform_clinica_detail(*, tenant_id: uuid.UUID) -> dict[str, Any]:
         "appointment_count": appointment_count,
         "ultima_actividad": ultima_actividad,
         "members": members,
+        "entitlements": entitlements,
     }
 
 

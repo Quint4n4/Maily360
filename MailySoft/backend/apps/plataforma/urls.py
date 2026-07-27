@@ -28,6 +28,7 @@ from django.urls import path
 from apps.plataforma.views import (
     PlatformAuditoriaListApi,
     PlatformClinicaDetailApi,
+    PlatformClinicaEntitlementsApi,
     PlatformClinicaEstadoApi,
     PlatformClinicasListApi,
     PlatformClinicaSuscripcionApi,
@@ -67,6 +68,11 @@ urlpatterns = [
         "plataforma/clinicas/<uuid:tenant_id>/suscripcion/",
         PlatformClinicaSuscripcionApi.as_view(),
         name="platform-clinica-suscripcion",
+    ),
+    path(
+        "plataforma/clinicas/<uuid:tenant_id>/entitlements/",
+        PlatformClinicaEntitlementsApi.as_view(),
+        name="platform-clinica-entitlements",
     ),
     path(
         "plataforma/usuarios/",

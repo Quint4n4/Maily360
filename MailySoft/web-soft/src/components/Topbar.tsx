@@ -8,31 +8,43 @@ import { useSucursalActiva } from '../auth/SucursalContext'
 import { Modulo, accesoModulo, puedeAccederConsultorio, ROLE_LABEL } from '../auth/permisos'
 import CampanaNotificaciones from './CampanaNotificaciones'
 import BottomNav from './BottomNav'
+import type { ModuloId } from '../lib/modulos'
 
 interface TopbarProps {
   /** Módulo activo del menú, o 'paquetes' (página propia fuera de la matriz de módulos). */
   active?: Modulo | 'paquetes'
 }
 
-const NAV: { key: Modulo; label: string; icon: typeof BarChart3 }[] = [
-  { key: 'finanzas',     label: 'Finanzas',     icon: BarChart3 },
-  { key: 'cotizaciones', label: 'Cotizaciones', icon: ScrollText },
-  { key: 'agenda',       label: 'Agenda',       icon: CalendarDays },
+/**
+ * Entradas del menú. `modulo` es el módulo del PLAN que la habilita (distinto
+ * de `key`, que es el permiso por ROL): una entrada se pinta solo si el rol la
+ * permite Y la clínica la tiene contratada.
+ *
+ * "Pacientes" no lleva módulo: el expediente del paciente es el núcleo, no se
+ * vende por separado.
+ */
+const NAV: { key: Modulo; label: string; icon: typeof BarChart3; modulo?: ModuloId }[] = [
+  { key: 'finanzas',     label: 'Finanzas',     icon: BarChart3,    modulo: 'cobranza' },
+  { key: 'cotizaciones', label: 'Cotizaciones', icon: ScrollText,   modulo: 'cotizaciones' },
+  { key: 'agenda',       label: 'Agenda',       icon: CalendarDays, modulo: 'agenda' },
   { key: 'contactos',    label: 'Pacientes',    icon: Users },
-  { key: 'personal',     label: 'Personal',     icon: Stethoscope },
-  { key: 'notas',        label: 'Notas',        icon: StickyNote },
+  { key: 'personal',     label: 'Personal',     icon: Stethoscope,  modulo: 'personal' },
+  { key: 'notas',        label: 'Notas',        icon: StickyNote,   modulo: 'notas' },
 ]
 
 export default function Topbar({ active = 'agenda' }: TopbarProps) {
   const navigate = useNavigate()
   const { role } = useRole()
-  const { user, logout, isPlatformStaff } = useAuth()
+  const { user, logout, isPlatformStaff, tieneModulo } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [cerrando, setCerrando] = useState(false)
 
-  const visibles = NAV.filter(n => accesoModulo(role, n.key))
+  // Regla de oro: se ve si el ROL lo permite Y el PLAN lo incluye.
+  const visibles = NAV.filter(
+    n => accesoModulo(role, n.key) && (!n.modulo || tieneModulo(n.modulo)),
+  )
   // Paquetes: página propia (no es Modulo del menú). Solo owner/admin la gestionan.
-  const puedeVerPaquetes = role === 'owner' || role === 'admin'
+  const puedeVerPaquetes = (role === 'owner' || role === 'admin') && tieneModulo('paquetes')
 
   const cerrarSesion = async () => {
     if (cerrando) return

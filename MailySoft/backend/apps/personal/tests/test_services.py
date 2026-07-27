@@ -77,12 +77,41 @@ class TestDoctorCreate:
         assert doctor.specialty == "Cardiología"
         assert doctor.is_active is True
 
-    def test_doctor_create_rejects_non_doctor_membership(self, db: None) -> None:
-        """Role distinto a 'doctor' en la membresía debe lanzar ValidationError."""
+    @pytest.mark.parametrize("role", ["owner", "admin"])
+    def test_doctor_create_allows_owner_and_admin(self, db: None, role: str) -> None:
+        """El dueño y el administrador pueden ejercer (consultorio individual).
+
+        Regresión: antes solo se aceptaba role='doctor', y como un usuario tiene
+        UNA sola membresía por clínica, el dueño-médico no podía recetar ni recibir
+        citas (Prescription.doctor y Appointment.doctor son obligatorios).
+        """
         # Arrange
         tenant = TenantFactory()
         user = UserFactory()
-        membership = TenantMembershipFactory(tenant=tenant, role="reception")
+        membership = TenantMembershipFactory(tenant=tenant, role=role)
+
+        # Act
+        doctor = doctor_create(
+            tenant=tenant,
+            user=user,
+            membership=membership,
+            cedula_profesional="12345678",
+        )
+
+        # Assert
+        assert doctor.pk is not None
+        assert doctor.membership_id == membership.id
+        assert doctor.cedula_profesional == "12345678"
+
+    @pytest.mark.parametrize("role", ["reception", "nurse", "finance", "readonly"])
+    def test_doctor_create_rejects_roles_that_cannot_practice(
+        self, db: None, role: str
+    ) -> None:
+        """Recepción, enfermería, finanzas y solo-lectura no pueden ejercer."""
+        # Arrange
+        tenant = TenantFactory()
+        user = UserFactory()
+        membership = TenantMembershipFactory(tenant=tenant, role=role)
 
         # Act & Assert
         with pytest.raises(ValidationError, match="médico"):

@@ -37,6 +37,7 @@ from rest_framework.response import Response
 from apps.core.permissions import ClinicalSummaryPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.models import ClinicalSummary, EvolutionNote
 from apps.expediente.selectors import clinical_summary_get, clinical_summary_list
 from apps.expediente.serializers import (
@@ -87,7 +88,7 @@ class ClinicalSummaryDraftApi(TenantAPIView):
     ClinicalSummaryDraftOutputSerializer).
     """
 
-    permission_classes = [IsAuthenticated, ClinicalSummaryPermission]
+    permission_classes = [IsAuthenticated, ClinicalSummaryPermission, RequiresExpediente]
 
     def get(self, request: Request, evolution_id: uuid.UUID) -> Response:
         """Devuelve el borrador auto-rellenado de la consulta indicada."""
@@ -112,7 +113,7 @@ class ClinicalSummaryCreateApi(TenantAPIView):
     Responde 201 con {id, created_at, doctor_name, evolution_id}.
     """
 
-    permission_classes = [IsAuthenticated, ClinicalSummaryPermission]
+    permission_classes = [IsAuthenticated, ClinicalSummaryPermission, RequiresExpediente]
 
     def post(self, request: Request, evolution_id: uuid.UUID) -> Response:
         """Crea el resumen clínico de la consulta indicada."""
@@ -159,7 +160,7 @@ class ClinicalSummaryPdfApi(TenantAPIView):
     el resto de los PDFs asíncronos del proyecto.
     """
 
-    permission_classes = [IsAuthenticated, ClinicalSummaryPermission]
+    permission_classes = [IsAuthenticated, ClinicalSummaryPermission, RequiresExpediente]
 
     def get(self, request: Request, summary_id: uuid.UUID) -> Response:
         """Encola la generación del PDF del resumen clínico."""
@@ -193,7 +194,7 @@ class PatientClinicalSummaryListApi(TenantAPIView):
     Devuelve los resúmenes clínicos del paciente, más reciente primero.
     """
 
-    permission_classes = [IsAuthenticated, ClinicalSummaryPermission]
+    permission_classes = [IsAuthenticated, ClinicalSummaryPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista los resúmenes clínicos del paciente (paginado)."""

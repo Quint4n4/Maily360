@@ -201,7 +201,45 @@ class Plan(BaseModel):
     )
     features = models.JSONField(
         default=list,
-        help_text="Lista de strings con las características incluidas en el plan.",
+        help_text=(
+            "Lista de strings de MARKETING que se muestran en la vitrina. "
+            "NO controla acceso: para eso está `modules`."
+        ),
+    )
+    modules = models.JSONField(
+        default=list,
+        help_text=(
+            "Slugs de apps.core.modules.Module incluidos en el plan. "
+            "Esto SÍ controla el acceso (el backend es la autoridad)."
+        ),
+    )
+    max_sucursales = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Máximo de sucursales. NULL = ilimitado. "
+            "El valor 1 activa el 'modo sede única': se oculta toda la UI de sucursales."
+        ),
+    )
+    max_consultorios = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Máximo de consultorios. NULL = ilimitado.",
+    )
+    max_usuarios = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Máximo de miembros activos de la clínica. NULL = ilimitado.",
+    )
+    roles = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Roles que el plan ofrece al dar de alta miembros. Lista VACÍA = sin "
+            "restricción extra (todos los que los módulos permitan). Un rol solo "
+            "aparece si además su módulo está activo (ej. 'finance' necesita cobranza). "
+            "Ej. Básico: ['owner','doctor','nurse','reception']."
+        ),
     )
     is_active = models.BooleanField(
         default=True,
@@ -219,6 +257,69 @@ class Plan(BaseModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class TenantEntitlements(BaseModel):
+    """Ajustes por clínica SOBRE lo que trae su plan (tratos a la medida).
+
+    NO hereda de TenantAwareModel: igual que TenantSubscription, esta tabla la
+    administra EXCLUSIVAMENTE la plataforma (super_admin) desde el panel interno
+    cross-tenant. Ninguna clínica tiene endpoint para modificar sus propios
+    derechos — sería como dejar que el cliente edite su contrato.
+
+    Existe porque el catálogo de planes nunca cubre todos los casos: una clínica
+    dental que quiere expediente pero no recetas no cabe en ningún plan fijo, y
+    crear un plan por cada caso raro multiplica el catálogo sin control.
+
+    Los derechos EFECTIVOS se calculan como:
+        (módulos del plan  ∪  modules_on)  −  modules_off
+        límite = override si no es NULL, si no el del plan
+    """
+
+    tenant = models.OneToOneField(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="entitlements",
+        help_text="Clínica a la que aplican estos ajustes.",
+    )
+    modules_on = models.JSONField(
+        default=list,
+        help_text="Módulos concedidos ADEMÁS de los del plan (add-ons, cortesías).",
+    )
+    modules_off = models.JSONField(
+        default=list,
+        help_text="Módulos revocados aunque el plan los traiga.",
+    )
+    max_sucursales = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override del límite del plan. NULL = usar el del plan.",
+    )
+    max_consultorios = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override del límite del plan. NULL = usar el del plan.",
+    )
+    max_usuarios = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override del límite del plan. NULL = usar el del plan.",
+    )
+    notes = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Por qué se concedió este trato especial. Obligatorio en la práctica: "
+            "sin el motivo, nadie sabe si el ajuste sigue vigente al renovar."
+        ),
+    )
+
+    class Meta:
+        db_table = "tenancy_entitlements"
+        verbose_name_plural = "tenant entitlements"
+
+    def __str__(self) -> str:
+        return f"Ajustes de {self.tenant}"
 
 
 class TenantSubscription(BaseModel):

@@ -7,6 +7,8 @@ import NuevoTipoCitaDrawer, { TipoCitaEdit } from '../components/personal/NuevoT
 import EquipoTab from '../components/personal/EquipoTab'
 import TiposCitaTab from '../components/personal/TiposCitaTab'
 import { useConsultoriosManage, useDeactivateConsultorio } from '../hooks/personal'
+import { useMembers } from '../hooks/miembros'
+import { useAuth } from '../auth/AuthContext'
 import type { Consultorio as ConsultorioApi } from '../types/personal'
 import { useRole } from '../auth/RoleContext'
 import { puedeEditar } from '../auth/permisos'
@@ -29,6 +31,21 @@ export default function PersonalPage() {
   const [editTipo, setEditTipo]     = useState<TipoCitaEdit | null>(null)
 
   const consultoriosQ = useConsultoriosManage()
+  const { capabilities } = useAuth()
+  const miembrosQ = useMembers(true)
+
+  // Tope del plan alcanzado → no se ofrece agregar (como pediste: "lo que ya no
+  // se puede, que no aparezca"). null = ilimitado.
+  const nMiembros = (miembrosQ.data ?? []).filter(m => m.is_active).length
+  const nConsultorios = (consultoriosQ.data?.results ?? []).filter(c => c.is_active).length
+  const topeUsuarios = capabilities?.max_usuarios ?? null
+  const topeConsultorios = capabilities?.max_consultorios ?? null
+  const limiteMiembros = topeUsuarios !== null && nMiembros >= topeUsuarios
+  const limiteConsultorios = topeConsultorios !== null && nConsultorios >= topeConsultorios
+  const nuevoBloqueado = (tab === 'equipo' && limiteMiembros) || (tab === 'consultorios' && limiteConsultorios)
+  const motivoBloqueo = tab === 'equipo'
+    ? `Tu plan permite ${topeUsuarios} usuarios.`
+    : `Tu plan permite ${topeConsultorios} consultorios.`
   const bajaConsul = useDeactivateConsultorio()
   const confirmar = useConfirm()
   const consultorios: ConsultorioApi[] = consultoriosQ.data?.results ?? []
@@ -73,13 +90,20 @@ export default function PersonalPage() {
               <p className="text-sm text-gray-500">Equipo y consultorios de tu clínica</p>
             </div>
             {editar && (
-              <button
-                onClick={nuevoSegunTab}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
-                style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
-              >
-                <Plus className="w-4 h-4" /> {labelNuevo}
-              </button>
+              nuevoBloqueado ? (
+                <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium text-gray-500"
+                  style={{ background: 'rgba(0,0,0,0.05)' }} title={motivoBloqueo}>
+                  {motivoBloqueo} Contacta a soporte para ampliar.
+                </span>
+              ) : (
+                <button
+                  onClick={nuevoSegunTab}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+                  style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
+                >
+                  <Plus className="w-4 h-4" /> {labelNuevo}
+                </button>
+              )
             )}
           </div>
 

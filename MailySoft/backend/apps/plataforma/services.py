@@ -44,8 +44,10 @@ from apps.core.permissions import (
     _PLATFORM_ROLES_SUBSCRIPTION,
     _PLATFORM_ROLES_SUPER_ADMIN_ONLY,
 )
+from apps.core.modules import validar_modulos
 from apps.core.tenant_context import clear_current_tenant, set_current_tenant
-from apps.personal.services import consultorio_create
+from apps.personal.models import Doctor
+from apps.personal.services import consultorio_create, doctor_create
 from apps.plataforma.selectors import plan_get, platform_staff_get
 from apps.tenancy.models import Plan, Tenant, TenantSubscription
 from apps.tenancy.services import member_create
@@ -172,6 +174,10 @@ def tenant_and_owner_create(
     owner_last_name: str,
     timezone: str = "America/Mexico_City",
     trial_days: int = 60,
+    owner_cedula: str = "",
+    owner_specialty: str = "",
+    plan_id: uuid.UUID | None = None,
+    billing_cycle: str = TenantSubscription.BillingCycle.MONTHLY,
 ) -> dict[str, Any]:
     """Crea una clínica nueva (Tenant) con su dueño y datos semilla.
 
@@ -188,7 +194,15 @@ def tenant_and_owner_create(
        con el FK correcto.
     5. Crea el owner vía member_create (valida email único + password Django).
     6. Crea datos semilla: 1 consultorio + 3 tipos de cita por defecto.
-    7. Registra TENANT_CREATE en auditoría (SIN contraseña en metadata).
+    7. Si viene `owner_cedula`, crea el perfil de médico del dueño.
+    8. Si viene `plan_id`, crea la suscripción al plan.
+    9. Registra TENANT_CREATE en auditoría (SIN contraseña en metadata).
+
+    Sobre el perfil de médico del dueño: `Appointment.doctor` y `Prescription.doctor`
+    son obligatorios, así que una clínica SIN ningún Doctor no puede agendar ni
+    recetar. En un consultorio individual el dueño ES el médico, por eso se le crea
+    su perfil aquí mismo si trae cédula. Sin cédula no se crea perfil y el resultado
+    lo indica en `needs_doctor` para que la UI lo advierta.
 
     La contraseña temporal SOLO se devuelve en el dict resultado para que
     la vista la muestre una vez. NUNCA se persiste ni se loguea.
@@ -201,16 +215,26 @@ def tenant_and_owner_create(
         owner_last_name:  Apellidos del dueño.
         timezone:         Zona horaria IANA de la clínica (default: America/Mexico_City).
         trial_days:       Duración del periodo de prueba en días (default 60).
+        owner_cedula:     Cédula profesional del dueño (opcional). Si viene, se le
+                          crea perfil de médico y la clínica queda operativa.
+        owner_specialty:  Especialidad del dueño (opcional, solo si hay cédula).
+        plan_id:          Plan a suscribir (opcional). Debe existir y estar activo.
+        billing_cycle:    Ciclo de cobro ('monthly'|'annual'). Solo aplica con plan.
 
     Returns:
         Dict con:
             - tenant (Tenant): la clínica creada.
             - owner (TenantMembership): membresía del dueño.
             - temporary_password (str): contraseña a mostrar UNA VEZ.
+            - doctor (Doctor | None): perfil de médico del dueño, si se creó.
+            - subscription (TenantSubscription | None): suscripción, si hubo plan.
+            - needs_doctor (bool): True si la clínica no tiene ningún médico y por
+              tanto NO puede agendar citas todavía.
 
     Raises:
         ValidationError: si el actor no está autorizado, el email ya existe,
-                         o la contraseña generada no pasa los validadores de Django.
+                         la contraseña generada no pasa los validadores de Django,
+                         o el plan no existe / está inactivo.
     """
     if not getattr(actor, "is_platform_staff", False):
         raise ValidationError("Solo el staff de plataforma puede crear clínicas.")
@@ -225,6 +249,9 @@ def tenant_and_owner_create(
     # pero en la práctica es un evento muy raro y el retry es simple).
     slug = _slug_unico(name)
     password_temporal = _generar_password_temporal()
+
+    doctor: Doctor | None = None
+    subscription: TenantSubscription | None = None
 
     with transaction.atomic():
         tenant = Tenant.objects.create(
@@ -278,6 +305,35 @@ def tenant_and_owner_create(
             # Etiquetas de sistema (Favorito y VIP) para clasificar pacientes.
             seed_system_patient_categories(tenant=tenant)
 
+            # -----------------------------------------------------------------
+            # Perfil de médico del dueño (solo si trae cédula).
+            # Sin ningún Doctor la clínica no puede agendar: Appointment.doctor
+            # es obligatorio. En el consultorio individual el dueño ES el médico.
+            # -----------------------------------------------------------------
+            if owner_cedula.strip():
+                doctor = doctor_create(
+                    tenant=tenant,
+                    user=owner.user,
+                    membership=owner,
+                    cedula_profesional=owner_cedula.strip(),
+                    specialty=owner_specialty.strip(),
+                )
+
+            # -----------------------------------------------------------------
+            # Suscripción al plan contratado (dentro de la misma transacción:
+            # una clínica no debe quedar creada a medias, sin su plan).
+            # -----------------------------------------------------------------
+            if plan_id is not None:
+                # El primer periodo termina cuando termina el trial: la clínica
+                # no debe quedar "por vencer" antes de haber probado el producto.
+                subscription = tenant_subscription_set(
+                    tenant=tenant,
+                    actor=actor,
+                    plan_id=plan_id,
+                    billing_cycle=billing_cycle,
+                    current_period_end=tenant.trial_ends_at.date(),
+                )
+
         finally:
             # SIEMPRE limpiar el contexto de tenant, incluso si hubo excepción.
             # Si hay excepción, la transacción se revierte y el tenant no queda
@@ -304,8 +360,11 @@ def tenant_and_owner_create(
             "tenant_slug": tenant.slug,
             "trial_days": trial_days,
             "timezone": timezone,
-            # NO incluir PII (owner_email) ni nada de contraseña. El alta del
-            # dueño queda trazada por su propio registro MEMBER_CREATE.
+            "plan_id": str(plan_id) if plan_id else None,
+            "owner_is_doctor": doctor is not None,
+            # NO incluir PII (owner_email, cédula) ni nada de contraseña. El alta
+            # del dueño queda trazada por su propio registro MEMBER_CREATE, y el
+            # perfil de médico por su DOCTOR_CREATE.
         },
     )
 
@@ -320,6 +379,11 @@ def tenant_and_owner_create(
         "tenant": tenant,
         "owner": owner,
         "temporary_password": password_temporal,
+        "doctor": doctor,
+        "subscription": subscription,
+        # Sin ningún médico no se puede agendar (Appointment.doctor obligatorio).
+        # La UI debe advertirlo para que no descubran el problema al primer intento.
+        "needs_doctor": doctor is None,
     }
 
 
@@ -508,6 +572,86 @@ def tenant_subscription_set(
     return subscription
 
 
+def tenant_entitlements_set(
+    *,
+    tenant: Tenant,
+    actor: User,
+    modules_on: list[str] | None = None,
+    modules_off: list[str] | None = None,
+    max_sucursales: int | None = None,
+    max_consultorios: int | None = None,
+    max_usuarios: int | None = None,
+    notes: str = "",
+) -> "TenantEntitlements":
+    """Fija los ajustes a la medida de una clínica SOBRE su plan.
+
+    Es lo que hace vendible el producto a clínicas con formas raras: el caso
+    dental (expediente sí, recetas no) no cabe en ningún plan fijo, y crear un
+    plan por cada caso multiplica el catálogo. Aquí se enciende un módulo suelto,
+    se revoca otro o se sube un límite, sin tocar el plan.
+
+    El resultado EFECTIVO lo resuelve entitlements_for_tenant:
+        (módulos del plan ∪ modules_on) − modules_off.
+
+    Args:
+        tenant:           Clínica a ajustar.
+        actor:            Staff de plataforma (super_admin) — auditoría.
+        modules_on:       Módulos a conceder además del plan.
+        modules_off:      Módulos a revocar aunque el plan los traiga.
+        max_*:            Overrides de límite. None = usar el del plan.
+        notes:            Motivo del trato. Sin él nadie sabe si sigue vigente.
+
+    Returns:
+        El TenantEntitlements creado o actualizado.
+
+    Raises:
+        ValidationError: actor no autorizado, o algún slug de módulo desconocido.
+    """
+    from apps.core.modules import modulos_desconocidos
+    from apps.tenancy.models import TenantEntitlements
+
+    if getattr(actor, "platform_role", "") not in _PLATFORM_ROLES_SUPER_ADMIN_ONLY:
+        raise ValidationError(
+            "Solo un super administrador puede ajustar los derechos de una clínica."
+        )
+
+    on = list(modules_on or [])
+    off = list(modules_off or [])
+    desconocidos = modulos_desconocidos([*on, *off])
+    if desconocidos:
+        raise ValidationError(
+            f"Módulos desconocidos: {', '.join(sorted(desconocidos))}."
+        )
+
+    entitlements, _created = TenantEntitlements.objects.update_or_create(
+        tenant=tenant,
+        defaults={
+            "modules_on": on,
+            "modules_off": off,
+            "max_sucursales": max_sucursales,
+            "max_consultorios": max_consultorios,
+            "max_usuarios": max_usuarios,
+            "notes": notes,
+        },
+    )
+
+    audit_record(
+        action=ActionType.TENANT_ENTITLEMENTS_SET,
+        resource_type="TenantEntitlements",
+        actor=actor,
+        tenant=None,
+        resource_id=entitlements.id,
+        resource_repr=str(entitlements),
+        description=(
+            f"Ajustes a la medida de '{tenant.name}' actualizados por "
+            f"{actor.email}. on={on} off={off}."
+        ),
+        actor_role=getattr(actor, "platform_role", ""),
+        metadata={"tenant_id": str(tenant.id), "modules_on": on, "modules_off": off},
+    )
+    return entitlements
+
+
 # ---------------------------------------------------------------------------
 # Catálogo de planes — alta y edición (Fase 3.1)
 # ---------------------------------------------------------------------------
@@ -522,12 +666,26 @@ _PLAN_IMMUTABLE_FIELDS: frozenset[str] = frozenset(
 # campo nuevo del modelo Plan queda fuera de PATCH hasta que se agregue aquí
 # a propósito).
 _PLAN_UPDATABLE_FIELDS: frozenset[str] = frozenset(
-    {"name", "description", "price_monthly", "is_featured", "features", "is_active", "order"}
+    {
+        "name",
+        "description",
+        "price_monthly",
+        "is_featured",
+        "features",
+        "is_active",
+        "order",
+        # Entitlements: lo que el plan realmente concede.
+        "modules",
+        "max_sucursales",
+        "max_consultorios",
+        "max_usuarios",
+        "roles",
+    }
 )
 
 
 def _validar_campos_plan(fields: dict[str, Any]) -> None:
-    """Valida name/price_monthly/features para plan_create y plan_update.
+    """Valida name/price_monthly/features/modules para plan_create y plan_update.
 
     Solo valida los campos presentes en `fields` — permite validación
     parcial en PATCH (no exige que todos los campos estén presentes).
@@ -536,8 +694,9 @@ def _validar_campos_plan(fields: dict[str, Any]) -> None:
         fields: subconjunto de campos que se van a persistir.
 
     Raises:
-        ValidationError: price_monthly negativo, name vacío, o features no
-            es una lista de strings no vacíos.
+        ValidationError: price_monthly negativo, name vacío, features no es una
+            lista de strings no vacíos, o modules con slugs desconocidos o con
+            dependencias sin cubrir.
     """
     if "name" in fields and not str(fields["name"]).strip():
         raise ValidationError("El nombre del plan no puede estar vacío.")
@@ -553,6 +712,16 @@ def _validar_campos_plan(fields: dict[str, Any]) -> None:
         for item in features:
             if not isinstance(item, str) or not item.strip():
                 raise ValidationError("Cada elemento de features debe ser un string no vacío.")
+
+    # Los módulos SÍ controlan acceso: un plan con dependencias sin cubrir se
+    # comportaría de forma impredecible (p. ej. cotizaciones sin catálogo que
+    # cotizar). Se revalida aquí porque el service también se llama desde
+    # management commands y tests, sin pasar por el serializer.
+    if "modules" in fields and fields["modules"] is not None:
+        modules = fields["modules"]
+        if not isinstance(modules, list):
+            raise ValidationError("modules debe ser una lista de slugs.")
+        validar_modulos(modules)
 
 
 def _validar_actor_plan_write(actor: User) -> None:
@@ -589,6 +758,11 @@ def plan_create(
     description: str = "",
     is_featured: bool = False,
     features: list[str] | None = None,
+    modules: list[str] | None = None,
+    roles: list[str] | None = None,
+    max_sucursales: int | None = None,
+    max_consultorios: int | None = None,
+    max_usuarios: int | None = None,
     is_active: bool = True,
     order: int | None = None,
 ) -> Plan:
@@ -643,6 +817,11 @@ def plan_create(
             price_monthly=price_monthly,
             is_featured=is_featured,
             features=features_norm,
+            modules=list(modules or []),
+            roles=list(roles or []),
+            max_sucursales=max_sucursales,
+            max_consultorios=max_consultorios,
+            max_usuarios=max_usuarios,
             is_active=is_active,
             order=order,
         )

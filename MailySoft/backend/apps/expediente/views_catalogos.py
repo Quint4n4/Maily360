@@ -29,6 +29,7 @@ from rest_framework.response import Response
 from apps.core.permissions import DocumentTemplatePermission, LabAnalytePermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.models import DocumentTemplate, LabAnalyte
 from apps.expediente.selectors import (
     document_template_get,
@@ -73,7 +74,7 @@ class DocumentTemplateListCreateApi(TenantAPIView):
     POST /api/v1/expediente/plantillas-documento/ — crea una plantilla (owner/admin).
     """
 
-    permission_classes = [IsAuthenticated, DocumentTemplatePermission]
+    permission_classes = [IsAuthenticated, DocumentTemplatePermission, RequiresExpediente]
 
     def get(self, request: Request) -> Response:
         """Lista paginada de plantillas de documento del tenant.
@@ -114,7 +115,7 @@ class DocumentTemplateListCreateApi(TenantAPIView):
 class DocumentTemplateDetailApi(TenantAPIView):
     """GET/PATCH/DELETE /api/v1/expediente/plantillas-documento/<id>/."""
 
-    permission_classes = [IsAuthenticated, DocumentTemplatePermission]
+    permission_classes = [IsAuthenticated, DocumentTemplatePermission, RequiresExpediente]
 
     def _get_or_404(
         self, template_id: uuid.UUID
@@ -178,7 +179,7 @@ class LabAnalyteListCreateApi(TenantAPIView):
     POST /api/v1/expediente/analitos/ — crea un analito (owner/admin).
     """
 
-    permission_classes = [IsAuthenticated, LabAnalytePermission]
+    permission_classes = [IsAuthenticated, LabAnalytePermission, RequiresExpediente]
 
     def get(self, request: Request) -> Response:
         """Lista paginada de analitos de laboratorio del tenant.
@@ -212,7 +213,7 @@ class LabAnalyteListCreateApi(TenantAPIView):
 class LabAnalyteDetailApi(TenantAPIView):
     """GET/PATCH/DELETE /api/v1/expediente/analitos/<id>/."""
 
-    permission_classes = [IsAuthenticated, LabAnalytePermission]
+    permission_classes = [IsAuthenticated, LabAnalytePermission, RequiresExpediente]
 
     def _get_or_404(self, analyte_id: uuid.UUID) -> "tuple[LabAnalyte | None, Response | None]":
         try:

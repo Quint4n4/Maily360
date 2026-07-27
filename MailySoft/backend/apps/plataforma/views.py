@@ -56,6 +56,7 @@ from apps.core.permissions import (
     PlatformSubscriptionPermission,
     PlatformSystemPermission,
 )
+from apps.core.modules import Module
 from apps.core.tenant_context import set_request_context
 from apps.core.views import enforce_password_change
 from apps.plataforma.selectors import (
@@ -101,6 +102,7 @@ from apps.plataforma.services import (
     platform_staff_password_reset,
     platform_staff_update,
     tenant_and_owner_create,
+    tenant_entitlements_set,
     tenant_set_status,
     tenant_subscription_set,
 )
@@ -276,6 +278,10 @@ class PlatformClinicasListApi(PlatformAPIView):
                 owner_last_name=data["owner_last_name"],
                 timezone=data.get("timezone", "America/Mexico_City"),
                 trial_days=data.get("trial_days", 60),
+                owner_cedula=data.get("owner_cedula", ""),
+                owner_specialty=data.get("owner_specialty", ""),
+                plan_id=data.get("plan_id"),
+                billing_cycle=data.get("billing_cycle", "monthly"),
             )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.messages) from exc
@@ -297,6 +303,7 @@ class PlatformClinicasListApi(PlatformAPIView):
             "tenant": tenant,
             "owner_email": resultado["owner"].user.email,
             "temporary_password": resultado["temporary_password"],
+            "needs_doctor": resultado["needs_doctor"],
         }
 
         # MEDIO-1: la respuesta contiene la contraseña temporal de primer acceso.
@@ -739,6 +746,11 @@ class PlatformPlanesListApi(PlatformAPIView):
                 description=data.get("description", ""),
                 is_featured=data.get("is_featured", False),
                 features=data.get("features") or [],
+                modules=data.get("modules") or [],
+                roles=data.get("roles") or [],
+                max_sucursales=data.get("max_sucursales"),
+                max_consultorios=data.get("max_consultorios"),
+                max_usuarios=data.get("max_usuarios"),
                 is_active=data.get("is_active", True),
                 order=data.get("order"),
             )
@@ -915,3 +927,58 @@ class PlatformClinicaSuscripcionApi(PlatformAPIView):
         tenant.refresh_from_db()
         row = platform_subscription_row_build(tenant=tenant)
         return Response(SubscriptionRowOutputSerializer(row).data)
+
+
+class PlatformClinicaEntitlementsApi(PlatformAPIView):
+    """Ajusta los derechos a la medida de una clínica (override sobre el plan).
+
+    POST → solo super_admin. Es lo que hace vendible el caso dental: encender un
+    módulo suelto o revocar otro sin cambiar el plan.
+    """
+
+    permission_classes = [IsAuthenticated, PlatformPlanWritePermission]
+
+    class InputSerializer(serializers.Serializer):
+        modules_on = serializers.ListField(
+            child=serializers.ChoiceField(choices=Module.choices),
+            required=False, default=list,
+        )
+        modules_off = serializers.ListField(
+            child=serializers.ChoiceField(choices=Module.choices),
+            required=False, default=list,
+        )
+        max_sucursales = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+        max_consultorios = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+        max_usuarios = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+        notes = serializers.CharField(required=False, allow_blank=True, default="", max_length=2000)
+
+    @extend_schema(
+        operation_id="plataforma_clinicas_entitlements_create",
+        request=InputSerializer,
+        responses=ClinicaDetailOutputSerializer,
+        tags=["plataforma"],
+    )
+    def post(self, request: Request, tenant_id: _uuid_module.UUID) -> Response:
+        """Guarda los ajustes a la medida y devuelve la ficha actualizada."""
+        try:
+            tenant = Tenant.objects.get(id=tenant_id)
+        except Tenant.DoesNotExist:
+            return Response(
+                {"detail": "Clínica no encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        s = self.InputSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        try:
+            tenant_entitlements_set(
+                tenant=tenant,
+                actor=request.user,  # type: ignore[arg-type]
+                **s.validated_data,
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+
+        detail = platform_clinica_detail(tenant_id=tenant_id)
+        return Response(ClinicaDetailOutputSerializer(detail).data)

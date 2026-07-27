@@ -10,7 +10,9 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.authn.models import User
-from apps.tenancy.models import Tenant
+from apps.core.modules import Module, expandir_dependencias, roles_disponibles, validar_modulos
+from apps.core.validators import validar_cedula_profesional
+from apps.tenancy.models import Tenant, TenantMembership
 
 # ---------------------------------------------------------------------------
 # Output — Clínicas (listado)
@@ -230,6 +232,38 @@ class ClinicaCreateInputSerializer(serializers.Serializer):
         max_value=365,
         help_text="Duración del periodo de prueba en días. Mínimo 1, máximo 365.",
     )
+    plan_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Plan contratado. Si se omite, la clínica queda sin plan asignado.",
+    )
+    billing_cycle = serializers.ChoiceField(
+        choices=["monthly", "annual"],
+        default="monthly",
+        required=False,
+        help_text="Ciclo de cobro. Solo aplica si se eligió un plan.",
+    )
+    owner_cedula = serializers.CharField(
+        max_length=30,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=(
+            "Cédula profesional del dueño. Si se proporciona, se le crea su perfil "
+            "de médico y la clínica puede agendar y recetar desde el primer día."
+        ),
+    )
+    owner_specialty = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Especialidad del dueño. Solo aplica si se proporcionó la cédula.",
+    )
+
+    def validate_owner_cedula(self, value: str) -> str:
+        """Valida el formato de la cédula del dueño (vacío es válido)."""
+        return validar_cedula_profesional(value)
 
     def validate_name(self, value: str) -> str:
         """Sanitiza el nombre y exige que produzca un identificador legible."""
@@ -276,6 +310,13 @@ class ClinicaCreateOutputSerializer(serializers.Serializer):
     tenant = ClinicaOutputSerializer(read_only=True)
     owner_email = serializers.EmailField(read_only=True)
     temporary_password = serializers.CharField(read_only=True)
+    needs_doctor = serializers.BooleanField(
+        read_only=True,
+        help_text=(
+            "True si la clínica quedó sin ningún médico. En ese caso NO puede "
+            "agendar citas hasta dar de alta uno (la cita exige médico)."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +349,10 @@ class ClinicaDetailOutputSerializer(serializers.Serializer):
     patient_count = serializers.IntegerField(read_only=True)
     appointment_count = serializers.IntegerField(read_only=True)
     ultima_actividad = serializers.DateTimeField(read_only=True, allow_null=True)
+    # Entitlements efectivos + consumo vs límite (dict libre: la forma la fija el
+    # selector platform_clinica_detail). Se serializa tal cual para no duplicar
+    # la estructura en dos lugares que puedan divergir.
+    entitlements = serializers.DictField(read_only=True)
     members = ClinicaMemberOutputSerializer(many=True, read_only=True)
 
 
@@ -438,8 +483,24 @@ class PlanOutputSerializer(serializers.Serializer):
     price_monthly = serializers.DecimalField(read_only=True, max_digits=10, decimal_places=2)
     is_featured = serializers.BooleanField(read_only=True)
     features = serializers.ListField(child=serializers.CharField(), read_only=True)
+    modules = serializers.ListField(child=serializers.CharField(), read_only=True)
+    max_sucursales = serializers.IntegerField(read_only=True, allow_null=True)
+    max_consultorios = serializers.IntegerField(read_only=True, allow_null=True)
+    max_usuarios = serializers.IntegerField(read_only=True, allow_null=True)
     is_active = serializers.BooleanField(read_only=True)
     order = serializers.IntegerField(read_only=True)
+    # roles_ofrecidos = lo que el super-admin marcó (vacío = todos los derivables).
+    # roles = lo efectivo: derivados de módulos ∩ ofrecidos. El editor muestra el
+    # primero como casillas y el segundo como resultado.
+    roles_ofrecidos = serializers.ListField(child=serializers.CharField(), source="roles", read_only=True)
+    roles = serializers.SerializerMethodField()
+
+    def get_roles(self, obj: Any) -> list[str]:
+        """Roles efectivos: los que los módulos permiten Y el plan ofrece."""
+        por_modulos = roles_disponibles(obj.modules)
+        if obj.roles:
+            por_modulos = por_modulos & set(obj.roles)
+        return sorted(por_modulos)
 
 
 # ---------------------------------------------------------------------------
@@ -487,6 +548,35 @@ class PlanCreateInputSerializer(serializers.Serializer):
         max_length=50,
         help_text="Lista de strings no vacíos con las características incluidas (máx. 50).",
     )
+    modules = serializers.ListField(
+        child=serializers.ChoiceField(choices=Module.choices),
+        required=False,
+        default=list,
+        help_text=(
+            "Slugs de módulos incluidos. Esto SÍ controla el acceso. "
+            "Las dependencias duras deben venir cubiertas (ver validate)."
+        ),
+    )
+    max_sucursales = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=1,
+        help_text="Máximo de sucursales. null = ilimitado. 1 = modo sede única.",
+    )
+    max_consultorios = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=1,
+        help_text="Máximo de consultorios. null = ilimitado.",
+    )
+    max_usuarios = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=1,
+        help_text="Máximo de usuarios. null = ilimitado.",
+    )
+    roles = serializers.ListField(
+        child=serializers.ChoiceField(choices=TenantMembership.Role.choices),
+        required=False, default=list,
+        help_text=(
+            "Roles que el plan ofrece. Vacío = todos los que los módulos permitan. "
+            "Un rol solo se ofrece si además su módulo está activo."
+        ),
+    )
     is_active = serializers.BooleanField(
         required=False,
         default=True,
@@ -505,6 +595,18 @@ class PlanCreateInputSerializer(serializers.Serializer):
         if not limpio:
             raise serializers.ValidationError("El nombre del plan no puede estar vacío.")
         return limpio
+
+    def validate_modules(self, value: list[str]) -> list[str]:
+        """Rechaza conjuntos incoherentes (p. ej. Cotizaciones sin Servicios).
+
+        NO expande en silencio: guardar un plan al que le falta una dependencia
+        es un error de captura que hay que señalar. La interfaz del super-admin
+        ajusta la selección en vivo, así que este camino solo se alcanza por API
+        directa.
+        """
+        validar_modulos(value)
+        return value
+
 
 
 class PlanUpdateInputSerializer(serializers.Serializer):
@@ -533,6 +635,15 @@ class PlanUpdateInputSerializer(serializers.Serializer):
         required=False,
         max_length=50,
     )
+    modules = serializers.ListField(
+        child=serializers.ChoiceField(choices=Module.choices), required=False,
+    )
+    max_sucursales = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    max_consultorios = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    max_usuarios = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    roles = serializers.ListField(
+        child=serializers.ChoiceField(choices=TenantMembership.Role.choices), required=False,
+    )
     is_active = serializers.BooleanField(required=False)
     order = serializers.IntegerField(required=False)
 
@@ -542,6 +653,18 @@ class PlanUpdateInputSerializer(serializers.Serializer):
         if not limpio:
             raise serializers.ValidationError("El nombre del plan no puede estar vacío.")
         return limpio
+
+    def validate_modules(self, value: list[str]) -> list[str]:
+        """Rechaza conjuntos incoherentes (p. ej. Cotizaciones sin Servicios).
+
+        NO expande en silencio: guardar un plan al que le falta una dependencia
+        es un error de captura que hay que señalar. La interfaz del super-admin
+        ajusta la selección en vivo, así que este camino solo se alcanza por API
+        directa.
+        """
+        validar_modulos(value)
+        return value
+
 
 
 # ---------------------------------------------------------------------------

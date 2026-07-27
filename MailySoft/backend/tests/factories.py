@@ -72,6 +72,7 @@ from apps.recetas.models import (
     PrescriptionItem,
     PrescriptionStatus,
 )
+from apps.core.modules import Module
 from apps.tenancy.models import Plan, Tenant, TenantMembership, TenantSubscription
 
 
@@ -99,14 +100,45 @@ class PlatformStaffFactory(UserFactory):
 
 
 class TenantFactory(DjangoModelFactory):
-    """Clínica (tenant) en estado activo por defecto."""
+    """Clínica (tenant) en estado activo y con acceso completo por defecto.
+
+    La suscripción NO es un adorno: desde que existen los entitlements, una
+    clínica sin plan no tiene módulos ni roles, y `member_create` la rechaza.
+    En producción eso no pasa —la migración 0007 dejó a todas con plan—, así
+    que la factory refleja esa realidad.
+
+    Para probar el gating se puede desactivar o acotar:
+        TenantFactory(sin_plan=True)               → clínica sin suscripción
+        TenantFactory(plan=PlanFactory(modules=[...], max_usuarios=3))
+    """
 
     class Meta:
         model = Tenant
+        skip_postgeneration_save = True
 
     name = factory.Sequence(lambda n: f"Clínica {n}")
     slug = factory.Sequence(lambda n: f"clinica-{n}")
     status = "active"
+
+    @factory.post_generation
+    def plan(obj, create, extracted, **kwargs):  # noqa: N805
+        """Suscribe la clínica a un plan (por defecto, uno con acceso completo)."""
+        if not create or getattr(obj, "_sin_plan", False):
+            return
+        TenantSubscription.objects.create(
+            tenant=obj,
+            plan=extracted or FullPlanFactory(),
+            billing_cycle="monthly",
+            current_period_end=datetime.date.today() + datetime.timedelta(days=365),
+        )
+
+    @classmethod
+    def _create(cls, model_class, *args, **kwargs):
+        """Extrae `sin_plan` antes de construir el modelo (no es campo de Tenant)."""
+        sin_plan = kwargs.pop("sin_plan", False)
+        obj = super()._create(model_class, *args, **kwargs)
+        obj._sin_plan = sin_plan
+        return obj
 
 
 class TenantMembershipFactory(DjangoModelFactory):
@@ -133,17 +165,52 @@ class PlanFactory(DjangoModelFactory):
     price_monthly = Decimal("1500.00")
     is_featured = False
     features = factory.LazyFunction(list)
+    # Sin módulos por defecto: quien pruebe entitlements debe decir cuáles
+    # quiere, para que el test explique qué está probando.
+    modules = factory.LazyFunction(list)
+    max_sucursales = None
+    max_consultorios = None
+    max_usuarios = None
     is_active = True
     order = factory.Sequence(lambda n: n)
 
 
+class FullPlanFactory(PlanFactory):
+    """Plan con TODOS los módulos y sin límites — el default de TenantFactory.
+
+    Es el equivalente en pruebas del plan "Legacy full" de producción: existe
+    para que los tests que no van de entitlements no tengan que pensar en ellos.
+    Se comparte entre clínicas (get_or_create por slug) para no insertar un plan
+    por cada tenant de la suite.
+    """
+
+    class Meta:
+        model = Plan
+        django_get_or_create = ("slug",)
+
+    slug = "test-full"
+    name = "Test full"
+    modules = factory.LazyFunction(lambda: list(Module.values))
+    max_sucursales = None
+    max_consultorios = None
+    max_usuarios = None
+
+
 class TenantSubscriptionFactory(DjangoModelFactory):
-    """Suscripción de un tenant a un plan."""
+    """Suscripción de un tenant a un plan.
+
+    Su tenant nace SIN plan (`sin_plan=True`): la suscripción es justo lo que
+    esta factory crea, y TenantSubscription.tenant es OneToOne — si el tenant ya
+    trajera una, el insert chocaría.
+
+    Si se pasa un `tenant=` explícito, debe venir de `TenantFactory(sin_plan=True)`
+    por la misma razón.
+    """
 
     class Meta:
         model = TenantSubscription
 
-    tenant = factory.SubFactory(TenantFactory)
+    tenant = factory.SubFactory(TenantFactory, sin_plan=True)
     plan = factory.SubFactory(PlanFactory)
     billing_cycle = "monthly"
     current_period_end = factory.LazyFunction(

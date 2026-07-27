@@ -139,10 +139,12 @@ class TestMemberCreate:
 
     @pytest.mark.parametrize(
         "role",
-        ["owner", "admin", "doctor", "nurse", "reception", "finance", "readonly"],
+        # 'owner' NO va aquí: hay un solo dueño por clínica (creado con el alta),
+        # no se invita un segundo. Se cubre en test_member_create_rejects_second_owner.
+        ["admin", "doctor", "nurse", "reception", "finance", "readonly"],
     )
     def test_member_create_all_valid_roles_are_accepted(self, db: None, role: str) -> None:
-        """Cada rol válido de la plataforma puede usarse al crear un miembro."""
+        """Cada rol invitable puede usarse al crear un miembro."""
         # Arrange
         tenant = TenantFactory()
         actor = UserFactory()
@@ -155,6 +157,17 @@ class TestMemberCreate:
         # Assert
         membership.refresh_from_db()
         assert membership.role == role
+
+    def test_member_create_rejects_second_owner(self, db: None) -> None:
+        """Un dueño por clínica: no se invita un segundo (el owner se crea con el alta)."""
+        # Arrange
+        tenant = TenantFactory()
+        actor = UserFactory()
+        TenantMembershipFactory(user=actor, tenant=tenant, role="owner", is_active=True)
+
+        # Act & Assert
+        with pytest.raises(ValidationError, match="ya tiene un dueño"):
+            _create_member(tenant, actor, email="segundo.dueno@clinic.test", role="owner")
 
     def test_member_create_duplicate_email_raises_validation_error(self, db: None) -> None:
         """Email ya registrado en la plataforma debe lanzar ValidationError con mensaje claro."""

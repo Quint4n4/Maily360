@@ -4,6 +4,9 @@ import { useCreatePlan, useUpdatePlan } from '../../hooks/plataforma'
 import { useAviso } from '../common/DialogProvider'
 import { ApiError } from '../../lib/http'
 import type { PlanFormInput, PlanPlataforma } from '../../types/plataforma'
+import EditorModulos from './EditorModulos'
+import type { ModuloId } from '../../lib/modulos'
+import type { ClinicRole } from '../../auth/permisos'
 
 interface Props {
   /** Plan a editar; si no viene, el modal crea uno nuevo. */
@@ -24,6 +27,11 @@ const CAMPO_LABEL: Record<string, string> = {
   is_featured: 'Popular',
   is_active: 'Activo',
   order: 'Orden',
+  modules: 'Módulos',
+  max_sucursales: 'Límite de sucursales',
+  max_consultorios: 'Límite de consultorios',
+  max_usuarios: 'Límite de usuarios',
+  roles: 'Roles',
 }
 
 /** Convierte el error de la API (400 de DRF con {campo: ["..."]}) en un texto legible. */
@@ -57,6 +65,15 @@ export default function PlanFormModal({ plan, onClose }: Props) {
   const [activo, setActivo] = useState(plan?.is_active ?? true)
   const [orden, setOrden] = useState(String(plan?.order ?? 0))
   const [error, setError] = useState<string | null>(null)
+  // Entitlements: lo que el plan concede de verdad.
+  const [modulos, setModulos] = useState<ModuloId[]>((plan?.modules ?? []) as ModuloId[])
+  const [limites, setLimites] = useState({
+    max_sucursales: plan?.max_sucursales ?? null,
+    max_consultorios: plan?.max_consultorios ?? null,
+    max_usuarios: plan?.max_usuarios ?? null,
+  })
+  // Roles que el plan ofrece (allow-list). Vacío = todos los que los módulos permitan.
+  const [roles, setRoles] = useState<ClinicRole[]>((plan?.roles_ofrecidos ?? []) as ClinicRole[])
 
   const setFeature = (i: number, valor: string) =>
     setFeatures(fs => fs.map((f, j) => (j === i ? valor : f)))
@@ -82,6 +99,9 @@ export default function PlanFormModal({ plan, onClose }: Props) {
       description: descripcion.trim(),
       features: features.map(f => f.trim()).filter(Boolean),
       is_featured: destacado,
+      modules: modulos,
+      roles,
+      ...limites,
       is_active: activo,
       order: Number.isFinite(ordenNum) ? Math.trunc(ordenNum) : 0,
     }
@@ -102,7 +122,7 @@ export default function PlanFormModal({ plan, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(30,22,8,0.45)', backdropFilter: 'blur(4px)' }}>
-      <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl p-7"
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-7"
         style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(22px)', border: '1px solid rgba(255,255,255,0.7)', boxShadow: '0 24px 60px rgba(60,42,12,0.3)' }}>
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors">
           <X className="w-4 h-4" />
@@ -177,6 +197,19 @@ export default function PlanFormModal({ plan, onClose }: Props) {
               style={{ color: '#9A7B1E' }}>
               <Plus className="w-3.5 h-3.5" /> Agregar característica
             </button>
+          </div>
+
+          <div className="pt-2 border-t border-amber-900/10">
+            <EditorModulos
+              modulos={modulos}
+              onChange={setModulos}
+              maxSucursales={limites.max_sucursales}
+              maxConsultorios={limites.max_consultorios}
+              maxUsuarios={limites.max_usuarios}
+              onLimite={(campo, valor) => setLimites(l => ({ ...l, [campo]: valor }))}
+              rolesOfrecidos={roles}
+              onRolesChange={setRoles}
+            />
           </div>
 
           <div className="flex flex-wrap gap-x-6 gap-y-2 pt-1">

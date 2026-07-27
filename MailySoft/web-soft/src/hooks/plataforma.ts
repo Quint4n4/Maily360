@@ -16,6 +16,7 @@ import {
   listPlatformSuscripciones,
   resetStaffPassword,
   setClinicaEstado,
+  setClinicaEntitlements,
   setClinicaSuscripcion,
   updatePlatformPlan,
   updatePlatformStaff,
@@ -27,6 +28,7 @@ import type {
   PlanFormInput,
   StaffFormInput,
   StaffUpdateInput,
+  EntitlementsOverrideInput,
   SuscripcionAsignarInput,
   SuscripcionesFiltros,
 } from '../types/plataforma'
@@ -186,6 +188,18 @@ export function useUpdatePlan() {
 }
 
 /** Asignar / cambiar el plan de una clínica. Invalida suscripciones, resumen y clínicas. */
+export function useSetClinicaEntitlements() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ tenantId, input }: { tenantId: string; input: EntitlementsOverrideInput }) =>
+      setClinicaEntitlements(tenantId, input),
+    onSuccess: (_data, { tenantId }) => {
+      qc.invalidateQueries({ queryKey: platKeys.clinicaDetail(tenantId) })
+      qc.invalidateQueries({ queryKey: ['plataforma', 'clinicas'] })
+    },
+  })
+}
+
 export function useSetClinicaSuscripcion() {
   const qc = useQueryClient()
   return useMutation({

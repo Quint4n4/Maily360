@@ -20,6 +20,7 @@ from apps.audit.services import audit_record
 from apps.core.permissions import VitalSignsPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.selectors import vital_signs_list, vital_signs_series
 from apps.expediente.serializers import (
     VitalSignsInputSerializer,
@@ -76,7 +77,7 @@ class VitalSignsListCreateApi(TenantAPIView):
         POST → owner, admin, doctor, nurse (enfermería captura signos).
     """
 
-    permission_classes = [IsAuthenticated, VitalSignsPermission]
+    permission_classes = [IsAuthenticated, VitalSignsPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista las tomas de signos vitales del paciente (-measured_at), paginadas.
@@ -221,7 +222,7 @@ class VitalSignsSeriesApi(TenantAPIView):
     Permisos: CLINICAL_READ (GET). Mismo conjunto que la lista de tomas.
     """
 
-    permission_classes = [IsAuthenticated, VitalSignsPermission]
+    permission_classes = [IsAuthenticated, VitalSignsPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Devuelve las series temporales de todos los parámetros del paciente.

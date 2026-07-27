@@ -22,14 +22,21 @@ export default function NuevoMiembroDrawer({ open, onClose }: Props) {
   const [verPass, setVerPass] = useState(false)
   const [errores, setErrores] = useState<string[]>([])
   const crear = useCreateMember()
-  const { clinicRole } = useAuth()
+  const { clinicRole, capabilities } = useAuth()
 
-  // Multi-sede (clúster F, jerarquía de roles): solo el dueño puede dar de alta
-  // dueños y administradores; un admin de sucursal solo crea equipo operativo.
-  // El backend es la autoridad (rechaza igual); esto es UX para no ofrecer un
-  // rol que va a fallar.
-  const rolesAsignables =
-    clinicRole === 'owner' ? ROLES : ROLES.filter(r => r.key !== 'owner' && r.key !== 'admin')
+  // Dos filtros, ambos los aplica el backend (esto es solo UX):
+  //   1) Jerarquía (multi-sede, clúster F): solo el dueño da de alta dueños y
+  //      administradores; un admin de sucursal crea equipo operativo.
+  //   2) Plan: solo los roles que el plan incluye. Un rol cuyo módulo está
+  //      apagado sería un usuario que no puede trabajar (finanzas sin cobranza).
+  const rolesDelPlan = capabilities?.roles ?? null
+  const rolesAsignables = ROLES
+    // Dueño único: se crea con el alta de la clínica, nunca se invita otro.
+    .filter(r => r.key !== 'owner')
+    // Admin solo lo asigna el dueño (jerarquía multi-sede).
+    .filter(r => clinicRole === 'owner' || r.key !== 'admin')
+    // Y solo los roles que el plan ofrece.
+    .filter(r => rolesDelPlan === null || rolesDelPlan.includes(r.key))
 
   useEffect(() => {
     if (open) { setForm(FORM_VACIO); setErrores([]); setVerPass(false) }

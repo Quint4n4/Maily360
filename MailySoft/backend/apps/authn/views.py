@@ -388,16 +388,21 @@ class MeApi(APIView):
                     active_membership = m
                     break
 
-        # 4. Resolver el doctor_id si el rol activo es 'doctor'.
-        #    Solo se incluye si el usuario tiene rol 'doctor' en el tenant activo.
-        #    Para cualquier otro rol (owner, admin, reception, nurse…) será None.
+        # 4. Resolver el doctor_id si el rol activo puede EJERCER.
+        #    Incluye dueño y administrador, no solo 'doctor': el perfil de médico
+        #    es una capacidad profesional, no un cargo (ver ROLES_QUE_PUEDEN_EJERCER
+        #    en apps/personal/services.py). Si aquí se filtrara solo por 'doctor',
+        #    el dueño de un consultorio individual no recibiría su doctor_id y el
+        #    frontend creería que no puede recetar.
         import uuid as _uuid_mod
+
+        from apps.personal.services import ROLES_QUE_PUEDEN_EJERCER
 
         doctor_id: _uuid_mod.UUID | None = None
         if (
             active_tenant is not None
             and active_membership is not None
-            and active_membership.role == TenantMembership.Role.DOCTOR
+            and active_membership.role in ROLES_QUE_PUEDEN_EJERCER
         ):
             doctor = doctor_get_for_user(user=user, tenant_id=active_tenant.id)
             if doctor is not None:
@@ -413,7 +418,28 @@ class MeApi(APIView):
                 for s in allowed_sucursales(user=user, tenant=active_tenant)
             ]
 
-        # 6. Serializar y devolver.
+        # 6. Entitlements de la clínica activa: qué módulos, límites y roles tiene
+        #    contratados. El frontend OCULTA con esto; el backend BLOQUEA con la
+        #    misma fuente (apps/tenancy/entitlements.py), así que nunca se
+        #    contradicen. Viaja en /me/ y no en un endpoint aparte porque se
+        #    necesita desde el primer render (el menú depende de él).
+        from apps.tenancy.entitlements import entitlements_for_tenant
+
+        capabilities: dict[str, object] | None = None
+        if active_tenant is not None:
+            ent = entitlements_for_tenant(tenant=active_tenant)
+            capabilities = {
+                "plan_slug": ent.plan_slug,
+                "plan_name": ent.plan_name,
+                "modules": sorted(ent.modules),
+                "roles": sorted(ent.roles),
+                "max_sucursales": ent.max_sucursales,
+                "max_consultorios": ent.max_consultorios,
+                "max_usuarios": ent.max_usuarios,
+                "sede_unica": ent.sede_unica,
+            }
+
+        # 7. Serializar y devolver.
         serializer = MeSerializer(
             user,
             context={
@@ -422,6 +448,7 @@ class MeApi(APIView):
                 "memberships": memberships,
                 "doctor_id": doctor_id,
                 "sucursales": sucursales_data,
+                "capabilities": capabilities,
             },
         )
         return Response(serializer.data)

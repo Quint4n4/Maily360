@@ -26,7 +26,8 @@ import { queryClient } from '../lib/queryClient'
 import { clearAccessToken, onAccessTokenChange } from '../lib/tokenStore'
 import { clearAllDrafts } from '../lib/draftKeys'
 import type { ClinicRole } from './permisos'
-import type { Me } from '../types/api'
+import type { Capabilities, Me } from '../types/api'
+import type { ModuloId } from '../lib/modulos'
 
 export type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
 
@@ -37,6 +38,14 @@ interface AuthContextValue {
   clinicRole: ClinicRole | null
   /** true si el usuario es staff de la plataforma Maily (panel interno). */
   isPlatformStaff: boolean
+  /**
+   * Qué tiene contratado la clínica activa. null mientras carga o si no hay
+   * clínica. El frontend OCULTA con esto; el backend BLOQUEA con la misma
+   * fuente y responde 404, así que ocultar aquí es experiencia, no seguridad.
+   */
+  capabilities: Capabilities | null
+  /** ¿La clínica tiene contratado este módulo? */
+  tieneModulo: (m: ModuloId) => boolean
   login: (input: LoginInput) => Promise<Me>
   logout: () => Promise<void>
   /** Re-consulta /me/ (útil tras cambiar de clínica a futuro). */
@@ -129,11 +138,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('authenticated')
   }, [])
 
+  // Mientras /me/ carga, `capabilities` es null y `tieneModulo` responde false:
+  // se prefiere no pintar un módulo un instante a pintarlo y quitarlo (parpadeo).
+  const capabilities = user?.capabilities ?? null
+  const tieneModulo = useCallback(
+    (m: ModuloId) => capabilities?.modules.includes(m) ?? false,
+    [capabilities],
+  )
+
   const value: AuthContextValue = {
     status,
     user,
     clinicRole: user?.active_role ?? null,
     isPlatformStaff: user?.is_platform_staff ?? false,
+    capabilities,
+    tieneModulo,
     login,
     logout,
     reloadMe,

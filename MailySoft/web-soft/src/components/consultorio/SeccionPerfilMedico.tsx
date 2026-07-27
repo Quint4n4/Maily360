@@ -10,6 +10,7 @@ import {
   useUpdateDoctorProfile,
 } from '../../hooks/clinica'
 import { erroresDe } from '../../lib/apiErrors'
+import { MSG, sonCedulasAdicionalesValidas } from '../../lib/validacion'
 import type { CredentialKind, DoctorCredentialOut } from '../../types/credenciales'
 import { CREDENTIAL_KIND_OPTIONS } from '../../types/credenciales'
 import ImageUploader from './ImageUploader'
@@ -67,9 +68,14 @@ export default function SeccionPerfilMedico() {
     }
   }
 
+  const errorCedulas = cedulas.trim() && !sonCedulasAdicionalesValidas(cedulas)
+    ? MSG.cedulasAdicionales
+    : null
+
   const guardarCedulas = async () => {
     setErrores([])
     setOk(false)
+    if (errorCedulas) { setErrores([errorCedulas]); return }
     try {
       await actualizarPerfil.mutateAsync({ cedulas_adicionales: cedulas.trim() })
       setOk(true)
@@ -117,14 +123,17 @@ export default function SeccionPerfilMedico() {
         <label className="label" htmlFor="cedulas">Cédulas adicionales</label>
         <input
           id="cedulas"
-          className="input max-w-xl"
+          className={`input max-w-xl${errorCedulas ? ' input-error' : ''}`}
           inputMode="numeric"
           maxLength={150}
           placeholder="1234567, 7654321"
           value={cedulas}
           onChange={(e) => setCedulas(e.target.value.replace(/[^\d,\s]/g, ''))}
+          aria-invalid={errorCedulas ? true : undefined}
         />
-        <Nota>Sepáralas con coma. La cédula profesional principal se edita en Personal.</Nota>
+        {errorCedulas
+          ? <p className="text-[11px] text-red-600 mt-0.5">{errorCedulas}</p>
+          : <Nota>Sepáralas con coma. La cédula profesional principal se edita en Personal.</Nota>}
         <div className="mt-3">
           <button className="btn-primary" onClick={guardarCedulas} disabled={actualizarPerfil.isPending}>
             {actualizarPerfil.isPending ? (

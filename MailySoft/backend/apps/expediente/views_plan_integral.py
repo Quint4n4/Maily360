@@ -39,6 +39,7 @@ from rest_framework.response import Response
 from apps.core.permissions import LongevityPlanPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.models import LongevityPlan, TreatmentPlan
 from apps.expediente.selectors import longevity_plan_get, longevity_plan_list
 from apps.expediente.serializers import (
@@ -104,7 +105,7 @@ class LongevityPlanDraftApi(TenantAPIView):
     "planes_disponibles": [...]} (ver LongevityPlanDraftOutputSerializer).
     """
 
-    permission_classes = [IsAuthenticated, LongevityPlanPermission]
+    permission_classes = [IsAuthenticated, LongevityPlanPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Devuelve el borrador auto-rellenado del paciente indicado."""
@@ -138,7 +139,7 @@ class LongevityPlanListCreateApi(TenantAPIView):
     POST /api/v1/expediente/<patient_id>/plan-integral/ — guarda la constancia. 201.
     """
 
-    permission_classes = [IsAuthenticated, LongevityPlanPermission]
+    permission_classes = [IsAuthenticated, LongevityPlanPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista los Planes Integrales de Longevidad del paciente (paginado)."""
@@ -200,7 +201,7 @@ class LongevityPlanPdfApi(TenantAPIView):
     el resto de los PDFs asíncronos del proyecto.
     """
 
-    permission_classes = [IsAuthenticated, LongevityPlanPermission]
+    permission_classes = [IsAuthenticated, LongevityPlanPermission, RequiresExpediente]
 
     def get(self, request: Request, plan_id: uuid.UUID) -> Response:
         """Encola la generación del PDF del Plan Integral de Longevidad."""

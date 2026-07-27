@@ -93,6 +93,11 @@ class MeSerializer(serializers.Serializer):
     # activas del tenant; cualquier otro rol solo las suyas (MembershipSucursal).
     # Inicializa el selector de sucursal del frontend (X-Sucursal-Id).
     sucursales = serializers.SerializerMethodField()
+    # Entitlements de la clínica activa: módulos, límites y roles contratados
+    # (planes/entitlements — Fase 4). null si no hay tenant activo. El frontend
+    # oculta con esto lo que el plan no incluye; el backend lo BLOQUEA con la
+    # misma fuente, así que nunca se contradicen.
+    capabilities = serializers.SerializerMethodField()
 
     def get_active_tenant(self, obj: User) -> dict | None:
         """Retorna la representación del tenant activo o null."""
@@ -140,6 +145,14 @@ class MeSerializer(serializers.Serializer):
         serializer solo forma la salida, sin lógica de negocio.
         """
         return self.context.get("sucursales", [])
+
+    def get_capabilities(self, obj: User) -> dict | None:
+        """Retorna los derechos de la clínica activa, o null si no hay ninguna.
+
+        El valor ya viene resuelto desde MeApi.get() (entitlements_for_tenant);
+        el serializer solo forma la salida, sin lógica de negocio.
+        """
+        return self.context.get("capabilities")
 
 
 class PasswordChangeInputSerializer(serializers.Serializer):

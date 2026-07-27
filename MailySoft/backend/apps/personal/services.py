@@ -17,10 +17,31 @@ from apps.audit.models import ActionType
 from apps.audit.services import audit_record
 from apps.clinica.models import Sucursal
 from apps.clinica.sucursal_scope import allowed_sucursales, resolve_write_sucursal
+from apps.core.entitlement_guards import assert_within_limit
 from apps.personal.models import Consultorio, Doctor, DoctorSchedule
 from apps.tenancy.models import Tenant, TenantMembership
 
 User = get_user_model()
+
+# ---------------------------------------------------------------------------
+# Quién puede tener perfil de médico (ejercer)
+# ---------------------------------------------------------------------------
+#
+# El perfil de médico es una capacidad PROFESIONAL, no un cargo administrativo.
+# En un consultorio individual el dueño atiende pacientes, y en clínicas chicas
+# el administrador suele ser profesional también. Como TenantMembership tiene
+# UniqueConstraint(user, tenant) —un usuario = un solo rol por clínica—, exigir
+# rol 'doctor' dejaba a esas personas sin poder recetar ni recibir citas.
+#
+# La autoridad para RECETAR sigue siendo la cédula profesional, no el rol:
+# apps/recetas/services.py rechaza emitir sin `cedula_profesional`.
+ROLES_QUE_PUEDEN_EJERCER: frozenset[str] = frozenset(
+    {
+        TenantMembership.Role.OWNER,
+        TenantMembership.Role.ADMIN,
+        TenantMembership.Role.DOCTOR,
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Campos inmutables de Doctor que no se pueden actualizar vía doctor_update
@@ -68,8 +89,14 @@ def doctor_create(
 ) -> Doctor:
     """Crea un perfil de médico para una membresía existente.
 
+    El perfil de médico es una CAPACIDAD PROFESIONAL, no un cargo: el dueño de un
+    consultorio individual y el administrador de una clínica chica suelen atender
+    pacientes. Por eso se acepta cualquier rol de ROLES_QUE_PUEDEN_EJERCER, no solo
+    'doctor'. Quien decide si puede recetar es la CÉDULA, no el rol: emitir recetas
+    exige `cedula_profesional` (validado en apps/recetas/services.py).
+
     Valida:
-    - Que membership.role == 'doctor'.
+    - Que membership.role esté en ROLES_QUE_PUEDEN_EJERCER.
     - Que membership.tenant == tenant (no se puede asignar una membresía de otra clínica).
     - Que no exista ya un Doctor para esa membresía (el OneToOne lo bloquea en BD,
       pero aquí damos un error legible antes del IntegrityError).
@@ -77,7 +104,7 @@ def doctor_create(
     Args:
         tenant:                        Clínica a la que pertenece el médico.
         user:                          Usuario que crea el registro (auditoría).
-        membership:                    TenantMembership del médico. Role debe ser 'doctor'.
+        membership:                    TenantMembership. Role en ROLES_QUE_PUEDEN_EJERCER.
         cedula_profesional:            Cédula profesional SEP (opcional).
         specialty:                     Especialidad médica texto libre (opcional).
         default_appointment_duration:  Duración default de cita en minutos (default 30).
@@ -87,11 +114,13 @@ def doctor_create(
         Instancia Doctor recién creada.
 
     Raises:
-        ValidationError: si el role no es 'doctor', la membresía no pertenece al tenant,
-                         o ya existe un perfil de médico para esa membresía.
+        ValidationError: si el role no puede ejercer, la membresía no pertenece al
+                         tenant, o ya existe un perfil de médico para esa membresía.
     """
-    if membership.role != TenantMembership.Role.DOCTOR:
-        raise ValidationError("La membresía debe tener rol de médico.")
+    if membership.role not in ROLES_QUE_PUEDEN_EJERCER:
+        raise ValidationError(
+            "Solo el dueño, un administrador o un médico pueden tener perfil de médico."
+        )
 
     if membership.tenant_id != tenant.id:
         raise ValidationError(
@@ -503,6 +532,13 @@ def consultorio_create(
     ).exists()
     if duplicate_exists:
         raise ValidationError(f"Ya existe un consultorio con el nombre '{name}' en esta clínica.")
+
+    # Límite del plan.
+    assert_within_limit(
+        tenant=tenant,
+        limite="max_consultorios",
+        actual=Consultorio.all_objects.filter(tenant=tenant, deleted_at__isnull=True).count(),
+    )
 
     sucursal: Sucursal | None = resolve_write_sucursal(
         tenant=tenant,

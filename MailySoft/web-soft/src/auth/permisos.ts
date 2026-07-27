@@ -183,6 +183,17 @@ export const puedeEmitirReceta = (role: ClinicRole): boolean =>
 export const puedeAnularReceta = (role: ClinicRole): boolean =>
   role === 'owner' || role === 'admin' || role === 'doctor'
 
+/**
+ * ¿Este rol puede tener perfil de médico (ejercer)?
+ *
+ * Espejo de ROLES_QUE_PUEDEN_EJERCER en apps/personal/services.py. El perfil de
+ * médico es una capacidad PROFESIONAL, no un cargo: en un consultorio individual
+ * el dueño atiende, y en clínicas chicas el administrador suele ser profesional.
+ * Quien habilita RECETAR es la CÉDULA, no el rol (el backend lo exige).
+ */
+export const puedeEjercer = (role: ClinicRole): boolean =>
+  role === 'owner' || role === 'admin' || role === 'doctor'
+
 /* ─── Estado de cuenta del paciente (apps/finanzas) ─────────────────────────
    Solo UX: ocultan el saldo / la pestaña de estado de cuenta. El backend es la
    autoridad y devuelve 403. Reflejan EXACTO PatientStatementPermission del

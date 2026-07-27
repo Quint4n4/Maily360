@@ -13,7 +13,8 @@ import HorariosDoctor from './HorariosDoctor'
 import SucursalesMiembro from './SucursalesMiembro'
 import { useConfirm } from '../common/DialogProvider'
 import { erroresDe } from '../../lib/apiErrors'
-import { ROLES } from '../../auth/permisos'
+import { errorDeCampo, esCedulaValida, MSG } from '../../lib/validacion'
+import { ROLES, puedeEjercer } from '../../auth/permisos'
 import type { ClinicRole } from '../../auth/permisos'
 import type { Member } from '../../types/personal'
 import { formatMedio } from '../../lib/fecha'
@@ -84,8 +85,10 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
   const rolesAsignables =
     clinicRole === 'owner' ? ROLES : ROLES.filter(r => r.key !== 'owner' && r.key !== 'admin')
 
-  // Perfil médico asociado (por email) si el miembro es médico.
-  const doctorPerfil = miembro && miembro.role === 'doctor'
+  // Perfil médico asociado (por email) si el miembro puede ejercer. Incluye a
+  // dueño y administrador: si aquí se filtrara solo por 'doctor', el perfil de
+  // un dueño-médico no se encontraría y se intentaría CREAR uno que ya existe.
+  const doctorPerfil = miembro && puedeEjercer(miembro.role)
     ? (docData?.results ?? []).find(d => d.user_email === miembro.user.email)
     : undefined
 
@@ -145,10 +148,12 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
   }
 
   const guardandoDoctor = crearDoctor.isPending || actualizarDoctor.isPending
+  const errorCedula = errorDeCampo(cedula, esCedulaValida, MSG.cedula)
   const guardarProfesional = async () => {
     setErrores([]); setOkMsg('')
     const dur = parseInt(duracion, 10)
     if (Number.isNaN(dur) || dur < 5 || dur > 480) { setErrores(['La duración de cita debe estar entre 5 y 480 minutos.']); return }
+    if (errorCedula) { setErrores([MSG.cedula]); return }
     const payload = {
       cedula_profesional: cedula.trim(),
       specialty: especialidad.trim(),
@@ -342,7 +347,7 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                 <SucursalesMiembro miembro={miembro} esYoMismo={esYoMismo} />
 
                 {/* Datos profesionales (solo si el miembro es médico) */}
-                {miembro.role === 'doctor' && (
+                {puedeEjercer(miembro.role) && (
                   <div className="mt-4 pt-4 border-t border-amber-900/10">
                     <p className="text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-3 flex items-center gap-2">
                       <Stethoscope className="w-4 h-4" /> Datos profesionales
@@ -351,7 +356,17 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
                     <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                       <div>
                         <label className="label">Cédula profesional</label>
-                        <input className="input" inputMode="numeric" maxLength={150} value={cedula} onChange={e => setCedula(e.target.value.replace(/\D/g, ''))} placeholder="Ej. 1234567" />
+                        <input
+                          className={`input${errorCedula ? ' input-error' : ''}`}
+                          inputMode="numeric" maxLength={10}
+                          value={cedula}
+                          onChange={e => setCedula(e.target.value.replace(/\D/g, ''))}
+                          placeholder="Ej. 1234567"
+                          aria-invalid={errorCedula ? true : undefined}
+                        />
+                        {errorCedula
+                          ? <p className="text-[11px] text-red-600 mt-0.5">{errorCedula}</p>
+                          : <p className="text-[11px] text-gray-400 mt-0.5">Necesaria para emitir recetas.</p>}
                       </div>
                       <div>
                         <label className="label">Especialidad</label>

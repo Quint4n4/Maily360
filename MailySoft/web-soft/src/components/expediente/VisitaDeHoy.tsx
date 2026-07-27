@@ -21,6 +21,7 @@ import { Activity, Stethoscope, Pill, CalendarHeart, Pencil, Plus } from 'lucide
 import type { LucideIcon } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { useVitalSigns } from '../../hooks/expediente'
+import { useAuth } from '../../auth/AuthContext'
 import { formatLargo } from '../../lib/fecha'
 import VisitaSignos from './VisitaSignos'
 import EvolucionSoapStepper from './EvolucionSoapStepper'
@@ -47,6 +48,11 @@ export default function VisitaDeHoy({
   // el índice de secciones quepa en la misma pantalla.
   const [abierto, setAbierto] = useState<PasoAbierto>(null)
   const cerrar = () => setAbierto(null)
+
+  // El paso ③ solo existe si la clínica contrató recetas. Es el caso dental:
+  // agenda y expediente sí, recetas no.
+  const { tieneModulo } = useAuth()
+  const hayRecetas = tieneModulo('recetas')
 
   // Misma query que usa VisitaSignos (caché compartida): solo sirve para saber
   // si el botón dice "Capturar signos" o "Nueva toma".
@@ -109,7 +115,8 @@ export default function VisitaDeHoy({
           {abierto === 2 && <EvolucionSoapStepper paciente={paciente} onClose={cerrar} />}
         </PasoVisita>
 
-        {/* ③ Receta */}
+        {/* ③ Receta — solo si el plan la incluye */}
+        {hayRecetas && (
         <PasoVisita
           numero={3} titulo="Receta" icon={Pill} color="#9A7B1E" activo={abierto === 3}
           accion={puedeEmitirReceta
@@ -122,6 +129,7 @@ export default function VisitaDeHoy({
         >
           {abierto === 3 && <NuevaReceta paciente={paciente} prefill={null} onClose={cerrar} />}
         </PasoVisita>
+        )}
       </div>
     </div>
   )

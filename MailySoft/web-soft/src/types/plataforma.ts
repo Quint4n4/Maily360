@@ -25,6 +25,8 @@
 import type { components } from './openapi'
 
 import type { EstadoClinica } from '../data/clinicas'
+import type { ModuloId } from '../lib/modulos'
+import type { ClinicRole } from '../auth/permisos'
 
 export type { EstadoClinica }
 
@@ -121,6 +123,16 @@ export interface ClinicaCreateInput {
   owner_last_name: string
   timezone?: string
   trial_days?: number
+  /** Plan contratado. Sin él, la clínica nace sin módulos. */
+  plan_id?: string
+  billing_cycle?: BillingCycle
+  /**
+   * Cédula del dueño. Si viene, se le crea su perfil de médico y la clínica
+   * puede agendar y recetar desde el primer día; sin ella la respuesta avisa
+   * con `needs_doctor` (una cita EXIGE médico).
+   */
+  owner_cedula?: string
+  owner_specialty?: string
 }
 
 /**
@@ -236,7 +248,14 @@ export interface PlanFormInput {
   price_monthly: string // decimal como string, p. ej. "1500.00"
   description?: string
   is_featured?: boolean
+  /** Texto de MARKETING para la vitrina. No controla acceso. */
   features?: string[]
+  /** Módulos incluidos. Esto SÍ controla el acceso (el backend es la autoridad). */
+  modules?: ModuloId[]
+  /** null = ilimitado. 1 en sucursales = modo sede única. */
+  max_sucursales?: number | null
+  max_consultorios?: number | null
+  max_usuarios?: number | null
   is_active?: boolean
   order?: number
 }
@@ -345,4 +364,42 @@ export type ClinicaDetail = Omit<
 > & {
   status: EstadoClinica
   members: ClinicaMember[]
+  /** Entitlements efectivos + consumo vs límite (Fase 6). */
+  entitlements?: ClinicaEntitlements
+}
+
+/** Consumo actual vs límite del plan (null = ilimitado). */
+export interface ConsumoLimite {
+  actual: number
+  limite: number | null
+}
+
+/** Derechos efectivos de una clínica, con su consumo y los ajustes vigentes. */
+export interface ClinicaEntitlements {
+  plan_slug: string
+  plan_name: string
+  modules: ModuloId[]
+  all_modules: ModuloId[]
+  roles: ClinicRole[]
+  usuarios: ConsumoLimite
+  consultorios: ConsumoLimite
+  sucursales: ConsumoLimite
+  override: {
+    modules_on: ModuloId[]
+    modules_off: ModuloId[]
+    max_sucursales: number | null
+    max_consultorios: number | null
+    max_usuarios: number | null
+    notes: string
+  }
+}
+
+/** Cuerpo para POST /plataforma/clinicas/<id>/entitlements/ (ajustes a la medida). */
+export interface EntitlementsOverrideInput {
+  modules_on?: ModuloId[]
+  modules_off?: ModuloId[]
+  max_sucursales?: number | null
+  max_consultorios?: number | null
+  max_usuarios?: number | null
+  notes?: string
 }

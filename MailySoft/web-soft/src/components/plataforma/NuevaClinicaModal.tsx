@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { X, Building2, Loader2, Check, Copy, KeyRound, AlertCircle } from 'lucide-react'
-import { useCreateClinica } from '../../hooks/plataforma'
+import { useCreateClinica, usePlatformPlanes } from '../../hooks/plataforma'
 import { ApiError } from '../../lib/http'
-import { esEmailValido } from '../../lib/validacion'
-import type { ClinicaCreateResult } from '../../types/plataforma'
+import { esEmailValido, esCedulaValida, errorDeCampo, MSG } from '../../lib/validacion'
+import type { ClinicaCreateResult, PlanPlataforma } from '../../types/plataforma'
+import { ROLE_LABEL } from '../../auth/permisos'
+import type { ClinicRole } from '../../auth/permisos'
 
 interface Props {
   open: boolean
@@ -28,20 +30,28 @@ function textoError(err: unknown): string {
 
 export default function NuevaClinicaModal({ open, onClose }: Props) {
   const crear = useCreateClinica()
+  const { data: planes } = usePlatformPlanes()
   const [nombre, setNombre] = useState('')
   const [dueñoNombre, setDueñoNombre] = useState('')
   const [dueñoApellido, setDueñoApellido] = useState('')
   const [dueñoEmail, setDueñoEmail] = useState('')
   const [diasPrueba, setDiasPrueba] = useState(60)
+  const [planId, setPlanId] = useState('')
+  const [cedula, setCedula] = useState('')
+  const [especialidad, setEspecialidad] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [resultado, setResultado] = useState<ClinicaCreateResult | null>(null)
   const [copiado, setCopiado] = useState(false)
+
+  const errorCedula = errorDeCampo(cedula, esCedulaValida, MSG.cedula)
+  const planesAsignables = (planes ?? []).filter(p => p.is_active)
 
   if (!open) return null
 
   const cerrar = () => {
     setNombre(''); setDueñoNombre(''); setDueñoApellido(''); setDueñoEmail('')
-    setDiasPrueba(60); setError(null); setResultado(null); setCopiado(false)
+    setDiasPrueba(60); setPlanId(''); setCedula(''); setEspecialidad('')
+    setError(null); setResultado(null); setCopiado(false)
     onClose()
   }
 
@@ -55,6 +65,10 @@ export default function NuevaClinicaModal({ open, onClose }: Props) {
       setError('El correo del dueño no es válido.')
       return
     }
+    if (errorCedula) {
+      setError(MSG.cedula)
+      return
+    }
     try {
       const res = await crear.mutateAsync({
         name: nombre.trim(),
@@ -62,6 +76,8 @@ export default function NuevaClinicaModal({ open, onClose }: Props) {
         owner_last_name: dueñoApellido.trim(),
         owner_email: dueñoEmail.trim(),
         trial_days: diasPrueba,
+        ...(planId ? { plan_id: planId } : {}),
+        ...(cedula.trim() ? { owner_cedula: cedula.trim(), owner_specialty: especialidad.trim() } : {}),
       })
       setResultado(res)
     } catch (e) {
@@ -117,10 +133,23 @@ export default function NuevaClinicaModal({ open, onClose }: Props) {
               </div>
             </div>
 
-            <p className="text-xs flex items-start gap-1.5 mb-5" style={{ color: '#C0392B' }}>
+            <p className="text-xs flex items-start gap-1.5 mb-4" style={{ color: '#C0392B' }}>
               <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               Guárdala y compártesela al dueño ahora. <strong>No se volverá a mostrar.</strong>
             </p>
+
+            {/* Sin ningún médico no se puede agendar: la cita exige uno. Vale más
+                decirlo aquí que dejar que lo descubran al primer intento. */}
+            {resultado.needs_doctor && (
+              <div className="flex items-start gap-2 rounded-xl px-3.5 py-2.5 mb-5"
+                style={{ background: '#FBF1D9', border: '1px solid rgba(201,162,39,0.4)' }}>
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#9A7B1E' }} />
+                <p className="text-xs" style={{ color: '#854F0B' }}>
+                  La clínica aún <strong>no puede agendar citas</strong>: no tiene ningún médico.
+                  El dueño debe darse de alta con su cédula en Personal, o registrar a un médico.
+                </p>
+              </div>
+            )}
 
             <button onClick={cerrar} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: '#C9A227' }}>
               Listo
@@ -171,10 +200,49 @@ export default function NuevaClinicaModal({ open, onClose }: Props) {
                 <input className={INPUT} style={INPUT_STYLE} type="email" value={dueñoEmail} onChange={e => setDueñoEmail(e.target.value)} placeholder="dueno@clinica.mx" />
               </div>
 
-              <div>
-                <label className={LABEL} style={{ color: '#9A7B1E' }}>Días de prueba</label>
-                <input className={`${INPUT} w-28`} style={INPUT_STYLE} type="number" min={1} max={365} value={diasPrueba} onChange={e => setDiasPrueba(Number(e.target.value))} />
+              {/* El dueño suele ser el médico. Sin ningún médico la clínica no
+                  puede agendar: la cita exige uno. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL} style={{ color: '#9A7B1E' }}>Cédula profesional</label>
+                  <input
+                    className={INPUT} style={INPUT_STYLE} inputMode="numeric" maxLength={10}
+                    value={cedula} onChange={e => setCedula(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Opcional"
+                  />
+                  {errorCedula
+                    ? <p className="text-[11px] text-red-600 mt-0.5">{errorCedula}</p>
+                    : <p className="text-[11px] text-gray-400 mt-0.5">Si el dueño atiende pacientes.</p>}
+                </div>
+                <div>
+                  <label className={LABEL} style={{ color: '#9A7B1E' }}>Especialidad</label>
+                  <input
+                    className={INPUT} style={INPUT_STYLE} maxLength={100}
+                    value={especialidad} onChange={e => setEspecialidad(e.target.value)}
+                    placeholder="Ej. Medicina general" disabled={!cedula.trim()}
+                  />
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL} style={{ color: '#9A7B1E' }}>Plan contratado</label>
+                  <select className={INPUT} style={INPUT_STYLE} value={planId} onChange={e => setPlanId(e.target.value)}>
+                    <option value="">Sin plan</option>
+                    {planesAsignables.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} — ${p.price_monthly}/mes</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={LABEL} style={{ color: '#9A7B1E' }}>Días de prueba</label>
+                  <input className={INPUT} style={INPUT_STYLE} type="number" min={1} max={365} value={diasPrueba} onChange={e => setDiasPrueba(Number(e.target.value))} />
+                </div>
+              </div>
+
+              {planId && (
+                <ResumenPlan plan={planesAsignables.find(p => p.id === planId)} />
+              )}
             </div>
 
             <button onClick={enviar} disabled={crear.isPending}
@@ -184,6 +252,25 @@ export default function NuevaClinicaModal({ open, onClose }: Props) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Resumen de lo que incluye el plan elegido, para confirmar antes de crear. */
+function ResumenPlan({ plan }: { plan?: PlanPlataforma }) {
+  if (!plan) return null
+  const inf = (n: number | null) => (n === null ? 'ilimitados' : String(n))
+  return (
+    <div className="rounded-xl px-3.5 py-2.5" style={{ background: 'rgba(201,162,39,0.08)', border: '1px solid rgba(201,162,39,0.25)' }}>
+      <p className="text-[11px] font-semibold mb-1" style={{ color: '#854F0B' }}>
+        {plan.name} incluye {plan.modules.length} módulos
+      </p>
+      <p className="text-[11px] text-gray-500">
+        {inf(plan.max_sucursales)} sucursales · {inf(plan.max_consultorios)} consultorios · {inf(plan.max_usuarios)} usuarios
+      </p>
+      <p className="text-[11px] text-gray-400 mt-0.5">
+        Roles: {plan.roles.map(r => ROLE_LABEL[r as ClinicRole] ?? r).join(', ')}
+      </p>
     </div>
   )
 }

@@ -37,6 +37,7 @@ from apps.clinica.models import (
     Sucursal,
 )
 from apps.core.files import validate_image
+from apps.core.validators import validar_cedulas_adicionales
 
 # ---------------------------------------------------------------------------
 # Constantes de validación de formato
@@ -441,16 +442,8 @@ class DoctorProfileImageInputSerializer(serializers.Serializer):
     )
 
     def validate_cedulas_adicionales(self, value: str) -> str:
-        """Valida que cada cédula adicional (separada por coma) sea solo dígitos."""
-        if not value.strip():
-            return value
-        tokens = [t.strip() for t in value.split(",") if t.strip()]
-        for token in tokens:
-            if not token.isdigit():
-                raise serializers.ValidationError(
-                    "Cada cédula adicional solo puede contener dígitos (0-9)."
-                )
-        return value
+        """Valida el formato de cada cédula adicional (separadas por coma)."""
+        return validar_cedulas_adicionales(value)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """M2: rechaza campos desconocidos (D-EC-7)."""

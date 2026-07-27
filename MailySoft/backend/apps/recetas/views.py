@@ -42,6 +42,7 @@ from apps.audit.services import audit_record
 from apps.core.permissions import MedicationPermission, PrescriptionFormatPermission, PrescriptionPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresRecetas
 from apps.pacientes.models import Patient
 from apps.pacientes.selectors import patient_get
 from apps.recetas.selectors import (
@@ -112,7 +113,7 @@ class MedicationSearchApi(TenantAPIView):
         sub-fase B1.2) y sobre el alta de medicamentos custom (MEDICATION_CREATE).
     """
 
-    permission_classes = [IsAuthenticated, MedicationPermission]
+    permission_classes = [IsAuthenticated, MedicationPermission, RequiresRecetas]
 
     def get(self, request: Request) -> Response:
         q: str = request.query_params.get("q", "")
@@ -148,7 +149,7 @@ class MedicationCreateApi(TenantAPIView):
     Respuesta 201: Medication recién creado.
     """
 
-    permission_classes = [IsAuthenticated, MedicationPermission]
+    permission_classes = [IsAuthenticated, MedicationPermission, RequiresRecetas]
 
     def post(self, request: Request) -> Response:
         serializer = MedicationCreateInputSerializer(data=request.data)
@@ -195,7 +196,7 @@ class PrescriptionListCreateApi(TenantAPIView):
     Anti-IDOR: patient_get usa TenantManager; paciente de otro tenant → 404.
     """
 
-    permission_classes = [IsAuthenticated, PrescriptionPermission]
+    permission_classes = [IsAuthenticated, PrescriptionPermission, RequiresRecetas]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Lista el historial de recetas del paciente, paginado."""
@@ -309,7 +310,7 @@ class PrescriptionDetailApi(TenantAPIView):
     Anti-IDOR: prescription_get usa TenantManager → 404 para recursos ajenos.
     """
 
-    permission_classes = [IsAuthenticated, PrescriptionPermission]
+    permission_classes = [IsAuthenticated, PrescriptionPermission, RequiresRecetas]
 
     def get(self, request: Request, prescription_id: uuid.UUID) -> Response:
         """Detalle completo de la receta."""
@@ -370,7 +371,7 @@ class PrescriptionPdfRequestApi(TenantAPIView):
     PRESCRIPTION_PDF (sin PII, solo folio) al solicitar.
     """
 
-    permission_classes = [IsAuthenticated, PrescriptionPermission]
+    permission_classes = [IsAuthenticated, PrescriptionPermission, RequiresRecetas]
 
     def get(self, request: Request, prescription_id: uuid.UUID) -> Response:
         """Encola (o reusa del caché) la generación del PDF de la receta."""
@@ -421,7 +422,7 @@ class PrescriptionPdfJobStatusApi(TenantAPIView):
     cada ~2 s hasta done (o failed). Anti-IDOR por tenant.
     """
 
-    permission_classes = [IsAuthenticated, PrescriptionPermission]
+    permission_classes = [IsAuthenticated, PrescriptionPermission, RequiresRecetas]
 
     def get(self, request: Request, job_id: uuid.UUID) -> Response:
         """Retorna el estado del trabajo de PDF."""
@@ -449,7 +450,7 @@ class PrescriptionPdfJobFileApi(TenantAPIView):
     (X-Frame-Options DENY, X-Content-Type-Options nosniff, Content-Disposition inline).
     """
 
-    permission_classes = [IsAuthenticated, PrescriptionPermission]
+    permission_classes = [IsAuthenticated, PrescriptionPermission, RequiresRecetas]
     renderer_classes = [PdfRenderer]
 
     def get(self, request: Request, job_id: uuid.UUID) -> HttpResponse:
@@ -483,7 +484,7 @@ class PrescriptionCancelApi(TenantAPIView):
     Responde 200 con el estado actualizado de la receta.
     """
 
-    permission_classes = [IsAuthenticated, PrescriptionPermission]
+    permission_classes = [IsAuthenticated, PrescriptionPermission, RequiresRecetas]
 
     def post(self, request: Request, prescription_id: uuid.UUID) -> Response:
         """Anula la receta médica."""
@@ -550,7 +551,7 @@ class PrescriptionFormatListCreateApi(TenantAPIView):
     Anti-IDOR: el TenantManager filtra por tenant activo.
     """
 
-    permission_classes = [IsAuthenticated, PrescriptionFormatPermission]
+    permission_classes = [IsAuthenticated, PrescriptionFormatPermission, RequiresRecetas]
 
     def get(self, request: Request) -> Response:
         """Lista los formatos activos del tenant."""
@@ -613,7 +614,7 @@ class PrescriptionFormatDetailApi(TenantAPIView):
     Anti-IDOR: prescription_format_get usa TenantManager; formato de otro tenant → 404.
     """
 
-    permission_classes = [IsAuthenticated, PrescriptionFormatPermission]
+    permission_classes = [IsAuthenticated, PrescriptionFormatPermission, RequiresRecetas]
 
     def get(self, request: Request, format_id: uuid.UUID) -> Response:
         """Detalle del formato."""

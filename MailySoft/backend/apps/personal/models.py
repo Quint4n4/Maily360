@@ -52,7 +52,11 @@ class Doctor(TenantAwareModel):
     Doctor ACTIVO (deleted_at IS NULL). Se modela con un índice único parcial
     (Meta.constraints) en vez de un OneToOneField, para que un Doctor
     soft-deleted no bloquee la re-creación del perfil con la misma membresía.
-    El service garantiza que membership.role == 'doctor'.
+
+    Tener perfil de médico es una capacidad PROFESIONAL, no un cargo: el service
+    acepta membresías con rol owner, admin o doctor (ROLES_QUE_PUEDEN_EJERCER),
+    porque el dueño de un consultorio individual atiende pacientes. Lo que habilita
+    RECETAR es la cédula profesional, no el rol.
     """
 
     membership = models.ForeignKey(
@@ -60,7 +64,10 @@ class Doctor(TenantAwareModel):
         on_delete=models.PROTECT,
         unique=False,
         related_name="doctor_profile",
-        help_text="Membresía del médico en esta clínica. Role debe ser 'doctor'.",
+        help_text=(
+            "Membresía de la persona en esta clínica. El rol debe poder ejercer "
+            "(dueño, administrador o médico)."
+        ),
     )
     cedula_profesional = models.CharField(
         max_length=30,

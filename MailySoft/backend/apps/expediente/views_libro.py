@@ -18,6 +18,7 @@ from apps.audit.services import audit_record
 from apps.core.permissions import EvolutionPermission
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import RequiresExpediente
 from apps.expediente.selectors import book_build
 from apps.expediente.serializers import PatientBookSerializer
 from apps.pacientes.models import Patient
@@ -56,7 +57,7 @@ class PatientBookApi(TenantAPIView):
         página actual; no genera queries adicionales durante la serialización.
     """
 
-    permission_classes = [IsAuthenticated, EvolutionPermission]
+    permission_classes = [IsAuthenticated, EvolutionPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Arma y devuelve el libro clínico del paciente (paginado)."""
@@ -140,7 +141,7 @@ class PatientBookPdfApi(TenantAPIView):
     Bitácora PATIENT_BOOK_PDF al SOLICITAR (NOM-024 / D-LIB-4).
     """
 
-    permission_classes = [IsAuthenticated, EvolutionPermission]
+    permission_classes = [IsAuthenticated, EvolutionPermission, RequiresExpediente]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         """Encola la generación del PDF del libro clínico."""

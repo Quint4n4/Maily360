@@ -42,6 +42,8 @@ from apps.audit.models import ActionType
 from apps.audit.services import audit_record
 from apps.clinica.models import MembershipSucursal
 from apps.clinica.sucursal_scope import allowed_sucursales
+from apps.core.entitlement_guards import assert_within_limit
+from apps.tenancy.entitlements import entitlements_for_tenant
 from apps.tenancy.models import Tenant, TenantMembership
 from apps.tenancy.selectors import membership_in_sucursal_scope
 
@@ -215,6 +217,17 @@ def member_create(
     if actor_membership is not None:
         actor_is_owner = actor_membership.role == TenantMembership.Role.OWNER
         _ensure_role_grantable(actor_is_owner=actor_is_owner, role=role)
+        # Un dueño por clínica: el owner se crea con el alta y no se invitan más.
+        # (Fuera del bootstrap, que es el `elif` de abajo.) Evita el segundo
+        # dueño que la UI ya no ofrece — el backend es la autoridad.
+        if role == TenantMembership.Role.OWNER and TenantMembership.objects.filter(
+            tenant=tenant, role=TenantMembership.Role.OWNER,
+            is_active=True, deleted_at__isnull=True,
+        ).exists():
+            raise ValidationError(
+                "Esta clínica ya tiene un dueño. Para transferir la propiedad, "
+                "contacta a soporte de Maily."
+            )
     elif (
         role == TenantMembership.Role.OWNER
         and not TenantMembership.objects.filter(tenant=tenant).exists()
@@ -225,6 +238,26 @@ def member_create(
         actor_is_owner = True
     else:
         raise ValidationError("No tienes una membresía activa en esta clínica.")
+
+    # --- Entitlements del plan -------------------------------------------
+    # El rol debe existir en el plan: uno cuyo módulo está apagado sería un
+    # usuario que no puede hacer su trabajo (finanzas sin cobranza no
+    # administra nada). Se omite en el bootstrap del owner, que ocurre en la
+    # misma transacción del alta de la clínica, antes de que haya suscripción.
+    if actor_membership is not None:
+        ent = entitlements_for_tenant(tenant=tenant)
+        if role not in ent.roles:
+            raise ValidationError(
+                f"El plan de esta clínica no incluye el rol '{role}'. "
+                "Contacta a soporte de Maily para ampliarlo."
+            )
+        assert_within_limit(
+            tenant=tenant,
+            limite="max_usuarios",
+            actual=TenantMembership.objects.filter(
+                tenant=tenant, is_active=True, deleted_at__isnull=True
+            ).count(),
+        )
 
     normalized_email = email.strip().lower()
     if User.objects.filter(email=normalized_email).exists():

@@ -50,6 +50,13 @@ from apps.core.permissions import (
 )
 from apps.core.tenant_context import get_current_tenant
 from apps.core.views import TenantAPIView
+from apps.core.entitlement_guards import (
+    RequiresCfdi,
+    RequiresCobranza,
+    RequiresCotizaciones,
+    RequiresPaquetes,
+    RequiresServicios,
+)
 from apps.finanzas import selectors, services
 from apps.finanzas.models import (
     CfdiDocument,
@@ -191,7 +198,7 @@ class ConceptListCreateApi(TenantAPIView):
     POST /api/v1/finanzas/conceptos/ — crea un concepto (solo owner).
     """
 
-    permission_classes = [IsAuthenticated, FinanceConceptPermission]
+    permission_classes = [IsAuthenticated, FinanceConceptPermission, RequiresServicios]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=160)
@@ -247,7 +254,7 @@ class ConceptDetailApi(TenantAPIView):
     PATCH/DELETE: solo owner (decisión del dueño, 2026-07-16).
     """
 
-    permission_classes = [IsAuthenticated, FinanceConceptPermission]
+    permission_classes = [IsAuthenticated, FinanceConceptPermission, RequiresServicios]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=160, required=False)
@@ -323,7 +330,7 @@ class ConceptDetailApi(TenantAPIView):
 class FiscalConfigApi(TenantAPIView):
     """GET/PATCH /api/v1/finanzas/config/ — datos fiscales del emisor (owner/admin)."""
 
-    permission_classes = [IsAuthenticated, FinanceConfigPermission]
+    permission_classes = [IsAuthenticated, FinanceConfigPermission, RequiresCfdi]
 
     class InputSerializer(serializers.Serializer):
         rfc = serializers.CharField(max_length=13, required=False, allow_blank=True)
@@ -373,7 +380,7 @@ class PackageListCreateApi(TenantAPIView):
     Calendarización: `items` llega como lista de dicts libres).
     """
 
-    permission_classes = [IsAuthenticated, TreatmentPackagePermission]
+    permission_classes = [IsAuthenticated, TreatmentPackagePermission, RequiresPaquetes]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=160)
@@ -431,7 +438,7 @@ class PackageDetailApi(TenantAPIView):
     disponibilidad actual no se toca (a diferencia de `items`).
     """
 
-    permission_classes = [IsAuthenticated, TreatmentPackagePermission]
+    permission_classes = [IsAuthenticated, TreatmentPackagePermission, RequiresPaquetes]
 
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(max_length=160)
@@ -504,7 +511,7 @@ class QuoteListCreateApi(TenantAPIView):
     POST /api/v1/finanzas/cotizaciones/ — crea una cotización (borrador).
     """
 
-    permission_classes = [IsAuthenticated, QuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission, RequiresCotizaciones]
 
     # NOTA: este ItemSerializer documenta la forma esperada de cada línea,
     # pero `InputSerializer.items` (abajo) usa un ListField/DictField suelto:
@@ -634,7 +641,7 @@ class QuoteDetailApi(TenantAPIView):
     PATCH /api/v1/finanzas/cotizaciones/<uuid>/  — rechazar/vencer (status).
     """
 
-    permission_classes = [IsAuthenticated, QuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission, RequiresCotizaciones]
 
     class InputSerializer(serializers.Serializer):
         status = serializers.ChoiceField(choices=[Quote.Status.REJECTED, Quote.Status.EXPIRED])
@@ -663,7 +670,7 @@ class QuoteDetailApi(TenantAPIView):
 class QuoteSendApi(TenantAPIView):
     """POST /api/v1/finanzas/cotizaciones/<uuid>/enviar/ — marca como enviada."""
 
-    permission_classes = [IsAuthenticated, QuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission, RequiresCotizaciones]
 
     def post(self, request: Request, quote_id: uuid.UUID) -> Response:
         quote, err = _quote_get_scoped(request, quote_id)
@@ -679,7 +686,7 @@ class QuoteSendApi(TenantAPIView):
 class QuoteAcceptApi(TenantAPIView):
     """POST /api/v1/finanzas/cotizaciones/<uuid>/aceptar/ — acepta y genera cargos."""
 
-    permission_classes = [IsAuthenticated, QuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission, RequiresCotizaciones]
 
     def post(self, request: Request, quote_id: uuid.UUID) -> Response:
         quote, err = _quote_get_scoped(request, quote_id)
@@ -703,7 +710,7 @@ class QuotePdfApi(TenantAPIView):
     Permiso QuotePermission. Anti-IDOR por tenant (404).
     """
 
-    permission_classes = [IsAuthenticated, QuotePermission]
+    permission_classes = [IsAuthenticated, QuotePermission, RequiresCotizaciones]
 
     def get(self, request: Request, quote_id: uuid.UUID) -> Response:
         try:
@@ -756,7 +763,7 @@ class ChargeListCreateApi(TenantAPIView):
         ?appointment=<uuid>   — cargos ligados a una cita concreta (para el libro).
     """
 
-    permission_classes = [IsAuthenticated, ChargeListPermission]
+    permission_classes = [IsAuthenticated, ChargeListPermission, RequiresCobranza]
 
     class InputSerializer(serializers.Serializer):
         patient_id = serializers.UUIDField()
@@ -845,7 +852,7 @@ class ChargeDetailApi(TenantAPIView):
     haya obtenido del estado de cuenta compartido del paciente.
     """
 
-    permission_classes = [IsAuthenticated, FinanceChargePermission]
+    permission_classes = [IsAuthenticated, FinanceChargePermission, RequiresCobranza]
 
     def _get_or_404(
         self, request: Request, charge_id: uuid.UUID
@@ -888,7 +895,7 @@ class PaymentListCreateApi(TenantAPIView):
     POST /api/v1/finanzas/pagos/ — registra un pago (caja: incluye recepción).
     """
 
-    permission_classes = [IsAuthenticated, FinancePaymentPermission]
+    permission_classes = [IsAuthenticated, FinancePaymentPermission, RequiresCobranza]
 
     class InputSerializer(serializers.Serializer):
         patient_id = serializers.UUIDField()
@@ -952,7 +959,7 @@ class PaymentListCreateApi(TenantAPIView):
 class PaymentDetailApi(TenantAPIView):
     """GET /api/v1/finanzas/pagos/<uuid>/ — detalle de un pago."""
 
-    permission_classes = [IsAuthenticated, FinancePaymentPermission]
+    permission_classes = [IsAuthenticated, FinancePaymentPermission, RequiresCobranza]
 
     def get(self, request: Request, payment_id: uuid.UUID) -> Response:
         try:
@@ -979,7 +986,7 @@ class CfdiListCreateApi(TenantAPIView):
     POST /api/v1/finanzas/cfdi/ — emite (timbra) un CFDI desde un pago.
     """
 
-    permission_classes = [IsAuthenticated, CfdiPermission]
+    permission_classes = [IsAuthenticated, CfdiPermission, RequiresCfdi]
 
     class InputSerializer(serializers.Serializer):
         payment_id = serializers.UUIDField()
@@ -1055,7 +1062,7 @@ def _cfdi_get_scoped(
 class CfdiDetailApi(TenantAPIView):
     """GET /api/v1/finanzas/cfdi/<uuid>/ — detalle de un comprobante."""
 
-    permission_classes = [IsAuthenticated, CfdiPermission]
+    permission_classes = [IsAuthenticated, CfdiPermission, RequiresCfdi]
 
     def get(self, request: Request, cfdi_id: uuid.UUID) -> Response:
         cfdi, err = _cfdi_get_scoped(request, cfdi_id)
@@ -1067,7 +1074,7 @@ class CfdiDetailApi(TenantAPIView):
 class CfdiCancelApi(TenantAPIView):
     """POST /api/v1/finanzas/cfdi/<uuid>/cancelar/ — cancela un comprobante."""
 
-    permission_classes = [IsAuthenticated, CfdiPermission]
+    permission_classes = [IsAuthenticated, CfdiPermission, RequiresCfdi]
 
     class InputSerializer(serializers.Serializer):
         reason = serializers.ChoiceField(choices=["01", "02", "03", "04"], default="02")
@@ -1099,7 +1106,7 @@ class AccountStatementApi(TenantAPIView):
         GET → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs (D-2).
     """
 
-    permission_classes = [IsAuthenticated, PatientStatementPermission]
+    permission_classes = [IsAuthenticated, PatientStatementPermission, RequiresCobranza]
 
     def get(self, request: Request, patient_id: uuid.UUID) -> Response:
         try:
@@ -1133,7 +1140,7 @@ class DashboardApi(TenantAPIView):
     activa, o esa sede con el header.
     """
 
-    permission_classes = [IsAuthenticated, FinanceDashboardPermission]
+    permission_classes = [IsAuthenticated, FinanceDashboardPermission, RequiresCobranza]
 
     def get(self, request: Request) -> Response:
         metrics = selectors.finance_dashboard_metrics(
@@ -1168,7 +1175,7 @@ class PeriodReportApi(TenantAPIView):
     del usuario (`sucursal_scope_ids`), igual que DashboardApi.
     """
 
-    permission_classes = [IsAuthenticated, FinanceDashboardPermission]
+    permission_classes = [IsAuthenticated, FinanceDashboardPermission, RequiresCobranza]
 
     def get(self, request: Request) -> Response:
         today = datetime.date.today()
@@ -1214,7 +1221,7 @@ class PeriodReportPdfApi(TenantAPIView):
         - Si la generación falla, devuelve 500 con mensaje genérico.
     """
 
-    permission_classes = [IsAuthenticated, FinanceDashboardPermission]
+    permission_classes = [IsAuthenticated, FinanceDashboardPermission, RequiresCobranza]
 
     def get(self, request: Request) -> Response:
         today = datetime.date.today()
@@ -1287,7 +1294,7 @@ class DailySheetApi(TenantAPIView):
     solo el cierre de esa sede.
     """
 
-    permission_classes = [IsAuthenticated, FinanceDeskPermission]
+    permission_classes = [IsAuthenticated, FinanceDeskPermission, RequiresCobranza]
 
     def get(self, request: Request) -> Response:
         raw_date = request.query_params.get("date")
@@ -1355,7 +1362,7 @@ class RetentionPanelApi(TenantAPIView):
     retención de SU sede; el dueño ve el panel consolidado del negocio.
     """
 
-    permission_classes = [IsAuthenticated, RetentionPermission]
+    permission_classes = [IsAuthenticated, RetentionPermission, RequiresCobranza]
 
     def get(self, request: Request) -> Response:
         tenant = get_current_tenant()
