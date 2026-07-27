@@ -402,7 +402,40 @@ enciende `Solo` cuando haya media docena de casos reales que digan el precio cor
 
 Ninguna. El plan está listo para ejecutarse.
 
-## Nota de estado
+---
 
-Plan. **Sin código todavía.** Lo afirmado sobre el estado actual está verificado leyendo el
-código: rutas, permisos, llaves foráneas, servicios de alta y restricciones de unicidad.
+# FASE 7 — Roles por plan y dueño único ✅ HECHA (2026-07-24)
+
+> Salió al probar: la pantalla de Equipo mostraba los 7 roles en todos los planes.
+> El empaquetado decía que admin/finanzas/solo-lectura son de Pro+, pero como
+> admin y readonly no dependen de ningún módulo, aparecían en Básico.
+
+- `Plan.roles` (allow-list, migración 0008/0009). Los roles efectivos = módulos ∩
+  roles del plan: la primera capa quita finanzas sin cobranza, la segunda es la
+  decisión comercial (Básico = dueño/médico/enfermería/recepción). Vacío = sin
+  restricción extra, para no cambiar los planes existentes.
+- Configurable desde el super-admin: en el editor de plan los roles son casillas
+  (dentro de lo que los módulos permiten); el dueño siempre va y no se desmarca.
+- **Un dueño por clínica:** `member_create` rechaza un segundo owner; la UI ya no
+  lo ofrece. El grid de Equipo y el botón "Nuevo miembro" se ocultan según el plan
+  y el tope de usuarios ("lo que ya no se puede agregar, que no aparezca").
+
+---
+
+## Nota de estado — EN PRODUCCIÓN (2026-07-27)
+
+**Implementado, probado y desplegado.** Ya NO es un plan: es lo que corre en
+producción.
+
+- **~80 tests nuevos**, suite completa en verde (3,397 al momento del merge).
+- Rama `feat/planes-entitlements` → merge `--no-ff` a `main` → deploy en Railway
+  (proyecto just-beauty, servicio Maily360).
+- **5 migraciones aplicadas** en producción, incluida `0007_entitlements_legacy_full`:
+  las clínicas existentes quedaron con acceso completo — nadie perdió funciones.
+- `seed_planes` corrido en producción: los 5 planes (Básico/Pro/Premium/Enterprise
+  activos, Solo inactivo) existen.
+- App verificada arriba (HTTP 200) tras el deploy.
+
+**Aprendizaje del deploy:** el primer build falló por 3 errores de TypeScript que la
+verificación local no cachó (se usó `tsc -p tsconfig.json`, config-solución que no
+revisa archivos = falso verde). Verificar el front con `npm run build` / `tsc -b`.
