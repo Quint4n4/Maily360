@@ -19,6 +19,7 @@ import type {
   ClinicaDetail,
   ClinicaPlat,
   DashboardMetrics,
+  EntitlementsOverrideInput,
   EstadoClinica,
   PlanFormInput,
   PlanPlataforma,

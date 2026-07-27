@@ -252,6 +252,8 @@ export interface PlanFormInput {
   features?: string[]
   /** Módulos incluidos. Esto SÍ controla el acceso (el backend es la autoridad). */
   modules?: ModuloId[]
+  /** Roles que el plan ofrece (allow-list). Vacío = todos los que los módulos permitan. */
+  roles?: ClinicRole[]
   /** null = ilimitado. 1 en sucursales = modo sede única. */
   max_sucursales?: number | null
   max_consultorios?: number | null

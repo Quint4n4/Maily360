@@ -2762,6 +2762,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plataforma/clinicas/{tenant_id}/entitlements/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Guarda los ajustes a la medida y devuelve la ficha actualizada. */
+        post: operations["plataforma_clinicas_entitlements_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plataforma/clinicas/{tenant_id}/estado/": {
         parameters: {
             query?: never;
@@ -3291,6 +3308,9 @@ export interface components {
             readonly appointment_count: number;
             /** Format: date-time */
             readonly ultima_actividad: string | null;
+            readonly entitlements: {
+                [key: string]: unknown;
+            };
             readonly members: components["schemas"]["ClinicaMemberOutput"][];
         };
         /** @description Input para POST /api/v1/plataforma/clinicas/<id>/estado/. */
@@ -3343,6 +3363,15 @@ export interface components {
             readonly total_pacientes: number;
             readonly ultimas_clinicas: components["schemas"]["UltimaClinicaOutput"][];
         };
+        InputRequest: {
+            modules_on?: components["schemas"]["ModulesEnum"][];
+            modules_off?: components["schemas"]["ModulesEnum"][];
+            max_sucursales?: number | null;
+            max_consultorios?: number | null;
+            max_usuarios?: number | null;
+            /** @default  */
+            notes: string;
+        };
         /**
          * @description * `agenda` - Agenda y citas
          *     * `recordatorios` - Recordatorios de cita
@@ -3384,6 +3413,7 @@ export interface components {
             max_sucursales?: number | null;
             max_consultorios?: number | null;
             max_usuarios?: number | null;
+            roles?: components["schemas"]["RolesEnum"][];
             is_active?: boolean;
             order?: number;
         };
@@ -3438,6 +3468,8 @@ export interface components {
             max_consultorios?: number | null;
             /** @description Máximo de usuarios. null = ilimitado. */
             max_usuarios?: number | null;
+            /** @description Roles que el plan ofrece. Vacío = todos los que los módulos permitan. Un rol solo se ofrece si además su módulo está activo. */
+            roles?: components["schemas"]["RolesEnum"][];
             /**
              * @description Si el plan queda activo/asignable desde su creación.
              * @default true
@@ -3468,7 +3500,8 @@ export interface components {
             readonly max_usuarios: number | null;
             readonly is_active: boolean;
             readonly order: number;
-            /** @description Roles asignables con estos módulos. Se derivan, no se configuran. */
+            readonly roles_ofrecidos: string[];
+            /** @description Roles efectivos: los que los módulos permiten Y el plan ofrece. */
             readonly roles: string[];
         };
         /**
@@ -3498,6 +3531,17 @@ export interface components {
             readonly platform_role_display: string;
             readonly is_active: boolean;
         };
+        /**
+         * @description * `owner` - Dueño
+         *     * `admin` - Administrador
+         *     * `doctor` - Médico
+         *     * `nurse` - Enfermería
+         *     * `reception` - Recepción
+         *     * `finance` - Finanzas
+         *     * `readonly` - Solo lectura
+         * @enum {string}
+         */
+        RolesEnum: "owner" | "admin" | "doctor" | "nurse" | "reception" | "finance" | "readonly";
         /** @description Input para POST /api/v1/plataforma/usuarios/. */
         StaffCreateInputRequest: {
             /**
@@ -7522,6 +7566,33 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicaDetailOutput"];
+                };
+            };
+        };
+    };
+    plataforma_clinicas_entitlements_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["InputRequest"];
+                "multipart/form-data": components["schemas"]["InputRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {

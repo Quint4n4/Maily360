@@ -3614,6 +3614,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClinicaDetailOutput'
           description: ''
+  /api/v1/plataforma/clinicas/{tenant_id}/entitlements/:
+    post:
+      operationId: plataforma_clinicas_entitlements_create
+      description: Guarda los ajustes a la medida y devuelve la ficha actualizada.
+      parameters:
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - plataforma
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InputRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicaDetailOutput'
+          description: ''
   /api/v1/plataforma/clinicas/{tenant_id}/estado/:
     post:
       operationId: plataforma_clinicas_estado_create
@@ -4424,6 +4457,10 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        entitlements:
+          type: object
+          additionalProperties: {}
+          readOnly: true
         members:
           type: array
           items:
@@ -4432,6 +4469,7 @@ components:
       required:
       - appointment_count
       - created_at
+      - entitlements
       - id
       - member_count
       - members
@@ -4569,6 +4607,33 @@ components:
       - total_platform_staff
       - total_usuarios
       - ultimas_clinicas
+    InputRequest:
+      type: object
+      properties:
+        modules_on:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModulesEnum'
+        modules_off:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModulesEnum'
+        max_sucursales:
+          type: integer
+          minimum: 1
+          nullable: true
+        max_consultorios:
+          type: integer
+          minimum: 1
+          nullable: true
+        max_usuarios:
+          type: integer
+          minimum: 1
+          nullable: true
+        notes:
+          type: string
+          default: ''
+          maxLength: 2000
     ModulesEnum:
       enum:
       - agenda
@@ -4649,6 +4714,10 @@ components:
           type: integer
           minimum: 1
           nullable: true
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RolesEnum'
         is_active:
           type: boolean
         order:
@@ -4736,6 +4805,12 @@ components:
           minimum: 1
           nullable: true
           description: Máximo de usuarios. null = ilimitado.
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RolesEnum'
+          description: Roles que el plan ofrece. Vacío = todos los que los módulos
+            permitan. Un rol solo se ofrece si además su módulo está activo.
         is_active:
           type: boolean
           default: true
@@ -4805,11 +4880,16 @@ components:
         order:
           type: integer
           readOnly: true
+        roles_ofrecidos:
+          type: array
+          items:
+            type: string
+          readOnly: true
         roles:
           type: array
           items:
             type: string
-          description: Roles asignables con estos módulos. Se derivan, no se configuran.
+          description: 'Roles efectivos: los que los módulos permiten Y el plan ofrece.'
           readOnly: true
       required:
       - description
@@ -4825,6 +4905,7 @@ components:
       - order
       - price_monthly
       - roles
+      - roles_ofrecidos
       - slug
     PlatformRoleEnum:
       enum:
@@ -4881,6 +4962,24 @@ components:
       - last_name
       - platform_role
       - platform_role_display
+    RolesEnum:
+      enum:
+      - owner
+      - admin
+      - doctor
+      - nurse
+      - reception
+      - finance
+      - readonly
+      type: string
+      description: |-
+        * `owner` - Dueño
+        * `admin` - Administrador
+        * `doctor` - Médico
+        * `nurse` - Enfermería
+        * `reception` - Recepción
+        * `finance` - Finanzas
+        * `readonly` - Solo lectura
     StaffCreateInputRequest:
       type: object
       description: Input para POST /api/v1/plataforma/usuarios/.
