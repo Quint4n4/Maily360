@@ -1,9 +1,12 @@
-import { X, Loader2, AlertCircle, Users, HeartPulse, CalendarDays, Clock } from 'lucide-react'
+import { useState } from 'react'
+import { X, Loader2, AlertCircle, Users, HeartPulse, CalendarDays, Clock, Layers, SlidersHorizontal } from 'lucide-react'
 import { useClinicaDetail, useSetClinicaEstado } from '../../hooks/plataforma'
 import { ESTADO_CLINICA } from '../../data/clinicas'
 import { formatFechaCorta, formatMesAnio } from '../../lib/fecha'
 import type { ClinicaDetail } from '../../types/plataforma'
 import { useConfirm } from '../common/DialogProvider'
+import { MODULO_LABEL } from '../../lib/modulos'
+import AjustesClinicaModal from './AjustesClinicaModal'
 
 interface Props {
   clinicaId: string | null
@@ -16,6 +19,7 @@ export default function ClinicaDetailDrawer({ clinicaId, puedeEditar, onClose }:
   const { data, isLoading, isError } = useClinicaDetail(clinicaId)
   const cambiarEstado = useSetClinicaEstado()
   const confirmar = useConfirm()
+  const [ajustesAbierto, setAjustesAbierto] = useState(false)
 
   if (!clinicaId) return null
 
@@ -91,6 +95,61 @@ export default function ClinicaDetailDrawer({ clinicaId, puedeEditar, onClose }:
               ))}
             </div>
 
+            {/* Plan y ajustes (Fase 6) */}
+            {data.entitlements && (
+              <div className="glass-card rounded-2xl overflow-hidden mb-4">
+                <div className="px-4 py-3 border-b border-white/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4" style={{ color: '#C9A227' }} />
+                    <h4 className="text-sm font-semibold text-gray-800">
+                      Plan {data.entitlements.plan_name || '— sin plan'}
+                    </h4>
+                  </div>
+                  {puedeEditar && (
+                    <button onClick={() => setAjustesAbierto(true)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: '#9A7B1E' }}>
+                      <SlidersHorizontal className="w-3.5 h-3.5" /> Ajustar
+                    </button>
+                  )}
+                </div>
+                <div className="px-4 py-3">
+                  {/* Consumo vs límite: detecta upsell de un vistazo */}
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {([
+                      ['Usuarios', data.entitlements.usuarios],
+                      ['Consultorios', data.entitlements.consultorios],
+                      ['Sucursales', data.entitlements.sucursales],
+                    ] as const).map(([label, c]) => {
+                      const tope = c.limite
+                      const lleno = tope !== null && c.actual >= tope
+                      return (
+                        <div key={label} className="text-center">
+                          <p className="text-sm font-bold" style={{ color: lleno ? '#C0392B' : '#2A241B' }}>
+                            {c.actual}<span className="text-gray-400 font-normal">/{tope ?? '∞'}</span>
+                          </p>
+                          <p className="text-[10px] text-gray-400">{label}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* Módulos encendidos */}
+                  <div className="flex flex-wrap gap-1">
+                    {data.entitlements.modules.map(m => (
+                      <span key={m} className="text-[10px] px-1.5 py-0.5 rounded-full"
+                        style={{ background: 'rgba(201,162,39,0.12)', color: '#854F0B' }}>
+                        {MODULO_LABEL[m]}
+                      </span>
+                    ))}
+                  </div>
+                  {data.entitlements.override.notes && (
+                    <p className="text-[10px] text-gray-400 mt-2 italic">
+                      Ajuste: {data.entitlements.override.notes}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Miembros */}
             <div className="glass-card rounded-2xl overflow-hidden mb-4">
               <div className="px-4 py-3 border-b border-white/50">
@@ -131,6 +190,15 @@ export default function ClinicaDetailDrawer({ clinicaId, puedeEditar, onClose }:
           </>
         )}
       </div>
+
+      {ajustesAbierto && data?.entitlements && (
+        <AjustesClinicaModal
+          tenantId={data.id}
+          clinicaNombre={data.name}
+          entitlements={data.entitlements}
+          onClose={() => setAjustesAbierto(false)}
+        />
+      )}
     </div>
   )
 }

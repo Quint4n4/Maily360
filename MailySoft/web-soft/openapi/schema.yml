@@ -17,6 +17,12 @@ paths:
             status:         Estado de la cita (scheduled|confirmed|arrived|...).
             date_from:      ISO datetime UTC inicio de rango.
             date_to:        ISO datetime UTC fin de rango.
+
+        Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+        alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+        header X-Sucursal-Id. Un usuario limitado a una sede ya NO puede ver
+        citas de otra sede con solo omitir el header; el dueño (alcance
+        total) sigue viendo todo (consolidado) cuando no manda header.
       tags:
       - v1
       security:
@@ -229,7 +235,12 @@ paths:
   /api/v1/agenda/eventos/:
     get:
       operationId: v1_agenda_eventos_retrieve
-      description: Lista de eventos del tenant que solapan el rango [date_from, date_to].
+      description: |-
+        Lista de eventos del tenant que solapan el rango [date_from, date_to].
+
+        Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+        alcance de sucursales del usuario (`sucursal_scope_ids`, ver
+        `agenda_block_list`), con o sin header X-Sucursal-Id.
       tags:
       - v1
       security:
@@ -732,6 +743,117 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/clinica/equipo/:
+    get:
+      operationId: v1_clinica_equipo_retrieve
+      description: |-
+        Lista paginada del equipo/departamentos del tenant.
+
+        Query param `only_active` (default true).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_clinica_equipo_create
+      description: Crea un miembro del equipo en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/equipo/{member_id}/:
+    get:
+      operationId: v1_clinica_equipo_retrieve_2
+      description: GET/PATCH/DELETE /api/v1/clinica/equipo/<id>/.
+      parameters:
+      - in: path
+        name: member_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_clinica_equipo_partial_update
+      description: GET/PATCH/DELETE /api/v1/clinica/equipo/<id>/.
+      parameters:
+      - in: path
+        name: member_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_clinica_equipo_destroy
+      description: GET/PATCH/DELETE /api/v1/clinica/equipo/<id>/.
+      parameters:
+      - in: path
+        name: member_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/clinica/membresias/{membership_id}/sucursales/:
+    get:
+      operationId: v1_clinica_membresias_sucursales_retrieve
+      description: Lista las sucursales actualmente asignadas al miembro.
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_clinica_membresias_sucursales_update
+      description: Reemplaza el conjunto de sucursales asignadas al miembro.
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/clinica/plantillas/:
     get:
       operationId: v1_clinica_plantillas_retrieve
@@ -817,6 +939,121 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/clinica/sucursales/:
+    get:
+      operationId: v1_clinica_sucursales_retrieve
+      description: Lista paginada de las sucursales activas que el usuario puede operar.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_clinica_sucursales_create
+      description: Crea una sucursal en el tenant del request (owner/admin).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clinica/sucursales/{sucursal_id}/:
+    get:
+      operationId: v1_clinica_sucursales_retrieve_2
+      description: |-
+        GET    /api/v1/clinica/sucursales/<id>/ — detalle de una sucursal.
+        PATCH  /api/v1/clinica/sucursales/<id>/ — actualización parcial (owner/admin).
+        DELETE /api/v1/clinica/sucursales/<id>/ — baja lógica (is_active=False, owner/admin).
+
+        PATCH separa is_active/is_default del resto de los campos: se enrutan a
+        sucursal_activate/sucursal_deactivate/sucursal_set_default en vez de al
+        service de update genérico (regla de campos sensibles del proyecto).
+
+        `_get_or_404` acota el id contra `actor_sucursal_ids` (owner: todas; el
+        resto de los roles: solo su `MembershipSucursal`, sea la sede activa o
+        no) — no solo contra el tenant. Cierra el Clúster C de la auditoría de
+        seguridad (docs/design/sucursales-hallazgos-seguridad.md): antes, un
+        admin acotado a Centro podía PATCH/DELETE la sucursal Norte (renombrar,
+        marcar default, e incluso desactivarla) con solo conocer su id.
+      parameters:
+      - in: path
+        name: sucursal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_clinica_sucursales_partial_update
+      description: |-
+        GET    /api/v1/clinica/sucursales/<id>/ — detalle de una sucursal.
+        PATCH  /api/v1/clinica/sucursales/<id>/ — actualización parcial (owner/admin).
+        DELETE /api/v1/clinica/sucursales/<id>/ — baja lógica (is_active=False, owner/admin).
+
+        PATCH separa is_active/is_default del resto de los campos: se enrutan a
+        sucursal_activate/sucursal_deactivate/sucursal_set_default en vez de al
+        service de update genérico (regla de campos sensibles del proyecto).
+
+        `_get_or_404` acota el id contra `actor_sucursal_ids` (owner: todas; el
+        resto de los roles: solo su `MembershipSucursal`, sea la sede activa o
+        no) — no solo contra el tenant. Cierra el Clúster C de la auditoría de
+        seguridad (docs/design/sucursales-hallazgos-seguridad.md): antes, un
+        admin acotado a Centro podía PATCH/DELETE la sucursal Norte (renombrar,
+        marcar default, e incluso desactivarla) con solo conocer su id.
+      parameters:
+      - in: path
+        name: sucursal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_clinica_sucursales_destroy
+      description: |-
+        GET    /api/v1/clinica/sucursales/<id>/ — detalle de una sucursal.
+        PATCH  /api/v1/clinica/sucursales/<id>/ — actualización parcial (owner/admin).
+        DELETE /api/v1/clinica/sucursales/<id>/ — baja lógica (is_active=False, owner/admin).
+
+        PATCH separa is_active/is_default del resto de los campos: se enrutan a
+        sucursal_activate/sucursal_deactivate/sucursal_set_default en vez de al
+        service de update genérico (regla de campos sensibles del proyecto).
+
+        `_get_or_404` acota el id contra `actor_sucursal_ids` (owner: todas; el
+        resto de los roles: solo su `MembershipSucursal`, sea la sede activa o
+        no) — no solo contra el tenant. Cierra el Clúster C de la auditoría de
+        seguridad (docs/design/sucursales-hallazgos-seguridad.md): antes, un
+        admin acotado a Centro podía PATCH/DELETE la sucursal Norte (renombrar,
+        marcar default, e incluso desactivarla) con solo conocer su id.
+      parameters:
+      - in: path
+        name: sucursal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/clinica/universidades/{university_id}/:
     delete:
       operationId: v1_clinica_universidades_destroy
@@ -856,6 +1093,60 @@ paths:
     post:
       operationId: v1_expediente_alergias_create
       description: Registra una alergia nueva para el paciente.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/calendarizaciones/:
+    get:
+      operationId: v1_expediente_calendarizaciones_retrieve_2
+      description: Lista los esquemas de tratamientos del paciente (paginado).
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_calendarizaciones_create
+      description: Crea un esquema de calendarización de tratamientos.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/calendarizaciones/desde-paquete/:
+    post:
+      operationId: v1_expediente_calendarizaciones_desde_paquete_create
+      description: Crea un esquema de calendarización nuevo copiando las líneas del
+        paquete.
       parameters:
       - in: path
         name: patient_id
@@ -1068,6 +1359,59 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/expediente/{patient_id}/plan-integral/:
+    get:
+      operationId: v1_expediente_plan_integral_retrieve
+      description: Lista los Planes Integrales de Longevidad del paciente (paginado).
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_plan_integral_create
+      description: Crea el Plan Integral de Longevidad del paciente indicado.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/plan-integral/borrador/:
+    get:
+      operationId: v1_expediente_plan_integral_borrador_retrieve
+      description: Devuelve el borrador auto-rellenado del paciente indicado.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/expediente/{patient_id}/recetas/:
     get:
       operationId: v1_expediente_recetas_retrieve
@@ -1089,6 +1433,24 @@ paths:
     post:
       operationId: v1_expediente_recetas_create
       description: Emite una receta médica nueva para el paciente.
+      parameters:
+      - in: path
+        name: patient_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/{patient_id}/resumenes/:
+    get:
+      operationId: v1_expediente_resumenes_retrieve
+      description: Lista los resúmenes clínicos del paciente (paginado).
       parameters:
       - in: path
         name: patient_id
@@ -1186,6 +1548,205 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/expediente/analitos/:
+    get:
+      operationId: v1_expediente_analitos_retrieve
+      description: |-
+        Lista paginada de analitos de laboratorio del tenant.
+
+        Query param: `only_active` (default true).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_analitos_create
+      description: Crea un analito de laboratorio en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/analitos/{analyte_id}/:
+    get:
+      operationId: v1_expediente_analitos_retrieve_2
+      description: GET/PATCH/DELETE /api/v1/expediente/analitos/<id>/.
+      parameters:
+      - in: path
+        name: analyte_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_expediente_analitos_partial_update
+      description: GET/PATCH/DELETE /api/v1/expediente/analitos/<id>/.
+      parameters:
+      - in: path
+        name: analyte_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_expediente_analitos_destroy
+      description: GET/PATCH/DELETE /api/v1/expediente/analitos/<id>/.
+      parameters:
+      - in: path
+        name: analyte_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/expediente/calendarizaciones/{plan_id}/:
+    get:
+      operationId: v1_expediente_calendarizaciones_retrieve
+      description: Devuelve el detalle del esquema (items + sesiones anidadas).
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: v1_expediente_calendarizaciones_update
+      description: Reemplaza el contenido del esquema (title/notes/status/doctor/items).
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_expediente_calendarizaciones_destroy
+      description: Da de baja lógica el esquema.
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/expediente/calendarizaciones/{plan_id}/cotizacion/:
+    post:
+      operationId: v1_expediente_calendarizaciones_cotizacion_create
+      description: Genera la cotización y la liga al esquema.
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/calendarizaciones/{plan_id}/pdf/:
+    get:
+      operationId: v1_expediente_calendarizaciones_pdf_retrieve
+      description: Encola la generación del PDF del esquema de tratamientos.
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/calendarizaciones/sesiones/{session_id}/agendar/:
+    post:
+      operationId: v1_expediente_calendarizaciones_sesiones_agendar_create
+      description: Agenda (o reagenda) la sesión como cita real de agenda.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_expediente_calendarizaciones_sesiones_agendar_destroy
+      description: 'Quita la sesión de la agenda: cancela su cita ligada (si tiene).'
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/expediente/diagnosticos/{diagnosis_id}/resolver/:
     post:
       operationId: v1_expediente_diagnosticos_resolver_create
@@ -1262,6 +1823,42 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/expediente/evoluciones/{evolution_id}/resumen/:
+    post:
+      operationId: v1_expediente_evoluciones_resumen_create
+      description: Crea el resumen clínico de la consulta indicada.
+      parameters:
+      - in: path
+        name: evolution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/evoluciones/{evolution_id}/resumen/borrador/:
+    get:
+      operationId: v1_expediente_evoluciones_resumen_borrador_retrieve
+      description: Devuelve el borrador auto-rellenado de la consulta indicada.
+      parameters:
+      - in: path
+        name: evolution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/expediente/imagenes/{image_id}/:
     delete:
       operationId: v1_expediente_imagenes_destroy
@@ -1269,6 +1866,100 @@ paths:
       parameters:
       - in: path
         name: image_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/expediente/plan-integral/{plan_id}/pdf/:
+    get:
+      operationId: v1_expediente_plan_integral_pdf_retrieve
+      description: Encola la generación del PDF del Plan Integral de Longevidad.
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/plantillas-documento/:
+    get:
+      operationId: v1_expediente_plantillas_documento_retrieve
+      description: |-
+        Lista paginada de plantillas de documento del tenant.
+
+        Query params: `section` (opcional), `only_active` (default true).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_expediente_plantillas_documento_create
+      description: Crea una plantilla de documento en el tenant del request.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/expediente/plantillas-documento/{template_id}/:
+    get:
+      operationId: v1_expediente_plantillas_documento_retrieve_2
+      description: GET/PATCH/DELETE /api/v1/expediente/plantillas-documento/<id>/.
+      parameters:
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_expediente_plantillas_documento_partial_update
+      description: GET/PATCH/DELETE /api/v1/expediente/plantillas-documento/<id>/.
+      parameters:
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_expediente_plantillas_documento_destroy
+      description: GET/PATCH/DELETE /api/v1/expediente/plantillas-documento/<id>/.
+      parameters:
+      - in: path
+        name: template_id
         schema:
           type: string
           format: uuid
@@ -1337,21 +2028,36 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/expediente/resumenes/{summary_id}/pdf/:
+    get:
+      operationId: v1_expediente_resumenes_pdf_retrieve
+      description: Encola la generación del PDF del resumen clínico.
+      parameters:
+      - in: path
+        name: summary_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/finanzas/cargos/:
     get:
       operationId: v1_finanzas_cargos_retrieve
       description: |-
-        GET  /api/v1/finanzas/cargos/ — lista de cargos.
-        POST /api/v1/finanzas/cargos/ — crea un cargo (owner/admin/finance).
+        Lista cargos del tenant actual.
 
-        Permisos:
-            GET  → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs (D-2).
-            POST → FINANCE_CORE_ROLES (owner/admin/finance).
-
-        Filtros GET soportados:
-            ?patient_id=<uuid>    — cargos de un paciente.
-            ?status=<str>         — pending | partial | paid | cancelled.
-            ?appointment=<uuid>   — cargos ligados a una cita concreta (para el libro).
+        Multi-sede — Fase 3: cuando se consulta por `patient_id` (estado de
+        cuenta del paciente) o por `appointment` (bloque de la visita en el
+        libro), NO se acota por sede — son vistas del expediente/cuenta del
+        paciente, compartidas entre sedes. El listado GENERAL (sin esos
+        filtros — p. ej. la pestaña "Cargos" de caja) SÍ se acota al alcance
+        de sucursales del usuario (`sucursal_scope_ids`).
       tags:
       - v1
       security:
@@ -1386,6 +2092,13 @@ paths:
       description: |-
         GET    /api/v1/finanzas/cargos/<uuid>/  — detalle.
         DELETE /api/v1/finanzas/cargos/<uuid>/  — cancela el cargo.
+
+        Multi-sede — Fase 3 (cierre de A7 — docs/design/
+        sucursales-hallazgos-seguridad.md): el detalle/cancelación por id se
+        acota EXACTAMENTE igual que el listado GENERAL de cargos
+        (`ChargeListCreateApi.get`, sin `patient_id`) — un admin acotado a una
+        sede no puede leer ni cancelar un cargo de otra sede por su id, aunque lo
+        haya obtenido del estado de cuenta compartido del paciente.
       parameters:
       - in: path
         name: charge_id
@@ -1405,6 +2118,13 @@ paths:
       description: |-
         GET    /api/v1/finanzas/cargos/<uuid>/  — detalle.
         DELETE /api/v1/finanzas/cargos/<uuid>/  — cancela el cargo.
+
+        Multi-sede — Fase 3 (cierre de A7 — docs/design/
+        sucursales-hallazgos-seguridad.md): el detalle/cancelación por id se
+        acota EXACTAMENTE igual que el listado GENERAL de cargos
+        (`ChargeListCreateApi.get`, sin `patient_id`) — un admin acotado a una
+        sede no puede leer ni cancelar un cargo de otra sede por su id, aunque lo
+        haya obtenido del estado de cuenta compartido del paciente.
       parameters:
       - in: path
         name: charge_id
@@ -1423,8 +2143,14 @@ paths:
     get:
       operationId: v1_finanzas_cfdi_retrieve
       description: |-
-        GET  /api/v1/finanzas/cfdi/ — lista de comprobantes.
-        POST /api/v1/finanzas/cfdi/ — emite (timbra) un CFDI desde un pago.
+        Lista comprobantes CFDI del tenant actual.
+
+        Multi-sede — Fase 3 (cierre de clúster D — docs/design/
+        sucursales-hallazgos-seguridad.md): cuando se consulta por
+        `patient_id` (historial fiscal del paciente), NO se acota por sede
+        (compartido entre sedes, mismo criterio que cargos/pagos/
+        cotizaciones). El listado GENERAL SÍ se acota al alcance de
+        sucursales del usuario (`sucursal_scope_ids`).
       tags:
       - v1
       security:
@@ -1495,6 +2221,11 @@ paths:
         Permiso: FinanceDeskPermission → FINANCE_DESK_ROLES (owner, admin, finance, reception).
         Reception puede consultar el cierre de caja propio del día; no puede ver el
         panel analítico (DashboardApi / PeriodReportApi).
+
+        Multi-sede — Fase 3 (privado por sede): la caja es de la sede — se acota
+        al alcance de sucursales del usuario (`sucursal_scope_ids`). Reception
+        normalmente está acotada a UNA sede vía MembershipSucursal, así que ve
+        solo el cierre de esa sede.
       tags:
       - v1
       security:
@@ -1506,8 +2237,13 @@ paths:
     get:
       operationId: v1_finanzas_conceptos_retrieve
       description: |-
-        GET  /api/v1/finanzas/conceptos/ — lista de conceptos cobrables.
-        POST /api/v1/finanzas/conceptos/ — crea un concepto (owner/admin).
+        Lista el catálogo de conceptos del tenant actual.
+
+        Multi-sede (decisión del dueño, 2026-07-16): se acota al alcance de
+        sucursales del usuario (`sucursal_scope_ids`) — un concepto con M2M
+        `sucursales` vacío es visible en cualquier sede; uno con sedes
+        explícitas solo es visible donde está asignado. El GET NO restringe
+        por rol (admin y staff siguen viendo el catálogo para cobrar/cotizar).
       tags:
       - v1
       security:
@@ -1519,7 +2255,7 @@ paths:
       operationId: v1_finanzas_conceptos_create
       description: |-
         GET  /api/v1/finanzas/conceptos/ — lista de conceptos cobrables.
-        POST /api/v1/finanzas/conceptos/ — crea un concepto (owner/admin).
+        POST /api/v1/finanzas/conceptos/ — crea un concepto (solo owner).
       tags:
       - v1
       security:
@@ -1530,7 +2266,10 @@ paths:
   /api/v1/finanzas/conceptos/{concept_id}/:
     get:
       operationId: v1_finanzas_conceptos_retrieve_2
-      description: GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+      description: |-
+        GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+
+        PATCH/DELETE: solo owner (decisión del dueño, 2026-07-16).
       parameters:
       - in: path
         name: concept_id
@@ -1547,7 +2286,10 @@ paths:
           description: No response body
     patch:
       operationId: v1_finanzas_conceptos_partial_update
-      description: GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+      description: |-
+        GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+
+        PATCH/DELETE: solo owner (decisión del dueño, 2026-07-16).
       parameters:
       - in: path
         name: concept_id
@@ -1564,7 +2306,10 @@ paths:
           description: No response body
     delete:
       operationId: v1_finanzas_conceptos_destroy
-      description: GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+      description: |-
+        GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+
+        PATCH/DELETE: solo owner (decisión del dueño, 2026-07-16).
       parameters:
       - in: path
         name: concept_id
@@ -1606,8 +2351,12 @@ paths:
     get:
       operationId: v1_finanzas_cotizaciones_retrieve
       description: |-
-        GET  /api/v1/finanzas/cotizaciones/ — lista de cotizaciones.
-        POST /api/v1/finanzas/cotizaciones/ — crea una cotización (borrador).
+        Lista cotizaciones del tenant actual.
+
+        Multi-sede — Fase 3: cuando se consulta por `patient_id` (historial
+        del paciente), NO se acota por sede (compartido entre sedes). Sin
+        `patient_id` (listado general), se acota al alcance de sucursales del
+        usuario (`sucursal_scope_ids`) — privado por sede.
       tags:
       - v1
       security:
@@ -1733,7 +2482,13 @@ paths:
   /api/v1/finanzas/dashboard/:
     get:
       operationId: v1_finanzas_dashboard_retrieve
-      description: GET /api/v1/finanzas/dashboard/ — KPIs y series para las gráficas.
+      description: |-
+        GET /api/v1/finanzas/dashboard/ — KPIs y series para las gráficas.
+
+        Multi-sede — Fase 3 (privado por sede): se acota al alcance de sucursales
+        del usuario (`sucursal_scope_ids`). Un admin/finanzas acotado a una sede
+        ve solo esa sede (con o sin header); el dueño ve consolidado sin sede
+        activa, o esa sede con el header.
       tags:
       - v1
       security:
@@ -1767,8 +2522,13 @@ paths:
     get:
       operationId: v1_finanzas_pagos_retrieve
       description: |-
-        GET  /api/v1/finanzas/pagos/ — lista de pagos.
-        POST /api/v1/finanzas/pagos/ — registra un pago (caja: incluye recepción).
+        Lista pagos del tenant actual.
+
+        Multi-sede — Fase 3: cuando se consulta por `patient_id` (estado de
+        cuenta del paciente), NO se acota por sede (compartido entre sedes).
+        El listado GENERAL (sin `patient_id` — p. ej. la pestaña "Pagos" de
+        caja) SÍ se acota al alcance de sucursales del usuario
+        (`sucursal_scope_ids`).
       tags:
       - v1
       security:
@@ -1806,6 +2566,120 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/finanzas/paquetes/:
+    get:
+      operationId: v1_finanzas_paquetes_retrieve
+      description: |-
+        Lista el catálogo de paquetes del tenant actual.
+
+        Multi-sede (decisión del dueño, 2026-07-16): se acota al alcance de
+        sucursales del usuario (`sucursal_scope_ids`), mismo criterio que
+        `ConceptListCreateApi.get`. El GET NO restringe por rol.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_finanzas_paquetes_create
+      description: |-
+        GET  /api/v1/finanzas/paquetes/ — catálogo de paquetes de tratamientos.
+        POST /api/v1/finanzas/paquetes/ — crea un paquete (solo owner).
+
+        Cada item de entrada: {concept_id, sessions?, order?}. La forma exacta
+        de cada línea se valida en el service (mismo patrón que Cotizaciones /
+        Calendarización: `items` llega como lista de dicts libres).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/finanzas/paquetes/{package_id}/:
+    get:
+      operationId: v1_finanzas_paquetes_retrieve_2
+      description: |-
+        GET    /api/v1/finanzas/paquetes/<uuid>/ — detalle.
+        PATCH  /api/v1/finanzas/paquetes/<uuid>/ — reemplaza (items opcional). Solo owner.
+        DELETE /api/v1/finanzas/paquetes/<uuid>/ — baja lógica. Solo owner.
+
+        PATCH es un REEMPLAZO del paquete (no un patch parcial de campos sueltos):
+        `name`/`description`/`is_active` siempre se reescriben con lo enviado.
+        Si `items` se omite, se conservan los items actuales tal cual (se
+        reenvían al service para no perderlos, ya que `package_replace` siempre
+        borra y recrea). `sucursal_ids` sí es opcional de verdad: si se omite, la
+        disponibilidad actual no se toca (a diferencia de `items`).
+      parameters:
+      - in: path
+        name: package_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_finanzas_paquetes_partial_update
+      description: |-
+        GET    /api/v1/finanzas/paquetes/<uuid>/ — detalle.
+        PATCH  /api/v1/finanzas/paquetes/<uuid>/ — reemplaza (items opcional). Solo owner.
+        DELETE /api/v1/finanzas/paquetes/<uuid>/ — baja lógica. Solo owner.
+
+        PATCH es un REEMPLAZO del paquete (no un patch parcial de campos sueltos):
+        `name`/`description`/`is_active` siempre se reescriben con lo enviado.
+        Si `items` se omite, se conservan los items actuales tal cual (se
+        reenvían al service para no perderlos, ya que `package_replace` siempre
+        borra y recrea). `sucursal_ids` sí es opcional de verdad: si se omite, la
+        disponibilidad actual no se toca (a diferencia de `items`).
+      parameters:
+      - in: path
+        name: package_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_finanzas_paquetes_destroy
+      description: |-
+        GET    /api/v1/finanzas/paquetes/<uuid>/ — detalle.
+        PATCH  /api/v1/finanzas/paquetes/<uuid>/ — reemplaza (items opcional). Solo owner.
+        DELETE /api/v1/finanzas/paquetes/<uuid>/ — baja lógica. Solo owner.
+
+        PATCH es un REEMPLAZO del paquete (no un patch parcial de campos sueltos):
+        `name`/`description`/`is_active` siempre se reescriben con lo enviado.
+        Si `items` se omite, se conservan los items actuales tal cual (se
+        reenvían al service para no perderlos, ya que `package_replace` siempre
+        borra y recrea). `sucursal_ids` sí es opcional de verdad: si se omite, la
+        disponibilidad actual no se toca (a diferencia de `items`).
+      parameters:
+      - in: path
+        name: package_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/finanzas/reporte/:
     get:
       operationId: v1_finanzas_reporte_retrieve
@@ -1821,6 +2695,9 @@ paths:
         anterior, series temporales, desglose por método/servicio/doctor y A/R aging.
 
         Permiso: FinanceDashboardPermission (GET → owner, admin, finance, readonly).
+
+        Multi-sede — Fase 3 (privado por sede): se acota al alcance de sucursales
+        del usuario (`sucursal_scope_ids`), igual que DashboardApi.
       tags:
       - v1
       security:
@@ -1890,6 +2767,10 @@ paths:
 
         El endpoint puede tardar >200ms en clínicas grandes (aggregación sobre citas
         históricas). En v2 se añadirá caché de 1h o tarea Celery periódica.
+
+        Multi-sede — Fase 3 (privado por sede): se acota al alcance de sucursales
+        del usuario (`sucursal_scope_ids`) — un admin de sede analiza la
+        retención de SU sede; el dueño ve el panel consolidado del negocio.
       tags:
       - v1
       security:
@@ -1911,7 +2792,19 @@ paths:
   /api/v1/miembros/:
     get:
       operationId: v1_miembros_retrieve
-      description: Lista de miembros del tenant (sin paginar — son pocos).
+      description: |-
+        Lista de miembros del tenant, acotada a la sede activa del selector.
+
+        Usa `sucursal_scope_ids(request)` (mismo criterio que agenda/
+        finanzas): con header X-Sucursal-Id, solo esa sede; sin header, el
+        alcance permitido del actor (owner: sin filtro, ve a todos).
+
+        Jerarquía de roles (decisión del dueño 2026-07-16): un viewer owner
+        ve a todos, sin importar la sede activa (D1, sin cambios). Un viewer
+        NO owner (administrador de sucursal) nunca ve a otros owners ni a
+        otros admins — solo personal con rol operacional de sus sedes, más a
+        sí mismo. `request.membership` ya lo resolvió `TenantAPIView` (una
+        sola query por request, sin N+1 adicional aquí).
       tags:
       - v1
       security:
@@ -1921,7 +2814,13 @@ paths:
           description: No response body
     post:
       operationId: v1_miembros_create
-      description: Crea un miembro en el tenant del request.
+      description: |-
+        Crea un miembro en el tenant del request.
+
+        La sede del nuevo miembro se resuelve a partir de la sede activa del
+        selector (`resolve_active_sucursal`); si no hay ninguna, `member_create`
+        decide (todas las sedes del actor si no es owner, o ninguna si lo es
+        — ver su docstring).
       tags:
       - v1
       security:
@@ -1992,6 +2891,13 @@ paths:
             is_task: bool — filtrar solo tareas (true) o solo notas (false).
             done:    bool — filtrar por estado done/pendiente.
             scope:   str  — filtrar por scope (aún no en selector; se aplica en query param).
+
+        Multi-sede (cierre de hueco — 2026-07-16): SIEMPRE se acota al
+        alcance de sedes del usuario (`sucursal_scope_ids`), con o sin
+        header X-Sucursal-Id. Un admin de una sola sede ya no puede ver
+        avisos de otra sede con solo omitir el header; el owner (alcance
+        total) sigue viendo todo, incluidos los avisos de "todas las
+        sedes".
       tags:
       - v1
       security:
@@ -2001,7 +2907,16 @@ paths:
           description: No response body
     post:
       operationId: v1_notas_create
-      description: Crea una nueva nota o tarea.
+      description: |-
+        Crea una nueva nota o tarea.
+
+        Multi-sede: resuelve la sede ACTIVA del request (header
+        X-Sucursal-Id, si viene) y la pasa al service como
+        `active_sucursal_id` — el service la usa únicamente para resolver
+        la sede de un actor NO-owner (ver note_create). El `sucursal_id`
+        explícito del body llega tal cual; el owner lo usa libremente
+        (None = todas las sedes), cualquier otro actor lo ve re-resuelto/
+        validado contra su propia sede.
       tags:
       - v1
       security:
@@ -2016,6 +2931,10 @@ paths:
         Actualización parcial de campos editables.
 
         No acepta 'done' (use /notas/<id>/done/).
+
+        Multi-sede: usa `_note_get_or_404` (mismo criterio que
+        `NoteToggleDoneApi` y el listado) — un aviso fuera del alcance de
+        sede del actor, o uno importante ajeno, devuelve 404.
       parameters:
       - in: path
         name: note_id
@@ -2032,7 +2951,10 @@ paths:
           description: No response body
     delete:
       operationId: v1_notas_destroy
-      description: Borra una nota (soft-delete).
+      description: |-
+        Borra una nota (soft-delete).
+
+        Multi-sede: usa `_note_get_or_404` — mismo criterio de alcance que patch/toggle-done.
       parameters:
       - in: path
         name: note_id
@@ -2050,7 +2972,10 @@ paths:
   /api/v1/notas/{note_id}/done/:
     post:
       operationId: v1_notas_done_create
-      description: Alterna el estado done/pendiente de una tarea (is_task=True).
+      description: |-
+        Alterna el estado done/pendiente de una tarea (is_task=True).
+
+        Multi-sede: usa `_note_get_or_404` — mismo criterio de alcance que patch/delete.
       parameters:
       - in: path
         name: note_id
@@ -2074,6 +2999,9 @@ paths:
         Query params:
             date_from: ISO datetime UTC (requerido).
             date_to:   ISO datetime UTC (requerido).
+
+        Multi-sede: acota por `sucursal_scope_ids(request)`, mismo criterio
+        que el listado principal (cierre de hueco — 2026-07-16).
       tags:
       - v1
       security:
@@ -2311,7 +3239,12 @@ paths:
   /api/v1/personal/consultorios/:
     get:
       operationId: v1_personal_consultorios_retrieve
-      description: Lista paginada de consultorios del tenant actual.
+      description: |-
+        Lista paginada de consultorios del tenant actual.
+
+        Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+        alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+        header X-Sucursal-Id (ver DoctorListCreateApi.get).
       tags:
       - v1
       security:
@@ -2393,7 +3326,14 @@ paths:
   /api/v1/personal/doctores/:
     get:
       operationId: v1_personal_doctores_retrieve
-      description: Lista paginada de doctores activos del tenant actual.
+      description: |-
+        Lista paginada de doctores activos del tenant actual.
+
+        Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+        alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+        header X-Sucursal-Id. Un usuario limitado a una sede ya NO puede ver
+        doctores de otra sede con solo omitir el header; el dueño (alcance
+        total) sigue viendo todo cuando no manda header.
       tags:
       - v1
       security:
@@ -2487,7 +3427,13 @@ paths:
   /api/v1/personal/doctores/{doctor_id}/horarios/:
     get:
       operationId: v1_personal_doctores_horarios_retrieve
-      description: Lista los horarios activos del médico indicado.
+      description: |-
+        Lista los horarios activos del médico indicado.
+
+        A4 (seguridad): se acota SIEMPRE por `sucursal_scope_ids(request)` —
+        un médico puede tener horarios en varias sedes; un admin/recepción
+        acotado a Centro ya no ve los horarios que ese médico tiene en Norte
+        solo por conocer su `doctor_id`.
       parameters:
       - in: path
         name: doctor_id
@@ -3373,6 +4319,32 @@ components:
           minimum: 1
           default: 60
           description: Duración del periodo de prueba en días. Mínimo 1, máximo 365.
+        plan_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Plan contratado. Si se omite, la clínica queda sin plan asignado.
+        billing_cycle:
+          allOf:
+          - $ref: '#/components/schemas/BillingCycleEnum'
+          default: monthly
+          description: |-
+            Ciclo de cobro. Solo aplica si se eligió un plan.
+
+            * `monthly` - monthly
+            * `annual` - annual
+        owner_cedula:
+          type: string
+          default: ''
+          description: Cédula profesional del dueño. Si se proporciona, se le crea
+            su perfil de médico y la clínica puede agendar y recetar desde el primer
+            día.
+          maxLength: 30
+        owner_specialty:
+          type: string
+          default: ''
+          description: Especialidad del dueño. Solo aplica si se proporcionó la cédula.
+          maxLength: 100
       required:
       - name
       - owner_email
@@ -3398,7 +4370,13 @@ components:
         temporary_password:
           type: string
           readOnly: true
+        needs_doctor:
+          type: boolean
+          readOnly: true
+          description: True si la clínica quedó sin ningún médico. En ese caso NO
+            puede agendar citas hasta dar de alta uno (la cita exige médico).
       required:
+      - needs_doctor
       - owner_email
       - temporary_password
       - tenant
@@ -3591,6 +4569,34 @@ components:
       - total_platform_staff
       - total_usuarios
       - ultimas_clinicas
+    ModulesEnum:
+      enum:
+      - agenda
+      - recordatorios
+      - expediente
+      - recetas
+      - notas
+      - servicios
+      - paquetes
+      - cotizaciones
+      - cobranza
+      - cfdi
+      - calendarizacion
+      - personal
+      type: string
+      description: |-
+        * `agenda` - Agenda y citas
+        * `recordatorios` - Recordatorios de cita
+        * `expediente` - Expediente clínico
+        * `recetas` - Recetas
+        * `notas` - Notas y tareas
+        * `servicios` - Servicios y precios
+        * `paquetes` - Paquetes
+        * `cotizaciones` - Cotizaciones
+        * `cobranza` - Cobranza y estado de cuenta
+        * `cfdi` - Facturación CFDI
+        * `calendarizacion` - Calendarización de tratamientos
+        * `personal` - Gestión de personal
     PatchedPlanUpdateInputRequest:
       type: object
       description: |-
@@ -3627,6 +4633,22 @@ components:
             minLength: 1
             maxLength: 200
           maxItems: 50
+        modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModulesEnum'
+        max_sucursales:
+          type: integer
+          minimum: 1
+          nullable: true
+        max_consultorios:
+          type: integer
+          minimum: 1
+          nullable: true
+        max_usuarios:
+          type: integer
+          minimum: 1
+          nullable: true
         is_active:
           type: boolean
         order:
@@ -3693,6 +4715,27 @@ components:
           description: Lista de strings no vacíos con las características incluidas
             (máx. 50).
           maxItems: 50
+        modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModulesEnum'
+          description: Slugs de módulos incluidos. Esto SÍ controla el acceso. Las
+            dependencias duras deben venir cubiertas (ver validate).
+        max_sucursales:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Máximo de sucursales. null = ilimitado. 1 = modo sede única.
+        max_consultorios:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Máximo de consultorios. null = ilimitado.
+        max_usuarios:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Máximo de usuarios. null = ilimitado.
         is_active:
           type: boolean
           default: true
@@ -3739,11 +4782,34 @@ components:
           items:
             type: string
           readOnly: true
+        modules:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        max_sucursales:
+          type: integer
+          readOnly: true
+          nullable: true
+        max_consultorios:
+          type: integer
+          readOnly: true
+          nullable: true
+        max_usuarios:
+          type: integer
+          readOnly: true
+          nullable: true
         is_active:
           type: boolean
           readOnly: true
         order:
           type: integer
+          readOnly: true
+        roles:
+          type: array
+          items:
+            type: string
+          description: Roles asignables con estos módulos. Se derivan, no se configuran.
           readOnly: true
       required:
       - description
@@ -3751,9 +4817,14 @@ components:
       - id
       - is_active
       - is_featured
+      - max_consultorios
+      - max_sucursales
+      - max_usuarios
+      - modules
       - name
       - order
       - price_monthly
+      - roles
       - slug
     PlatformRoleEnum:
       enum:

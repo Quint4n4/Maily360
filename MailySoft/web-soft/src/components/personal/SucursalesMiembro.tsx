@@ -41,8 +41,10 @@ function mensajesDe(err: unknown): string[] {
 }
 
 export default function SucursalesMiembro({ miembro, esYoMismo }: Props) {
-  const { clinicRole } = useAuth()
-  const puedeAsignar = clinicRole === 'owner' || clinicRole === 'admin'
+  const { clinicRole, capabilities } = useAuth()
+  // En modo sede única no hay sedes que asignar: toda esta UI sobra.
+  const puedeAsignar =
+    (clinicRole === 'owner' || clinicRole === 'admin') && !(capabilities?.sede_unica ?? false)
 
   const { data: sucData, isLoading: cargandoSucs } = useSucursales()
   const { data: asignadas, isLoading: cargandoAsig, isError } = useMembershipSucursales(

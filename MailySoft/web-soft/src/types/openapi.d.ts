@@ -21,6 +21,12 @@ export interface paths {
          *         status:         Estado de la cita (scheduled|confirmed|arrived|...).
          *         date_from:      ISO datetime UTC inicio de rango.
          *         date_to:        ISO datetime UTC fin de rango.
+         *
+         *     Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+         *     alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+         *     header X-Sucursal-Id. Un usuario limitado a una sede ya NO puede ver
+         *     citas de otra sede con solo omitir el header; el dueño (alcance
+         *     total) sigue viendo todo (consolidado) cuando no manda header.
          */
         get: operations["v1_agenda_citas_retrieve"];
         put?: never;
@@ -188,7 +194,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lista de eventos del tenant que solapan el rango [date_from, date_to]. */
+        /**
+         * @description Lista de eventos del tenant que solapan el rango [date_from, date_to].
+         *
+         *     Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+         *     alcance de sucursales del usuario (`sucursal_scope_ids`, ver
+         *     `agenda_block_list`), con o sin header X-Sucursal-Id.
+         */
         get: operations["v1_agenda_eventos_retrieve"];
         put?: never;
         /** @description Crea un evento (reunión o bloqueo) en el tenant del request. */
@@ -579,6 +591,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clinica/equipo/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Lista paginada del equipo/departamentos del tenant.
+         *
+         *     Query param `only_active` (default true).
+         */
+        get: operations["v1_clinica_equipo_retrieve"];
+        put?: never;
+        /** @description Crea un miembro del equipo en el tenant del request. */
+        post: operations["v1_clinica_equipo_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinica/equipo/{member_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET/PATCH/DELETE /api/v1/clinica/equipo/<id>/. */
+        get: operations["v1_clinica_equipo_retrieve_2"];
+        put?: never;
+        post?: never;
+        /** @description GET/PATCH/DELETE /api/v1/clinica/equipo/<id>/. */
+        delete: operations["v1_clinica_equipo_destroy"];
+        options?: never;
+        head?: never;
+        /** @description GET/PATCH/DELETE /api/v1/clinica/equipo/<id>/. */
+        patch: operations["v1_clinica_equipo_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/clinica/membresias/{membership_id}/sucursales/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lista las sucursales actualmente asignadas al miembro. */
+        get: operations["v1_clinica_membresias_sucursales_retrieve"];
+        /** @description Reemplaza el conjunto de sucursales asignadas al miembro. */
+        put: operations["v1_clinica_membresias_sucursales_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clinica/plantillas/": {
         parameters: {
             query?: never;
@@ -632,6 +703,88 @@ export interface paths {
         patch: operations["v1_clinica_plantillas_partial_update"];
         trace?: never;
     };
+    "/api/v1/clinica/sucursales/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lista paginada de las sucursales activas que el usuario puede operar. */
+        get: operations["v1_clinica_sucursales_retrieve"];
+        put?: never;
+        /** @description Crea una sucursal en el tenant del request (owner/admin). */
+        post: operations["v1_clinica_sucursales_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinica/sucursales/{sucursal_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET    /api/v1/clinica/sucursales/<id>/ — detalle de una sucursal.
+         *     PATCH  /api/v1/clinica/sucursales/<id>/ — actualización parcial (owner/admin).
+         *     DELETE /api/v1/clinica/sucursales/<id>/ — baja lógica (is_active=False, owner/admin).
+         *
+         *     PATCH separa is_active/is_default del resto de los campos: se enrutan a
+         *     sucursal_activate/sucursal_deactivate/sucursal_set_default en vez de al
+         *     service de update genérico (regla de campos sensibles del proyecto).
+         *
+         *     `_get_or_404` acota el id contra `actor_sucursal_ids` (owner: todas; el
+         *     resto de los roles: solo su `MembershipSucursal`, sea la sede activa o
+         *     no) — no solo contra el tenant. Cierra el Clúster C de la auditoría de
+         *     seguridad (docs/design/sucursales-hallazgos-seguridad.md): antes, un
+         *     admin acotado a Centro podía PATCH/DELETE la sucursal Norte (renombrar,
+         *     marcar default, e incluso desactivarla) con solo conocer su id.
+         */
+        get: operations["v1_clinica_sucursales_retrieve_2"];
+        put?: never;
+        post?: never;
+        /**
+         * @description GET    /api/v1/clinica/sucursales/<id>/ — detalle de una sucursal.
+         *     PATCH  /api/v1/clinica/sucursales/<id>/ — actualización parcial (owner/admin).
+         *     DELETE /api/v1/clinica/sucursales/<id>/ — baja lógica (is_active=False, owner/admin).
+         *
+         *     PATCH separa is_active/is_default del resto de los campos: se enrutan a
+         *     sucursal_activate/sucursal_deactivate/sucursal_set_default en vez de al
+         *     service de update genérico (regla de campos sensibles del proyecto).
+         *
+         *     `_get_or_404` acota el id contra `actor_sucursal_ids` (owner: todas; el
+         *     resto de los roles: solo su `MembershipSucursal`, sea la sede activa o
+         *     no) — no solo contra el tenant. Cierra el Clúster C de la auditoría de
+         *     seguridad (docs/design/sucursales-hallazgos-seguridad.md): antes, un
+         *     admin acotado a Centro podía PATCH/DELETE la sucursal Norte (renombrar,
+         *     marcar default, e incluso desactivarla) con solo conocer su id.
+         */
+        delete: operations["v1_clinica_sucursales_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description GET    /api/v1/clinica/sucursales/<id>/ — detalle de una sucursal.
+         *     PATCH  /api/v1/clinica/sucursales/<id>/ — actualización parcial (owner/admin).
+         *     DELETE /api/v1/clinica/sucursales/<id>/ — baja lógica (is_active=False, owner/admin).
+         *
+         *     PATCH separa is_active/is_default del resto de los campos: se enrutan a
+         *     sucursal_activate/sucursal_deactivate/sucursal_set_default en vez de al
+         *     service de update genérico (regla de campos sensibles del proyecto).
+         *
+         *     `_get_or_404` acota el id contra `actor_sucursal_ids` (owner: todas; el
+         *     resto de los roles: solo su `MembershipSucursal`, sea la sede activa o
+         *     no) — no solo contra el tenant. Cierra el Clúster C de la auditoría de
+         *     seguridad (docs/design/sucursales-hallazgos-seguridad.md): antes, un
+         *     admin acotado a Centro podía PATCH/DELETE la sucursal Norte (renombrar,
+         *     marcar default, e incluso desactivarla) con solo conocer su id.
+         */
+        patch: operations["v1_clinica_sucursales_partial_update"];
+        trace?: never;
+    };
     "/api/v1/clinica/universidades/{university_id}/": {
         parameters: {
             query?: never;
@@ -661,6 +814,41 @@ export interface paths {
         put?: never;
         /** @description Registra una alergia nueva para el paciente. */
         post: operations["v1_expediente_alergias_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/{patient_id}/calendarizaciones/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lista los esquemas de tratamientos del paciente (paginado). */
+        get: operations["v1_expediente_calendarizaciones_retrieve_2"];
+        put?: never;
+        /** @description Crea un esquema de calendarización de tratamientos. */
+        post: operations["v1_expediente_calendarizaciones_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/{patient_id}/calendarizaciones/desde-paquete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Crea un esquema de calendarización nuevo copiando las líneas del paquete. */
+        post: operations["v1_expediente_calendarizaciones_desde_paquete_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -817,6 +1005,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expediente/{patient_id}/plan-integral/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lista los Planes Integrales de Longevidad del paciente (paginado). */
+        get: operations["v1_expediente_plan_integral_retrieve"];
+        put?: never;
+        /** @description Crea el Plan Integral de Longevidad del paciente indicado. */
+        post: operations["v1_expediente_plan_integral_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/{patient_id}/plan-integral/borrador/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Devuelve el borrador auto-rellenado del paciente indicado. */
+        get: operations["v1_expediente_plan_integral_borrador_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expediente/{patient_id}/recetas/": {
         parameters: {
             query?: never;
@@ -829,6 +1052,23 @@ export interface paths {
         put?: never;
         /** @description Emite una receta médica nueva para el paciente. */
         post: operations["v1_expediente_recetas_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/{patient_id}/resumenes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lista los resúmenes clínicos del paciente (paginado). */
+        get: operations["v1_expediente_resumenes_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -902,6 +1142,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expediente/analitos/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Lista paginada de analitos de laboratorio del tenant.
+         *
+         *     Query param: `only_active` (default true).
+         */
+        get: operations["v1_expediente_analitos_retrieve"];
+        put?: never;
+        /** @description Crea un analito de laboratorio en el tenant del request. */
+        post: operations["v1_expediente_analitos_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/analitos/{analyte_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET/PATCH/DELETE /api/v1/expediente/analitos/<id>/. */
+        get: operations["v1_expediente_analitos_retrieve_2"];
+        put?: never;
+        post?: never;
+        /** @description GET/PATCH/DELETE /api/v1/expediente/analitos/<id>/. */
+        delete: operations["v1_expediente_analitos_destroy"];
+        options?: never;
+        head?: never;
+        /** @description GET/PATCH/DELETE /api/v1/expediente/analitos/<id>/. */
+        patch: operations["v1_expediente_analitos_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/expediente/calendarizaciones/{plan_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Devuelve el detalle del esquema (items + sesiones anidadas). */
+        get: operations["v1_expediente_calendarizaciones_retrieve"];
+        /** @description Reemplaza el contenido del esquema (title/notes/status/doctor/items). */
+        put: operations["v1_expediente_calendarizaciones_update"];
+        post?: never;
+        /** @description Da de baja lógica el esquema. */
+        delete: operations["v1_expediente_calendarizaciones_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/calendarizaciones/{plan_id}/cotizacion/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Genera la cotización y la liga al esquema. */
+        post: operations["v1_expediente_calendarizaciones_cotizacion_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/calendarizaciones/{plan_id}/pdf/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Encola la generación del PDF del esquema de tratamientos. */
+        get: operations["v1_expediente_calendarizaciones_pdf_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/calendarizaciones/sesiones/{session_id}/agendar/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Agenda (o reagenda) la sesión como cita real de agenda. */
+        post: operations["v1_expediente_calendarizaciones_sesiones_agendar_create"];
+        /** @description Quita la sesión de la agenda: cancela su cita ligada (si tiene). */
+        delete: operations["v1_expediente_calendarizaciones_sesiones_agendar_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expediente/diagnosticos/{diagnosis_id}/resolver/": {
         parameters: {
             query?: never;
@@ -960,6 +1312,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expediente/evoluciones/{evolution_id}/resumen/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Crea el resumen clínico de la consulta indicada. */
+        post: operations["v1_expediente_evoluciones_resumen_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/evoluciones/{evolution_id}/resumen/borrador/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Devuelve el borrador auto-rellenado de la consulta indicada. */
+        get: operations["v1_expediente_evoluciones_resumen_borrador_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expediente/imagenes/{image_id}/": {
         parameters: {
             query?: never;
@@ -975,6 +1361,64 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/plan-integral/{plan_id}/pdf/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Encola la generación del PDF del Plan Integral de Longevidad. */
+        get: operations["v1_expediente_plan_integral_pdf_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/plantillas-documento/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Lista paginada de plantillas de documento del tenant.
+         *
+         *     Query params: `section` (opcional), `only_active` (default true).
+         */
+        get: operations["v1_expediente_plantillas_documento_retrieve"];
+        put?: never;
+        /** @description Crea una plantilla de documento en el tenant del request. */
+        post: operations["v1_expediente_plantillas_documento_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expediente/plantillas-documento/{template_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET/PATCH/DELETE /api/v1/expediente/plantillas-documento/<id>/. */
+        get: operations["v1_expediente_plantillas_documento_retrieve_2"];
+        put?: never;
+        post?: never;
+        /** @description GET/PATCH/DELETE /api/v1/expediente/plantillas-documento/<id>/. */
+        delete: operations["v1_expediente_plantillas_documento_destroy"];
+        options?: never;
+        head?: never;
+        /** @description GET/PATCH/DELETE /api/v1/expediente/plantillas-documento/<id>/. */
+        patch: operations["v1_expediente_plantillas_documento_partial_update"];
         trace?: never;
     };
     "/api/v1/expediente/preguntas-hc/": {
@@ -1013,6 +1457,23 @@ export interface paths {
         patch: operations["v1_expediente_preguntas_hc_partial_update"];
         trace?: never;
     };
+    "/api/v1/expediente/resumenes/{summary_id}/pdf/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Encola la generación del PDF del resumen clínico. */
+        get: operations["v1_expediente_resumenes_pdf_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/finanzas/cargos/": {
         parameters: {
             query?: never;
@@ -1021,17 +1482,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description GET  /api/v1/finanzas/cargos/ — lista de cargos.
-         *     POST /api/v1/finanzas/cargos/ — crea un cargo (owner/admin/finance).
+         * @description Lista cargos del tenant actual.
          *
-         *     Permisos:
-         *         GET  → FINANCE_VIEW_ROLES siempre; doctor solo si doctors_see_costs (D-2).
-         *         POST → FINANCE_CORE_ROLES (owner/admin/finance).
-         *
-         *     Filtros GET soportados:
-         *         ?patient_id=<uuid>    — cargos de un paciente.
-         *         ?status=<str>         — pending | partial | paid | cancelled.
-         *         ?appointment=<uuid>   — cargos ligados a una cita concreta (para el libro).
+         *     Multi-sede — Fase 3: cuando se consulta por `patient_id` (estado de
+         *     cuenta del paciente) o por `appointment` (bloque de la visita en el
+         *     libro), NO se acota por sede — son vistas del expediente/cuenta del
+         *     paciente, compartidas entre sedes. El listado GENERAL (sin esos
+         *     filtros — p. ej. la pestaña "Cargos" de caja) SÍ se acota al alcance
+         *     de sucursales del usuario (`sucursal_scope_ids`).
          */
         get: operations["v1_finanzas_cargos_retrieve"];
         put?: never;
@@ -1065,6 +1523,13 @@ export interface paths {
         /**
          * @description GET    /api/v1/finanzas/cargos/<uuid>/  — detalle.
          *     DELETE /api/v1/finanzas/cargos/<uuid>/  — cancela el cargo.
+         *
+         *     Multi-sede — Fase 3 (cierre de A7 — docs/design/
+         *     sucursales-hallazgos-seguridad.md): el detalle/cancelación por id se
+         *     acota EXACTAMENTE igual que el listado GENERAL de cargos
+         *     (`ChargeListCreateApi.get`, sin `patient_id`) — un admin acotado a una
+         *     sede no puede leer ni cancelar un cargo de otra sede por su id, aunque lo
+         *     haya obtenido del estado de cuenta compartido del paciente.
          */
         get: operations["v1_finanzas_cargos_retrieve_2"];
         put?: never;
@@ -1072,6 +1537,13 @@ export interface paths {
         /**
          * @description GET    /api/v1/finanzas/cargos/<uuid>/  — detalle.
          *     DELETE /api/v1/finanzas/cargos/<uuid>/  — cancela el cargo.
+         *
+         *     Multi-sede — Fase 3 (cierre de A7 — docs/design/
+         *     sucursales-hallazgos-seguridad.md): el detalle/cancelación por id se
+         *     acota EXACTAMENTE igual que el listado GENERAL de cargos
+         *     (`ChargeListCreateApi.get`, sin `patient_id`) — un admin acotado a una
+         *     sede no puede leer ni cancelar un cargo de otra sede por su id, aunque lo
+         *     haya obtenido del estado de cuenta compartido del paciente.
          */
         delete: operations["v1_finanzas_cargos_destroy"];
         options?: never;
@@ -1087,8 +1559,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description GET  /api/v1/finanzas/cfdi/ — lista de comprobantes.
-         *     POST /api/v1/finanzas/cfdi/ — emite (timbra) un CFDI desde un pago.
+         * @description Lista comprobantes CFDI del tenant actual.
+         *
+         *     Multi-sede — Fase 3 (cierre de clúster D — docs/design/
+         *     sucursales-hallazgos-seguridad.md): cuando se consulta por
+         *     `patient_id` (historial fiscal del paciente), NO se acota por sede
+         *     (compartido entre sedes, mismo criterio que cargos/pagos/
+         *     cotizaciones). El listado GENERAL SÍ se acota al alcance de
+         *     sucursales del usuario (`sucursal_scope_ids`).
          */
         get: operations["v1_finanzas_cfdi_retrieve"];
         put?: never;
@@ -1156,6 +1634,11 @@ export interface paths {
          *     Permiso: FinanceDeskPermission → FINANCE_DESK_ROLES (owner, admin, finance, reception).
          *     Reception puede consultar el cierre de caja propio del día; no puede ver el
          *     panel analítico (DashboardApi / PeriodReportApi).
+         *
+         *     Multi-sede — Fase 3 (privado por sede): la caja es de la sede — se acota
+         *     al alcance de sucursales del usuario (`sucursal_scope_ids`). Reception
+         *     normalmente está acotada a UNA sede vía MembershipSucursal, así que ve
+         *     solo el cierre de esa sede.
          */
         get: operations["v1_finanzas_cierre_diario_retrieve"];
         put?: never;
@@ -1174,14 +1657,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description GET  /api/v1/finanzas/conceptos/ — lista de conceptos cobrables.
-         *     POST /api/v1/finanzas/conceptos/ — crea un concepto (owner/admin).
+         * @description Lista el catálogo de conceptos del tenant actual.
+         *
+         *     Multi-sede (decisión del dueño, 2026-07-16): se acota al alcance de
+         *     sucursales del usuario (`sucursal_scope_ids`) — un concepto con M2M
+         *     `sucursales` vacío es visible en cualquier sede; uno con sedes
+         *     explícitas solo es visible donde está asignado. El GET NO restringe
+         *     por rol (admin y staff siguen viendo el catálogo para cobrar/cotizar).
          */
         get: operations["v1_finanzas_conceptos_retrieve"];
         put?: never;
         /**
          * @description GET  /api/v1/finanzas/conceptos/ — lista de conceptos cobrables.
-         *     POST /api/v1/finanzas/conceptos/ — crea un concepto (owner/admin).
+         *     POST /api/v1/finanzas/conceptos/ — crea un concepto (solo owner).
          */
         post: operations["v1_finanzas_conceptos_create"];
         delete?: never;
@@ -1197,15 +1685,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/. */
+        /**
+         * @description GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+         *
+         *     PATCH/DELETE: solo owner (decisión del dueño, 2026-07-16).
+         */
         get: operations["v1_finanzas_conceptos_retrieve_2"];
         put?: never;
         post?: never;
-        /** @description GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/. */
+        /**
+         * @description GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+         *
+         *     PATCH/DELETE: solo owner (decisión del dueño, 2026-07-16).
+         */
         delete: operations["v1_finanzas_conceptos_destroy"];
         options?: never;
         head?: never;
-        /** @description GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/. */
+        /**
+         * @description GET/PATCH/DELETE /api/v1/finanzas/conceptos/<uuid>/.
+         *
+         *     PATCH/DELETE: solo owner (decisión del dueño, 2026-07-16).
+         */
         patch: operations["v1_finanzas_conceptos_partial_update"];
         trace?: never;
     };
@@ -1235,8 +1735,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description GET  /api/v1/finanzas/cotizaciones/ — lista de cotizaciones.
-         *     POST /api/v1/finanzas/cotizaciones/ — crea una cotización (borrador).
+         * @description Lista cotizaciones del tenant actual.
+         *
+         *     Multi-sede — Fase 3: cuando se consulta por `patient_id` (historial
+         *     del paciente), NO se acota por sede (compartido entre sedes). Sin
+         *     `patient_id` (listado general), se acota al alcance de sucursales del
+         *     usuario (`sucursal_scope_ids`) — privado por sede.
          */
         get: operations["v1_finanzas_cotizaciones_retrieve"];
         put?: never;
@@ -1342,7 +1846,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description GET /api/v1/finanzas/dashboard/ — KPIs y series para las gráficas. */
+        /**
+         * @description GET /api/v1/finanzas/dashboard/ — KPIs y series para las gráficas.
+         *
+         *     Multi-sede — Fase 3 (privado por sede): se acota al alcance de sucursales
+         *     del usuario (`sucursal_scope_ids`). Un admin/finanzas acotado a una sede
+         *     ve solo esa sede (con o sin header); el dueño ve consolidado sin sede
+         *     activa, o esa sede con el header.
+         */
         get: operations["v1_finanzas_dashboard_retrieve"];
         put?: never;
         post?: never;
@@ -1382,8 +1893,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description GET  /api/v1/finanzas/pagos/ — lista de pagos.
-         *     POST /api/v1/finanzas/pagos/ — registra un pago (caja: incluye recepción).
+         * @description Lista pagos del tenant actual.
+         *
+         *     Multi-sede — Fase 3: cuando se consulta por `patient_id` (estado de
+         *     cuenta del paciente), NO se acota por sede (compartido entre sedes).
+         *     El listado GENERAL (sin `patient_id` — p. ej. la pestaña "Pagos" de
+         *     caja) SÍ se acota al alcance de sucursales del usuario
+         *     (`sucursal_scope_ids`).
          */
         get: operations["v1_finanzas_pagos_retrieve"];
         put?: never;
@@ -1415,6 +1931,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/finanzas/paquetes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Lista el catálogo de paquetes del tenant actual.
+         *
+         *     Multi-sede (decisión del dueño, 2026-07-16): se acota al alcance de
+         *     sucursales del usuario (`sucursal_scope_ids`), mismo criterio que
+         *     `ConceptListCreateApi.get`. El GET NO restringe por rol.
+         */
+        get: operations["v1_finanzas_paquetes_retrieve"];
+        put?: never;
+        /**
+         * @description GET  /api/v1/finanzas/paquetes/ — catálogo de paquetes de tratamientos.
+         *     POST /api/v1/finanzas/paquetes/ — crea un paquete (solo owner).
+         *
+         *     Cada item de entrada: {concept_id, sessions?, order?}. La forma exacta
+         *     de cada línea se valida en el service (mismo patrón que Cotizaciones /
+         *     Calendarización: `items` llega como lista de dicts libres).
+         */
+        post: operations["v1_finanzas_paquetes_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/finanzas/paquetes/{package_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET    /api/v1/finanzas/paquetes/<uuid>/ — detalle.
+         *     PATCH  /api/v1/finanzas/paquetes/<uuid>/ — reemplaza (items opcional). Solo owner.
+         *     DELETE /api/v1/finanzas/paquetes/<uuid>/ — baja lógica. Solo owner.
+         *
+         *     PATCH es un REEMPLAZO del paquete (no un patch parcial de campos sueltos):
+         *     `name`/`description`/`is_active` siempre se reescriben con lo enviado.
+         *     Si `items` se omite, se conservan los items actuales tal cual (se
+         *     reenvían al service para no perderlos, ya que `package_replace` siempre
+         *     borra y recrea). `sucursal_ids` sí es opcional de verdad: si se omite, la
+         *     disponibilidad actual no se toca (a diferencia de `items`).
+         */
+        get: operations["v1_finanzas_paquetes_retrieve_2"];
+        put?: never;
+        post?: never;
+        /**
+         * @description GET    /api/v1/finanzas/paquetes/<uuid>/ — detalle.
+         *     PATCH  /api/v1/finanzas/paquetes/<uuid>/ — reemplaza (items opcional). Solo owner.
+         *     DELETE /api/v1/finanzas/paquetes/<uuid>/ — baja lógica. Solo owner.
+         *
+         *     PATCH es un REEMPLAZO del paquete (no un patch parcial de campos sueltos):
+         *     `name`/`description`/`is_active` siempre se reescriben con lo enviado.
+         *     Si `items` se omite, se conservan los items actuales tal cual (se
+         *     reenvían al service para no perderlos, ya que `package_replace` siempre
+         *     borra y recrea). `sucursal_ids` sí es opcional de verdad: si se omite, la
+         *     disponibilidad actual no se toca (a diferencia de `items`).
+         */
+        delete: operations["v1_finanzas_paquetes_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description GET    /api/v1/finanzas/paquetes/<uuid>/ — detalle.
+         *     PATCH  /api/v1/finanzas/paquetes/<uuid>/ — reemplaza (items opcional). Solo owner.
+         *     DELETE /api/v1/finanzas/paquetes/<uuid>/ — baja lógica. Solo owner.
+         *
+         *     PATCH es un REEMPLAZO del paquete (no un patch parcial de campos sueltos):
+         *     `name`/`description`/`is_active` siempre se reescriben con lo enviado.
+         *     Si `items` se omite, se conservan los items actuales tal cual (se
+         *     reenvían al service para no perderlos, ya que `package_replace` siempre
+         *     borra y recrea). `sucursal_ids` sí es opcional de verdad: si se omite, la
+         *     disponibilidad actual no se toca (a diferencia de `items`).
+         */
+        patch: operations["v1_finanzas_paquetes_partial_update"];
+        trace?: never;
+    };
     "/api/v1/finanzas/reporte/": {
         parameters: {
             query?: never;
@@ -1434,6 +2033,9 @@ export interface paths {
          *     anterior, series temporales, desglose por método/servicio/doctor y A/R aging.
          *
          *     Permiso: FinanceDashboardPermission (GET → owner, admin, finance, readonly).
+         *
+         *     Multi-sede — Fase 3 (privado por sede): se acota al alcance de sucursales
+         *     del usuario (`sucursal_scope_ids`), igual que DashboardApi.
          */
         get: operations["v1_finanzas_reporte_retrieve"];
         put?: never;
@@ -1517,6 +2119,10 @@ export interface paths {
          *
          *     El endpoint puede tardar >200ms en clínicas grandes (aggregación sobre citas
          *     históricas). En v2 se añadirá caché de 1h o tarea Celery periódica.
+         *
+         *     Multi-sede — Fase 3 (privado por sede): se acota al alcance de sucursales
+         *     del usuario (`sucursal_scope_ids`) — un admin de sede analiza la
+         *     retención de SU sede; el dueño ve el panel consolidado del negocio.
          */
         get: operations["v1_finanzas_retencion_retrieve"];
         put?: never;
@@ -1551,10 +2157,30 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lista de miembros del tenant (sin paginar — son pocos). */
+        /**
+         * @description Lista de miembros del tenant, acotada a la sede activa del selector.
+         *
+         *     Usa `sucursal_scope_ids(request)` (mismo criterio que agenda/
+         *     finanzas): con header X-Sucursal-Id, solo esa sede; sin header, el
+         *     alcance permitido del actor (owner: sin filtro, ve a todos).
+         *
+         *     Jerarquía de roles (decisión del dueño 2026-07-16): un viewer owner
+         *     ve a todos, sin importar la sede activa (D1, sin cambios). Un viewer
+         *     NO owner (administrador de sucursal) nunca ve a otros owners ni a
+         *     otros admins — solo personal con rol operacional de sus sedes, más a
+         *     sí mismo. `request.membership` ya lo resolvió `TenantAPIView` (una
+         *     sola query por request, sin N+1 adicional aquí).
+         */
         get: operations["v1_miembros_retrieve"];
         put?: never;
-        /** @description Crea un miembro en el tenant del request. */
+        /**
+         * @description Crea un miembro en el tenant del request.
+         *
+         *     La sede del nuevo miembro se resuelve a partir de la sede activa del
+         *     selector (`resolve_active_sucursal`); si no hay ninguna, `member_create`
+         *     decide (todas las sedes del actor si no es owner, o ninguna si lo es
+         *     — ver su docstring).
+         */
         post: operations["v1_miembros_create"];
         delete?: never;
         options?: never;
@@ -1611,10 +2237,27 @@ export interface paths {
          *         is_task: bool — filtrar solo tareas (true) o solo notas (false).
          *         done:    bool — filtrar por estado done/pendiente.
          *         scope:   str  — filtrar por scope (aún no en selector; se aplica en query param).
+         *
+         *     Multi-sede (cierre de hueco — 2026-07-16): SIEMPRE se acota al
+         *     alcance de sedes del usuario (`sucursal_scope_ids`), con o sin
+         *     header X-Sucursal-Id. Un admin de una sola sede ya no puede ver
+         *     avisos de otra sede con solo omitir el header; el owner (alcance
+         *     total) sigue viendo todo, incluidos los avisos de "todas las
+         *     sedes".
          */
         get: operations["v1_notas_retrieve"];
         put?: never;
-        /** @description Crea una nueva nota o tarea. */
+        /**
+         * @description Crea una nueva nota o tarea.
+         *
+         *     Multi-sede: resuelve la sede ACTIVA del request (header
+         *     X-Sucursal-Id, si viene) y la pasa al service como
+         *     `active_sucursal_id` — el service la usa únicamente para resolver
+         *     la sede de un actor NO-owner (ver note_create). El `sucursal_id`
+         *     explícito del body llega tal cual; el owner lo usa libremente
+         *     (None = todas las sedes), cualquier otro actor lo ve re-resuelto/
+         *     validado contra su propia sede.
+         */
         post: operations["v1_notas_create"];
         delete?: never;
         options?: never;
@@ -1632,7 +2275,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** @description Borra una nota (soft-delete). */
+        /**
+         * @description Borra una nota (soft-delete).
+         *
+         *     Multi-sede: usa `_note_get_or_404` — mismo criterio de alcance que patch/toggle-done.
+         */
         delete: operations["v1_notas_destroy"];
         options?: never;
         head?: never;
@@ -1640,6 +2287,10 @@ export interface paths {
          * @description Actualización parcial de campos editables.
          *
          *     No acepta 'done' (use /notas/<id>/done/).
+         *
+         *     Multi-sede: usa `_note_get_or_404` (mismo criterio que
+         *     `NoteToggleDoneApi` y el listado) — un aviso fuera del alcance de
+         *     sede del actor, o uno importante ajeno, devuelve 404.
          */
         patch: operations["v1_notas_partial_update"];
         trace?: never;
@@ -1653,7 +2304,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Alterna el estado done/pendiente de una tarea (is_task=True). */
+        /**
+         * @description Alterna el estado done/pendiente de una tarea (is_task=True).
+         *
+         *     Multi-sede: usa `_note_get_or_404` — mismo criterio de alcance que patch/delete.
+         */
         post: operations["v1_notas_done_create"];
         delete?: never;
         options?: never;
@@ -1674,6 +2329,9 @@ export interface paths {
          *     Query params:
          *         date_from: ISO datetime UTC (requerido).
          *         date_to:   ISO datetime UTC (requerido).
+         *
+         *     Multi-sede: acota por `sucursal_scope_ids(request)`, mismo criterio
+         *     que el listado principal (cierre de hueco — 2026-07-16).
          */
         get: operations["v1_notas_recordatorios_retrieve"];
         put?: never;
@@ -1882,7 +2540,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lista paginada de consultorios del tenant actual. */
+        /**
+         * @description Lista paginada de consultorios del tenant actual.
+         *
+         *     Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+         *     alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+         *     header X-Sucursal-Id (ver DoctorListCreateApi.get).
+         */
         get: operations["v1_personal_consultorios_retrieve"];
         put?: never;
         /** @description Crea un consultorio en el tenant del request. */
@@ -1931,7 +2595,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lista paginada de doctores activos del tenant actual. */
+        /**
+         * @description Lista paginada de doctores activos del tenant actual.
+         *
+         *     Multi-sede — Fase 3 (seguridad, Objetivo A): SIEMPRE se acota al
+         *     alcance de sucursales del usuario (`sucursal_scope_ids`), con o sin
+         *     header X-Sucursal-Id. Un usuario limitado a una sede ya NO puede ver
+         *     doctores de otra sede con solo omitir el header; el dueño (alcance
+         *     total) sigue viendo todo cuando no manda header.
+         */
         get: operations["v1_personal_doctores_retrieve"];
         put?: never;
         /** @description Crea un perfil de médico en el tenant del request. */
@@ -1992,7 +2664,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lista los horarios activos del médico indicado. */
+        /**
+         * @description Lista los horarios activos del médico indicado.
+         *
+         *     A4 (seguridad): se acota SIEMPRE por `sucursal_scope_ids(request)` —
+         *     un médico puede tener horarios en varias sedes; un admin/recepción
+         *     acotado a Centro ya no ve los horarios que ese médico tiene en Norte
+         *     solo por conocer su `doctor_id`.
+         */
         get: operations["v1_personal_doctores_horarios_retrieve"];
         put?: never;
         /** @description Crea un bloque de horario para el médico indicado. */
@@ -2556,6 +3235,29 @@ export interface components {
              * @default 60
              */
             trial_days: number;
+            /**
+             * Format: uuid
+             * @description Plan contratado. Si se omite, la clínica queda sin plan asignado.
+             */
+            plan_id?: string | null;
+            /**
+             * @description Ciclo de cobro. Solo aplica si se eligió un plan.
+             *
+             *     * `monthly` - monthly
+             *     * `annual` - annual
+             * @default monthly
+             */
+            billing_cycle: components["schemas"]["BillingCycleEnum"];
+            /**
+             * @description Cédula profesional del dueño. Si se proporciona, se le crea su perfil de médico y la clínica puede agendar y recetar desde el primer día.
+             * @default
+             */
+            owner_cedula: string;
+            /**
+             * @description Especialidad del dueño. Solo aplica si se proporcionó la cédula.
+             * @default
+             */
+            owner_specialty: string;
         };
         /**
          * @description Salida para POST /api/v1/plataforma/clinicas/.
@@ -2569,6 +3271,8 @@ export interface components {
             /** Format: email */
             readonly owner_email: string;
             readonly temporary_password: string;
+            /** @description True si la clínica quedó sin ningún médico. En ese caso NO puede agendar citas hasta dar de alta uno (la cita exige médico). */
+            readonly needs_doctor: boolean;
         };
         /** @description Ficha de detalle de una clínica para el panel interno de plataforma. */
         ClinicaDetailOutput: {
@@ -2640,6 +3344,22 @@ export interface components {
             readonly ultimas_clinicas: components["schemas"]["UltimaClinicaOutput"][];
         };
         /**
+         * @description * `agenda` - Agenda y citas
+         *     * `recordatorios` - Recordatorios de cita
+         *     * `expediente` - Expediente clínico
+         *     * `recetas` - Recetas
+         *     * `notas` - Notas y tareas
+         *     * `servicios` - Servicios y precios
+         *     * `paquetes` - Paquetes
+         *     * `cotizaciones` - Cotizaciones
+         *     * `cobranza` - Cobranza y estado de cuenta
+         *     * `cfdi` - Facturación CFDI
+         *     * `calendarizacion` - Calendarización de tratamientos
+         *     * `personal` - Gestión de personal
+         * @enum {string}
+         */
+        ModulesEnum: "agenda" | "recordatorios" | "expediente" | "recetas" | "notas" | "servicios" | "paquetes" | "cotizaciones" | "cobranza" | "cfdi" | "calendarizacion" | "personal";
+        /**
          * @description Input para PATCH /api/v1/plataforma/planes/<plan_id>/.
          *
          *     Todos los campos son opcionales (PATCH parcial): solo se envían los que
@@ -2660,6 +3380,10 @@ export interface components {
             price_monthly?: string;
             is_featured?: boolean;
             features?: string[];
+            modules?: components["schemas"]["ModulesEnum"][];
+            max_sucursales?: number | null;
+            max_consultorios?: number | null;
+            max_usuarios?: number | null;
             is_active?: boolean;
             order?: number;
         };
@@ -2706,6 +3430,14 @@ export interface components {
             is_featured: boolean;
             /** @description Lista de strings no vacíos con las características incluidas (máx. 50). */
             features?: string[] | null;
+            /** @description Slugs de módulos incluidos. Esto SÍ controla el acceso. Las dependencias duras deben venir cubiertas (ver validate). */
+            modules?: components["schemas"]["ModulesEnum"][];
+            /** @description Máximo de sucursales. null = ilimitado. 1 = modo sede única. */
+            max_sucursales?: number | null;
+            /** @description Máximo de consultorios. null = ilimitado. */
+            max_consultorios?: number | null;
+            /** @description Máximo de usuarios. null = ilimitado. */
+            max_usuarios?: number | null;
             /**
              * @description Si el plan queda activo/asignable desde su creación.
              * @default true
@@ -2730,8 +3462,14 @@ export interface components {
             readonly price_monthly: string;
             readonly is_featured: boolean;
             readonly features: string[];
+            readonly modules: string[];
+            readonly max_sucursales: number | null;
+            readonly max_consultorios: number | null;
+            readonly max_usuarios: number | null;
             readonly is_active: boolean;
             readonly order: number;
+            /** @description Roles asignables con estos módulos. Se derivan, no se configuran. */
+            readonly roles: string[];
         };
         /**
          * @description * `super_admin` - Súper Admin
@@ -3835,6 +4573,142 @@ export interface operations {
             };
         };
     };
+    v1_clinica_equipo_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_equipo_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_equipo_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_equipo_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_equipo_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_membresias_sucursales_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_membresias_sucursales_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_clinica_plantillas_retrieve: {
         parameters: {
             query?: never;
@@ -3931,6 +4805,102 @@ export interface operations {
             };
         };
     };
+    v1_clinica_sucursales_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_sucursales_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_sucursales_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sucursal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_sucursales_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sucursal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_clinica_sucursales_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sucursal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_clinica_universidades_destroy: {
         parameters: {
             query?: never;
@@ -3972,6 +4942,66 @@ export interface operations {
         };
     };
     v1_expediente_alergias_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_desde_paquete_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -4171,6 +5201,66 @@ export interface operations {
             };
         };
     };
+    v1_expediente_plan_integral_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_plan_integral_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_plan_integral_borrador_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_expediente_recetas_retrieve: {
         parameters: {
             query?: never;
@@ -4192,6 +5282,26 @@ export interface operations {
         };
     };
     v1_expediente_recetas_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_resumenes_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -4291,6 +5401,242 @@ export interface operations {
             };
         };
     };
+    v1_expediente_analitos_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_analitos_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_analitos_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analyte_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_analitos_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analyte_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_analitos_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analyte_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_cotizacion_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_pdf_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_sesiones_agendar_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_calendarizaciones_sesiones_agendar_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_expediente_diagnosticos_resolver_create: {
         parameters: {
             query?: never;
@@ -4371,6 +5717,46 @@ export interface operations {
             };
         };
     };
+    v1_expediente_evoluciones_resumen_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                evolution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_evoluciones_resumen_borrador_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                evolution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_expediente_imagenes_destroy: {
         parameters: {
             query?: never;
@@ -4384,6 +5770,122 @@ export interface operations {
         responses: {
             /** @description No response body */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_plan_integral_pdf_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_plantillas_documento_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_plantillas_documento_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_plantillas_documento_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_plantillas_documento_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_plantillas_documento_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4453,6 +5955,26 @@ export interface operations {
             header?: never;
             path: {
                 question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_expediente_resumenes_pdf_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                summary_id: string;
             };
             cookie?: never;
         };
@@ -4985,6 +6507,102 @@ export interface operations {
             header?: never;
             path: {
                 payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_finanzas_paquetes_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_finanzas_paquetes_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_finanzas_paquetes_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_finanzas_paquetes_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_finanzas_paquetes_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
             };
             cookie?: never;
         };

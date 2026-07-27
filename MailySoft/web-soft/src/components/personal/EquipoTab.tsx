@@ -36,7 +36,7 @@ interface Props {
 
 export default function EquipoTab({ enabled }: Props) {
   const { data: miembros, isLoading, isError } = useMembers(enabled)
-  const { user, clinicRole } = useAuth()
+  const { user, clinicRole, capabilities } = useAuth()
   const [rolSel, setRolSel] = useState<ClinicRole | null>(null)
 
   // Multi-sede (clúster F, jerarquía de roles): un admin de sucursal solo
@@ -44,7 +44,10 @@ export default function EquipoTab({ enabled }: Props) {
   // omite a los dueños/otros-admins de la lista; aquí ocultamos además el
   // GRUPO "Dueño" para que no aparezca vacío. El dueño sigue viendo todo.
   const esOwner = clinicRole === 'owner'
-  const rolesVisibles = esOwner ? ROLES_META : ROLES_META.filter(r => r.key !== 'owner')
+  // El plan decide qué roles existen: Básico no ofrece admin/finanzas/solo-lectura.
+  // Se muestra un rol si el plan lo ofrece O si YA tiene miembros (para no esconder
+  // gente que quedó de un plan anterior). rolesDelPlan = null mientras /me/ carga.
+  const rolesDelPlan = capabilities?.roles ?? null
   const [miembroSel, setMiembroSel] = useState<Member | null>(null)
 
   if (!enabled) {
@@ -67,6 +70,10 @@ export default function EquipoTab({ enabled }: Props) {
 
   const todos = miembros ?? []
   const cuenta = (rol: ClinicRole) => todos.filter(m => m.role === rol).length
+
+  const rolesVisibles = ROLES_META
+    .filter(r => esOwner || r.key !== 'owner')  // admin de sede no ve al dueño
+    .filter(r => rolesDelPlan === null || rolesDelPlan.includes(r.key) || cuenta(r.key) > 0)
 
   // ── Nivel 2: usuarios del rol seleccionado ──
   if (rolSel !== null) {

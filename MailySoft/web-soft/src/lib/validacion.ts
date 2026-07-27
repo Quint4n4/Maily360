@@ -14,6 +14,7 @@
  *   - Redes (fb/ig/yt):               apps/clinica/serializers.py _validate_social_field
  *                                     (_HTML_TAG_RE + _CONTROL_CHAR_RE)
  *   - CURP:                           apps/pacientes/views.py   _CURP_RE (regex RENAPO)
+ *   - Cédula profesional:             apps/core/validators.py   CEDULA_RE
  *
  * NOTA sobre CURP: el backend usa el patrón RENAPO
  *   ^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$  (case-insensitive, se normaliza a
@@ -56,6 +57,16 @@ const CURP_RE = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$/i
  */
 const RFC_RE = /^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/i
 
+/**
+ * Cédula profesional (SEP): 5 a 10 dígitos. (CEDULA_RE)
+ * Las vigentes traen 7 u 8; el rango es amplio para no rechazar cédulas
+ * históricas. No certifica que exista —eso solo lo sabe el Registro Nacional de
+ * Profesionistas—, solo frena capturas obviamente falsas como "1".
+ * Rango explícito [0-9] igual que el backend (no \d, que en Python acepta
+ * dígitos Unicode).
+ */
+const CEDULA_RE = /^[0-9]{5,10}$/
+
 // ── Validadores de formato (true = válido) ──────────────────────────────────
 
 /** ¿El teléfono/celular/WhatsApp tiene formato válido? */
@@ -86,6 +97,17 @@ export function esCurpValido(valor: string): boolean {
 /** ¿El RFC tiene formato válido del SAT (12-13 caracteres)? */
 export function esRfcValido(valor: string): boolean {
   return RFC_RE.test(valor)
+}
+
+/** ¿La cédula profesional tiene formato válido (5-10 dígitos)? */
+export function esCedulaValida(valor: string): boolean {
+  return CEDULA_RE.test(valor)
+}
+
+/** ¿La lista de cédulas separadas por coma es válida? (cada una 5-10 dígitos) */
+export function sonCedulasAdicionalesValidas(valor: string): boolean {
+  const partes = valor.split(',').map(p => p.trim()).filter(Boolean)
+  return partes.every(p => CEDULA_RE.test(p))
 }
 
 /**
@@ -133,6 +155,8 @@ export const MSG = {
   curp: 'CURP inválida (formato RENAPO, 18 caracteres)',
   rfc: 'RFC inválido (12-13 caracteres, formato SAT)',
   cie10: 'Código CIE-10 inválido (ej. E11, F32.2)',
+  cedula: 'La cédula debe tener entre 5 y 10 dígitos (solo números)',
+  cedulasAdicionales: 'Cada cédula debe tener entre 5 y 10 dígitos, separadas por coma',
 } as const
 
 // ── Signos vitales — rangos fisiológicos (copia EXACTA del backend) ──────────

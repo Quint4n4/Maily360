@@ -20,6 +20,7 @@ import SeccionAnalitos from '../components/consultorio/SeccionAnalitos'
 import SeccionEquipo from '../components/consultorio/SeccionEquipo'
 import SeccionSucursales from '../components/consultorio/SeccionSucursales'
 import SeccionHorarioAgenda from '../components/consultorio/SeccionHorarioAgenda'
+import { useAuth } from '../auth/AuthContext'
 
 type SeccionKey =
   | 'datos' | 'sucursales' | 'horario-agenda' | 'formatos' | 'plantillas' | 'categorias' | 'servicios'
@@ -51,6 +52,8 @@ const SECCIONES: SeccionDef[] = [
 /** Página "Mi Consultorio": configuración de la clínica por secciones. */
 export default function MiConsultorioPage() {
   const { role } = useRole()
+  const { capabilities, tieneModulo } = useAuth()
+  const sedeUnica = capabilities?.sede_unica ?? false
   const [seccion, setSeccion] = useState<SeccionKey>('datos')
 
   const gestionable = puedeGestionarConsultorio(role) // datos, recetas, categorías
@@ -103,6 +106,12 @@ export default function MiConsultorioPage() {
     'horario-agenda', 'validar-credenciales', 'historia-clinica', 'plantillas-documento', 'analitos', 'equipo',
   ]
   const seccionesVisibles = SECCIONES.filter((s) => {
+    // Modo sede única (max_sucursales = 1): la clínica ni se entera de que
+    // existen las sucursales. Al subir de plan aparece todo sin migrar nada —
+    // la sede principal ya existe.
+    if (s.key === 'sucursales' && sedeUnica) return false
+    // Servicios y precios viven en el módulo comercial: sin él, no hay catálogo.
+    if (s.key === 'servicios' && !tieneModulo('servicios')) return false
     if (s.key === 'perfil') return editaPerfil
     if (soloDueno.includes(s.key)) return esOwner
     if (soloGestion.includes(s.key)) return gestionable

@@ -174,3 +174,11 @@ export async function setClinicaSuscripcion(
 ): Promise<SuscripcionRow> {
   return request<SuscripcionRow>(`/plataforma/clinicas/${tenantId}/suscripcion/`, { method: 'POST', body })
 }
+
+/** POST /plataforma/clinicas/<tenant_id>/entitlements/ — ajusta los derechos a la medida. */
+export async function setClinicaEntitlements(
+  tenantId: string,
+  body: EntitlementsOverrideInput,
+): Promise<ClinicaDetail> {
+  return request<ClinicaDetail>(`/plataforma/clinicas/${tenantId}/entitlements/`, { method: 'POST', body })
+}

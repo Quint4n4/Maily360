@@ -18,6 +18,7 @@ import type { PatientOut } from '../../types/paciente'
 import { useDiagnoses, useEvolutionNotes, useVitalSigns } from '../../hooks/expediente'
 import { usePrescriptions } from '../../hooks/recetas'
 import { useAppointmentsForPatient } from '../../hooks/agenda'
+import { useAuth } from '../../auth/AuthContext'
 
 /** Identificador de cada sección del expediente. */
 export type SeccionId =
@@ -37,14 +38,22 @@ interface IndiceSeccionesProps {
 export default function IndiceSecciones({
   paciente, accesoClinico, verEstadoCuenta, puedeCalendarizar, onAbrir,
 }: IndiceSeccionesProps) {
+  // Además del rol, el PLAN: un módulo no contratado responde 404, así que ni
+  // se pregunta por él (y la sección no se ofrece).
+  const { tieneModulo } = useAuth()
+  const verRecetas = accesoClinico && tieneModulo('recetas')
+  const verCalendarizacion = puedeCalendarizar && tieneModulo('calendarizacion')
+  const verCuenta = verEstadoCuenta && tieneModulo('cobranza')
+  const verCitas = tieneModulo('agenda')
+
   // Los contadores solo se consultan si el rol puede ver esa sección: pasar
   // null deshabilita la query (evita 403 y peticiones de más).
   const clinicoId = accesoClinico ? paciente.id : null
   const evoluciones = useEvolutionNotes(clinicoId)
   const signos = useVitalSigns(clinicoId)
   const diagnosticos = useDiagnoses(clinicoId)
-  const recetas = usePrescriptions(clinicoId)
-  const citas = useAppointmentsForPatient(paciente.id)
+  const recetas = usePrescriptions(verRecetas ? paciente.id : null)
+  const citas = useAppointmentsForPatient(verCitas ? paciente.id : null)
 
   const items: {
     id: SeccionId
@@ -79,24 +88,24 @@ export default function IndiceSecciones({
         color: '#4f46e5',
         total: diagnosticos.data?.count ?? null,
       },
-      {
-        id: 'recetas' as const,
-        titulo: 'Recetas',
-        descripcion: 'Emitidas, PDF y anulación',
-        icon: Pill,
-        color: '#db2777',
-        total: recetas.data?.count ?? null,
-      },
     ] : []),
-    {
+    ...(verRecetas ? [{
+      id: 'recetas' as const,
+      titulo: 'Recetas',
+      descripcion: 'Emitidas, PDF y anulación',
+      icon: Pill,
+      color: '#db2777',
+      total: recetas.data?.count ?? null,
+    }] : []),
+    ...(verCitas ? [{
       id: 'citas' as const,
       titulo: 'Citas',
       descripcion: 'Próxima cita e historial',
       icon: CalendarClock,
       color: '#0284c7',
       total: citas.data?.count ?? null,
-    },
-    ...(verEstadoCuenta ? [{
+    }] : []),
+    ...(verCuenta ? [{
       id: 'cuenta' as const,
       titulo: 'Estado de cuenta',
       descripcion: 'Cargos, pagos y saldo',
@@ -104,7 +113,7 @@ export default function IndiceSecciones({
       color: '#b45309',
       total: null,
     }] : []),
-    ...(puedeCalendarizar ? [{
+    ...(verCalendarizacion ? [{
       id: 'calendarizacion' as const,
       titulo: 'Calendarización',
       descripcion: 'Sesiones de tratamiento programadas',

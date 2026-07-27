@@ -14,6 +14,7 @@
  */
 
 import type { ClinicRole } from '../auth/permisos'
+import type { ModuloId } from '../lib/modulos'
 import type { SucursalBrief } from './sucursal'
 
 /** Estado de una clínica (Tenant.status en el backend). */
@@ -51,7 +52,11 @@ export interface Me {
    * usar la app (responde 403 password_change_required en endpoints de negocio).
    */
   must_change_password: boolean
-  /** Si el usuario es médico, el id de su perfil Doctor en el tenant activo; null si no. */
+  /**
+   * Id del perfil Doctor del usuario en el tenant activo; null si no ejerce.
+   * Incluye a dueño y administrador con cédula: el perfil de médico es una
+   * capacidad profesional, no un cargo.
+   */
   doctor_id: string | null
   active_tenant: TenantBrief | null
   active_role: ClinicRole | null
@@ -63,6 +68,30 @@ export interface Me {
    * Puede venir vacío en clínicas aún sin sucursales configuradas.
    */
   sucursales: SucursalBrief[]
+  /**
+   * Qué tiene CONTRATADA la clínica activa. null si no hay clínica activa.
+   *
+   * El frontend OCULTA con esto; el backend BLOQUEA con la misma fuente
+   * (apps/tenancy/entitlements.py) y responde 404 a un módulo no contratado.
+   * Por eso nunca se contradicen: ocultar aquí es experiencia, no seguridad.
+   */
+  capabilities: Capabilities | null
+}
+
+/** Derechos efectivos de una clínica (plan + ajustes a la medida). */
+export interface Capabilities {
+  plan_slug: string
+  plan_name: string
+  /** Slugs de apps/core/modules.py Module contratados. */
+  modules: ModuloId[]
+  /** Roles asignables, derivados de los módulos. */
+  roles: ClinicRole[]
+  /** null = ilimitado. */
+  max_sucursales: number | null
+  max_consultorios: number | null
+  max_usuarios: number | null
+  /** max_sucursales === 1: se oculta TODA la UI de sucursales. */
+  sede_unica: boolean
 }
 
 /** Respuesta de POST /api/v1/auth/login/ (patrón híbrido: solo access en el body). */

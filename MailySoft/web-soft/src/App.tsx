@@ -11,6 +11,7 @@ import { DialogProvider } from './components/common/DialogProvider'
 import { PlatModulo, accesoModuloPlat, inicioPlat } from './platform/permisos'
 import AlertaCitas from './components/agenda/AlertaCitas'
 import LuzRecordatorios from './components/agenda/LuzRecordatorios'
+import type { ModuloId } from './lib/modulos'
 
 // Páginas con carga diferida (code-splitting): cada ruta es su propio chunk,
 // así el bundle inicial no arrastra Finanzas (recharts/jspdf/xlsx) ni el resto
@@ -34,17 +35,31 @@ const SistemaPage = lazy(() => import('./pages/plataforma/SistemaPage'))
 const AuditoriaPage = lazy(() => import('./pages/plataforma/AuditoriaPage'))
 
 /* App de la clínica: exige sesión válida (RequireAuth) y luego protege por rol */
-function Guard({ modulo, children }: { modulo: Modulo; children: ReactElement }) {
+/* Guard de ROL (lo que el puesto permite) + de PLAN (lo que la clínica contrató).
+   Ocultar el menú no basta: sin esto, escribir la URL a mano entra igual. El
+   backend responde 404 de todos modos, pero el usuario vería una pantalla rota
+   en vez de que la sección simplemente no exista para él. */
+function Guard({
+  modulo, requiere, children,
+}: { modulo: Modulo; requiere?: ModuloId; children: ReactElement }) {
   const { role } = useRole()
+  const { tieneModulo, capabilities } = useAuth()
   if (!accesoModulo(role, modulo)) return <Navigate to={inicioDeRol(role)} replace />
+  // Mientras /me/ no responde, capabilities es null: no se redirige todavía
+  // para no expulsar al usuario de una ruta que sí tiene contratada.
+  if (requiere && capabilities !== null && !tieneModulo(requiere)) {
+    return <Navigate to={inicioDeRol(role)} replace />
+  }
   return children
 }
 
-/* Atajo: ruta de clínica protegida por sesión + rol */
-function ClinicRoute({ modulo, children }: { modulo: Modulo; children: ReactElement }) {
+/* Atajo: ruta de clínica protegida por sesión + rol + módulo del plan */
+function ClinicRoute({
+  modulo, requiere, children,
+}: { modulo: Modulo; requiere?: ModuloId; children: ReactElement }) {
   return (
     <RequireAuth>
-      <Guard modulo={modulo}>{children}</Guard>
+      <Guard modulo={modulo} requiere={requiere}>{children}</Guard>
     </RequireAuth>
   )
 }
@@ -141,15 +156,15 @@ export default function App() {
             <Route path="/cambiar-contrasena" element={<RequireAuth><CambiarContrasenaPage /></RequireAuth>} />
 
             {/* ── App de la clínica (sesión real) ── */}
-            <Route path="/agenda"    element={<ClinicRoute modulo="agenda"><AgendaPage /></ClinicRoute>} />
+            <Route path="/agenda"    element={<ClinicRoute modulo="agenda" requiere="agenda"><AgendaPage /></ClinicRoute>} />
             <Route path="/contactos" element={<ClinicRoute modulo="contactos"><ContactosPage /></ClinicRoute>} />
-            <Route path="/personal"  element={<ClinicRoute modulo="personal"><PersonalPage /></ClinicRoute>} />
-            <Route path="/notas"     element={<ClinicRoute modulo="notas"><NotasPage /></ClinicRoute>} />
-            <Route path="/finanzas"  element={<ClinicRoute modulo="finanzas"><FinanzasPage /></ClinicRoute>} />
-            <Route path="/cotizaciones" element={<ClinicRoute modulo="cotizaciones"><CotizacionesPage /></ClinicRoute>} />
+            <Route path="/personal"  element={<ClinicRoute modulo="personal" requiere="personal"><PersonalPage /></ClinicRoute>} />
+            <Route path="/notas"     element={<ClinicRoute modulo="notas" requiere="notas"><NotasPage /></ClinicRoute>} />
+            <Route path="/finanzas"  element={<ClinicRoute modulo="finanzas" requiere="cobranza"><FinanzasPage /></ClinicRoute>} />
+            <Route path="/cotizaciones" element={<ClinicRoute modulo="cotizaciones" requiere="cotizaciones"><CotizacionesPage /></ClinicRoute>} />
             {/* Paquetes (catálogo reutilizable): gating fino de rol (owner/admin) dentro
                 de la propia página, no es un Modulo del menú → solo RequireAuth aquí. */}
-            <Route path="/paquetes" element={<RequireAuth><PaquetesPage /></RequireAuth>} />
+            <Route path="/paquetes" element={<ClinicRoute modulo="cotizaciones" requiere="paquetes"><PaquetesPage /></ClinicRoute>} />
             <Route path="/mi-consultorio" element={<ConsultorioRoute><MiConsultorioPage /></ConsultorioRoute>} />
 
             {/* ── Panel interno de Maily (datos reales: dashboard/clínicas/usuarios) ── */}
