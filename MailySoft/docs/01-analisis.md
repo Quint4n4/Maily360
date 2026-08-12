@@ -365,7 +365,8 @@ desviaciones puntuales listadas en `docs/_legacy/README.md`.
 | Quieres saber… | Lee |
 |---|---|
 | Qué es el producto y para quién | este documento |
-| Qué hace el sistema hoy, endpoint por endpoint | `docs/02-contrato.md` (pendiente, sesión A2) |
+| Qué hace el sistema hoy, endpoint por endpoint | `docs/02-contrato.md` (sesión A2, 2026-08-12) |
+| Dónde el código contradice a este documento | `docs/00-brechas.md` (sesión A2, 2026-08-12) |
 | Qué está mal y en qué orden se arregla | `docs/00-deuda.md` (pendiente, sesión A3) |
 | Por qué se decidió algo | `docs/DECISIONES-CLAVE.md` y `docs/adr/` |
 | Cómo se audita la seguridad | `docs/reports/PROTOCOLO-AUDITORIA-SEGURIDAD.md` |

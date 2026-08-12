@@ -47,8 +47,8 @@ El proceso completo está en `MI CONTEXTO/FLUJO-DE-TRABAJO.md` del usuario. Resu
 | Fase | Qué produce | Estado |
 |---|---|---|
 | A1 · Consolidar documentación | `docs/01-analisis.md` + `docs/_legacy/` | ✅ 2026-08-11 |
-| A2 · Contrato inverso | `docs/02-contrato.md` + `docs/00-brechas.md` | ⏳ siguiente |
-| A3 · Auditoría | `docs/00-deuda.md` | ⏳ |
+| A2 · Contrato inverso | `docs/02-contrato.md` + `docs/00-brechas.md` | ✅ 2026-08-12 — 15 apps, 167 brechas |
+| A3 · Auditoría | `docs/00-deuda.md` | ⏳ siguiente |
 | A4 · Triage | prioridades confirmadas | ⏳ |
 
 ## Agentes
