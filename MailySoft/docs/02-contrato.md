@@ -16,6 +16,35 @@
 | Alcance | `MailySoft/backend/` — 15 apps Django. El frontend no se documenta aquí |
 | Entrada | `docs/01-analisis.md` (el *qué*), `docs/_legacy/` (archivo histórico) |
 | Salida hermana | `docs/00-brechas.md` — donde el código contradice a la documentación |
+| Revisión | **rev. 2 — 2026-08-12.** Ver "Correcciones de la rev. 2" abajo |
+
+## Correcciones de la rev. 2
+
+La primera versión de este contrato se auditó contra el código antes de aceptarlo como fuente de
+verdad. La auditoría confirmó lo esencial —145 de 145 rutas documentadas, las 15 apps cubiertas, 13
+de 18 citas `archivo:línea` exactas al dígito— y encontró cinco defectos, ya corregidos aquí:
+
+1. **`405` donde el sistema responde `403`.** DRF ejecuta `check_permissions` **antes** de resolver
+   el handler del método, así que un método que la `policy` del permiso no declara muere en el
+   permiso con **403**, aunque la vista tampoco tenga el handler. El `405` solo aparece cuando el rol
+   **sí pasa** el permiso y no hay handler — lo que significa que el código de respuesta **depende
+   del rol** en varios endpoints. Se revisaron las 28 menciones a 405 del documento una por una
+   contra `core/permissions.py` y las vistas, y se corrigieron 19. La regla canónica está en §1.7.2.
+2. **§1.5.5 contradecía a §3.4.2** sobre el detalle de una nota de cita: la vista solo implementa
+   `delete`, así que el riesgo de alcance por sede es **borrar**, no leer. §3.4.2 tenía razón.
+3. **Cuatro conteos falsos en preámbulos**, todos verificados de nuevo contra el código: finanzas
+   tiene **diez** modelos (no nueve) y **23** rutas (no 19); clínica tiene **17** rutas (no 13);
+   plataforma tiene **15** vistas (no 13).
+4. **§1.1.1 presentaba la policy canónica con `WITH CHECK` sin advertir que es la forma final.**
+   Varias tablas nacieron solo con `USING` y el `WITH CHECK` llegó en migraciones posteriores; quien
+   copiara el patrón desde una `0002_enable_rls.py` habría creado una policy incompleta.
+5. **§8.5 y §9.4 eran 95 líneas de matriz de permisos sin una sola cita.** Ahora cada fila lleva la
+   referencia de la clase de permiso y, cuando la regla vive en el `service` y no en el permiso, las
+   dos. En el proceso se corrigió una celda: un `admin` **sí** puede crear un aviso `scope=all`.
+
+Pendiente que no se corrigió aquí porque es código, no documentación: el docstring de
+`backend/apps/core/permissions.py:748-751` afirma el `405` equivocado y es el origen del error. Va al
+backlog de A4.
 
 ## Cómo leer este documento
 
@@ -93,6 +122,13 @@ CREATE POLICY <nombre> ON <tabla>
 
 `current_tenant_id()` lee el GUC `app.current_tenant_id` y devuelve `NULL` si está vacío o si el
 setting no existe (`tenancy/migrations/0002_enable_rls.py:22-28`).
+
+> **No copies este patrón desde una migración `0002_enable_rls.py`.** Esa es la forma **final**, no la
+> original: varias tablas nacieron con `USING` solamente y el `WITH CHECK` se agregó después en
+> migraciones aparte (`pacientes/0014_rls_with_check.py`, `agenda/0013_rls_with_check.py`,
+> `expediente/0005_rls_with_check.py`, `finanzas/0003_rls_with_check.py`,
+> `personal/0007_rls_with_check.py`). Para una tabla nueva hay que escribir las dos cláusulas de una
+> vez, o el test guardián de §1.8.3 la rechaza.
 
 #### 1.1.2 Cómo se fija el contexto de tenant
 
@@ -322,7 +358,7 @@ Leyenda de roles: **O**=owner · **A**=admin · **D**=doctor · **N**=nurse · *
 | 21 | `AllergyPermission` `:675` | TODOS | O A D N | O A D N | O A D N | GET abierto a propósito: bandera de seguridad |
 | 22 | `MedicalHistoryPermission` `:697` | CLINICAL_READ | — | O A D (PUT) | — | |
 | 23 | `VitalSignsPermission` `:721` | CLINICAL_READ | O A D N | — | — | Append-only |
-| 24 | `EvolutionPermission` `:741` | CLINICAL_READ | O A D | — | O A D | Sin PATCH/PUT → 405 (inmutabilidad) |
+| 24 | `EvolutionPermission` `:741` | CLINICAL_READ | O A D | — | O A D | Sin PATCH/PUT → **403** para todos (el permiso no declara el método), no 405 |
 | 25 | `ClinicalSummaryPermission` `:770` | O A D | O A D | — | — | |
 | 26 | `TreatmentPlanPermission` `:796` | O A D | O A D | O A D (PUT) | O A D | |
 | 27 | `LongevityPlanPermission` `:820` | O A D | O A D | — | — | |
@@ -569,7 +605,7 @@ escrituras.
 
 | Caso | Evidencia | Consecuencia |
 |---|---|---|
-| Detalle de una nota de cita | `apps/agenda/views.py:1144` (`AgendaItemNoteDetailApi`), hallazgo abierto citado en `docs/01-analisis.md:346-348` | Un admin de Norte puede leer/borrar por id la nota de una cita de Centro |
+| Detalle de una nota de cita | `apps/agenda/views.py:1144` (`AgendaItemNoteDetailApi`), hallazgo abierto citado en `docs/01-analisis.md:346-348` | Un admin de Norte puede **borrar** por id la nota de una cita de Centro. **No leerla**: la vista solo implementa `delete` (`views.py:1153`), así que un GET muere en 405. Ver §3.4.2, que es la versión correcta |
 | Bitácora de auditoría | `AuditLog` no tiene campo `sucursal`; se compensó restringiendo a `owner` (`apps/audit/permissions.py:10-14`) | Un admin de sede no ve bitácora de ninguna sede |
 | Detalle/avatar de miembro | Usa `allowed_sucursales` (permiso), **no** `sucursal_scope_ids` (`apps/tenancy/views.py:70-110`) | Deliberado: el dueño parado en Centro sí puede editar a alguien de Norte |
 | Tenant sin ninguna `Sucursal` | `sucursal_scope_ids` → `None` (`:487-490`); `_sucursal_scope_q` → `Q()` vacío (`apps/tenancy/selectors.py:64-68`) | Una clínica que nunca adoptó multi-sede opera sin filtro |
@@ -694,7 +730,7 @@ Códigos y su significado transversal:
 | 401 | Sin token o token inválido (`IsAuthenticated`) |
 | 403 | Rol insuficiente; sin membresía activa; sede no permitida (`sucursal_scope.py:297`, `:307`); contraseña temporal pendiente |
 | 404 | Recurso de otro tenant, fuera de la sede permitida, **o módulo no contratado** |
-| 405 | Método no ruteado en la vista (así se sostiene la inmutabilidad clínica) |
+| 405 | Método sin handler en la vista **y** declarado en la `policy` del permiso para el rol del actor (así se sostiene la inmutabilidad clínica). Si el método no está en la `policy` → **403, no 405** (`permissions.py:133-135`) |
 | 429 | Throttle |
 
 #### 1.7.3 Throttling (`config/settings/base.py:216-232`)
@@ -805,8 +841,9 @@ vendible.
 | POST | `/api/v1/miembros/<uuid:membership_id>/avatar/` | `views.py:242` | ídem, `multipart/form-data` | 200 `MemberOutput` | 400, 401, 403, 404 |
 | DELETE | `/api/v1/miembros/<uuid:membership_id>/avatar/` | `views.py:262` | ídem | 200 `MemberOutput` | 401, 403, 404 |
 
-**No existe `GET /api/v1/miembros/<id>/`**: `MemberDetailApi` solo implementa `patch` → cualquier GET
-a esa ruta responde **405** (ver B-T-15).
+**No existe `GET /api/v1/miembros/<id>/`**: `MemberDetailApi` solo implementa `patch` → un GET
+a esa ruta responde **405** solo para owner y admin (`MemberPermission.policy["GET"]` = O A: pasan el
+permiso y no hay handler) y **403** para los demás roles (ver B-T-15).
 
 #### `GET /api/v1/miembros/`
 
@@ -1737,10 +1774,18 @@ Dos formas de cuerpo de error conviven aquí:
 | 24 | POST | `/api/v1/agenda/eventos/<uuid>/notas/` | `views.py:1112` | `AgendaItemNotePermission` | 201 |
 | 25 | DELETE | `/api/v1/agenda/notas/<uuid>/` | `views.py:1153` | `AgendaItemNotePermission` | 204 |
 
-**Métodos que devuelven 405 por no estar ruteados** (así se sostiene la inmutabilidad, §1.7.2):
-`POST`/`PUT` sobre `/agenda/citas/<id>/` · `GET` sobre `/agenda/tipos-cita/<id>/` · `GET` sobre
-`/agenda/eventos/<id>/` · **`GET` sobre `/agenda/notas/<id>/`** (solo existe `delete`,
-`views.py:1153`) · `PUT` sobre `/agenda/config/` · `DELETE` sobre `/agenda/citas/<id>/notas/`.
+**Métodos sin handler en la vista** (así se sostiene la inmutabilidad, §1.7.2). Como
+`check_permissions` corre antes de resolver el handler, solo dan **405** los métodos que el permiso
+sí declara para el rol; el resto da **403**:
+`POST` sobre `/agenda/citas/<id>/` → **405** para O A D R y **403** para N F L · `PUT` sobre
+`/agenda/citas/<id>/` → **403** para todos (no hay clave `"PUT"` en `AppointmentPermission.policy`) ·
+`GET` sobre `/agenda/tipos-cita/<id>/` → **405** para todos (`AppointmentTypePermission.GET` = todos)
+· `GET` sobre
+`/agenda/eventos/<id>/` → **405** para O A D N R L y **403** para F · **`GET` sobre
+`/agenda/notas/<id>/`** (solo existe `delete`,
+`views.py:1153`) → **405** para O A D N R L y **403** para F · `PUT` sobre `/agenda/config/` →
+**403** para todos (`AgendaConfigPermission` solo declara GET y PATCH) · `DELETE` sobre
+`/agenda/citas/<id>/notas/` → **405** para O A D N R y **403** para F y L.
 
 #### 3.2.1 `GET /api/v1/agenda/citas/`
 
@@ -2731,7 +2776,8 @@ tenant activo para este request."}` (p. ej. `views_alergias.py:74-78`). En la pr
 | POST | `/api/v1/expediente/<patient_id>/signos/` | `views_signos.py:135` | ídem (POST → O A D N) | 201 |
 | GET | `/api/v1/expediente/<patient_id>/signos/series/` | `views_signos.py:227` | ídem | 200 |
 
-- **Append-only:** no hay PATCH/PUT/DELETE ruteados → **405**.
+- **Append-only:** no hay PATCH/PUT/DELETE → **403** para todos, no 405, porque
+  `VitalSignsPermission` solo declara GET y POST y el permiso corre antes de resolver el handler.
 - **Paginación propia** `_VitalSignsPagination` (`views_signos.py:36`): `page_size=50`, param
   `page_size` **sí admitido**, tope 200 — se aparta del paginador estándar de §1.7.1.
 - **POST** body (`serializers.py:370`): `measured_at` (ISO, default ahora, no futuro), los 9
@@ -2756,7 +2802,8 @@ tenant activo para este request."}` (p. ej. `views_alergias.py:74-78`). En la pr
 | POST | `/api/v1/expediente/<patient_id>/evoluciones/` | `views_evoluciones.py:148` | ídem (POST → O A D) | 201 |
 | POST | `/api/v1/expediente/evoluciones/<evolution_id>/addendum/` | `views_evoluciones.py:270` | `AddendumPermission` (§1.3.2 #30) + `RequiresExpediente` | 201 |
 
-- **PATCH, PUT y DELETE sobre una nota no existen** → **405**. Es el sostén HTTP de la inmutabilidad
+- **PATCH, PUT y DELETE sobre una nota no existen.** PATCH y PUT → **403** para todos (no están en
+  la `policy`); DELETE → **405** para O A D y **403** para el resto. Es el sostén HTTP de la inmutabilidad
   (`views.py:45-47`). `EvolutionPermission` sí declara `DELETE` pero solo lo consume el endpoint de
   imágenes (`permissions.py:753-760`).
 - **Paginación** `_EvolutionPagination` (`views_evoluciones.py:56`): `page_size=20`, param
@@ -2804,7 +2851,8 @@ Devuelve las **últimas 20** notas de evolución del paciente con `indicaciones_
 orden `-created_at` (`selectors.py:472-483`). **Sin paginación** ni query params: el límite es fijo
 y no es configurable. Forma por elemento: `{id, fecha, doctor, indicaciones}`
 (`serializers.py:873-894`) — `doctor` es el nombre completo del médico, `""` si no se puede
-resolver. Único método ruteado: GET; cualquier otro → 405.
+resolver. Único método con handler: GET; cualquier otro → **403**, no 405, porque
+`NursingInstructionPermission` solo declara GET en su `policy`.
 
 #### 4.2.7 Imágenes de evolución
 
@@ -2964,7 +3012,8 @@ Los 6 endpoints usan `TreatmentPlanPermission` (§1.3.2 #26 → **O A D** en GET
   Coherencia: `select` exige `options` no vacía; cualquier otro tipo exige `options` vacía
   (`serializers.py:1022-1032`, revalidado en `services.py:1235-1240`).
 - **No hay GET de detalle**: `MedicalHistoryQuestionDetailApi` solo implementa `patch` y `delete`
-  (`views_preguntas.py:86`) → cualquier GET a esa ruta responde **405**.
+  (`views_preguntas.py:86`) → un GET a esa ruta responde **405** para O A D N L (`policy["GET"]` =
+  CLINICAL_READ) y **403** para R y F.
 - **DELETE** — baja lógica (`is_active=False`), idempotente (`services.py:1393-1395`).
 
 #### 4.2.13 Catálogos del plan integral (plantillas y analitos)
@@ -3020,14 +3069,14 @@ Los 6 endpoints usan `TreatmentPlanPermission` (§1.3.2 #26 → **O A D** en GET
 | # | Regla | Dónde | Cómo se sostiene |
 |---|---|---|---|
 | 1 | **La nota de evolución nace bloqueada** | `models.py:587` + `models.py:611-614` | `is_locked` default `True` y `CheckConstraint(is_locked=True)` — **la base rechaza cualquier fila con `is_locked=False`** |
-| 2 | **No se edita ni se borra una nota** | `urls.py:123-127`, `views.py:45-47` | No hay `patch`/`put`/`delete` en `EvolutionNoteListCreateApi` → 405. `EvolutionPermission` ni siquiera declara PATCH/PUT (`permissions.py:763-767`) |
+| 2 | **No se edita ni se borra una nota** | `urls.py:123-127`, `views.py:45-47` | No hay `patch`/`put`/`delete` en `EvolutionNoteListCreateApi`. PATCH y PUT → **403** para todos, porque `EvolutionPermission` ni siquiera los declara (`permissions.py:763-767`); DELETE sí está declarado (O A D) → **405** para esos tres y 403 para los demás |
 | 3 | **Una sola nota por cita** | `models.py:603-607` | Constraint parcial + chequeo previo en el service (`services.py:722-723`) + captura del `IntegrityError` como 400 (`services.py:743-747`) |
 | 4 | **La nota solo nace de una cita ATTENDED** | `services.py:682-686` | 400 `"La nota de evolución solo puede crearse sobre una cita con estado ATTENDED (atendida)."` |
 | 5 | **El médico de la nota debe ser el de la cita** | `services.py:689-690` | 400 |
 | 6 | **Regla del médico**: con `actor_role == "doctor"`, solo sobre **sus** citas | `services.py:699-709` | Compara `appointment.doctor.membership.user_id` con `user.pk`. Owner/admin sin restricción. Si el médico de la cita no tiene membresía válida → 400, no 500 (`:702-705`) |
 | 7 | **Corrección solo por addendum** | `services.py:815-888` | `addendum_create` es append-only; no hay update ni delete de addenda |
 | 8 | **El addendum NO valida autoría sobre la nota** | `services.py:849-865` | Cualquier owner/admin/doctor puede firmar un addendum sobre la nota de otro médico → B-EXP-01 |
-| 9 | **Las tomas de signos son append-only** | `urls.py:111-115` | Solo GET y POST ruteados; el resto → 405 |
+| 9 | **Las tomas de signos son append-only** | `urls.py:111-115` | Solo GET y POST ruteados; el resto → **403**, no 405, porque `VitalSignsPermission` solo declara GET y POST |
 | 10 | **El resumen clínico aplica la regla del médico** | `services_resumen.py:405-415` | 400 `"Un médico solo puede generar el resumen clínico de sus propias consultas."` |
 | 11 | **En calendarización, un médico solo cancela/mueve sus propias citas** | `services_calendarizacion.py:201-206` | 400 `"Como médico, solo puedes cancelar o mover tus propias citas."` |
 | 12 | **Los diagnósticos no se editan**: solo se resuelven | `services.py:1030-1032` | No existe service ni endpoint de update |
@@ -3101,7 +3150,7 @@ para cualquier rol (§1.4.2).
 | Registrar toma de signos | expediente | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ |
 | Leer notas de evolución | expediente | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ |
 | Crear nota de evolución | expediente | ✔ | ✔ | **propio** | ✘ | ✘ | ✘ | ✘ |
-| Editar / borrar nota de evolución | — | ✘ (405) | ✘ (405) | ✘ (405) | ✘ (405) | ✘ (405) | ✘ (405) | ✘ (405) |
+| Editar / borrar nota de evolución | — | ✘ (PATCH/PUT 403 · DELETE 405) | ✘ (PATCH/PUT 403 · DELETE 405) | ✘ (PATCH/PUT 403 · DELETE 405) | ✘ (403) | ✘ (403) | ✘ (403) | ✘ (403) |
 | Crear addendum | expediente | ✔ | ✔ | ✔ *(no acotado, B-EXP-01)* | ✘ | ✘ | ✘ | ✘ |
 | Leer diagnósticos | expediente | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ |
 | Crear / resolver diagnóstico | expediente | ✔ | ✔ | ✔ *(no acotado)* | ✘ | ✘ | ✘ | ✘ |
@@ -3469,8 +3518,10 @@ Ninguna de estas rutas lee `X-Sucursal-Id`.
 | 15 | GET | `/api/v1/pdfs/job/<uuid:job_id>/` | `apps/pdfs/views.py:54` | `IsAuthenticated` + permiso del `kind` | **ninguno** | 200 | 401, 404 |
 | 16 | GET | `/api/v1/pdfs/job/<uuid:job_id>/file/` | `apps/pdfs/views.py:87` | `IsAuthenticated` + permiso del `kind` | **ninguno** | 200 `application/pdf` | 404, 409, 401 |
 
-Métodos no ruteados en cada vista → **405** (así se sostiene la inmutabilidad, §1.7.2). En
-particular: **no existe PATCH ni PUT sobre `/api/v1/recetas/<id>/`**, ni DELETE, ni ninguna ruta
+Métodos sin handler en cada vista (así se sostiene la inmutabilidad, §1.7.2): dan **405** solo si el
+permiso declara ese método para el rol, y **403** si no. En
+particular: **no existe PATCH ni PUT sobre `/api/v1/recetas/<id>/`**, ni DELETE — los tres dan
+**403** para todos los roles, porque `PrescriptionPermission` solo declara GET y POST —, ni ninguna ruta
 sobre `PrescriptionItem`.
 
 #### 5.2.1 `GET /api/v1/recetas/medicamentos/buscar/`
@@ -3826,8 +3877,8 @@ prescription.save(update_fields=["status","cancelled_at","cancelled_by",
 
 | Regla | Cómo se sostiene | Referencia |
 |---|---|---|
-| No hay PATCH/PUT de receta | La vista solo implementa `get` → cualquier otro método es **405** | `views.py:300-341` |
-| No hay DELETE de receta | Idem | `views.py:300-341` |
+| No hay PATCH/PUT de receta | La vista solo implementa `get`, pero PATCH y PUT dan **403** (no 405) porque `PrescriptionPermission` no los declara; solo POST llega a **405**, y únicamente para O A D | `views.py:300-341` |
+| No hay DELETE de receta | Idem: **403** para todos, el permiso no declara DELETE | `views.py:300-341` |
 | No hay endpoint de ítems | `urls.py` no rutea nada bajo `PrescriptionItem` | `urls.py:43-111` |
 | No hay borrado físico | Ningún `.delete()` sobre `Prescription` o `PrescriptionItem` en toda la app | verificado en `services.py`, `views.py`, `selectors.py` |
 | La corrección es anulación + receta nueva | Documentado en el modelo y aplicado por el service | `models.py:386-388`, `services.py:787-788` |
@@ -4180,7 +4231,7 @@ Archivos leídos: `models.py` (917), `views.py` (1375), `services.py` (1274), `s
 
 ### 6.1 Modelo de datos
 
-Nueve modelos concretos. **Los nueve heredan `TenantAwareModel`** (`finanzas/models.py:34, 114, 189,
+Diez modelos concretos. **Los diez heredan `TenantAwareModel`** (`finanzas/models.py:34, 114, 189,
 305, 408, 461, 504, 621, 701, 745`), así que todos llevan `tenant_id` con `on_delete=PROTECT`,
 `created_by` `SET_NULL`, soft-delete y los dos managers de §1.8.2. No hay ninguna tabla de esta app
 sin `tenant_id` salvo las dos intermedias de M2M, cubiertas aparte (§6.1.10).
@@ -4189,7 +4240,7 @@ Precisión monetaria única en toda la app: `DecimalField(max_digits=12, decimal
 en dos constantes (`finanzas/models.py:24-25`) y con la regla escrita en el docstring del módulo:
 *"Montos: DecimalField(max_digits=12, decimal_places=2). NUNCA float para dinero"*
 (`finanzas/models.py:14`). **Verificado: no hay ni un `FloatField` ni un `float()` sobre dinero en
-ninguno de los nueve modelos ni en los services.** Los únicos `float` del dominio son ratios de
+ninguno de los diez modelos ni en los services.** Los únicos `float` del dominio son ratios de
 presentación: `conversion_rate` (`finanzas/selectors.py:669`), `retention_rate` /
 `no_show_rate` / `pct_with_future_appt` (`finanzas/retention.py:520, 547, 578`), el ancho de barra
 del SVG de aging (`finanzas/pdf.py:120`) y los porcentajes formateados del PDF
@@ -4395,7 +4446,7 @@ El comportamiento real (que no coincide del todo con lo declarado) está en §6.
 
 ### 6.2 Endpoints
 
-19 rutas, 27 combinaciones método+ruta. Prefijo `/api/v1/` (§1.7). Todas heredan de `TenantAPIView`
+23 rutas (`finanzas/urls.py`), 36 handlers HTTP (`finanzas/views.py`). Prefijo `/api/v1/` (§1.7). Todas heredan de `TenantAPIView`
 (§1.1.2). Todas las respuestas de error siguen las tres formas de §1.7.2; en esta app la forma
 dominante de error de negocio es `{"detail": ["<msg>", ...]}` (**lista**), porque las vistas
 traducen `DjangoValidationError` con `exc.messages` (p. ej. `finanzas/views.py:245`).
@@ -5144,7 +5195,7 @@ caché ni TTL. → B-FIN-20.
 > Lo transversal (aislamiento, auth, formato de error, paginación, throttling, modelos base) está en
 > §1 y tampoco se repite.
 
-Ocho modelos, 13 rutas, 32 operaciones HTTP. Todo bajo el prefijo `/api/v1/` (`config/urls.py:48`).
+Ocho modelos, 17 rutas, 32 operaciones HTTP. Todo bajo el prefijo `/api/v1/` (`config/urls.py:48`).
 
 **Ningún endpoint de esta app lleva guard de módulo.** Verificado: la única importación de
 `apps.core.entitlement_guards` en toda la app es `assert_within_limit`
@@ -5446,8 +5497,10 @@ y solo toca los campos presentes (`views.py:171`, `services.py:241-242`). Campos
 - **DELETE**: `is_active=False`. Sobre una etiqueta de sistema (Favorito/VIP) → **400**
   `{"detail": ["Las etiquetas del sistema (Favorito y VIP) no se pueden eliminar."]}`
   (`services.py:467-468`). Éxito **204**.
-- **`PatientCategoryDetailApi` solo implementa `delete`** (`views.py:367`): `GET` y `PATCH` a
-  `/clinica/categorias/<id>/` responden **405**. No existe renombrar ni reactivar → B-CLI-10.
+- **`PatientCategoryDetailApi` solo implementa `delete`** (`views.py:367`): un `GET` a
+  `/clinica/categorias/<id>/` responde **405** para todos los roles (`policy["GET"]` = todos), y un
+  `PATCH` responde **403**, porque el permiso no declara PATCH. No existe renombrar ni reactivar →
+  B-CLI-10.
 
 #### 7.2.4 Perfil ampliado del médico
 
@@ -6075,8 +6128,10 @@ horarios (§8.2.3), que sí lo hacen → **B-PER-01**.
 - **DELETE**: `schedule_get(..., sucursal_ids=sucursal_scope_ids(request))` (`views.py:684-687`) →
   fuera de alcance **404** `{"detail": "Horario no encontrado."}`. Baja lógica `is_active=False`.
   Éxito **204**.
-- **`DoctorScheduleDetailApi` solo implementa `delete`** (`views.py:669`): GET y PATCH sobre
-  `/personal/horarios/<id>/` responden **405**. No se puede corregir un horario mal capturado: hay
+- **`DoctorScheduleDetailApi` solo implementa `delete`** (`views.py:669`): un GET sobre
+  `/personal/horarios/<id>/` responde **405** para todos los roles, y un PATCH responde **405** solo
+  para owner y admin (**403** para el resto: `PersonalPermission.PATCH` = O A). No se puede corregir
+  un horario mal capturado: hay
   que borrarlo y volverlo a crear → B-PER-06.
 
 #### 8.2.4 Django Admin
@@ -6230,48 +6285,53 @@ alguien hoy hay que usar `blocked: true`, no restablecer la contraseña.
 **L**=readonly. `sí` = permitido · `no` = 403 · `propio` = solo sobre sus propios registros ·
 `sede` = permitido pero acotado a sus sedes.
 
-**Todas las filas de `apps/personal` responden 404 (no 403) si la clínica no tiene el módulo
-`personal`** — antes de evaluar el rol, porque el guard corre en la misma lista de
-`permission_classes` (§1.4.2).
+**Orden de evaluación:** `permission_classes = [IsAuthenticated, PersonalPermission,
+RequiresPersonal]` (`personal/views.py:74`, `:189`, `:329`, `:420`, `:557`, `:672`), y DRF itera la
+lista **en orden** (`core/views.py:121-161` delega en `super().check_permissions()` al final, sin
+reordenar). Por lo tanto el rol se evalúa **antes** que el módulo: un `readonly` que hace
+`POST /personal/doctores/` en una clínica sin el módulo `personal` recibe **403**, no 404. El 404 de
+§1.4.2 solo gana donde el rol ya pasó.
 
-| Acción | O | A | D | N | R | F | L |
-|---|---|---|---|---|---|---|---|
-| Listar médicos (`GET /personal/doctores/`) | sí | sede | sede | sede | sede | sede | sede |
-| Ver el detalle de un médico | sí | sí (1) | sí (1) | sí (1) | sí (1) | sí (1) | sí (1) |
-| Crear un perfil de médico | sí | sí (1) | no | no | no | no | no |
-| Editar cédula, especialidad, duración, semblanza | sí | sí (1) | no | no | no | no | no |
-| Reasignar consultorios y sedes de un médico | sí | sede | no | no | no | no | no |
-| Desactivar un médico (`DELETE`) | sí | sí (1) | no | no | no | no | no |
-| Listar consultorios | sí | sede | sede | sede | sede | sede | sede |
-| Ver el detalle de un consultorio | sí | sede | sede | sede | sede | sede | sede |
-| Crear un consultorio | sí | sede | no | no | no | no | no |
-| Editar o reasignar de sede un consultorio | sí | sede | no | no | no | no | no |
-| Desactivar un consultorio | sí | sede | no | no | no | no | no |
-| Listar horarios de un médico | sí | sede | sede | sede | sede | sede | sede |
-| Crear un horario | sí | sede | no | no | no | no | no |
-| Desactivar un horario | sí | sede | no | no | no | no | no |
-| Editar un horario | **no** — no existe el endpoint (405) | no | no | no | no | no | no |
-| Reactivar un médico, consultorio u horario | **no** — no existe el endpoint | no | no | no | no | no | no |
-| Editar sello, foto y cédulas adicionales (§7.2.4) | sí | sí | propio | no | no | no | no |
+| Acción | O | A | D | N | R | F | L | Dónde se decide |
+|---|---|---|---|---|---|---|---|---|
+| Listar médicos (`GET /personal/doctores/`) | sí | sede | sede | sede | sede | sede | sede | `core/permissions.py:162-178` (GET=`ALL_ROLES`, `:56-66`) + `personal/views.py:118-120` → `clinica/sucursal_scope.py:429-474` (`sucursal_scope_ids`; owner → `None`) |
+| Ver el detalle de un médico | sí | sí (1) | sí (1) | sí (1) | sí (1) | sí (1) | sí (1) | `core/permissions.py:162-178` + `personal/views.py:240-248`: `_get_doctor_or_404` llama `doctor_get` **sin** `sucursal_ids` |
+| Crear un perfil de médico | sí | sí (1) | no | no | no | no | no | `core/permissions.py:174` (POST=`MANAGE_ROLES`, `:68`) + `personal/services.py:120-135` (valida rol de la membresía y duplicado; **no** la sede) |
+| Editar cédula, especialidad, duración, semblanza | sí | sí (1) | no | no | no | no | no | `core/permissions.py:175` (PATCH=`MANAGE_ROLES`) + `personal/views.py:240-248` + `personal/services.py:158-201` (sin comprobación de sede) |
+| Reasignar consultorios y sedes de un médico | sí | sede | no | no | no | no | no | `core/permissions.py:175` + `personal/services.py:326-345` (consultorios) y `:448-458` (sedes): la diferencia simétrica debe caber en `allowed_sucursales` (`clinica/sucursal_scope.py:135`) |
+| Desactivar un médico (`DELETE`) | sí | sí (1) | no | no | no | no | no | `core/permissions.py:176` (DELETE=`MANAGE_ROLES`) + `personal/views.py:310-316` sobre `_get_doctor_or_404` (`:240-248`) + `personal/services.py:204-232` (solo `is_active=False`) |
+| Listar consultorios | sí | sede | sede | sede | sede | sede | sede | `core/permissions.py:173` + `personal/views.py:359-361` (`consultorio_list(..., sucursal_ids=sucursal_scope_ids(request))`) |
+| Ver el detalle de un consultorio | sí | sede | sede | sede | sede | sede | sede | `core/permissions.py:173` + `personal/views.py:441-461` (`_get_consultorio_or_404` sí pasa `sucursal_scope_ids`) |
+| Crear un consultorio | sí | sede | no | no | no | no | no | `core/permissions.py:174` + `personal/views.py:388` + `personal/services.py:543-548` → `resolve_write_sucursal` (`clinica/sucursal_scope.py:313`) |
+| Editar o reasignar de sede un consultorio | sí | sede | no | no | no | no | no | `core/permissions.py:175` + `personal/views.py:441-461` (alcance de entrada) y `:495-519` (la sede destino se resuelve con `resolve_write_sucursal`, no con `sucursal_get`) + `personal/services.py:617-620` |
+| Desactivar un consultorio | sí | sede | no | no | no | no | no | `core/permissions.py:176` + `personal/views.py:441-461`, `:535-544` + `personal/services.py:640-665` |
+| Listar horarios de un médico | sí | sede | sede | sede | sede | sede | sede | `core/permissions.py:173` + `personal/views.py:593-599` (`schedule_list_for_doctor(..., sucursal_ids=sucursal_scope_ids(request))`) |
+| Crear un horario | sí | sede | no | no | no | no | no | `core/permissions.py:174` + `personal/views.py:641-644` + `personal/services.py:748-758` (`resolve_write_sucursal` y "El médico no atiende en esa sucursal") |
+| Desactivar un horario | sí | sede | no | no | no | no | no | `core/permissions.py:176` + `personal/views.py:674-693` (`schedule_get(..., sucursal_ids=...)`) + `personal/services.py:788-816` |
+| Editar un horario | **no** — la vista no implementa `patch` (405) | **no** (405) | no (403) | no (403) | no (403) | no (403) | no (403) | `personal/urls.py:56-60` + `personal/views.py:669-702`: `DoctorScheduleDetailApi` solo define `delete`. PATCH está en la `policy` solo para O A (`core/permissions.py:175`), así que solo esos dos llegan al 405 |
+| Reactivar un médico, consultorio u horario | **no** — no existe el endpoint | no | no | no | no | no | no | `personal/urls.py:26-61` (no hay ruta); las bajas solo apagan la bandera: `personal/services.py:220-221`, `:654-655`, `:805-806` |
+| Editar sello, foto y cédulas adicionales (§7.2.4) | sí | sí | propio | no | no | no | no | `clinica/permissions.py:77-92` (`_DOCTOR_PROFILE_WRITE` = owner/admin/doctor, `:26`) + `clinica/views.py:438-448` (el rol `doctor` solo su propio perfil → 403). **Sin guard de módulo**: `clinica/views.py:411` |
 
-(1) **Sin acotar por sede**, a diferencia del listado: es exactamente el hueco B-PER-01.
+(1) **Sin acotar por sede**, a diferencia del listado: es exactamente el hueco B-PER-01
+(`personal/views.py:240-248`).
 
-Alta, bloqueo y contraseñas (`/api/v1/miembros/`, §1.9 y §8.3) — permiso `MemberPermission`, **sin**
-guard de módulo:
+Alta, bloqueo y contraseñas (`/api/v1/miembros/`, §1.9 y §8.3) — permiso `MemberPermission`
+(`core/permissions.py:213-230`), **sin** guard de módulo (`tenancy/views.py:118`, `:191`, `:239`):
 
-| Acción | O | A | D | N | R | F | L |
-|---|---|---|---|---|---|---|---|
-| Listar el equipo | sí | sede + solo roles operacionales + sí mismo | no | no | no | no | no |
-| Ver / editar / dar de alta a un miembro | sí | sede, solo roles operacionales | no | no | no | no | no |
-| Otorgar el rol `owner` o `admin` | sí | **no** | no | no | no | no | no |
-| Crear un segundo `owner` | **no** | no | no | no | no | no | no |
-| Restablecer la contraseña de un miembro | sí (cualquiera) | sede, solo roles operacionales | no | no | no | no | no |
-| Bloquear / desbloquear una cuenta | sí (salvo la propia) | sede, solo operacionales, salvo la propia | no | no | no | no | no |
-| Subir o borrar el avatar de un miembro | sí | sede, solo operacionales | no | no | no | no | no |
-| Cambiar la **propia** contraseña | sí | sí | sí | sí | sí | sí | sí |
+| Acción | O | A | D | N | R | F | L | Dónde se decide |
+|---|---|---|---|---|---|---|---|---|
+| Listar el equipo | sí | sede + solo roles operacionales + sí mismo | no | no | no | no | no | `core/permissions.py:224` (GET=`MANAGE_ROLES`, `:68`) + `tenancy/views.py:141-149` + `tenancy/selectors.py:174-188` + `tenancy/models.py:105-127` (`operational_roles()` = todos menos owner y admin) |
+| Ver / editar / dar de alta a un miembro | sí | sede, solo roles operacionales | no | no | no | no | no | `core/permissions.py:225-226` + `tenancy/views.py:70-110` (`_member_get_or_404` → 404, no 403) + `tenancy/services.py:102-111` (`_authorize_write_on_member`) |
+| Otorgar el rol `owner` o `admin` | sí | **no** | no | no | no | no | no | `tenancy/services.py:114-133` (`_ensure_role_grantable`), invocado en `:219` (alta) y `:385-388` (PATCH) → 400 |
+| Crear un segundo `owner` | **no** | no | no | no | no | no | no | `tenancy/services.py:223-230`: 400 incluso para el owner (solo el bootstrap de plataforma lo evita, `:231-238`) |
+| Restablecer la contraseña de un miembro | sí (cualquiera) | sede, solo roles operacionales | no | no | no | no | no | `core/permissions.py:226` + `tenancy/services.py:102-103` (owner: no-op) y `:424-436` |
+| Bloquear / desbloquear una cuenta | sí (salvo la propia) | sede, solo operacionales, salvo la propia | no | no | no | no | no | `tenancy/services.py:438-440` (el veto de autobloqueo solo aplica a `blocked=True`) + `:102-111` |
+| Subir o borrar el avatar de un miembro | sí | sede, solo operacionales | no | no | no | no | no | `core/permissions.py:225`, `:227` + `tenancy/views.py:242-269` + `tenancy/services.py:465-471` y `:494-500` (mismo `_authorize_write_on_member`) |
+| Cambiar la **propia** contraseña | sí | sí | sí | sí | sí | sí | sí | `authn/views.py:462`, `:496`: `permission_classes = [IsAuthenticated]` — sin `HasClinicRole` ni guard de módulo + `authn/services.py:25` |
 
 Tipos de cita (`AppointmentType`, `apps/agenda`): `AppointmentTypePermission` = GET todos los roles ·
-POST/PATCH/DELETE owner y admin (§1.3.2 #7), con guard `RequiresAgenda`. Se documenta en la sección
+POST/PATCH/DELETE owner y admin (§1.3.2 #7 — `core/permissions.py:232-248`), con guard
+`RequiresAgenda` (`core/entitlement_guards.py:92`). Se documenta en la sección
 de agenda.
 
 ---
@@ -6649,44 +6709,51 @@ Devuelve las notas visibles del usuario (misma lógica de 9.2.1, incluido el aco
 
 ### 9.4 Matriz de permisos del módulo
 
-`NotePermission` (§1.3.2 #20) deja pasar a los 7 roles en los 4 métodos, así que **esta tabla es la
-del `service` y el `selector`, no la del permiso HTTP**. Un "No" aquí significa 400 con `detail`
-(regla de negocio) salvo donde se indique 404 (fuera de alcance de sede) o 403 (rol/módulo).
+`NotePermission` (§1.3.2 #20 — `core/permissions.py:638-660`) deja pasar a los 7 roles en los 4
+métodos (`ALL_ROLES`, `core/permissions.py:56-66`), así que **esta tabla es la del `service` y el
+`selector`, no la del permiso HTTP**. Un "No" aquí significa 400 con `detail` (regla de negocio)
+salvo donde se indique 404 (fuera de alcance de sede) o 403 (rol/módulo).
 
 Leyenda: **Sí** = permitido · **Propias** = solo sobre registros propios · **No** = denegado.
 
-| Acción | owner | admin | doctor | nurse | reception | finance | readonly |
-|---|---|---|---|---|---|---|---|
-| Ver mis notas personales | Propias | Propias | Propias | Propias | Propias | Propias | Propias |
-| Ver avisos dirigidos a mi rol (en mi sede o de toda la clínica) | Sí | Sí | Sí | Sí | Sí | Sí | Sí |
-| Ver avisos `scope=all` (en mi sede o de toda la clínica) | Sí | Sí | Sí | Sí | Sí | Sí | Sí |
-| Ver notas personales de otros | No | No | No | No | No | No | No |
-| Ver avisos de una sede que no es la mía | Sí (alcance total) | Solo si sus `MembershipSucursal` la cubren | ídem | ídem | ídem | ídem | ídem |
-| Crear nota personal | Sí | Sí | Sí | Sí | Sí | Sí | Sí |
-| Crear tarea (`is_task`) | Sí | Sí | Sí | Sí | Sí | Sí | Sí |
-| Poner recordatorio (`remind_at`) | Sí | Sí | Sí | Sí | Sí | Sí | Sí |
-| Crear aviso a un rol (`scope=role`) | Sí | Sí | Sí | Sí | Sí | **No** | **No** |
-| Crear aviso a toda la clínica (`scope=all`) | Sí | Sí | **No** | **No** | **No** | **No** | **No** |
-| Elegir la sede del aviso | Sí (cualquiera, o todas) | **No** — forzado a la suya | **No** | **No** | **No** | n/a | n/a |
-| Marcar un aviso como importante | Sí | **No** | **No** | **No** | **No** | **No** | **No** |
-| Editar nota propia (`PATCH`) | Propias | Propias | Propias | Propias | Propias | Propias | Propias |
-| Editar aviso ajeno (`role`/`all`) | **Sí** (supervisión) | No | No | No | No | No | No |
-| Editar aviso importante ajeno | Sí | **404** | **404** | **404** | **404** | **404** | **404** |
-| Cambiar `scope` de una nota propia a `role` | Sí | Sí | Sí | Sí | Sí | **No** | **No** |
-| Cambiar `scope` de una nota propia a `all` | Sí | Sí | **No** | **No** | **No** | **No** | **No** |
-| Cambiar `sucursal` o `is_important` por PATCH | **No** (400) | No | No | No | No | No | No |
-| Borrar nota propia (`DELETE`, soft) | Propias | Propias | Propias | Propias | Propias | Propias | Propias |
-| Borrar aviso ajeno (`role`/`all`) | **Sí** | No | No | No | No | No | No |
-| Marcar tarea como hecha | Propias | Propias | Propias | Propias | Propias | Propias | Propias |
-| Marcar hecha la tarea de otro | **No** | No | No | No | No | No | No |
-| Restaurar una nota borrada | n/a — no existe endpoint | n/a | n/a | n/a | n/a | n/a | n/a |
-| Cualquier acción sin el módulo `notas` | **404** | 404 | 404 | 404 | 404 | 404 | 404 |
+| Acción | owner | admin | doctor | nurse | reception | finance | readonly | Dónde se decide |
+|---|---|---|---|---|---|---|---|---|
+| Ver mis notas personales | Propias | Propias | Propias | Propias | Propias | Propias | Propias | `core/permissions.py:656` (GET=`ALL_ROLES`) + `notas/selectors.py:160` (`author=user, scope=personal`) vía `notas/views.py:152-155` |
+| Ver avisos dirigidos a mi rol (en mi sede o de toda la clínica) | Sí | Sí | Sí | Sí | Sí | Sí | Sí | `notas/selectors.py:157`, `:163-167` (`target_role` == rol de la membresía) y `:172-177` (condición de sede) |
+| Ver avisos `scope=all` (en mi sede o de toda la clínica) | Sí | Sí | Sí | Sí | Sí | Sí | Sí | `notas/selectors.py:170` y `:172-177` |
+| Ver notas personales de otros | No | No | No | No | No | No | No | `notas/selectors.py:160` (la rama personal exige `author=user`); además no existe GET de detalle: `notas/urls.py:39-43` |
+| Ver avisos de una sede que no es la mía | Sí (alcance total) | Solo si sus `MembershipSucursal` la cubren | ídem | ídem | ídem | ídem | ídem | `clinica/sucursal_scope.py:429-474` (`sucursal_scope_ids`: owner y "admin de negocio" → `None`) + `notas/selectors.py:172-177` + `notas/views.py:152-155` |
+| Crear nota personal | Sí | Sí | Sí | Sí | Sí | Sí | Sí | `core/permissions.py:657` (POST=`ALL_ROLES`) + `notas/services.py:343-345` (scope personal no valida rol) |
+| Crear tarea (`is_task`) | Sí | Sí | Sí | Sí | Sí | Sí | Sí | `core/permissions.py:657` + `notas/services.py:250`, `:366` (ninguna validación de rol sobre `is_task`) |
+| Poner recordatorio (`remind_at`) | Sí | Sí | Sí | Sí | Sí | Sí | Sí | `core/permissions.py:657` + `notas/services.py:251`, `:368` |
+| Crear aviso a un rol (`scope=role`) | Sí | Sí | Sí | Sí | Sí | **No** | **No** | `notas/services.py:323-326` → `notificaciones/recipients.py:32-34` (`ROLE_NOTE_SENDERS` = owner/admin/doctor/nurse/reception) → 400 |
+| Crear aviso a toda la clínica (`scope=all`) | Sí | ⚠ **Sí** | **No** | **No** | **No** | **No** | **No** | `notas/services.py:314-322` → `:106-108` (`_SCOPE_ALL_SENDERS` = owner **y admin**; el comentario `:315-317` dice "ya NO es exclusivo del owner") |
+| Elegir la sede del aviso | Sí (cualquiera, o todas) | **No** — forzado a la suya | **No** | **No** | **No** | n/a | n/a | `notas/services.py:167-228` (`_resolve_broadcast_sucursal`): owner `:211-217`; cualquier otro `:222-228` vía `resolve_write_sucursal` (`clinica/sucursal_scope.py:313`) |
+| Marcar un aviso como importante | Sí | **No** | **No** | **No** | **No** | **No** | **No** | `notas/services.py:219-220` (400 explícito para todo no-owner) + `:211-217` (solo el owner conserva el valor pedido) |
+| Editar nota propia (`PATCH`) | Propias | Propias | Propias | Propias | Propias | Propias | Propias | `core/permissions.py:658` (PATCH=`ALL_ROLES`) + `notas/services.py:482-483` → `_can_mutate` `:150-164` |
+| Editar aviso ajeno (`role`/`all`) | **Sí** (supervisión) | No | No | No | No | No | No | `notas/services.py:157-164`: autor, o `_is_owner` (`:132-135`) cuando `scope` es role/all |
+| Editar aviso importante ajeno | Sí | **404** | **404** | **404** | **404** | **404** | **404** | `notas/selectors.py:72-85` (el filtro de alcance exige `is_important=False`) vía `notas/views.py:68-87` (`_note_get_or_404`) |
+| Cambiar `scope` de una nota propia a `role` | Sí | Sí | Sí | Sí | Sí | **No** | **No** | `notas/services.py:531-535` → `notificaciones/recipients.py:32-34` |
+| Cambiar `scope` de una nota propia a `all` | Sí | Sí | **No** | **No** | **No** | **No** | **No** | `notas/services.py:522-530` → `:106-108` (`_SCOPE_ALL_SENDERS`) |
+| Cambiar `sucursal` o `is_important` por PATCH | **No** (400) | No | No | No | No | No | No | `notas/services.py:93-100` (`_NOTE_IMMUTABLE_FIELDS`) + `:486-490` (rechazo por nombre de campo, sin excepción para el owner) |
+| Borrar nota propia (`DELETE`, soft) | Propias | Propias | Propias | Propias | Propias | Propias | Propias | `core/permissions.py:659` (DELETE=`ALL_ROLES`) + `notas/services.py:632-633` → `_can_mutate` `:150-164` |
+| Borrar aviso ajeno (`role`/`all`) | **Sí** | No | No | No | No | No | No | `notas/services.py:632-633` → `:162-163` |
+| Marcar tarea como hecha | Propias | Propias | Propias | Propias | Propias | Propias | Propias | `core/permissions.py:657` + `notas/views.py:298` + `notas/services.py:590-596` |
+| Marcar hecha la tarea de otro | **No** | No | No | No | No | No | No | `notas/services.py:595-596` (compara `author_id`; **no** hay excepción de owner, a diferencia de `_can_mutate`) |
+| Restaurar una nota borrada | n/a — no existe endpoint | n/a | n/a | n/a | n/a | n/a | n/a | `notas/urls.py:25-49` (solo list/create, detail PATCH+DELETE, done, recordatorios) |
+| Cualquier acción sin el módulo `notas` | **404** | 404 | 404 | 404 | 404 | 404 | 404 | `core/entitlement_guards.py:72-84` (`raise NotFound`) + `:96` (`RequiresNotas`), aplicado en `notas/views.py:95`, `:213`, `:298`, `:331`. Aquí el 404 sí gana para todos los roles, porque `NotePermission` los deja pasar a los 7 |
+
+⚠ **Celda corregida** respecto a la primera versión de este contrato: crear un aviso `scope=all` **sí
+lo puede hacer el `admin`**, no solo el owner (`notas/services.py:106-108`). La tabla original decía
+"No" y se contradecía con su propia fila "Cambiar `scope` de una nota propia a `all`", que usa la
+misma constante. Lo que el admin **no** puede es elegir sede ni marcar el aviso como importante.
 
 La fila del "admin de negocio" (rol no-owner cuyas `MembershipSucursal` cubren **todas** las sedes,
-§1.5.2) merece una nota: recibe `sucursal_ids=None` y por lo tanto **alcance total en `note_get`**,
-igual que el owner. Sigue sin poder mutar lo ajeno porque `_can_mutate` compara contra el rol
-`owner`, no contra el alcance — pero sí puede alcanzar por id cualquier nota del tenant y recibir un
-400 en vez de un 404 (B-NOT-04).
+§1.5.2) merece una nota: recibe `sucursal_ids=None` (`clinica/sucursal_scope.py:448-451`) y por lo
+tanto **alcance total en `note_get`** (`notas/selectors.py:72`, la rama de filtrado no se aplica),
+igual que el owner. Sigue sin poder mutar lo ajeno porque `_can_mutate`
+(`notas/services.py:150-164`) compara contra el rol `owner`, no contra el alcance — pero sí puede
+alcanzar por id cualquier nota del tenant y recibir un 400 en vez de un 404 (B-NOT-04).
 
 ---
 
@@ -6979,7 +7046,8 @@ Fuente de las cuatro primeras columnas: `NotificationPermission` abre los 7 role
 (`selectors.py:65-68`). Las dos últimas filas salen de §1.2.4 y `core/permissions.py:129-131`.
 
 **No hay ninguna operación de creación ni de borrado por API.** `PUT`, `PATCH` y `DELETE` sobre
-cualquiera de las cuatro rutas → **405** (los handlers no existen).
+cualquiera de las cuatro rutas → **403** para todos los roles, no 405: `NotificationPermission` solo
+declara GET y POST, y el permiso corre antes de resolver el handler.
 
 ---
 
@@ -7495,7 +7563,9 @@ Ruta registrada en `apps/audit/urls.py:15` bajo el prefijo `api/v1/audit/`
 (`MailySoft/backend/config/urls.py:43`). Hereda de `TenantAPIView` (`views.py:39`), así que resuelve
 tenant y fija el GUC.
 
-**`PUT`, `POST`, `PATCH` y `DELETE` → 405**: los handlers no existen (`views.py:42`). Es la misma
+**`PUT`, `POST`, `PATCH` y `DELETE` → 403**, no 405: `AuditLogPermission` solo declara `GET` (y solo
+para owner), así que el permiso deniega antes de que DRF busque el handler, que tampoco existe
+(`views.py:42`). Es la misma
 técnica con la que se sostiene la inmutabilidad clínica (§1.7.2).
 
 #### `GET /api/v1/audit/logs/`
@@ -7972,7 +8042,7 @@ porque se usa `all_objects`, y la de Postgres porque `current_tenant_id() IS NUL
 condición `OR` de toda policy. Lo único que separa "el equipo de Maily" de "cualquier usuario
 autenticado" es el `permission_class` que cada vista declara a mano. Su `permission_classes` de
 clase es `[IsAuthenticated]` (`views.py:132`): una vista nueva que herede y olvide declarar el
-permiso queda abierta a cualquier usuario de cualquier clínica. Hoy no ocurre —las 13 vistas lo
+permiso queda abierta a cualquier usuario de cualquier clínica. Hoy no ocurre —las 15 vistas lo
 declaran—, pero es un fail-open por omisión. Ver `B-PLA-01`.
 
 ---
