@@ -1,0 +1,1995 @@
+<title>Expediente clínico — Maily360</title>
+
+<style>
+:root{
+  --paper:#F7F6F2; --card:#FFFFFF; --ink:#1D2426; --ink-soft:#3E4749; --muted:#6C7879;
+  --rule:#D8D5CC; --rule-soft:#E9E6DE; --code-bg:#EEECE4; --code-ink:#334042;
+  --teal:#0E6F6E; --gold:#8E7118; --gold-hi:#C9A227; --oxide:#A33B2A; --navy:#2F5D8C; --plum:#6B4A8C;
+  --tint-teal:rgba(14,111,110,.09); --tint-gold:rgba(201,162,39,.13);
+  --tint-oxide:rgba(163,59,42,.09); --tint-navy:rgba(47,93,140,.09); --tint-plum:rgba(107,74,140,.09);
+  --shadow:0 1px 2px rgba(29,36,38,.05), 0 8px 24px -12px rgba(29,36,38,.18);
+  --serif:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#14191B; --card:#1B2124; --ink:#E8E5DD; --ink-soft:#C6C3BA; --muted:#8D9899;
+    --rule:#2F3739; --rule-soft:#242B2D; --code-bg:#1F272A; --code-ink:#C8D2D3;
+    --teal:#63C2B8; --gold:#D6B357; --gold-hi:#E3C463; --oxide:#E28D78; --navy:#8FB6DE; --plum:#B79AD6;
+    --tint-teal:rgba(99,194,184,.11); --tint-gold:rgba(227,196,99,.11);
+    --tint-oxide:rgba(226,141,120,.10); --tint-navy:rgba(143,182,222,.10); --tint-plum:rgba(183,154,214,.10);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14191B; --card:#1B2124; --ink:#E8E5DD; --ink-soft:#C6C3BA; --muted:#8D9899;
+  --rule:#2F3739; --rule-soft:#242B2D; --code-bg:#1F272A; --code-ink:#C8D2D3;
+  --teal:#63C2B8; --gold:#D6B357; --gold-hi:#E3C463; --oxide:#E28D78; --navy:#8FB6DE; --plum:#B79AD6;
+  --tint-teal:rgba(99,194,184,.11); --tint-gold:rgba(227,196,99,.11);
+  --tint-oxide:rgba(226,141,120,.10); --tint-navy:rgba(143,182,222,.10); --tint-plum:rgba(183,154,214,.10);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+}
+:root[data-theme="light"]{
+  --paper:#F7F6F2; --card:#FFFFFF; --ink:#1D2426; --ink-soft:#3E4749; --muted:#6C7879;
+  --rule:#D8D5CC; --rule-soft:#E9E6DE; --code-bg:#EEECE4; --code-ink:#334042;
+  --teal:#0E6F6E; --gold:#8E7118; --gold-hi:#C9A227; --oxide:#A33B2A; --navy:#2F5D8C; --plum:#6B4A8C;
+  --tint-teal:rgba(14,111,110,.09); --tint-gold:rgba(201,162,39,.13);
+  --tint-oxide:rgba(163,59,42,.09); --tint-navy:rgba(47,93,140,.09); --tint-plum:rgba(107,74,140,.09);
+  --shadow:0 1px 2px rgba(29,36,38,.05), 0 8px 24px -12px rgba(29,36,38,.18);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);
+  font-size:17px;line-height:1.62;-webkit-font-smoothing:antialiased}
+a{color:var(--teal);text-decoration-thickness:1px;text-underline-offset:3px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--gold-hi);outline-offset:3px;border-radius:2px}
+code,kbd{font-family:var(--mono);font-size:.82em;background:var(--code-bg);color:var(--code-ink);
+  padding:.12em .38em;border-radius:3px;word-break:break-word}
+
+.masthead{border-bottom:1px solid var(--rule);background:var(--card)}
+.masthead-in{max-width:1200px;margin:0 auto;padding:52px 30px 40px}
+.eyebrow{font-family:var(--sans);font-size:11.5px;font-weight:640;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 20px}
+.masthead h1{font-size:clamp(38px,6.6vw,68px);line-height:1.02;letter-spacing:-.02em;margin:0;
+  font-weight:600;text-wrap:balance}
+.masthead h1 em{font-style:normal;color:var(--teal)}
+.lede{font-size:20px;line-height:1.55;color:var(--ink-soft);max-width:62ch;margin:20px 0 0}
+.facts{display:flex;flex-wrap:wrap;gap:0;margin:34px 0 0;border-top:1px solid var(--rule-soft);
+  font-family:var(--sans)}
+.fact{padding:14px 26px 0 0;margin-right:26px;border-right:1px solid var(--rule-soft);flex:0 1 auto}
+.fact:last-child{border-right:0}
+.fact dt{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin:0 0 3px}
+.fact dd{margin:0;font-size:14px;font-weight:560;color:var(--ink)}
+
+.page{max-width:1200px;margin:0 auto;padding:0 30px 140px;
+  display:grid;grid-template-columns:236px minmax(0,1fr);gap:64px;align-items:start}
+.rail{position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:34px 0;font-family:var(--sans)}
+.rail summary{display:none}
+.rail-t{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+.rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.rail a{display:grid;grid-template-columns:26px 1fr;gap:8px;padding:5px 0;font-size:13.5px;
+  line-height:1.34;color:var(--ink-soft);text-decoration:none;border-radius:3px}
+.rail a:hover{color:var(--teal)}
+.rail a b{font-variant-numeric:tabular-nums;font-weight:560;color:var(--muted);font-size:12px}
+.rail a:hover b{color:var(--teal)}
+
+main{padding:34px 0 0;min-width:0}
+
+.sec{padding:0 0 56px;scroll-margin-top:22px}
+.sec+.sec{border-top:1px solid var(--rule);padding-top:52px}
+.sec-h{display:grid;grid-template-columns:52px minmax(0,1fr);gap:0 14px;margin:0 0 26px}
+.sec-h .num{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--gold);
+  padding-top:.72em;font-variant-numeric:tabular-nums}
+.sec-h h2{grid-column:2;margin:0;font-size:clamp(27px,3.6vw,36px);line-height:1.12;
+  letter-spacing:-.015em;font-weight:600;text-wrap:balance}
+.sec-h .dek{grid-column:2;margin:9px 0 0;font-size:17.5px;color:var(--muted);max-width:64ch}
+.sec>p,.sec>ul,.sec>ol{max-width:68ch}
+.sec>p{margin:0 0 18px}
+h3{font-family:var(--sans);font-size:15px;font-weight:640;letter-spacing:.01em;
+  margin:36px 0 14px;color:var(--ink)}
+h3:first-child{margin-top:0}
+h4{font-family:var(--sans);font-size:11.5px;font-weight:640;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);margin:26px 0 10px}
+.sec ul,.sec ol{padding-left:1.15em;margin:0 0 18px}
+.sec li{margin:0 0 7px}
+.sec li>ul{margin:7px 0 0}
+
+.ficha{background:var(--card);border:1px solid var(--rule);border-radius:5px;
+  padding:22px 24px;margin:0 0 18px;box-shadow:var(--shadow)}
+.ficha>h3{margin-top:0}
+.ficha-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 14px;margin:0 0 14px;
+  padding-bottom:12px;border-bottom:1px solid var(--rule-soft)}
+.ficha-h h3{margin:0;font-size:16.5px}
+.ficha p{margin:0 0 14px;max-width:66ch}
+.ficha p:last-child,.ficha ul:last-child,.ficha>div:last-child{margin-bottom:0}
+.src{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:16px;margin:0 0 18px}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px;padding:0;list-style:none}
+.chip{font-family:var(--sans);font-size:11.5px;font-weight:560;letter-spacing:.02em;
+  padding:3px 9px;border-radius:20px;border:1px solid var(--rule);color:var(--ink-soft);
+  background:var(--paper);white-space:nowrap}
+.chip.mono{font-family:var(--mono);font-weight:400;letter-spacing:0}
+.chip.t{color:var(--teal);border-color:color-mix(in srgb,var(--teal) 34%,transparent);background:var(--tint-teal)}
+.chip.g{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 38%,transparent);background:var(--tint-gold)}
+.chip.o{color:var(--oxide);border-color:color-mix(in srgb,var(--oxide) 34%,transparent);background:var(--tint-oxide)}
+.chip.n{color:var(--navy);border-color:color-mix(in srgb,var(--navy) 34%,transparent);background:var(--tint-navy)}
+.chip.p{color:var(--plum);border-color:color-mix(in srgb,var(--plum) 34%,transparent);background:var(--tint-plum)}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;
+  vertical-align:baseline;border:1px solid rgba(0,0,0,.14)}
+
+.call{border-left:3px solid var(--rule);padding:14px 18px;margin:0 0 18px;border-radius:0 4px 4px 0;
+  background:var(--paper);max-width:70ch}
+.call .lab{display:block;font-family:var(--sans);font-size:10.5px;font-weight:680;letter-spacing:.12em;
+  text-transform:uppercase;margin:0 0 6px}
+.call p{margin:0 0 10px;font-size:16px}
+.call p:last-child,.call ul:last-child{margin-bottom:0}
+.call ul{margin:0;font-size:16px}
+.call.regla{border-color:var(--oxide);background:var(--tint-oxide)}
+.call.regla .lab{color:var(--oxide)}
+.call.dec{border-color:var(--navy);background:var(--tint-navy)}
+.call.dec .lab{color:var(--navy)}
+.call.opp{border-color:var(--gold-hi);background:var(--tint-gold)}
+.call.opp .lab{color:var(--gold)}
+.call.nota{border-color:var(--teal);background:var(--tint-teal)}
+.call.nota .lab{color:var(--teal)}
+
+.tw{overflow-x:auto;margin:0 0 20px;border:1px solid var(--rule);border-radius:5px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:13.5px;line-height:1.42}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+thead th{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+  font-weight:640;background:var(--paper);border-bottom:1px solid var(--rule);
+  position:sticky;top:0;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td code,th code{font-size:12px;background:none;padding:0;color:var(--code-ink)}
+td.mono,th.mono{font-family:var(--mono);font-size:12px;white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.yes{color:var(--teal);font-weight:640}
+.no{color:var(--muted)}
+.mid{color:var(--gold);font-weight:640}
+caption{caption-side:bottom;text-align:left;padding:9px 13px;font-family:var(--sans);
+  font-size:12px;color:var(--muted);border-top:1px solid var(--rule-soft)}
+
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0;margin:0 0 18px;font-family:var(--sans);font-size:14px}
+.kv dt{font-family:var(--mono);font-size:12.5px;color:var(--teal);padding:7px 18px 7px 0;
+  border-bottom:1px solid var(--rule-soft);white-space:nowrap}
+.kv dd{margin:0;padding:7px 0;border-bottom:1px solid var(--rule-soft);color:var(--ink-soft)}
+.kv dt:last-of-type,.kv dd:last-of-type{border-bottom:0}
+
+.wire{border:1px solid var(--rule);border-radius:5px;background:var(--card);padding:16px;
+  margin:0 0 8px;overflow-x:auto}
+.wire-t{font-family:var(--sans);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 12px}
+.wire-c{font-family:var(--sans);font-size:12.5px;color:var(--muted);margin:0 0 20px}
+
+.drawer{display:flex;flex-direction:column;gap:8px;font-family:var(--sans);font-size:11.5px;min-width:420px}
+.dz{border:1px solid var(--rule);border-radius:4px;padding:9px 11px;background:var(--paper)}
+.dz b{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  font-weight:640;margin:0 0 4px}
+.dz.hi{border-color:color-mix(in srgb,var(--gold) 45%,transparent);background:var(--tint-gold)}
+.dz.tl{border-color:color-mix(in srgb,var(--teal) 40%,transparent);background:var(--tint-teal)}
+.dz.ox{border-color:color-mix(in srgb,var(--oxide) 40%,transparent);background:var(--tint-oxide)}
+.dcols{display:grid;grid-template-columns:minmax(160px,.85fr) minmax(0,1.7fr);gap:8px}
+.dstack{display:flex;flex-direction:column;gap:8px}
+
+.soap{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 20px}
+.sq{border:1px solid var(--rule);border-radius:5px;padding:14px;background:var(--card)}
+.sq .let{font-family:var(--sans);font-weight:700;font-size:15px;width:28px;height:28px;
+  display:grid;place-items:center;border-radius:4px;color:#fff;margin:0 0 9px}
+.sq h4{margin:0 0 5px;font-size:13px;letter-spacing:.02em;text-transform:none;color:var(--ink)}
+.sq p{font-family:var(--sans);font-size:12.5px;color:var(--muted);margin:0 0 8px;line-height:1.45}
+.sq .fl{font-family:var(--mono);font-size:11px;color:var(--ink-soft);line-height:1.6}
+
+.steps{list-style:none;padding:0;margin:0 0 20px;counter-reset:st}
+.steps li{counter-increment:st;display:grid;grid-template-columns:28px minmax(0,1fr);gap:14px;
+  padding:0 0 16px}
+.steps li::before{content:counter(st);font-family:var(--mono);font-size:11.5px;font-weight:500;
+  color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);
+  background:var(--tint-gold);border-radius:50%;width:26px;height:26px;
+  display:grid;place-items:center;margin-top:2px}
+.steps li>b,.steps li>p{grid-column:2}
+.steps li b{font-family:var(--sans);font-size:14.5px;display:block;margin-bottom:2px}
+.steps li p{margin:0;max-width:62ch}
+
+pre.mermaid{background:var(--card);border:1px solid var(--rule);border-radius:5px;
+  padding:18px;margin:0 0 20px;overflow-x:auto;text-align:center}
+.msg{font-family:var(--sans);font-style:italic;color:var(--ink-soft)}
+.klist{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);line-height:1.85;
+  background:var(--code-bg);border-radius:4px;padding:12px 14px;margin:0 0 16px;
+  border:1px solid var(--rule-soft)}
+
+.foot{border-top:1px solid var(--rule);margin-top:14px;padding:30px 0 0;
+  font-family:var(--sans);font-size:13.5px;color:var(--muted);max-width:68ch}
+
+@media(max-width:900px){
+  .page{grid-template-columns:1fr;gap:0;padding:0 22px 90px}
+  .rail{position:static;max-height:none;padding:24px 0 0;overflow:visible;
+    border-bottom:1px solid var(--rule);margin-bottom:8px}
+  .rail summary{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    font-weight:640;color:var(--teal);cursor:pointer;padding:8px 0 16px}
+  .rail-t{display:none}
+  .rail ol{padding-bottom:18px}
+  .masthead-in{padding:38px 22px 30px}
+  body{font-size:16.5px}
+  .sec-h{grid-template-columns:38px minmax(0,1fr)}
+  .fact{padding:12px 0 0;margin:0;border-right:0;border-top:1px solid var(--rule-soft);flex:1 1 100%}
+  .facts{border-top:0}
+  .dcols{grid-template-columns:1fr}
+  .drawer{min-width:0}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="masthead">
+  <div class="masthead-in">
+    <p class="eyebrow">Maily360 · Handoff para diseño · Documento 2 de 2</p>
+    <h1>Expediente clínico:<br>todo lo que <em>ya hace</em> hoy</h1>
+    <p class="lede">Inventario completo de las vistas del expediente: historia clínica, signos
+      vitales, notas de evolución, diagnósticos, recetas, el libro del paciente y todo lo que cuelga
+      de ellas. Con las reglas que la ley mexicana impone y que ningún rediseño puede quitar.</p>
+    <dl class="facts">
+      <div class="fact"><dt>Fecha de corte</dt><dd>26 de julio de 2026</dd></div>
+      <div class="fact"><dt>Alcance</dt><dd>Expediente · Recetas · Libro clínico · PDFs</dd></div>
+      <div class="fact"><dt>Marco legal</dt><dd>NOM-004-SSA3-2012 · COFEPRIS · LFPDPPP</dd></div>
+      <div class="fact"><dt>Documento par</dt><dd><a href="https://claude.ai/code/artifact/d03daefa-a619-4603-8147-1790365bbecb">Agenda →</a></dd></div>
+    </dl>
+  </div>
+</header>
+
+<div class="page">
+
+<details class="rail" open>
+  <summary>Índice del documento</summary>
+  <p class="rail-t">Contenido</p>
+  <ol>
+    <li><a href="#s01"><b>01</b><span>Cómo leer este documento</span></a></li>
+    <li><a href="#s02"><b>02</b><span>Mapa de navegación</span></a></li>
+    <li><a href="#s03"><b>03</b><span>Anatomía de la pantalla</span></a></li>
+    <li><a href="#s04"><b>04</b><span>Visita de hoy</span></a></li>
+    <li><a href="#s05"><b>05</b><span>Ficha del paciente</span></a></li>
+    <li><a href="#s06"><b>06</b><span>Alergias</span></a></li>
+    <li><a href="#s07"><b>07</b><span>Historia clínica</span></a></li>
+    <li><a href="#s08"><b>08</b><span>Signos vitales</span></a></li>
+    <li><a href="#s09"><b>09</b><span>Evolución SOAP</span></a></li>
+    <li><a href="#s10"><b>10</b><span>Diagnósticos</span></a></li>
+    <li><a href="#s11"><b>11</b><span>Libro clínico</span></a></li>
+    <li><a href="#s12"><b>12</b><span>Resumen clínico</span></a></li>
+    <li><a href="#s13"><b>13</b><span>Recetas</span></a></li>
+    <li><a href="#s14"><b>14</b><span>Plan Integral</span></a></li>
+    <li><a href="#s15"><b>15</b><span>Calendarización</span></a></li>
+    <li><a href="#s16"><b>16</b><span>Estado de cuenta</span></a></li>
+    <li><a href="#s17"><b>17</b><span>PDFs asíncronos</span></a></li>
+    <li><a href="#s18"><b>18</b><span>Qué existe según el plan</span></a></li>
+    <li><a href="#s19"><b>19</b><span>Permisos por rol</span></a></li>
+    <li><a href="#s20"><b>20</b><span>Referencia técnica</span></a></li>
+    <li><a href="#s21"><b>21</b><span>Brechas y oportunidades</span></a></li>
+  </ol>
+</details>
+
+<main>
+
+<!-- ============ 01 ============ -->
+<section class="sec" id="s01">
+  <div class="sec-h">
+    <span class="num">01</span>
+    <h2>Cómo leer este documento</h2>
+    <p class="dek">Y tres advertencias que evitan rediseñar cosas que no existen.</p>
+  </div>
+
+  <p>Igual que su
+    <a href="https://claude.ai/code/artifact/d03daefa-a619-4603-8147-1790365bbecb">documento par sobre
+    la agenda</a>, esto es un inventario de lo que el expediente
+    <strong>hace hoy</strong>, levantado del código de producción. El expediente es la parte más
+    grande y más regulada del producto: aquí es donde entra la ley mexicana, y donde una decisión de
+    interfaz puede invalidar un documento médico-legal.</p>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>Tres normas gobiernan casi todo lo que sigue. La <strong>NOM-004-SSA3-2012</strong> define qué
+      debe contener un expediente y exige que las notas sean inmutables. El <strong>Artículo 83 de
+      la Ley General de Salud</strong> y las reglas de <strong>COFEPRIS</strong> definen qué debe
+      llevar una receta. La <strong>LFPDPPP</strong> obliga a minimizar los datos personales. Cuando
+      veas un aviso rojo, casi siempre es una de estas tres.</p>
+  </div>
+
+  <h3>Tres advertencias, para no diseñar de más</h3>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>1. <code>EvolucionTab.tsx</code> es código muerto</h3>
+      <span class="chip o">No lo mires</span></div>
+    <p>Son 31 KB, unas 800 líneas, y <strong>nadie lo importa</strong>. Fue sustituido por
+      <code>EvolucionSoapStepper.tsx</code>, que es el que sí se usa. Si abres el proyecto y lo
+      encuentras, ignóralo: la pantalla real de evolución es la otra.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>2. Las recetas tienen dos formatos, no tres</h3>
+      <span class="chip o">Documentación desactualizada</span></div>
+    <p>Hay comentarios en el código que hablan de tres formatos —<em>standard</em>, <em>compact</em>
+      y <em>digital</em>—. El formato <em>standard</em> <strong>fue eliminado</strong> por una
+      migración: los datos se movieron a <em>digital</em> y la opción se borró. Hoy solo existen
+      <strong>Farmacia (media carta)</strong> y <strong>Paciente (hoja completa)</strong>.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>3. Las «especialidades como plugins» nunca se construyeron</h3>
+      <span class="chip o">Solo existe en el plan</span></div>
+    <p>El plan original describía un catálogo de especialidades que el super administrador activaba
+      por clínica. <strong>No existe.</strong> Lo que sí existe, y funciona con el mismo espíritu, es
+      un sistema de <strong>módulos vendibles con derechos por clínica</strong> (sección 18). No
+      diseñes un panel de especialidades: diseña sobre módulos.</p>
+  </div>
+
+  <h3>Los tres tipos de aviso</h3>
+  <div class="call regla"><span class="lab">Regla de negocio</span>
+    <p>No es negociable. Casi siempre por ley o por integridad de los datos.</p></div>
+  <div class="call dec"><span class="lab">Decisión de diseño</span>
+    <p>Se hizo así a propósito y hay una razón registrada.</p></div>
+  <div class="call opp"><span class="lab">Oportunidad</span>
+    <p>Un hueco real. Todas están reunidas en la sección 21.</p></div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section class="sec" id="s02">
+  <div class="sec-h">
+    <span class="num">02</span>
+    <h2>Mapa de navegación</h2>
+    <p class="dek">Lo primero que hay que entender: el expediente no es una página.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>El expediente vive en un <strong>panel modal de 95 % de ancho por 95 % de alto</strong> que se
+      abre encima de la lista de pacientes. <strong>No hay una ruta <code>/expediente/:id</code></strong>:
+      no se puede compartir el enlace de un expediente, ni abrirlo en otra pestaña, ni volver a él
+      con el botón de atrás del navegador. Es una de las decisiones estructurales más importantes
+      que el rediseño puede cuestionar.</p>
+  </div>
+
+  <pre class="mermaid">
+flowchart TD
+  CO["/contactos — Lista de pacientes"] --> EX["Panel del expediente"]
+  AG["/agenda"] --> EX
+  EX --> IZQ["Columna izquierda — la ficha"]
+  EX --> DER["Columna derecha — la visita y las secciones"]
+  IZQ --> HC["Modal: Historia clínica"]
+  EX --> PI["Modal: Plan Integral"]
+  EX --> AGD["Modal: Agendar cita"]
+  DER --> VH["Visita de hoy: 3 pasos"]
+  VH --> SG["Capturar signos"]
+  VH --> SO["Escribir evolución SOAP"]
+  VH --> RX["Nueva receta"]
+  DER --> S1["Libro clínico"]
+  DER --> S2["Signos y mediciones"]
+  DER --> S3["Diagnósticos"]
+  DER --> S4["Recetas"]
+  DER --> S5["Citas"]
+  DER --> S6["Estado de cuenta"]
+  DER --> S7["Calendarización"]
+  S1 --> RC["Modal: Resumen clínico"]
+  S1 --> LB["Lightbox de imágenes"]
+  S1 --> PDF["Visor de PDF"]
+  S7 --> AS["Modal: Agendar sesión"]
+  S6 --> PG["Modal: Registrar pago"]
+  </pre>
+
+  <div class="call nota">
+    <span class="lab">Detalle de implementación con efecto visible</span>
+    <p>El panel <strong>no se desmonta al cerrarse</strong>. Por eso hay una salvaguarda explícita:
+      si cambias de paciente, la sección abierta se reinicia a la portada, para no mostrarte las
+      recetas del paciente anterior. Es el tipo de error que este tipo de arquitectura invita a
+      cometer.</p>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section class="sec" id="s03">
+  <div class="sec-h">
+    <span class="num">03</span>
+    <h2>Anatomía de la pantalla</h2>
+    <p class="dek">Un encabezado, dos columnas con desplazamiento independiente, y un índice de
+      siete secciones.</p>
+  </div>
+
+  <div class="wire">
+    <p class="wire-t">Estructura del panel</p>
+    <div class="drawer">
+      <div class="dz hi"><b>Encabezado a todo el ancho</b>
+        Avatar editable de 96 px · «EXPEDIENTE DEL PACIENTE» · Nombre completo · Número de expediente
+        · Chips: Activo/Inactivo · VIP · Finado · <strong>Saldo</strong> ·
+        Acciones: [Agendar] [✨ Plan Integral] [Dar de baja] · [× cerrar]</div>
+      <div class="dcols">
+        <div class="dstack">
+          <div class="dz ox"><b>① Alergias</b>En rojo, siempre primero</div>
+          <div class="dz"><b>② Datos generales</b>Rejilla de 2 columnas visible sin desplegar · [✎ Editar] convierte la columna en formulario</div>
+          <div class="dz"><b>③ Próxima consulta</b></div>
+          <div class="dz"><b>④ Plegables</b>Historia clínica → abre modal · Indicaciones de enfermería · Observaciones</div>
+          <div class="dz"><b>Aviso</b>«Expediente provisional», si aplica</div>
+        </div>
+        <div class="dstack">
+          <div class="dz tl"><b>Visita de hoy</b>① Enfermería [+ Capturar] · ② Evolución SOAP [✎ Escribir] · ③ Receta [+ Receta]</div>
+          <div class="dz"><b>Índice de secciones</b>
+            📖 Libro clínico [n] › · 📈 Signos y mediciones [n] › · 🩺 Diagnósticos [n] › ·
+            💊 Recetas [n] › · 📅 Citas [n] › · 💰 Estado de cuenta › · ✅ Calendarización ›</div>
+          <div class="dz"><b>Sección abierta</b>[← Volver] · Título · Contenido de la sección</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="wire-c">La columna izquierda mide 380 px fijos; la derecha ocupa el resto. Cada una se
+    desplaza por su cuenta.</p>
+
+  <h3>El índice de secciones y sus contadores</h3>
+  <p>Cada entrada del índice muestra un <strong>contador en vivo</strong> del número de registros, y
+    aparece o desaparece según dos filtros: el <strong>rol</strong> del usuario y los
+    <strong>módulos</strong> que la clínica contrató.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Sección</th><th>Descripción que se muestra</th><th>Contador</th><th>Requiere el módulo</th></tr></thead>
+    <tbody>
+      <tr><td>Libro clínico</td><td>Evoluciones y notas por visita</td><td>notas de evolución</td><td class="mono">expediente</td></tr>
+      <tr><td>Signos y mediciones</td><td>Peso, presión, glucosa y tendencias</td><td>tomas registradas</td><td class="mono">expediente</td></tr>
+      <tr><td>Diagnósticos</td><td>Presuntivos y definitivos (CIE-10)</td><td>diagnósticos</td><td class="mono">expediente</td></tr>
+      <tr><td>Recetas</td><td>Emitidas, PDF y anulación</td><td>recetas</td><td class="mono">recetas</td></tr>
+      <tr><td>Citas</td><td>Próxima cita e historial</td><td>citas</td><td class="mono">agenda</td></tr>
+      <tr><td>Estado de cuenta</td><td>Cargos, pagos y saldo</td><td>—</td><td class="mono">cobranza</td></tr>
+      <tr><td>Calendarización</td><td>Sesiones de tratamiento programadas</td><td>—</td><td class="mono">calendarizacion</td></tr>
+    </tbody>
+  </table>
+  <caption>Cuando el rol no puede ver una sección, la consulta al servidor no se hace: se desactiva
+    para que no se llene la consola de errores de permiso.</caption>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Dos secciones —Estado de cuenta y Calendarización— <strong>no tienen contador</strong>,
+      mientras las otras cinco sí. Es una inconsistencia visible en el índice.</p>
+  </div>
+
+  <p class="src">components/contactos/ExpedienteDrawer.tsx · components/expediente/IndiceSecciones.tsx</p>
+</section>
+
+<!-- ============ 04 ============ -->
+<section class="sec" id="s04">
+  <div class="sec-h">
+    <span class="num">04</span>
+    <h2>Visita de hoy</h2>
+    <p class="dek">La idea rectora del rediseño anterior: el expediente está centrado en la visita,
+      no en el archivo.</p>
+  </div>
+
+  <p>Lo primero que se ve al abrir el expediente es una tarjeta con <strong>tres pasos</strong>, en el
+    orden real en que ocurre una consulta:</p>
+
+  <ol class="steps">
+    <li><b>Enfermería</b>
+      <p>Botón <strong>[+ Capturar]</strong> — o <strong>[Nueva toma]</strong> si ya hay tomas
+        previas. Abre la captura rápida de nueve signos vitales. Enfermería puede hacer este paso;
+        es el único donde puede escribir.</p></li>
+    <li><b>Evolución SOAP</b>
+      <p>Botón <strong>[✎ Escribir]</strong>. Solo para personal clínico con permiso de escritura; el
+        resto ve el texto gris <em>«Solo personal clínico»</em>. Abre el asistente SOAP de la
+        sección 9.</p></li>
+    <li><b>Receta</b>
+      <p>Botón <strong>[+ Receta]</strong>. Reutiliza el mismo componente de la sección de
+        recetas.</p></li>
+  </ol>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>El paso ③ <strong>desaparece por completo</strong> si la clínica no contrató el módulo de
+      recetas. Está documentado en el código con un caso real: <em>«es el caso dental: agenda y
+      expediente sí, recetas no»</em>. Al rediseñar hay que contemplar que la tarjeta tenga dos pasos
+      en algunas clínicas y tres en otras.</p>
+  </div>
+
+  <p class="src">components/expediente/VisitaDeHoy.tsx · VisitaSignos.tsx</p>
+</section>
+
+<!-- ============ 05 ============ -->
+<section class="sec" id="s05">
+  <div class="sec-h">
+    <span class="num">05</span>
+    <h2>Ficha del paciente</h2>
+    <p class="dek">La columna izquierda. Ordenada de lo que no se puede pasar por alto a lo que se
+      consulta de vez en cuando.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño — por qué este orden</span>
+    <p>Antes los datos generales eran <strong>tres tarjetas apiladas</strong> (Contacto,
+      Identificación y campos de norma) que empujaban todo lo demás fuera de la pantalla. Se
+      colapsaron en una sola rejilla de dos columnas, visible sin desplegar, y las alergias subieron
+      al primer lugar. El orden actual es intencional: <strong>alergias → datos generales → próxima
+      consulta → plegables</strong>.</p>
+  </div>
+
+  <h3>La rejilla de datos generales</h3>
+  <p>Quince datos, cada uno con <strong>su propio icono de color</strong>. El color no es decorativo:
+    sirve para localizar el dato sin leer la etiqueta. Un valor vacío se muestra como «—».</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Dato</th><th>Icono</th><th>Color</th><th>Ancho</th></tr></thead>
+    <tbody>
+      <tr><td>Edad</td><td>Pastel</td><td class="mono"><span class="sw" style="background:#db2777"></span>#db2777</td><td>1 columna</td></tr>
+      <tr><td>Nacimiento</td><td>Calendario</td><td class="mono"><span class="sw" style="background:#7c3aed"></span>#7c3aed</td><td>1</td></tr>
+      <tr><td>Sexo</td><td>Persona</td><td class="mono"><span class="sw" style="background:#0284c7"></span>#0284c7</td><td>1</td></tr>
+      <tr><td>Estado civil</td><td>Personas</td><td class="mono"><span class="sw" style="background:#e11d48"></span>#e11d48</td><td>1</td></tr>
+      <tr><td>Ocupación</td><td>Portafolio</td><td class="mono"><span class="sw" style="background:#b45309"></span>#b45309</td><td>1</td></tr>
+      <tr><td>Tipo de sangre</td><td>Gota</td><td class="mono"><span class="sw" style="background:#dc2626"></span>#dc2626</td><td>1</td></tr>
+      <tr><td>Escolaridad</td><td>Birrete</td><td class="mono"><span class="sw" style="background:#4f46e5"></span>#4f46e5</td><td>1</td></tr>
+      <tr><td>Religión</td><td>Libro</td><td class="mono"><span class="sw" style="background:#7c3aed"></span>#7c3aed</td><td>1</td></tr>
+      <tr><td>CURP</td><td>Huella</td><td class="mono"><span class="sw" style="background:#64748b"></span>#64748b</td><td>2 columnas</td></tr>
+      <tr><td>Teléfono</td><td>Teléfono</td><td class="mono"><span class="sw" style="background:#0891b2"></span>#0891b2</td><td>2</td></tr>
+      <tr><td>Correo</td><td>Sobre</td><td class="mono"><span class="sw" style="background:#2563eb"></span>#2563eb</td><td>2</td></tr>
+      <tr><td>Lugar de nacimiento</td><td>Bebé</td><td class="mono"><span class="sw" style="background:#059669"></span>#059669</td><td>2</td></tr>
+      <tr><td>Domicilio</td><td>Alfiler</td><td class="mono"><span class="sw" style="background:#ea580c"></span>#ea580c</td><td>2</td></tr>
+      <tr><td>Categoría</td><td>Etiqueta</td><td class="mono"><span class="sw" style="background:#0d9488"></span>#0d9488</td><td>2, si existe</td></tr>
+      <tr><td>Defunción</td><td>Advertencia</td><td class="mono"><span class="sw" style="background:#6b7280"></span>#6b7280</td><td>2, si aplica</td></tr>
+    </tbody>
+  </table>
+  <caption>El teléfono se compone: <em>principal · secundario (etiqueta)</em>. El domicilio también:
+    <em>calle, colonia, ciudad, estado · CP</em>.</caption>
+  </div>
+
+  <h3>Edición en el sitio</h3>
+  <p>El botón <strong>[✎ Editar]</strong> no abre un modal: <strong>convierte la columna entera en el
+    formulario</strong>, reutilizando los mismos grupos de campos del modal grande de pacientes
+    (datos personales, contacto, domicilio, campos de norma y notas). Los bloques de consulta se
+    ocultan para no competir con el guardado. Al pie, [Cancelar] y [Guardar cambios], con el guardado
+    desactivado mientras haya errores de formato.</p>
+  <p><strong>Las alergias no entran en modo edición</strong>: conservan su propio alta y su propio
+    «resolver».</p>
+
+  <h3>Expediente provisional</h3>
+  <p>Cuando el paciente se creó desde la agenda con datos mínimos, aparece un aviso dorado:</p>
+  <p class="msg">«Este paciente se creó al agendar con datos mínimos. Falta completar su información
+    personal (fecha de nacimiento, sexo, contacto). Usa «Editar» para completarlo.»</p>
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>Esto no es cosmético. <strong>Sin fecha de nacimiento y sin sexo no se puede emitir una
+      receta</strong>, porque la NOM-004 exige edad y sexo en el documento. Un expediente provisional
+      bloquea el paso ③ de la visita, y el error que verá el médico será el de la receta, no el del
+      expediente. Vale la pena que el rediseño conecte explícitamente el aviso con esa consecuencia.</p>
+  </div>
+
+  <h3>Favoritos, VIP y clasificación</h3>
+  <p>Fueron campos del paciente y hoy son <strong>etiquetas de la clínica</strong>: una etiqueta de
+    sistema de tipo «favorito» y otra de tipo «VIP», que no se pueden renombrar ni borrar, más las
+    etiquetas personalizadas que la clínica quiera crear.</p>
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Favoritos y VIP son de <strong>toda la clínica</strong>, no de cada usuario. Si la recepcionista
+      marca a alguien como favorito, la dueña lo ve igual.</p>
+  </div>
+
+  <h4>Los ocho segmentos de la lista de pacientes</h4>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Segmento</th><th>Regla</th></tr></thead>
+    <tbody>
+      <tr><td>Todos</td><td>Los pacientes activos.</td></tr>
+      <tr><td>Recientes</td><td>Los que ya fueron atendidos alguna vez, del más reciente al más antiguo.</td></tr>
+      <tr><td>Esta semana</td><td>Atendidos en la semana calendario, lunes a domingo, hora de Ciudad de México.</td></tr>
+      <tr><td>Este mes</td><td>Atendidos en el mes calendario.</td></tr>
+      <tr><td>Rango de fechas</td><td>Atendidos entre dos fechas. <strong>Ambas obligatorias.</strong></td></tr>
+      <tr><td>Clientes potenciales</td><td>Nunca atendidos <strong>y</strong> con al menos una cita cancelada o reagendada. Es el segmento de recuperación.</td></tr>
+      <tr><td>⭐ Favoritos</td><td>Con la etiqueta de sistema «favorito».</td></tr>
+      <tr><td>👑 VIP</td><td>Con la etiqueta de sistema «VIP».</td></tr>
+    </tbody>
+  </table>
+  <caption>«Visto» significa la cita atendida más reciente, calculada al vuelo, nunca guardada como
+    dato. Comportamiento esperado: a principios de semana, «Esta semana» puede salir vacío mientras
+    «Recientes» y «Este mes» muestran pacientes.</caption>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Marcar a alguien como ⭐ o 👑 <strong>solo se puede desde la tarjeta de la lista de
+      pacientes</strong>, no desde su expediente. Tampoco se pueden asignar etiquetas personalizadas
+      desde ahí. Estando dentro del expediente es justo donde uno querría hacerlo.</p>
+  </div>
+
+  <p class="src">components/expediente/FichaPaciente.tsx · docs/design/pacientes-filtros-clasificacion.md</p>
+</section>
+
+<!-- ============ 06 ============ -->
+<section class="sec" id="s06">
+  <div class="sec-h">
+    <span class="num">06</span>
+    <h2>Alergias</h2>
+    <p class="dek">Lo primero de la columna izquierda, y la única información clínica que ve todo el
+      personal.</p>
+  </div>
+
+  <p>Cada alergia es una pastilla con <strong>color por severidad</strong>, que muestra
+    <em>sustancia · severidad · reacción</em>:</p>
+  <ul class="chips">
+    <li class="chip o">Severa — rojo</li>
+    <li class="chip" style="color:#B8620B;border-color:rgba(184,98,11,.4);background:rgba(214,124,30,.1)">Moderada — ámbar</li>
+    <li class="chip g">Leve o sin especificar — dorado</li>
+  </ul>
+
+  <dl class="kv">
+    <dt>substance</dt><dd>Obligatoria. Hasta 160 caracteres. «Penicilina», «Látex».</dd>
+    <dt>reaction</dt><dd>Opcional, hasta 255. «Urticaria generalizada».</dd>
+    <dt>severity</dt><dd>Sin especificar · Leve · Moderada · Severa.</dd>
+    <dt>is_active</dt><dd>Vigente o resuelta. <strong>Es una bandera clínica, no un borrado.</strong></dd>
+  </dl>
+
+  <p>Con permiso de escritura, el botón <strong>+</strong> abre un mini formulario en el mismo sitio.
+    Cada alergia vigente tiene una <strong>×</strong> que la marca como resuelta. Para ver las
+    resueltas hay que pedirlas explícitamente.</p>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>Es la <strong>única entidad clínica que recepción y finanzas pueden leer</strong>. Se decidió
+      así a propósito: es una bandera de seguridad y todo el personal debe poder verla. Escribir y
+      resolver sigue restringido a personal clínico.</p>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p><strong>No hay validación de duplicados.</strong> Se puede registrar «Penicilina» dos veces sin
+      un solo aviso, y en una lista de alergias eso es exactamente lo que no debe pasar.</p>
+  </div>
+
+  <p>Las alergias vuelven a aparecer en la página de historia clínica del libro, como
+    <strong>⚠ Alergias (n)</strong> en rojo, y se auto-rellenan en el Plan Integral.</p>
+  <p class="src">backend/apps/expediente/models.py:46-111 · views_alergias.py</p>
+</section>
+
+<!-- ============ 07 ============ -->
+<section class="sec" id="s07">
+  <div class="sec-h">
+    <span class="num">07</span>
+    <h2>Historia clínica</h2>
+    <p class="dek">Un documento vivo, uno por paciente, con seis bloques estructurados y preguntas
+      configurables por clínica.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>La historia clínica es un <strong>documento vivo</strong>: hay <strong>una sola por
+      paciente</strong> y se sobrescribe. No hay versiones. La trazabilidad de quién cambió qué la
+      da la bitácora, no el documento. Es la contraparte de las notas de evolución, que sí son
+      inmutables: <em>la historia es el estado actual del paciente; las evoluciones son el
+      registro de lo que pasó</em>.</p>
+  </div>
+
+  <p>Se abre desde el bloque plegable <strong>«Historia clínica»</strong> de la columna izquierda
+    («Antecedentes, padecimiento actual y exploración basal») en un modal centrado de 900 px, con un
+    acordeón por bloques.</p>
+
+  <h3>Los seis bloques estructurados</h3>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>A · Antecedentes heredo-familiares</h3><span class="chip mono">16 campos + número de hermanos</span></div>
+    <p class="klist">diabetes · hipertension_arterial · cardiopatias · hepatopatias · urologicos ·
+      neurologicos · respiratorias · cancer · alergicas · metabolicas · sanguineas · articulares ·
+      inmunologicas · malformaciones · dermatologicas · otros</p>
+    <p>Cada uno es texto libre; el valor esperado por defecto es «Negado».</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>B · Antecedentes personales patológicos</h3><span class="chip mono">25 campos</span></div>
+    <p class="klist">enfermedades_infancia · diabetes · hipertension · respiratorias · oftalmico ·
+      cardiovasculares · neurologicos · gastrointestinales · hepatopatias · metabolicas · urologicos ·
+      circulatorio · traumaticas · articulares · dermatologicas · quirurgicos · transfusionales ·
+      vectores · autoinmunes · emocionales · adicciones · hospitalizaciones_previas · pesticidas ·
+      dx_cancer · otros</p>
+    <p><strong>No incluye alergias</strong> a propósito: la fuente de verdad de las alergias es su
+      propio bloque, para que no haya dos listas que se contradigan.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>C · Antecedentes personales no patológicos</h3><span class="chip mono">8 campos + casa habitación</span></div>
+    <p class="klist">servicios_basicos · actividad_fisica · tabaquismo · alcoholismo ·
+      otras_toxicomanias · inmunizaciones · ultima_desparasitacion · otros</p>
+    <p>«Casa habitación» es el único con opciones cerradas: propia, rentada, prestada u otro.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>D · Hábitos alimenticios</h3><span class="chip mono">4 campos + comidas al día</span></div>
+    <p class="klist">dieta_especial · intolerancias_alimentarias · consumo_agua_litros · suplementos</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>E · Antecedentes gineco-obstétricos</h3><span class="chip o">Condicional por sexo</span></div>
+    <p class="klist">menarca · ritmo_menstrual · alteraciones · fum · ivsa · numero_parejas · gestas ·
+      abortos · partos · cesareas · fup · metodo_planificacion · citologia_vaginal · colposcopia ·
+      usg_pelvico · mastografia · usg_mamas · menopausia_climaterio · tratamientos_hormonales</p>
+    <div class="call regla">
+      <span class="lab">Regla de negocio</span>
+      <p>El bloque <strong>se oculta si el paciente no es de sexo femenino</strong>, y el servidor
+        <strong>rechaza</strong> guardar contenido en él si el sexo registrado no lo permite. No es
+        solo una regla de interfaz.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>F · Exploración física basal</h3><span class="chip mono">18 aparatos y sistemas</span></div>
+    <p class="klist">cerebro · sistema_nervioso · ocular · endocrino · corazon · circulatorio ·
+      respiratorio · hepatico · pancreas · renal · gastrointestinal · osteoarticular · tendomuscular ·
+      reproductor · inmunologico · extremidades · piel_tegumentos · otros</p>
+    <p>Cada sistema tiene <strong>dos estados</strong> — «Sin alteraciones» (por defecto) o «Con
+      alteraciones» — más un campo de detalle de hasta 2 000 caracteres. Cada uno se presenta con su
+      <strong>icono anatómico</strong>: SVG de la librería Healthicons, uno por aparato, en
+      <code>web-soft/public/organos/</code>.</p>
+    <div class="call nota">
+      <span class="lab">Ojo al rediseñar</span>
+      <p>La exploración <strong>basal</strong> tiene dos estados. La exploración de cada
+        <strong>evolución</strong> tiene cuatro (sección 9). Son deliberadamente distintas y no hay
+        que unificarlas por error.</p>
+    </div>
+  </div>
+
+  <h3>Los cuatro campos de texto libre</h3>
+  <dl class="kv">
+    <dt>antecedentes_importancia</dt><dd>Hasta 10 000 caracteres. Es el recuadro que se destaca en el libro.</dd>
+    <dt>padecimiento_actual</dt><dd>Hasta 10 000.</dd>
+    <dt>tratamientos_actuales</dt><dd>Hasta 10 000. Se auto-rellena en el Plan Integral.</dd>
+    <dt>prioridad_analisis</dt><dd>Hasta 5 000.</dd>
+  </dl>
+
+  <h3>Preguntas extra por clínica</h3>
+  <p>Cada clínica puede añadir sus propias preguntas, que se renderizan dinámicamente. Cada una
+    tiene: etiqueta, <strong>tipo de campo</strong> (texto, texto largo, sí/no, lista de opciones,
+    número o fecha), sección a la que pertenece, orden, si es obligatoria y si está activa.</p>
+  <p>Si la sección declarada coincide con el título de un bloque del núcleo, la pregunta
+    <strong>cae dentro de ese bloque</strong>; si no, forma una sección propia. Se configuran en
+    <strong>Mi Consultorio</strong>, con un mini constructor de formularios que además muestra en
+    solo lectura las diez secciones y ~90 preguntas fijas del núcleo de la norma.</p>
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Desactivar una pregunta <strong>no borra las respuestas históricas</strong>. Y si llega una
+      respuesta de una pregunta que ya no existe, se ignora en silencio en lugar de fallar.</p>
+  </div>
+
+  <h3>Comportamiento del formulario</h3>
+  <ul>
+    <li><strong>Autoguardado local de borrador:</strong> si cierras sin guardar, al volver aparece un
+      banner ofreciendo recuperar lo que escribiste. Es la misma pieza en todos los formularios
+      largos del expediente.</li>
+    <li>Un valor de bloque no puede pasar de 2 000 caracteres, y los campos numéricos solo aceptan
+      enteros positivos.</li>
+    <li>Si dos personas guardan a la vez, el servidor lo resuelve con un bloqueo: <strong>nunca hay
+      un error 500</strong>, y nadie pierde el trabajo por una carrera.</li>
+    <li>Al pedir la historia de un paciente que no tiene ninguna, el servidor devuelve un
+      <strong>documento vacío</strong>, no un error: la interfaz siempre tiene algo que pintar.</li>
+  </ul>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — una decisión valiente que hay que conocer</span>
+    <p>Cada lectura del expediente se registra en la bitácora. Pero si el registro
+      <strong>falla</strong>, el acceso <strong>no se deniega</strong>: se eleva una alarma crítica en
+      los logs y el médico entra. La razón está escrita en el código: <em>«un médico en una urgencia
+      no puede quedar bloqueado por un fallo de log»</em>. El código para cambiarlo a un error 503
+      está listo y comentado, esperando la decisión del comité clínico.</p>
+  </div>
+
+  <p class="src">models.py:119-283 · validators.py · HistoriaTab.tsx · lib/nucleoHistoriaClinica.ts</p>
+</section>
+
+<!-- ============ 08 ============ -->
+<section class="sec" id="s08">
+  <div class="sec-h">
+    <span class="num">08</span>
+    <h2>Signos vitales</h2>
+    <p class="dek">Una serie temporal que solo crece. Cada toma es inmutable; si hubo un error, se
+      captura otra.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Las tomas <strong>no se editan ni se borran</strong>. Solo existen las operaciones de listar y
+      crear; intentar modificar una devuelve «método no permitido». Corregir un error significa
+      capturar otra toma, y el historial conserva ambas. Cualquier interfaz que sugiera «editar esta
+      toma» sería una promesa falsa.</p>
+  </div>
+
+  <h3>Los nueve signos y sus rangos</h3>
+  <p>El servidor rechaza cualquier valor fuera del rango fisiológico plausible, con el mensaje
+    <em class="msg">«Valor fuera del rango fisiológico plausible (mínimo – máximo).»</em> El
+    frontend replica los mismos rangos para avisar en vivo.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Orden</th><th>Signo</th><th>Etiqueta</th><th>Unidad</th><th>Rango válido</th><th>Marcador</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="mono">systolic</td><td>PA sistólica</td><td>mmHg</td><td class="num">40 – 300</td><td>Ej. 120</td></tr>
+      <tr><td class="num">2</td><td class="mono">diastolic</td><td>PA diastólica</td><td>mmHg</td><td class="num">20 – 200</td><td>Ej. 80</td></tr>
+      <tr><td class="num">3</td><td class="mono">temperature_c</td><td>Temperatura</td><td>°C</td><td class="num">30 – 45</td><td>Ej. 36.5</td></tr>
+      <tr><td class="num">4</td><td class="mono">weight_kg</td><td>Peso</td><td>kg</td><td class="num">0.2 – 500</td><td>Ej. 70.5</td></tr>
+      <tr><td class="num">5</td><td class="mono">height_m</td><td>Talla</td><td>m</td><td class="num">0.2 – 2.6</td><td>Ej. 1.65</td></tr>
+      <tr><td class="num">6</td><td class="mono">heart_rate</td><td>Frecuencia cardíaca</td><td>lpm</td><td class="num">20 – 300</td><td>Ej. 72</td></tr>
+      <tr><td class="num">7</td><td class="mono">resp_rate</td><td>Frecuencia respiratoria</td><td>rpm</td><td class="num">5 – 80</td><td>Ej. 16</td></tr>
+      <tr><td class="num">8</td><td class="mono">oxygen_saturation</td><td>Saturación de oxígeno</td><td>%</td><td class="num">50 – 100</td><td>Ej. 98</td></tr>
+      <tr><td class="num">9</td><td class="mono">glucose</td><td>Glucosa</td><td>mg/dL</td><td class="num">10 – 1000</td><td>Ej. 90</td></tr>
+    </tbody>
+  </table>
+  <caption>Además: la diastólica debe ser <strong>menor</strong> que la sistólica, y la fecha de la
+    toma <strong>no puede ser futura</strong> (retroactiva sí). El orden es el que usa enfermería.</caption>
+  </div>
+
+  <h3>Los cinco parámetros de laboratorio</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Parámetro</th><th>Rango sugerido en la interfaz</th></tr></thead>
+    <tbody>
+      <tr><td>Colesterol</td><td class="num">50 – 800</td></tr>
+      <tr><td>Triglicéridos</td><td class="num">20 – 2000</td></tr>
+      <tr><td>Urea</td><td class="num">5 – 300</td></tr>
+      <tr><td>Creatinina</td><td class="num">0.1 – 20</td></tr>
+      <tr><td>Hemoglobina</td><td class="num">3 – 25</td></tr>
+    </tbody>
+  </table>
+  <caption>Solo se aceptan estos cinco, y todos tienen que ser estrictamente mayores que cero:
+    un cero es fisiológicamente imposible.</caption>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>El <strong>índice de masa corporal se calcula, nunca se guarda</strong>. Se deriva del peso y
+      la talla de cada toma. Eso significa que no hay forma de que quede desincronizado, y que
+      cualquier gráfica de IMC se recalcula al vuelo.</p>
+  </div>
+
+  <h3>Dos puntos de captura</h3>
+  <div class="grid2">
+    <div class="ficha">
+      <div class="ficha-h"><h3>Captura rápida en la visita</h3><span class="chip t">Enfermería</span></div>
+      <p>Los nueve campos en el orden de arriba, con validación en vivo. Al guardar muestra un
+        resumen compacto <strong>«guardada ✓»</strong> con presión, temperatura, peso y glucosa.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>Sección completa</h3><span class="chip">Signos y mediciones</span></div>
+      <p>Formulario con fecha y hora de la toma, los nueve signos <strong>con icono de color por
+        campo</strong>, los cinco de laboratorio y observaciones. Más las tres tarjetas de abajo.</p>
+    </div>
+  </div>
+
+  <h4>Las tres tarjetas de la sección</h4>
+  <ol>
+    <li><strong>Última toma:</strong> rejilla con peso, estatura, <strong>IMC destacado</strong>,
+      presión arterial como <em>sistólica/diastólica</em>, frecuencia cardíaca, respiratoria,
+      temperatura, saturación y glucosa.</li>
+    <li><strong>Tendencia:</strong> un selector con <strong>ocho series graficables</strong> — peso,
+      IMC, presión sistólica, presión diastólica, frecuencia cardíaca, glucosa, saturación y
+      temperatura — y una gráfica de línea responsiva de 200 px de alto, con rejilla tenue y
+      tooltip propio.</li>
+    <li><strong>Tomas registradas:</strong> la tabla histórica completa con el IMC calculado.</li>
+  </ol>
+
+  <div class="call nota">
+    <span class="lab">Detalle de rendimiento con efecto en el diseño</span>
+    <p>Las series están topadas a las <strong>730 tomas más recientes</strong> —unos dos años de
+      tomas diarias— y el tope es invisible para el cliente. Para un paciente crónico con muchos
+      años de historia, la gráfica no muestra todo. Si el rediseño quiere «ver los últimos 5 años»,
+      hay que hablar con el equipo.</p>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Los rangos que se validan son los <strong>fisiológicamente posibles</strong>, no los
+      <strong>clínicamente normales</strong>. Una presión de 190/120 se guarda sin un solo aviso
+      visual. No hay ninguna marca de «fuera de lo normal» en la última toma, en la tabla ni en la
+      gráfica — y es justo la información que un médico busca de un vistazo. Nota: el Plan Integral
+      sí marca resultados fuera de rango, así que el patrón ya existe en el producto.</p>
+  </div>
+
+  <p class="src">models.py:296-466 · SignosTab.tsx · VisitaSignos.tsx · TendenciaChart.tsx</p>
+</section>
+
+<!-- ============ 09 ============ -->
+<section class="sec" id="s09">
+  <div class="sec-h">
+    <span class="num">09</span>
+    <h2>Evolución SOAP</h2>
+    <p class="dek">La nota de la consulta. Un asistente de cuatro pasos, e inmutable en cuanto se
+      guarda.</p>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — tres condiciones para que exista una nota</span>
+    <ul>
+      <li>Nace de una <strong>cita en estado «Atendida»</strong>. No se puede escribir la nota de una
+        consulta que no se marcó como atendida.</li>
+      <li>Solo puede haber <strong>una nota por cita</strong>.</li>
+      <li>El autor tiene que ser <strong>el médico de esa cita</strong>. La dueña y administración
+        pueden escribirla en nombre de un médico; otro médico no.</li>
+    </ul>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — inmutabilidad</span>
+    <p>Una vez guardada, la nota <strong>no se puede editar ni borrar, nunca</strong>. No existe
+      endpoint para hacerlo y la base de datos lo impide con una restricción propia. Es exigencia de
+      la NOM-004. Las correcciones se hacen con un <strong>addendum</strong>, que se añade al final y
+      tampoco se edita.</p>
+  </div>
+
+  <h3>Las cuatro letras y a qué corresponden</h3>
+  <p>El asistente presenta el modelo SOAP, y cada letra escribe en campos reales del expediente:</p>
+
+  <div class="soap">
+    <div class="sq">
+      <div class="let" style="background:#185FA5">S</div>
+      <h4>Subjetivo</h4>
+      <p>Lo que cuenta el paciente</p>
+      <p class="fl">interrogatorio<br>antecedentes</p>
+    </div>
+    <div class="sq">
+      <div class="let" style="background:#0F6E56">O</div>
+      <h4>Objetivo</h4>
+      <p>Lo que tú observas y mides</p>
+      <p class="fl">signos vitales (solo lectura)<br>estudios<br>exploracion_fisica</p>
+    </div>
+    <div class="sq">
+      <div class="let" style="background:#534AB7">A</div>
+      <h4>Análisis</h4>
+      <p>Tu impresión diagnóstica</p>
+      <p class="fl">diagnosticos_texto</p>
+    </div>
+    <div class="sq">
+      <div class="let" style="background:#3B6D11">P</div>
+      <h4>Plan</h4>
+      <p>Qué se va a hacer</p>
+      <p class="fl">tratamiento<br>plan_recomendaciones<br>indicaciones_enfermeria</p>
+    </div>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Los <strong>signos vitales del paso O son de solo lectura</strong>: se heredan de la toma que
+      hizo enfermería. El médico no los reescribe. Es lo que hace que los tres pasos de la «visita de
+      hoy» encadenen de verdad.</p>
+  </div>
+
+  <h3>Exploración física selectiva</h3>
+  <p>En lugar de mostrar los 18 sistemas de golpe, hay un botón <strong>«+ Agregar aparato»</strong>:
+    se eligen solo los que se revisaron hoy. Cada uno se añade con un semáforo de
+    <strong>cuatro estados</strong> y un campo de detalle, con un icono de papelera para quitarlo.</p>
+  <ul class="chips">
+    <li class="chip"><span class="sw" style="background:#9aa0a6"></span>No evaluado — por defecto</li>
+    <li class="chip t"><span class="sw" style="background:#2E7D5B"></span>Normal</li>
+    <li class="chip g"><span class="sw" style="background:#9A7B1E"></span>Observación</li>
+    <li class="chip o"><span class="sw" style="background:#C0392B"></span>Alterado</li>
+  </ul>
+  <p>El semáforo no es decorativo: el <strong>resumen clínico</strong> que se entrega al paciente
+    incluye <em>solo</em> los sistemas marcados como «observación» o «alterado» (sección 12).</p>
+
+  <h3>Imágenes de la nota</h3>
+  <p>Después de guardar, el asistente ofrece <strong>adjuntar imágenes</strong> a la nota recién
+    creada — heridas, estudios, lesiones — con pie de foto opcional («Herida día 3»). Se pueden
+    quitar antes de cerrar.</p>
+  <dl class="kv">
+    <dt>Formatos</dt><dd>JPEG, PNG y WEBP. El contenido binario se valida de verdad antes de guardar, no solo por su extensión.</dd>
+    <dt>Tamaño</dt><dd>Hasta 10 MB por imagen — más que un avatar, justificado clínicamente.</dd>
+    <dt>Cantidad</dt><dd>Máximo 20 imágenes activas por nota.</dd>
+    <dt>Almacenamiento</dt><dd>Aislado por clínica, con nombres aleatorios: no se pueden adivinar ni enumerar.</dd>
+  </dl>
+
+  <h3>Addendum</h3>
+  <p>Hasta 5 000 caracteres, firmado por el usuario que lo escribe (no por el médico, así que la
+    dueña o administración pueden añadirlo). Se muestran al final del capítulo del libro, en cajas
+    doradas con <strong>💬 Addendum · fecha</strong>.</p>
+
+  <h3>Indicaciones para enfermería</h3>
+  <p>Uno de los campos del plan tiene su propia vista de solo lectura: extrae las indicaciones de
+    todas las notas del paciente, de la más reciente a la más antigua, y se muestra como bloque
+    plegable en la columna izquierda. Enfermería necesita leer las órdenes del médico sin abrir cada
+    nota.</p>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>El autoguardado local del borrador es la única red de seguridad: si el médico escribe una nota
+      de 4 000 caracteres y algo falla al guardar, lo que lo salva es el borrador del navegador. Dado
+      que la nota es <strong>irreversible</strong> una vez guardada, tampoco hay ninguna
+      confirmación del tipo «esto no se podrá editar, ¿continúas?». Merece más peso en la interfaz.</p>
+  </div>
+
+  <p class="src">models.py:474-679 · EvolucionSoapStepper.tsx <strong>(el activo)</strong> ·
+    EvolucionTab.tsx <em>(código muerto)</em></p>
+</section>
+
+<!-- ============ 10 ============ -->
+<section class="sec" id="s10">
+  <div class="sec-h">
+    <span class="num">10</span>
+    <h2>Diagnósticos</h2>
+    <p class="dek">Presuntivos y definitivos, con código CIE-10 validado en vivo.</p>
+  </div>
+
+  <dl class="kv">
+    <dt>description</dt><dd><strong>Obligatoria</strong>, hasta 255 caracteres.</dd>
+    <dt>cie_code</dt><dd>Opcional. Texto libre validado por formato; <strong>no hay catálogo</strong> todavía.</dd>
+    <dt>kind</dt><dd>Presuntivo (por defecto) o Definitivo.</dd>
+    <dt>status</dt><dd>Activo (por defecto) o Resuelto.</dd>
+    <dt>evolution</dt><dd>La consulta donde se asentó. Opcional, y determina si aparece en el capítulo.</dd>
+  </dl>
+
+  <h3>Validación del código</h3>
+  <p>Una letra mayúscula, dos dígitos y una subcategoría opcional de uno o dos dígitos. Válidos:
+    <code>J06</code>, <code>J06.9</code>, <code>A01.0</code>, <code>Z00.00</code>. Se
+    <strong>normaliza a mayúsculas</strong> automáticamente, así que <code>j06.9</code> se guarda
+    como <code>J06.9</code>. Vacío está permitido. Si es inválido:</p>
+  <p class="msg">«Código CIE-10 inválido. Formato esperado: letra mayúscula + 2 dígitos +
+    subcategoría opcional (ej. J06.9, A01).»</p>
+  <p>El frontend replica la misma validación y muestra el error debajo del campo, en vivo.</p>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>Descripción, código y tipo <strong>no se pueden modificar</strong> después de crear el
+      diagnóstico. Lo único que cambia es el estado, y solo en un sentido: <strong>activo →
+      resuelto</strong>. Resolver es idempotente: hacerlo dos veces no falla.</p>
+  </div>
+
+  <h3>En pantalla</h3>
+  <p>Una tarjeta «Nuevo diagnóstico» que se despliega y se oculta, con descripción, código y tipo.
+    Debajo, la lista de activos y resueltos con fecha corta y chip de tipo y estado, y un botón
+    <strong>«Resolver»</strong> en cada uno.</p>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Dentro del bloque <strong>A (Análisis)</strong> de cada capítulo del libro aparecen
+      <strong>solo los diagnósticos ligados a esa consulta</strong>. Los creados directamente desde
+      esta sección son «del paciente», no de una nota, y por eso no se duplican en los capítulos.</p>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>El código CIE-10 se escribe a mano y solo se valida su <em>forma</em>: nada comprueba que
+      <code>J06.9</code> exista o que corresponda a la descripción. Un catálogo con buscador es una
+      fase pendiente reconocida en los planes, y es una de las mejoras de mayor impacto clínico.</p>
+  </div>
+
+  <p class="src">models.py:701-773 · DiagnosticosTab.tsx · lib/validacion.ts</p>
+</section>
+
+<!-- ============ 11 ============ -->
+<section class="sec" id="s11">
+  <div class="sec-h">
+    <span class="num">11</span>
+    <h2>Libro clínico</h2>
+    <p class="dek">El expediente completo presentado como un libro. No es una tabla nueva: se
+      compone de todo lo demás.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño — el principio rector</span>
+    <p>El libro <strong>se compone, no se duplica</strong>. No existe ninguna tabla «libro»: cada
+      sección se arma leyendo los datos que ya viven en su módulo. Eso significa que no puede
+      desincronizarse nunca, y que cualquier cosa que el rediseño quiera mostrar en el libro tiene
+      que existir primero en otra parte.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Sección del libro</th><th>De dónde sale</th></tr></thead>
+    <tbody>
+      <tr><td>Portada</td><td>Datos del paciente + configuración de la clínica</td></tr>
+      <tr><td>Historia clínica</td><td>La historia viva + las alergias vigentes</td></tr>
+      <tr><td>Capítulo = una consulta</td><td>Una nota de evolución</td></tr>
+      <tr><td>· signos de la visita</td><td>La toma de enfermería ligada a esa nota</td></tr>
+      <tr><td>· exploración por aparatos</td><td>Campos de la propia nota</td></tr>
+      <tr><td>· imágenes</td><td>Imágenes de la nota</td></tr>
+      <tr><td>· diagnósticos</td><td>El texto de la nota + los diagnósticos ligados</td></tr>
+      <tr><td>· recetas</td><td>Recetas ligadas a esa nota</td></tr>
+      <tr><td>· addenda</td><td>Correcciones posteriores</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>El visor en pantalla</h3>
+  <div class="wire">
+    <p class="wire-t">Estructura del libro</p>
+    <div class="drawer">
+      <div class="dz hi"><b>Barra superior</b>
+        📖 Libro clínico · Nombre del paciente · «Exp. 00123 · 12 capítulos» ·
+        [🖨 Imprimir libro] [📄 Solo historia clínica] [📚 Solo último] · ☑ Incluir imágenes en el PDF</div>
+      <div class="dz"><b>Índice de chips con desplazamiento horizontal</b>
+        [Portada] [Historia clínica] [Capítulo 12 · 3 jul] [Capítulo 11 · …] · el activo en dorado sólido</div>
+      <div class="dz tl"><b>La hoja</b>Fondo de papel translúcido con esquinas redondeadas · Contenido de la página elegida</div>
+      <div class="dz"><b>Al pie</b>[📚 Cargar capítulos más antiguos]</div>
+    </div>
+  </div>
+  <p class="wire-c">Mensaje de carga: <em>«Encuadernando el libro clínico…»</em></p>
+
+  <h4>Página de portada</h4>
+  <p>Membrete de la clínica (logo o marcador, nombre, dirección y teléfono), «LIBRO CLÍNICO DEL
+    PACIENTE» como antetítulo, el nombre en grande y el número de expediente. Debajo, los datos del
+    paciente en una rejilla que <strong>omite los campos vacíos</strong>: sexo, fecha de nacimiento,
+    edad, CURP, teléfono, correo, tipo de sangre, estado civil, ocupación y domicilio. Al pie,
+    «N capítulos · Generado en pantalla · fecha».</p>
+
+  <h4>Página de historia clínica</h4>
+  <p>«Versión viva · actualizada [fecha]». <strong>⚠ Alergias (n)</strong> en rojo, como pastillas.
+    Los cuatro textos libres respetando saltos de línea. Los bloques estructurados mostrando
+    <strong>solo las claves con valor</strong>, con las etiquetas humanizadas. La exploración física
+    como pastillas <em>Sistema: Con/Sin alteraciones (detalle)</em>. Si no hay historia:
+    <em class="msg">«Este paciente aún no tiene historia clínica registrada.»</em></p>
+
+  <h4>Página de capítulo</h4>
+  <ol>
+    <li>Encabezado: «CAPÍTULO n DE total» + 🩺 fecha y hora + nombre del médico. Botón
+      <strong>«Resumen clínico»</strong> en dorado, si el rol lo permite.</li>
+    <li><strong>Signos de enfermería</strong>: tarjetas en verde azulado con presión, temperatura,
+      frecuencia cardíaca, saturación, peso, IMC, frecuencia respiratoria y glucosa, con su
+      marca de tiempo.</li>
+    <li><strong>Bloques SOAP</strong>: un cuadrado de color con la letra, la etiqueta y el texto. No
+      se renderiza el bloque si está vacío. En <strong>A</strong> se añaden los chips de diagnóstico;
+      <strong>P</strong> concatena tratamiento, recomendaciones e indicaciones para enfermería.</li>
+    <li><strong>Exploración por aparatos</strong> como pastillas doradas.</li>
+    <li><strong>Imágenes · n</strong>: rejilla cuadrada con carga diferida; al tocar una abre un
+      visor a pantalla completa con el pie de foto abajo.</li>
+    <li><strong>Recetas · n</strong>: folio, chip «Anulada» si aplica, fecha, botón «Ver PDF» y la
+      lista de medicamentos.</li>
+    <li><strong>Addenda</strong> en cajas doradas.</li>
+    <li><strong>Estado de cuenta de la visita</strong>, si el rol puede ver costos (sección 16).</li>
+    <li><strong>Pie de firma</strong>: nombre del médico y ✅ sus cédulas validadas.</li>
+  </ol>
+
+  <h3>Paginación e impresión</h3>
+  <p>Los capítulos van <strong>del más reciente al más antiguo</strong>, diez por página, y el botón
+    del pie trae más hacia el pasado sin duplicar. La numeración es estable: usa el total absoluto,
+    así que el «Capítulo 12» sigue siendo el 12 cuando cargas más páginas.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Modo de impresión</th><th>Qué incluye</th><th>Para qué sirve</th></tr></thead>
+    <tbody>
+      <tr><td>Libro completo</td><td>Portada + historia + alergias + <strong>todos</strong> los capítulos</td><td>Entregar el expediente completo</td></tr>
+      <tr><td>Solo historia clínica</td><td>Portada + historia + alergias, sin capítulos</td><td>La primera consulta</td></tr>
+      <tr><td>Solo último capítulo</td><td>Portada + el último capítulo + sus recetas</td><td>Cada visita</td></tr>
+    </tbody>
+  </table>
+  <caption>El interruptor «Incluir imágenes» permite un PDF ligero para impresión rápida. El nombre
+    del archivo sale como <code>libro-00123-completo.pdf</code>.</caption>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — las seis decisiones cerradas del libro</span>
+    <ul>
+      <li>La historia clínica del libro es <strong>siempre la versión actual</strong>; las
+        evoluciones son inmutables.</li>
+      <li>Las imágenes son <strong>opcionales al imprimir</strong>, pero en pantalla siempre se ven.</li>
+      <li>Orden <strong>más reciente primero</strong>; la paginación va hacia el pasado.</li>
+      <li>Cada PDF es una <strong>foto del momento</strong>, y queda registrada en la bitácora.</li>
+      <li>Tres modos de impresión, no más.</li>
+      <li><strong>Nunca hay una URL pública</strong>: la descarga va autenticada. Solo roles
+        clínicos.</li>
+    </ul>
+  </div>
+
+  <p>Si el rol no alcanza, el mensaje es específico: <em class="msg">«No tienes permiso para ver el
+    libro clínico. El libro contiene el expediente completo y solo está disponible para roles
+    clínicos.»</em></p>
+
+  <p class="src">LibroClinico.tsx (38 KB, 952 líneas) · selectors.py:539-598 ·
+    docs/design/libro-clinico-plan.md</p>
+</section>
+
+<!-- ============ 12 ============ -->
+<section class="sec" id="s12">
+  <div class="sec-h">
+    <span class="num">12</span>
+    <h2>Resumen clínico por consulta</h2>
+    <p class="dek">La constancia que se entrega al paciente. Se auto-rellena, el médico la edita y
+      la firma.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>El <strong>libro clínico</strong> es interno y completo. El <strong>resumen clínico</strong> es
+      sintético, de una sola consulta, y <strong>se entrega al paciente</strong>: quién lo atendió,
+      qué se encontró y qué debe hacer. Son dos documentos con dos públicos, y por eso tienen
+      permisos distintos.</p>
+  </div>
+
+  <p>Se abre desde el botón <strong>«Resumen clínico»</strong> de un capítulo del libro.</p>
+
+  <h3>Encabezado, no editable</h3>
+  <p>Clínica, nombre del paciente, edad, sexo, fecha de la consulta, y los signos vitales de esa
+    visita: peso, talla, presión arterial, frecuencia cardíaca, frecuencia respiratoria y
+    temperatura.</p>
+
+  <h3>Seis secciones editables, con su auto-relleno</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>#</th><th>Sección</th><th>De dónde se construye el borrador</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Ficha de identificación</td><td>Sexo en adjetivo + edad calculada <strong>a la fecha de la consulta</strong> + el motivo de la cita</td></tr>
+      <tr><td class="num">2</td><td>Antecedentes</td><td>Heredo-familiares y personales patológicos de la historia, con las etiquetas en español y <strong>omitiendo los «Negado»</strong></td></tr>
+      <tr><td class="num">3</td><td>Padecimiento actual</td><td>Interrogatorio y antecedentes de la nota + padecimiento actual de la historia</td></tr>
+      <tr><td class="num">4</td><td>Exploración física</td><td><strong>Solo los sistemas marcados «observación» o «alterado»</strong>, con sus etiquetas</td></tr>
+      <tr><td class="num">5</td><td>Diagnóstico y manejo</td><td>Texto de diagnósticos + diagnósticos ligados + tratamiento</td></tr>
+      <tr><td class="num">6</td><td>Indicaciones</td><td>Recomendaciones + indicaciones para enfermería</td></tr>
+    </tbody>
+  </table>
+  <caption>El filtro de relevancia descarta los valores vacíos y los «negado», «no», «ninguno» y
+    «ninguna». La idea es que el médico reciba un borrador limpio, no un volcado.</caption>
+  </div>
+
+  <div class="call nota">
+    <span class="lab">Detalle importante</span>
+    <p>El borrador <strong>no se guarda ni se registra en la bitácora</strong>: es una propuesta. Solo
+      cuando el médico pulsa «Generar» se guarda la constancia con el texto ya editado, y se produce
+      el PDF. La constancia guardada no se edita después.</p>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>Un médico solo puede generar el resumen de <strong>sus propias consultas</strong>. Y
+      <strong>enfermería y solo-lectura no tienen ningún acceso</strong>, a diferencia del resto del
+      expediente: es un documento que sale de la clínica con el nombre y la firma del médico, así que
+      es contenido pre-firma, no un registro de consulta.</p>
+  </div>
+
+  <p class="src">ResumenClinicoModal.tsx · services_resumen.py · models.py:957-1066</p>
+</section>
+
+<!-- ============ 13 ============ -->
+<section class="sec" id="s13">
+  <div class="sec-h">
+    <span class="num">13</span>
+    <h2>Recetas</h2>
+    <p class="dek">La parte más regulada del producto. Aquí una decisión de interfaz puede invalidar
+      un documento legal.</p>
+  </div>
+
+  <h3>El catálogo de medicamentos</h3>
+  <p>Dos fuentes que el buscador une, más la posibilidad de escribir texto libre:</p>
+  <div class="grid2">
+    <div class="ficha">
+      <div class="ficha-h"><h3>Catálogo global</h3><span class="chip">313 entradas iniciales</span></div>
+      <p>Compartido por todas las clínicas. Solo lo puebla el equipo de Maily: no hay ninguna forma
+        de escribir en él desde la aplicación.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>Catálogo de la clínica</h3><span class="chip t">Editable</span></div>
+      <p>Medicamentos propios que la clínica agrega. Mismos campos. Se dan de baja de forma lógica.</p>
+    </div>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — seguridad clínica</span>
+    <p>El catálogo guarda <strong>únicamente identificación farmacéutica</strong>: nombre genérico,
+      nombre comercial, forma, concentración y presentación. <strong>No contiene dosis
+      recomendadas, indicaciones ni contraindicaciones</strong>, a propósito. Eso es responsabilidad
+      del médico y se escribe en cada renglón de la receta. Cualquier función que sugiera dosis
+      automáticamente cruzaría una línea deliberada.</p>
+  </div>
+
+  <h3>El renglón de tratamiento</h3>
+  <p>Cada renglón puede ser un <strong>medicamento</strong>, un <strong>suero</strong> (solución
+    parenteral) o una <strong>terapia</strong> (procedimiento). Los cuatro campos COFEPRIS son
+    obligatorios <strong>solo</strong> cuando es un medicamento.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Campo</th><th>Obligatorio</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td>Denominación genérica</td><td class="yes">Siempre</td><td>El principio activo. Por el Artículo 83 de la Ley General de Salud, <strong>se imprime primero</strong>.</td></tr>
+      <tr><td>Denominación comercial</td><td class="no">No</td><td>Secundaria.</td></tr>
+      <tr><td>Forma farmacéutica</td><td class="no">No</td><td>16 opciones: tableta, cápsula, jarabe, suspensión, solución, solución inyectable, crema, ungüento, gel, gotas, óvulo, supositorio, parche, aerosol, polvo y otro.</td></tr>
+      <tr><td>Concentración · Presentación</td><td class="no">No</td><td>«500 mg» · «Caja con 20 tabletas».</td></tr>
+      <tr><td><strong>Dosis</strong></td><td class="mid">Si es medicamento</td><td><strong>Sin abreviaturas.</strong> «1 tableta», «500 miligramos».</td></tr>
+      <tr><td><strong>Frecuencia</strong></td><td class="mid">Si es medicamento</td><td>«cada 8 horas», «dos veces al día».</td></tr>
+      <tr><td><strong>Vía</strong></td><td class="mid">Si es medicamento</td><td>14 opciones: oral, sublingual, intravenosa, intramuscular, subcutánea, tópica, oftálmica, ótica, nasal, rectal, vaginal, inhalada, transdérmica y otra. <strong>Sin abreviar.</strong></td></tr>
+      <tr><td><strong>Duración</strong></td><td class="mid">Si es medicamento</td><td>«7 días», «hasta terminar el frasco», «uso crónico».</td></tr>
+      <tr><td>Cantidad a dispensar</td><td class="no">No</td><td>«20 tabletas», «1 frasco».</td></tr>
+      <tr><td>Nota o indicación libre</td><td class="no">No</td><td>Texto adicional.</td></tr>
+    </tbody>
+  </table>
+  <caption>Si falta alguno de los cuatro obligatorios: <em>«El ítem #N (medicamento) requiere los
+    campos COFEPRIS: …»</em> con la lista de los que faltan.</caption>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — la receta es autocontenida</span>
+    <p>Los datos del medicamento se <strong>copian</strong> a la receta al emitirla, no se referencian.
+      Si el catálogo cambia después, <strong>la receta emitida no se altera</strong>. Es un documento
+      médico-legal y tiene que decir lo mismo dentro de cinco años.</p>
+  </div>
+
+  <h3>Los seis bloqueos duros para emitir</h3>
+  <p>Antes de crear una receta, el servidor comprueba seis cosas. Cinco devuelven un error de
+    validación y una devuelve «permiso denegado»:</p>
+  <ol>
+    <li>El usuario <strong>tiene que tener perfil de médico activo</strong> en la clínica:
+      <em class="msg">«Solo un médico puede emitir recetas.»</em> Esto incluye a la dueña y a
+      administración: tener el rol no basta.</li>
+    <li>Ese médico <strong>tiene que tener cédula profesional</strong> registrada:
+      <em class="msg">«complétala en tu perfil antes de emitir.»</em></li>
+    <li>El paciente <strong>no puede estar marcado como fallecido</strong>.</li>
+    <li>El paciente <strong>tiene que tener fecha de nacimiento y sexo</strong> — la norma exige edad
+      y sexo en la receta. Esto es lo que bloquea los expedientes provisionales.</li>
+    <li>Tiene que haber <strong>al menos un renglón</strong>, con su denominación genérica.</li>
+    <li>Si hay <strong>medicamentos controlados</strong>, el folio del recetario especial es
+      obligatorio.</li>
+  </ol>
+
+  <h3>Medicamentos controlados</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Grupo</th><th>Qué incluye</th><th>Vigencia de la receta</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">none</td><td>No controlado — la mayoría del catálogo</td><td>Sin vigencia</td></tr>
+      <tr><td class="mono">I</td><td>Estupefacientes experimentales, uso muy restringido</td><td class="num"><strong>24 horas</strong></td></tr>
+      <tr><td class="mono">II</td><td>Opioides y psicotrópicos de alto potencial, un solo surtido</td><td class="num">30 días</td></tr>
+      <tr><td class="mono">III</td><td>Psicotrópicos de potencial moderado</td><td class="num">30 días</td></tr>
+      <tr><td class="mono">IV</td><td>Psicotrópicos de bajo potencial — benzodiacepinas</td><td class="num">30 días</td></tr>
+      <tr><td class="mono">V</td><td>Psicotrópicos de menor potencial — algunos antiepilépticos</td><td class="num">30 días</td></tr>
+    </tbody>
+  </table>
+  <caption>La vigencia se calcula con el <strong>grupo más restrictivo</strong> de toda la receta. El
+    grupo se copia del catálogo al emitir, igual que el resto de los datos del medicamento.</caption>
+  </div>
+  <p>Cuando hay un controlado aparece el campo <strong>«Folio del recetario especial»</strong> con un
+    icono de advertencia, y cada renglón muestra un chip con su grupo y un escudo. La emisión queda
+    en la bitácora con un tipo de acción <strong>propio y reforzado</strong>, con el grupo y el folio
+    oficial.</p>
+
+  <h3>Folio y firma</h3>
+  <p>Cada receta lleva un <strong>folio consecutivo por clínica</strong> que arranca en 1, generado
+    de forma segura incluso si dos médicos emiten en el mismo instante. Se le pega también un
+    <strong>snapshot de signos vitales</strong>: los que el médico capture en la receta, o si no, la
+    última toma de enfermería, indicando de cuál de las dos fuentes viene.</p>
+
+  <h3>Anular</h3>
+  <p>Una receta <strong>no se borra</strong>: se anula, con motivo obligatorio. Solo puede anularla
+    <strong>el médico que la emitió</strong>, la dueña o administración. No se puede anular dos
+    veces. En el historial aparece con un chip «Anulada» y en el libro también.</p>
+
+  <h3>Los dos formatos de PDF</h3>
+  <div class="grid2">
+    <div class="ficha">
+      <div class="ficha-h"><h3>Farmacia</h3><span class="chip mono">compact</span></div>
+      <p>Media carta horizontal. Es la que se lleva a la farmacia.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>Paciente</h3><span class="chip mono">digital</span></div>
+      <p>Hoja completa. Por defecto.</p>
+    </div>
+  </div>
+
+  <p>Cada clínica —y cada médico— puede configurar su formato: nombre, color de acento,
+    <strong>tipografía</strong> (sans o serif), <strong>tema de fondo</strong> (ondas suaves,
+    minimalista, barra lateral o geométrico), y el <strong>modo de membrete</strong>: el sistema lo
+    imprime, o se deja espacio arriba para papel pre-impreso.</p>
+
+  <h4>Las diez secciones que se pueden encender y apagar</h4>
+  <ul class="chips">
+    <li class="chip o">edad y sexo — no se puede apagar</li>
+    <li class="chip o">contacto de la clínica — no se puede apagar</li>
+    <li class="chip">signos</li><li class="chip">diagnóstico</li><li class="chip">alergias</li>
+    <li class="chip">sueros</li><li class="chip">terapias</li><li class="chip">indicaciones</li>
+    <li class="chip">vigencia</li><li class="chip">QR</li>
+  </ul>
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p><strong>Edad y sexo</strong> del paciente y <strong>domicilio y teléfonos del emisor</strong>
+      son obligatorios por la NOM-004 y el Artículo 83, y <strong>no se pueden desactivar</strong>. El
+      sistema lo impide en tres capas distintas. La lista de medicamentos tampoco es configurable:
+      siempre está.</p>
+  </div>
+  <p>El formato que se usa se resuelve por precedencia: el elegido en la vista previa → el formato
+    personal del médico, <strong>si está autorizado</strong> por la dueña o administración → el
+    formato por omisión de la clínica → los valores de fábrica.</p>
+
+  <h3>Verificación pública con QR</h3>
+  <p>Cada receta lleva un QR que apunta a una página pública donde cualquiera —una farmacia, el
+    propio paciente— puede comprobar que es auténtica. La firma criptográfica es de 128 bits y se
+    compara en tiempo constante, así que no se puede adivinar ni sondear.</p>
+  <div class="call regla">
+    <span class="lab">Regla de negocio — privacidad</span>
+    <p>Ni el QR, ni la URL, ni la respuesta pública contienen <strong>nombre del paciente,
+      medicamentos ni diagnóstico</strong>. Solo devuelven: folio, estado (vigente o anulada), fecha
+      de emisión, nombre y cédula del médico, nombre de la clínica, si es controlada y su vigencia.
+      Una firma inválida responde «no encontrado».</p>
+  </div>
+
+  <h3>El formulario en pantalla</h3>
+  <p>El mismo componente se usa en la sección de recetas y en el paso ③ de la visita de hoy:</p>
+  <ol class="steps">
+    <li><b>Buscador de medicamentos</b>
+      <p>Autocompletado con retardo, que une el catálogo global con el de la clínica y acepta texto
+        libre. Filtrable por tipo de renglón.</p></li>
+    <li><b>Renglones de tratamiento</b>
+      <p>Cada uno con todos sus campos, los cuatro obligatorios resaltados, el chip de grupo
+        controlado si aplica, y su icono de papelera.</p></li>
+    <li><b>Diagnóstico</b>
+      <p>Con un aviso explícito: una receta sin diagnóstico se invalida según COFEPRIS.</p></li>
+    <li><b>Recomendaciones generales</b>
+      <p>Con plantillas clínicas para pre-rellenar.</p></li>
+    <li><b>Editor de signos vitales</b>
+      <p>Al mostrarlo, precarga la última toma de enfermería como referencia. Editable, con
+        validación de rangos en vivo e IMC calculado.</p></li>
+    <li><b>Copiar de una receta previa</b>
+      <p>Trae todos los renglones de una receta anterior. Es el atajo más usado en tratamientos
+        crónicos.</p></li>
+  </ol>
+
+  <p>En el historial, cada receta muestra folio, fecha, médico, chip Activa/Anulada y número de
+    medicamentos, con tres acciones: <strong>Ver PDF</strong>, <strong>Copiar a nueva</strong> y
+    <strong>Anular</strong>.</p>
+
+  <p class="src">RecetasTab.tsx (52 KB, el componente más grande del expediente) ·
+    backend/apps/recetas/ · VerificarRecetaPage.tsx</p>
+</section>
+
+<!-- ============ 14 ============ -->
+<section class="sec" id="s14">
+  <div class="sec-h">
+    <span class="num">14</span>
+    <h2>Plan Integral de Longevidad</h2>
+    <p class="dek">Un documento largo de medicina regenerativa que compone datos de todo el
+      expediente.</p>
+  </div>
+
+  <p>Se abre con el botón <strong>«✨ Plan Integral»</strong> del encabezado del expediente. A
+    diferencia del resumen clínico, que nace de <em>una consulta</em>, este nace
+    <strong>directamente del paciente</strong> y lee de varios módulos a la vez.</p>
+
+  <h3>Ocho secciones, cuatro con auto-relleno</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Sección</th><th>Se auto-rellena desde</th></tr></thead>
+    <tbody>
+      <tr><td>Alergias</td><td class="yes">Las alergias vigentes</td></tr>
+      <tr><td>Antecedentes</td><td class="yes">«Antecedentes de importancia» de la historia</td></tr>
+      <tr><td>Tratamientos actuales</td><td class="yes">«Tratamientos actuales» de la historia</td></tr>
+      <tr><td>Condiciones a mejorar</td><td class="yes">Los sistemas <strong>con alteraciones</strong> de la exploración basal</td></tr>
+      <tr><td>Estudios</td><td class="no">Vacía</td></tr>
+      <tr><td>Reporte médico</td><td class="no">Vacía</td></tr>
+      <tr><td>Interconsulta</td><td class="no">Vacía</td></tr>
+      <tr><td>Seguimiento</td><td class="no">Vacía</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Lo que además captura</h3>
+  <ul>
+    <li><strong>Resultados de laboratorio</strong>, eligiendo analitos de un catálogo de la clínica.
+      Cada analito tiene nombre, unidad y rango de referencia, y al guardar el plan se marca si el
+      resultado quedó <strong>fuera de rango</strong>. El rango se congela junto con el resultado:
+      cambiar el catálogo después no altera constancias ya emitidas.</li>
+    <li><strong>Estudios de gabinete</strong>: nombre y conclusión.</li>
+    <li><strong>Equipo por departamento</strong>: no lo escribe el usuario, sale de los miembros
+      registrados de la clínica.</li>
+    <li><strong>Esquema de tratamiento</strong>: se puede vincular un plan de calendarización y su
+      contenido se copia como foto del momento.</li>
+    <li><strong>Plantillas de documento</strong>: textos guardados por la clínica para pre-rellenar
+      cualquiera de las secciones. Cada plantilla se asocia a una sección concreta.</li>
+  </ul>
+
+  <div class="call nota">
+    <span class="lab">Detalle</span>
+    <p>Las plantillas <strong>no modifican el PDF</strong>: solo pre-rellenan texto de secciones que
+      ya se renderizan. Es un atajo de escritura, no un constructor de documentos.</p>
+  </div>
+
+  <p>Solo la dueña, administración y médicos tienen acceso, en lectura y en escritura.</p>
+  <p class="src">PlanIntegralModal.tsx (35 KB) · services_plan_integral.py · models.py:1334-1628</p>
+</section>
+
+<!-- ============ 15 ============ -->
+<section class="sec" id="s15">
+  <div class="sec-h">
+    <span class="num">15</span>
+    <h2>Calendarización de tratamientos</h2>
+    <p class="dek">Un esquema de sesiones que se convierte en citas reales y en una cotización.</p>
+  </div>
+
+  <p>Un plan de tratamiento es una lista de servicios, cada uno con <strong>N sesiones</strong>. Cada
+    sesión tiene su número, fecha y hora programadas, fecha de aplicación, estado (programada o
+    aplicada), duración opcional y, si se agendó, <strong>su cita real en la agenda</strong>.</p>
+
+  <h3>Qué se puede hacer desde la sección</h3>
+  <ul>
+    <li>Armar la tabla de tratamientos desde el catálogo de servicios o escribiéndolos a mano, con
+      <strong>total en vivo</strong>.</li>
+    <li><strong>Crear el plan desde un paquete</strong> ya definido.</li>
+    <li><strong>Generar una cotización</strong> del plan. Cada regeneración crea una nueva y el plan
+      apunta a la última.</li>
+    <li><strong>Agendar</strong>, <strong>quitar de la agenda</strong> o <strong>marcar como
+      aplicada</strong> cada sesión.</li>
+    <li>Descargar el <strong>PDF del esquema</strong>.</li>
+  </ul>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — reconciliación inteligente</span>
+    <p>Al guardar el plan, el sistema <strong>no borra y recrea</strong>: reconcilia elemento por
+      elemento. Lo que sobrevive conserva su identidad, y con ella <strong>la cita ya agendada, la
+      fecha de aplicación y el estado</strong>. Lo que desaparece del plan se borra y
+      <strong>su cita se cancela</strong>. Sin esto, editar el plan destruiría la agenda.</p>
+  </div>
+
+  <h3>Agendar una sesión</h3>
+  <p>Abre un modal con una rejilla de horarios donde los que se empalman con una cita existente
+    aparecen <strong>en rojo y deshabilitados</strong>. Duraciones de 15, 30, 45, 60, 90 y 120
+    minutos. Los consultorios se filtran a los del médico. Si hay empalme, se muestra el error del
+    servidor.</p>
+  <p>Por debajo reutiliza exactamente los mismos servicios de la agenda: si la sesión no tenía cita,
+    la crea; si la tenía y es el mismo médico, la reagenda; si cambió el médico, cancela la vieja y
+    crea una nueva.</p>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>La rejilla de este modal es <strong>fija de 07:00 a 21:00 cada 30 minutos</strong>, e ignora
+      por completo el horario configurado de la clínica. Una clínica que abre a las 6 de la mañana o
+      trabaja con intervalos de 20 minutos ve una rejilla que no corresponde con su agenda.</p>
+  </div>
+
+  <div class="call nota">
+    <span class="lab">Detalle del PDF</span>
+    <p>Las columnas de firma del médico y del paciente <strong>nunca se guardan en la base de
+      datos</strong>: existen solo como celdas vacías del documento impreso, para firmar a mano.</p>
+  </div>
+
+  <p>Este módulo requiere que la clínica tenga contratados a la vez <strong>expediente, servicios y
+    cotizaciones</strong>, y no forma parte de los planes estándar: se activa caso por caso.</p>
+  <p class="src">CalendarizacionTab.tsx (48 KB) · AgendarSesionModal.tsx · services_calendarizacion.py</p>
+</section>
+
+<!-- ============ 16 ============ -->
+<section class="sec" id="s16">
+  <div class="sec-h">
+    <span class="num">16</span>
+    <h2>Estado de cuenta dentro del expediente</h2>
+    <p class="dek">El dinero pegado al expediente, no en un módulo aparte. Y una decisión clave:
+      quién puede ver precios.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño — validada contra el mercado</span>
+    <p>El estado de cuenta se ve <strong>en el libro del paciente, por visita</strong>, no solo en el
+      panel de finanzas. La decisión se tomó tras estudiar siete plataformas del sector
+      (SimplePractice, Jane App, Cliniko, Tebra, DrChrono, Dentrix, NexHealth) y encontrar un patrón
+      universal: <em>el estado de cuenta vive pegado al expediente</em>.</p>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p><strong>Que los médicos vean costos es configurable por clínica, y por defecto NO los ven.</strong>
+      Hay un interruptor en la configuración de la clínica que lo decide, y el servidor es la
+      autoridad: no basta con ocultarlo en la interfaz. Enfermería <strong>nunca</strong> ve costos,
+      sin importar el interruptor.</p>
+  </div>
+
+  <p>El saldo se <strong>calcula</strong> a partir de los cargos, los pagos y sus asignaciones. No hay
+    una tabla de saldo que pueda quedar desincronizada. Y cada cargo congela el nombre del concepto y
+    su precio en el momento de cobrarlo.</p>
+
+  <h3>Los tres lugares donde aparece</h3>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>A · Chip de saldo en el encabezado</h3><span class="chip g">Siempre visible</span></div>
+    <p>Con saldo pendiente: <strong>«Saldo: $X por cobrar»</strong> en dorado, y
+      <strong>escala a rojo</strong> cuando pasa de mil pesos. Sin adeudo: chip verde <strong>«Sin
+      adeudo»</strong>. No existen saldos a favor: el servidor lo impide.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>B · Bloque en cada capítulo del libro</h3><span class="chip">Por visita</span></div>
+    <p><strong>🧾 Estado de cuenta de la visita</strong>: los cargos de ese día y el saldo de la
+      visita. Vacío: <em class="msg">«Sin cargos en esta visita.»</em> Si el rol no alcanza, el
+      bloque simplemente no se dibuja: es secundario y no debe romper la lectura del libro.</p>
+    <div class="call opp">
+      <span class="lab">Oportunidad</span>
+      <p>Este bloque <strong>filtra por fecha, no por cita</strong>, porque el capítulo del libro no
+        expone el identificador de la cita. En un día con dos visitas del mismo paciente, los cargos
+        de ambas aparecerían en los dos capítulos. Es una limitación conocida y documentada.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>C · Sección completa</h3><span class="chip">Dos vistas conmutables</span></div>
+    <p><strong>«Por cargo»</strong> (por defecto): cada servicio con lo cobrado, lo pagado, el saldo y
+      su estado. Responde «¿qué debe de qué?». <strong>«Movimientos»</strong>: el registro
+      cronológico con <strong>saldo corrido</strong>, como un estado de banco.</p>
+    <p>Arriba, los totales de cobrado, pagado y saldo, más el botón <strong>«Registrar
+      pago»</strong> si el rol puede cobrar.</p>
+    <h4>Los cuatro colores de estado de cargo</h4>
+    <ul class="chips">
+      <li class="chip"><span class="sw" style="background:#0F766E"></span>Pagado</li>
+      <li class="chip"><span class="sw" style="background:#B45309"></span>Parcial — abonó pero falta</li>
+      <li class="chip"><span class="sw" style="background:#B91C1C"></span>Pendiente — sin pagar</li>
+      <li class="chip"><span class="sw" style="background:#9A958C"></span>Cancelado</li>
+    </ul>
+    <p>El modal de pago pide monto, método (Efectivo, Tarjeta, Transferencia u Otro), referencia y la
+      <strong>asignación a cargos concretos</strong>, listando solo los pendientes y parciales.</p>
+  </div>
+
+  <p><strong>Quién puede ver el estado de cuenta:</strong> dueña, administración, finanzas, recepción
+    y solo-lectura siempre; médicos solo si el interruptor está encendido; enfermería nunca.
+    <strong>Quién puede cobrar:</strong> dueña, administración, finanzas y recepción. El interruptor
+    de costos <strong>no</strong> le da a los médicos permiso de escribir cargos.</p>
+
+  <p class="src">EstadoCuentaExpediente.tsx · EstadoCuentaVisita.tsx · PagoModal.tsx ·
+    docs/design/finanzas-pacientes-unificacion-plan.md</p>
+</section>
+
+<!-- ============ 17 ============ -->
+<section class="sec" id="s17">
+  <div class="sec-h">
+    <span class="num">17</span>
+    <h2>PDFs asíncronos</h2>
+    <p class="dek">Todos los PDFs se generan en segundo plano. Eso tiene consecuencias visibles en
+      la interfaz.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño — el problema que resolvió</span>
+    <p>Generar un PDF ocupaba entre 5 y 10 segundos <strong>bloqueando un proceso del servidor</strong>.
+      Con ocho procesos disponibles, unas pocas descargas simultáneas <strong>congelaban toda la
+      aplicación</strong> para todo el mundo. Se movió a un sistema de trabajos en segundo plano.
+      Es la razón de que exista un estado «Generando PDF…» en la interfaz.</p>
+  </div>
+
+  <pre class="mermaid">
+flowchart LR
+  A["El usuario pide el PDF"] --> B["El servidor encola el trabajo y responde de inmediato"]
+  B --> C["La interfaz pregunta cada 2 segundos si ya está"]
+  C --> D["Listo → se descarga y se abre en el visor"]
+  C --> E["Falló → 'No se pudo generar el PDF. Intenta de nuevo.'"]
+  C --> F["Pasó un minuto → 'La generación del PDF está tardando demasiado.'"]
+  </pre>
+
+  <h3>Qué se guarda en caché y qué no</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Documento</th><th>Caché</th><th>Por qué</th></tr></thead>
+    <tbody>
+      <tr><td>Receta</td><td class="yes">Sí, perfecta</td><td>La receta es inmutable: el mismo documento con el mismo formato da siempre el mismo PDF. El segundo clic es instantáneo.</td></tr>
+      <tr><td>Libro clínico</td><td class="no">No</td><td>El libro cambia con cada consulta. Siempre se regenera.</td></tr>
+      <tr><td>Resumen clínico</td><td class="no">No</td><td>Por consistencia.</td></tr>
+      <tr><td>Calendarización · Plan Integral · Cotización · Reportes</td><td class="no">No</td><td>Salida mutable.</td></tr>
+    </tbody>
+  </table>
+  <caption>Si un trabajo falla, se limpia y se vuelve a encolar cuando el usuario lo pide otra vez —
+    así un servidor que se cayó no deja un PDF muerto para siempre.</caption>
+  </div>
+
+  <h3>Dónde vive el diseño impreso</h3>
+  <p>Los PDFs no se maquetan con la interfaz: son plantillas HTML propias que renderiza el servidor.
+    <strong>Si el rediseño toca la identidad impresa, estos son los archivos.</strong></p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Plantilla</th><th>Documento</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">expediente/libro.html</td><td>Libro clínico</td></tr>
+      <tr><td class="mono">expediente/resumen_clinico.html</td><td>Resumen clínico</td></tr>
+      <tr><td class="mono">expediente/calendarizacion.html</td><td>Esquema de tratamientos</td></tr>
+      <tr><td class="mono">expediente/plan_integral.html</td><td>Plan Integral de Longevidad</td></tr>
+      <tr><td class="mono">recetas/formats/compact.html</td><td>Receta — media carta (farmacia)</td></tr>
+      <tr><td class="mono">recetas/formats/digital.html</td><td>Receta — hoja completa (paciente)</td></tr>
+      <tr><td class="mono">recetas/formats/_theme_bg.html</td><td>Los cuatro fondos decorativos</td></tr>
+      <tr><td class="mono">core/pdf/brand_background.html</td><td>Marca de agua compartida</td></tr>
+      <tr><td class="mono">core/pdf/clinic_header.html</td><td>Membrete compartido</td></tr>
+      <tr><td class="mono">finanzas/cotizacion.html · reporte_periodo.html</td><td>Finanzas</td></tr>
+    </tbody>
+  </table>
+  <caption>Todos comparten un contexto de marca común: logo, color de marca de la clínica, marca de
+    agua, nombre, dirección y teléfonos.</caption>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — seguridad del renderizado</span>
+    <p>El motor de PDF <strong>solo acepta imágenes ya incrustadas</strong>: no puede leer archivos
+      del servidor ni hacer peticiones a internet. Todas las imágenes se convierten antes. Además se
+      redimensionan a un máximo de unos 6 × 7 cm y 8 MB cada una, porque el proyecto ya tuvo un caso
+      real de una imagen de 58 megapíxeles que generaba PDFs de gigabytes. Si el rediseño quiere
+      imágenes más grandes en el libro, esos límites hay que negociarlos.</p>
+  </div>
+</section>
+
+<!-- ============ 18 ============ -->
+<section class="sec" id="s18">
+  <div class="sec-h">
+    <span class="num">18</span>
+    <h2>Qué existe según el plan de la clínica</h2>
+    <p class="dek">Dos clínicas ven dos productos distintos. Esto no es opcional al diseñar.</p>
+  </div>
+
+  <p>Maily360 se vende por <strong>módulos</strong>. Una clínica que no contrató recetas no tiene
+    recetas: no es que estén desactivadas, es que <strong>no existen para ella</strong>. Al diseñar
+    cualquier pantalla hay que preguntarse qué se ve cuando falta el módulo.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Grupo</th><th>Módulo</th><th>Nombre comercial</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="5">Clínico</td><td class="mono">agenda</td><td>Agenda y citas</td></tr>
+      <tr><td class="mono">recordatorios</td><td>Recordatorios de cita</td></tr>
+      <tr><td class="mono">expediente</td><td><strong>Expediente clínico</strong></td></tr>
+      <tr><td class="mono">recetas</td><td>Recetas</td></tr>
+      <tr><td class="mono">notas</td><td>Notas y tareas</td></tr>
+      <tr><td rowspan="5">Comercial</td><td class="mono">servicios</td><td>Servicios y precios</td></tr>
+      <tr><td class="mono">paquetes</td><td>Paquetes</td></tr>
+      <tr><td class="mono">cotizaciones</td><td>Cotizaciones</td></tr>
+      <tr><td class="mono">cobranza</td><td>Cobranza y estado de cuenta</td></tr>
+      <tr><td class="mono">cfdi</td><td>Facturación CFDI</td></tr>
+      <tr><td>Especial</td><td class="mono">calendarizacion</td><td>Calendarización de tratamientos — solo caso por caso</td></tr>
+      <tr><td>Operación</td><td class="mono">personal</td><td>Gestión de personal</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Dependencias duras</h3>
+  <p>Algunos módulos no funcionan solos:</p>
+  <div class="klist">recordatorios → agenda<br>paquetes → servicios<br>cotizaciones → servicios<br>cfdi → cobranza<br>calendarizacion → expediente + servicios + cotizaciones</div>
+
+  <h3>Los roles también dependen de los módulos</h3>
+  <div class="klist">doctor → expediente<br>nurse → expediente<br>reception → agenda<br>finance → cobranza<br>owner · admin · readonly → siempre disponibles</div>
+  <p>La razón está escrita en el código: <em>«un rol sin su módulo es un usuario que no puede hacer
+    su trabajo: el rol finance sin cobranza solo vería agenda y pacientes en modo lectura»</em>.</p>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio — 404, no 403</span>
+    <p>Un módulo no contratado responde <strong>«no encontrado»</strong>, no «no tienes permiso». La
+      razón está documentada: <em>«un 403 dice "esto existe pero no lo pagas" — delata el catálogo e
+      invita a curiosear»</em>. Al diseñar mensajes de error hay que respetar esta distinción: 404
+      para «tu clínica no tiene esto», 403 para «tu rol no alcanza».</p>
+  </div>
+
+  <p>Los módulos los activa el <strong>super administrador de Maily</strong> desde el panel de
+    plataforma, clínica por clínica, sobre la base del plan contratado. Ocultarlos en la interfaz es
+    solo cosmético: el servidor bloquea de verdad.</p>
+
+  <div class="call nota">
+    <span class="lab">Nota sobre multi-sucursal</span>
+    <p>Tener varias sedes <strong>no es un módulo</strong>: es un límite numérico del plan. Cuando el
+      límite es 1, la interfaz de sucursales simplemente no se muestra.</p>
+  </div>
+
+  <p class="src">backend/apps/core/modules.py · entitlement_guards.py · apps/tenancy/entitlements.py</p>
+</section>
+
+<!-- ============ 19 ============ -->
+<section class="sec" id="s19">
+  <div class="sec-h">
+    <span class="num">19</span>
+    <h2>Permisos por rol</h2>
+    <p class="dek">Siete roles. La matriz tiene excepciones deliberadas que conviene entender antes
+      de simplificarla.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Entidad</th><th>Acción</th><th>owner</th><th>admin</th><th>doctor</th><th>nurse</th><th>reception</th><th>finance</th><th>readonly</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="2">Alergias</td><td>Ver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="mid">Sí</td><td class="mid">Sí</td><td class="yes">Sí</td></tr>
+      <tr><td>Registrar y resolver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="mid">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td rowspan="2">Historia clínica</td><td>Ver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="mid">Sí</td><td class="no">No</td><td class="no">No</td><td class="yes">Sí</td></tr>
+      <tr><td>Escribir</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td rowspan="2">Signos vitales</td><td>Ver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="yes">Sí</td></tr>
+      <tr><td>Capturar</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="mid">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td rowspan="2">Evoluciones e imágenes</td><td>Ver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="yes">Sí</td></tr>
+      <tr><td>Escribir</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td rowspan="2">Diagnósticos</td><td>Ver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="yes">Sí</td></tr>
+      <tr><td>Crear y resolver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Libro clínico</td><td>Ver e imprimir</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="yes">Sí</td></tr>
+      <tr><td>Resumen clínico</td><td>Ver y generar</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td rowspan="2">Recetas</td><td>Ver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="yes">Sí</td></tr>
+      <tr><td>Emitir y anular</td><td class="mid">Con perfil médico</td><td class="mid">Con perfil médico</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Formatos de receta</td><td>Ver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="mid">Sí</td><td class="mid">Sí</td><td class="yes">Sí</td></tr>
+      <tr><td>Plan Integral</td><td>Ver y generar</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Calendarización</td><td>Todo</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Estado de cuenta</td><td>Ver</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="mid">Solo con el interruptor</td><td class="no">No</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td></tr>
+      <tr><td>Cobrar</td><td>Registrar pago</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td></tr>
+      <tr><td>Preguntas y catálogos</td><td>Configurar</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Las excepciones, y por qué existen</h3>
+  <dl class="kv">
+    <dt>Alergias</dt><dd>La <strong>única</strong> entidad clínica que recepción y finanzas leen. Es una bandera de seguridad para todo el personal.</dd>
+    <dt>Enfermería</dt><dd><strong>Lee</strong> la historia clínica (consulta antecedentes antes de la toma) pero no la escribe. <strong>Captura</strong> signos vitales: es su función central.</dd>
+    <dt>Resumen clínico</dt><dd>El <strong>único</strong> documento del que enfermería y solo-lectura quedan fuera: sale de la clínica con la firma del médico.</dd>
+    <dt>Recetas</dt><dd>El rol no basta. Hay que tener <strong>perfil de médico activo y cédula</strong>. La dueña con el rol pero sin perfil médico recibe permiso denegado.</dd>
+    <dt>Formatos de receta</dt><dd>Los ve <strong>todo el mundo</strong>, incluida recepción, porque hay que poder elegir el formato al imprimir. Solo la dueña y administración los borran.</dd>
+  </dl>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>El código lleva una advertencia formal: <em>«Esta matriz NO se modifica sin aprobación del
+      comité clínico (NOM-004 exige restricción de acceso al expediente según función del
+      personal).»</em> Si el rediseño necesita cambiar quién ve qué, es una conversación con el
+      comité, no una decisión de interfaz.</p>
+  </div>
+</section>
+
+<!-- ============ 20 ============ -->
+<section class="sec" id="s20">
+  <div class="sec-h">
+    <span class="num">20</span>
+    <h2>Referencia técnica</h2>
+    <p class="dek">Los endpoints y los archivos, con los componentes que probablemente hay que
+      descomponer.</p>
+  </div>
+
+  <h3>Los archivos del frontend, por tamaño</h3>
+  <p>El tamaño es una señal: los seis primeros son componentes monolíticos que concentran mucha
+    responsabilidad, y son los candidatos naturales a repensarse.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Archivo</th><th>Tamaño</th><th>Qué contiene</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">expediente/RecetasTab.tsx</td><td class="num">52 KB</td><td>Formulario de nueva receta (reutilizado en la visita) + historial + anulación</td></tr>
+      <tr><td class="mono">expediente/CalendarizacionTab.tsx</td><td class="num">48 KB</td><td>Esquema de tratamientos completo</td></tr>
+      <tr><td class="mono">expediente/LibroClinico.tsx</td><td class="num">38 KB</td><td>Visor, portada, capítulo y visor de imágenes — 952 líneas</td></tr>
+      <tr><td class="mono">expediente/PlanIntegralModal.tsx</td><td class="num">35 KB</td><td>Plan Integral de Longevidad</td></tr>
+      <tr><td class="mono">expediente/EvolucionTab.tsx</td><td class="num">31 KB</td><td><strong>Código muerto.</strong> No lo importa nadie</td></tr>
+      <tr><td class="mono">expediente/EvolucionSoapStepper.tsx</td><td class="num">29 KB</td><td><strong>El asistente SOAP activo</strong></td></tr>
+      <tr><td class="mono">expediente/HistoriaTab.tsx</td><td class="num">28 KB</td><td>Historia clínica completa</td></tr>
+      <tr><td class="mono">expediente/FichaPaciente.tsx</td><td class="num">28 KB</td><td>Columna izquierda, modal de historia y edición en el sitio</td></tr>
+      <tr><td class="mono">contactos/ExpedienteDrawer.tsx</td><td class="num">17 KB</td><td>El contenedor del expediente</td></tr>
+      <tr><td class="mono">expediente/SignosTab.tsx</td><td class="num">17 KB</td><td>Captura, última toma, tendencia e histórico</td></tr>
+      <tr><td class="mono">expediente/ResumenClinicoModal.tsx</td><td class="num">15 KB</td><td>Constancia para el paciente</td></tr>
+      <tr><td class="mono">expediente/AgendarSesionModal.tsx</td><td class="num">15 KB</td><td>Sesión de tratamiento → cita real</td></tr>
+      <tr><td class="mono">expediente/EstadoCuentaExpediente.tsx</td><td class="num">10 KB</td><td>Dos vistas del ledger</td></tr>
+      <tr><td class="mono">expediente/ui.tsx</td><td class="num">10 KB</td><td><strong>Primitivas compartidas</strong> y todas las listas de opciones y etiquetas</td></tr>
+      <tr><td class="mono">expediente/VisitaSignos.tsx</td><td class="num">8.6 KB</td><td>Captura rápida de enfermería</td></tr>
+      <tr><td class="mono">expediente/VisitaDeHoy.tsx</td><td class="num">7.5 KB</td><td>Los tres pasos de la visita</td></tr>
+      <tr><td class="mono">expediente/DiagnosticosTab.tsx</td><td class="num">7.3 KB</td><td>Diagnósticos y CIE-10</td></tr>
+      <tr><td class="mono">expediente/IndiceSecciones.tsx</td><td class="num">6.1 KB</td><td>El índice con contadores</td></tr>
+      <tr><td class="mono">expediente/Acordeon.tsx</td><td class="num">3.0 KB</td><td>Secciones colapsables con <strong>carga diferida</strong>: no dispara todas las consultas de golpe</td></tr>
+      <tr><td class="mono">expediente/TendenciaChart.tsx</td><td class="num">2.9 KB</td><td>La gráfica de tendencia</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Infraestructura transversal que conviene conocer</h4>
+  <dl class="kv">
+    <dt>VisorPdf</dt><dd>Visor único con ver, descargar e imprimir. Muestra «Generando PDF…».</dd>
+    <dt>useLocalDraft</dt><dd>Autoguardado local de todos los formularios largos: historia, SOAP, resumen, Plan Integral y calendarización.</dd>
+    <dt>BorradorRecuperadoAviso</dt><dd>El banner de «recuperamos tu borrador».</dd>
+    <dt>lib/validacion.ts</dt><dd>Espejo de los rangos y validaciones del servidor, para avisar en vivo.</dd>
+    <dt>lib/apiErrors.ts</dt><dd>Traduce los errores del servidor a mensajes por campo.</dd>
+    <dt>Acordeon</dt><dd>Carga diferida real: el contenido no se monta hasta abrirlo, y se conserva después.</dd>
+  </dl>
+
+  <h3>Los 54 endpoints</h3>
+  <p>Todos con prefijo <code>/api/v1/</code>. <code>&lt;pid&gt;</code> es el identificador del
+    paciente. Los que devuelven <strong>202</strong> encolan un PDF.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Módulo</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/alergias/</td><td>todos</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/&lt;pid&gt;/alergias/</td><td>owner admin doctor nurse</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">DELETE</td><td class="mono">expediente/alergias/&lt;id&gt;/</td><td>owner admin doctor nurse</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/historia/</td><td>clínicos + readonly</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">PUT</td><td class="mono">expediente/&lt;pid&gt;/historia/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/signos/</td><td>clínicos + readonly</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/&lt;pid&gt;/signos/</td><td>owner admin doctor nurse</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/signos/series/</td><td>clínicos + readonly</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/evoluciones/</td><td>clínicos + readonly</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/&lt;pid&gt;/evoluciones/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/evoluciones/&lt;id&gt;/addendum/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">expediente/evoluciones/&lt;id&gt;/imagenes/</td><td>ver: clínicos · subir: owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">DELETE</td><td class="mono">expediente/imagenes/&lt;id&gt;/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/diagnosticos/</td><td>clínicos + readonly</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/&lt;pid&gt;/diagnosticos/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/diagnosticos/&lt;id&gt;/resolver/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/indicaciones-enfermeria/</td><td>clínicos + readonly</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/libro/</td><td>clínicos + readonly</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/libro/pdf/ → 202</td><td>clínicos + readonly</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/evoluciones/&lt;id&gt;/resumen/borrador/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/evoluciones/&lt;id&gt;/resumen/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/resumenes/&lt;id&gt;/pdf/ → 202</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/resumenes/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">expediente/preguntas-hc/</td><td>ver: clínicos · crear: owner admin</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">PATCH DELETE</td><td class="mono">expediente/preguntas-hc/&lt;id&gt;/</td><td>owner admin</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/&lt;pid&gt;/plan-integral/borrador/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">expediente/&lt;pid&gt;/plan-integral/</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/plan-integral/&lt;id&gt;/pdf/ → 202</td><td>owner admin doctor</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">expediente/plantillas-documento/</td><td>ver: owner admin doctor · crear: owner admin</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET PATCH DELETE</td><td class="mono">expediente/plantillas-documento/&lt;id&gt;/</td><td>owner admin</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">expediente/analitos/</td><td>ver: owner admin doctor · crear: owner admin</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET PATCH DELETE</td><td class="mono">expediente/analitos/&lt;id&gt;/</td><td>owner admin</td><td class="mono">expediente</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">expediente/&lt;pid&gt;/calendarizaciones/</td><td>owner admin doctor</td><td class="mono">calendarizacion</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/&lt;pid&gt;/calendarizaciones/desde-paquete/</td><td>owner admin doctor</td><td class="mono">calendarizacion</td></tr>
+      <tr><td class="mono">GET PUT DELETE</td><td class="mono">expediente/calendarizaciones/&lt;id&gt;/</td><td>owner admin doctor</td><td class="mono">calendarizacion</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">expediente/calendarizaciones/&lt;id&gt;/pdf/ → 202</td><td>owner admin doctor</td><td class="mono">calendarizacion</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/calendarizaciones/&lt;id&gt;/cotizacion/</td><td>owner admin doctor</td><td class="mono">calendarizacion</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">expediente/calendarizaciones/sesiones/&lt;id&gt;/agendar/</td><td>owner admin doctor</td><td class="mono">calendarizacion</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">recetas/medicamentos/buscar/</td><td>clínicos + readonly</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">recetas/medicamentos/</td><td>owner admin doctor</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">expediente/&lt;pid&gt;/recetas/</td><td>ver: clínicos · emitir: owner admin doctor</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">recetas/&lt;id&gt;/</td><td>clínicos + readonly</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">recetas/&lt;id&gt;/anular/</td><td>emisor, owner o admin</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">recetas/&lt;id&gt;/pdf/</td><td>clínicos + readonly</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">recetas/pdf-job/&lt;id&gt;/ · /file/</td><td>clínicos + readonly</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">recetas/formatos/</td><td>ver: <strong>todos</strong> · crear: owner admin doctor</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">GET PATCH DELETE</td><td class="mono">recetas/formatos/&lt;id&gt;/</td><td>borrar: owner admin</td><td class="mono">recetas</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">verificar-receta/&lt;id&gt;/?sig=</td><td><strong>público, sin sesión</strong></td><td>—</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">pdfs/job/&lt;id&gt;/ · /file/</td><td>según el documento</td><td>—</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">finanzas/estado-cuenta/&lt;pid&gt;/</td><td>owner admin finance reception readonly + doctor con interruptor</td><td class="mono">cobranza</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">finanzas/cargos/</td><td>crear: owner admin finance</td><td class="mono">cobranza</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">finanzas/pagos/</td><td>owner admin finance reception</td><td class="mono">cobranza</td></tr>
+    </tbody>
+  </table>
+  <caption>«clínicos» = owner, admin, doctor y nurse. Un recurso de otra clínica responde siempre
+    «no encontrado», nunca «sin permiso», con el mismo mensaje que si no existiera.</caption>
+  </div>
+
+  <h3>El backend</h3>
+  <p><code>backend/apps/expediente/</code>: <code>models.py</code> (1 628 líneas, 10 modelos) ·
+    <code>serializers.py</code> (2 055) · <code>services.py</code> (1 471) ·
+    <code>selectors.py</code> (1 192) · <code>services_calendarizacion.py</code> (1 093) ·
+    <code>pdf.py</code> (1 043) · <code>validators.py</code> (736) · once módulos de vistas ·
+    30 migraciones · más de mil pruebas.</p>
+  <p><code>backend/apps/recetas/</code>: <code>models.py</code> (1 139) ·
+    <code>services.py</code> (1 293) · <code>serializers.py</code> (908) ·
+    <code>pdf.py</code> (719) · <code>verification.py</code> (162) · 17 migraciones.</p>
+
+  <h3>Documentos de diseño previos</h3>
+  <dl class="kv">
+    <dt>expediente-clinico-plan.md</dt><dd>269 líneas. Las decisiones D-EC-1 a D-EC-9, el modelo, la API y las fases.</dd>
+    <dt>expediente-saas-rediseno.md</dt><dd>88 líneas. El rediseño centrado en la visita, el SOAP guiado y la historia configurable.</dd>
+    <dt>libro-clinico-plan.md</dt><dd>102 líneas. Las seis decisiones del libro y su contrato de datos.</dd>
+    <dt>recetas-plan.md · recetas-formatos-plan.md</dt><dd>44 + 267 líneas. La receta inmutable y los formatos configurables.</dd>
+    <dt>finanzas-pacientes-unificacion-plan.md</dt><dd>164 líneas. El benchmark de siete plataformas y las nueve decisiones.</dd>
+    <dt>pdf-async-celery-plan.md</dt><dd>95 líneas. El riesgo de bloqueo del servidor y su solución.</dd>
+    <dt>pacientes-filtros-clasificacion.md</dt><dd>151 líneas. Segmentos, favoritos, VIP y etiquetas.</dd>
+    <dt>expediente-clinico-analisis-legacy.md</dt><dd>340 líneas. Análisis del sistema anterior, incluido qué es núcleo y qué es de especialidad.</dd>
+  </dl>
+</section>
+
+<!-- ============ 21 ============ -->
+<section class="sec" id="s21">
+  <div class="sec-h">
+    <span class="num">21</span>
+    <h2>Brechas y oportunidades</h2>
+    <p class="dek">Los huecos reales del expediente, ordenados por impacto clínico y de negocio.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>#</th><th>Hueco</th><th>Por qué importa</th><th>Dónde</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><strong>No hay marca de valor fuera de lo normal en los signos vitales</strong></td><td>Se validan los rangos <em>posibles</em>, no los <em>normales</em>. Una presión de 190/120 se guarda sin ninguna señal visual, ni en la última toma, ni en la tabla, ni en la gráfica. Es lo que un médico busca de un vistazo, y el patrón ya existe en el producto: el Plan Integral sí marca resultados fuera de rango.</td><td class="mono">SignosTab.tsx</td></tr>
+      <tr><td class="num">2</td><td><strong>El expediente no tiene URL propia</strong></td><td>Es un panel modal: no se puede compartir el enlace, abrirlo en otra pestaña, ni volver con el botón de atrás. Para una herramienta que se usa ocho horas al día, es una limitación estructural.</td><td class="mono">ExpedienteDrawer.tsx</td></tr>
+      <tr><td class="num">3</td><td><strong>El código CIE-10 se escribe a mano</strong></td><td>Solo se valida el formato: nada comprueba que el código exista ni que corresponda a la descripción. Un catálogo con buscador es una fase pendiente reconocida.</td><td class="mono">DiagnosticosTab.tsx</td></tr>
+      <tr><td class="num">4</td><td><strong>Guardar una nota de evolución es irreversible sin ninguna advertencia</strong></td><td>La nota no se puede editar ni borrar nunca, y la interfaz no lo dice antes de guardar. La única red es el borrador local.</td><td class="mono">EvolucionSoapStepper.tsx</td></tr>
+      <tr><td class="num">5</td><td><strong>Las alergias admiten duplicados</strong></td><td>«Penicilina» se puede registrar dos veces sin aviso. En una lista de alergias es exactamente lo que no debe pasar.</td><td class="mono">views_alergias.py</td></tr>
+      <tr><td class="num">6</td><td><strong>El estado de cuenta por visita filtra por fecha, no por cita</strong></td><td>Con dos visitas del mismo paciente el mismo día, los cargos de ambas aparecen en los dos capítulos. Limitación conocida: el capítulo no expone el identificador de la cita.</td><td class="mono">EstadoCuentaVisita.tsx</td></tr>
+      <tr><td class="num">7</td><td><strong>Marcar ⭐ o 👑 no se puede desde el expediente</strong></td><td>Solo desde la tarjeta de la lista. Tampoco se pueden asignar etiquetas personalizadas. Estando dentro del expediente es donde uno querría hacerlo.</td><td class="mono">FichaPaciente.tsx</td></tr>
+      <tr><td class="num">8</td><td><strong>La rejilla de «agendar sesión» ignora la configuración de la clínica</strong></td><td>Fija de 07:00 a 21:00 cada 30 minutos. Una clínica con otro horario ve una rejilla que no corresponde con su agenda.</td><td class="mono">AgendarSesionModal.tsx</td></tr>
+      <tr><td class="num">9</td><td><strong>Dos secciones del índice no tienen contador</strong></td><td>Estado de cuenta y Calendarización, mientras las otras cinco sí. Inconsistencia visible.</td><td class="mono">IndiceSecciones.tsx</td></tr>
+      <tr><td class="num">10</td><td><strong>Las series de signos están topadas a 730 tomas</strong></td><td>Unos dos años de tomas diarias, y el tope es invisible. Para un paciente crónico, la gráfica no muestra todo su historial.</td><td class="mono">selectors.py</td></tr>
+      <tr><td class="num">11</td><td><strong>Seis componentes monolíticos</strong></td><td>Recetas (52 KB), Calendarización (48), Libro (38), Plan Integral (35), Evolución SOAP (29) e Historia (28) concentran pantalla, estado y lógica en un archivo. Cualquier rediseño de esas pantallas es un refactor.</td><td class="mono">components/expediente/</td></tr>
+      <tr><td class="num">12</td><td><strong>31 KB de código muerto</strong></td><td><code>EvolucionTab.tsx</code> no lo importa nadie. Confunde a quien llega nuevo y hace parecer que hay dos pantallas de evolución.</td><td class="mono">EvolucionTab.tsx</td></tr>
+      <tr><td class="num">13</td><td><strong>Documentación desalineada</strong></td><td>Comentarios que hablan de tres formatos de receta cuando hay dos, y un plan que describe «especialidades como plugins» que nunca se construyeron. Es la trampa más probable para alguien que llega nuevo al proyecto.</td><td class="mono">api/recetas.ts · docs/design/</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call nota">
+    <span class="lab">Una lectura de conjunto</span>
+    <p>El expediente está mucho más completo que la agenda: casi todo lo que la norma exige está
+      construido, y bien construido. Los huecos son de <strong>otra naturaleza</strong> que los de la
+      agenda. Allá faltaban superficies para datos que ya existían; aquí falta sobre todo
+      <strong>ayuda clínica en el momento de decidir</strong>: señalar el valor anormal, ofrecer el
+      código correcto, avisar del duplicado, advertir antes de lo irreversible. El sistema hoy
+      guarda muy bien; podría <em>acompañar</em> mucho mejor.</p>
+  </div>
+</section>
+
+<p class="foot">Documento 2 de 2 del handoff de Maily360. El documento par cubre la
+  <strong><a href="https://claude.ai/code/artifact/d03daefa-a619-4603-8147-1790365bbecb">agenda</a></strong>:
+  el tablero del día, el asistente para agendar, multi-citas, bloqueos y
+  reuniones, cancelaciones y recordatorios. Todo lo descrito aquí se levantó leyendo el código de
+  producción con fecha 26 de julio de 2026; si algo cambia en la aplicación, este documento se
+  actualiza y conserva el mismo enlace.</p>
+
+</main>
+</div>

@@ -1,0 +1,1473 @@
+<title>Agenda — Maily360</title>
+
+<style>
+:root{
+  --paper:#F7F6F2; --card:#FFFFFF; --ink:#1D2426; --ink-soft:#3E4749; --muted:#6C7879;
+  --rule:#D8D5CC; --rule-soft:#E9E6DE; --code-bg:#EEECE4; --code-ink:#334042;
+  --teal:#0E6F6E; --gold:#8E7118; --gold-hi:#C9A227; --oxide:#A33B2A; --navy:#2F5D8C; --plum:#6B4A8C;
+  --tint-teal:rgba(14,111,110,.09); --tint-gold:rgba(201,162,39,.13);
+  --tint-oxide:rgba(163,59,42,.09); --tint-navy:rgba(47,93,140,.09); --tint-plum:rgba(107,74,140,.09);
+  --shadow:0 1px 2px rgba(29,36,38,.05), 0 8px 24px -12px rgba(29,36,38,.18);
+  --serif:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#14191B; --card:#1B2124; --ink:#E8E5DD; --ink-soft:#C6C3BA; --muted:#8D9899;
+    --rule:#2F3739; --rule-soft:#242B2D; --code-bg:#1F272A; --code-ink:#C8D2D3;
+    --teal:#63C2B8; --gold:#D6B357; --gold-hi:#E3C463; --oxide:#E28D78; --navy:#8FB6DE; --plum:#B79AD6;
+    --tint-teal:rgba(99,194,184,.11); --tint-gold:rgba(227,196,99,.11);
+    --tint-oxide:rgba(226,141,120,.10); --tint-navy:rgba(143,182,222,.10); --tint-plum:rgba(183,154,214,.10);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14191B; --card:#1B2124; --ink:#E8E5DD; --ink-soft:#C6C3BA; --muted:#8D9899;
+  --rule:#2F3739; --rule-soft:#242B2D; --code-bg:#1F272A; --code-ink:#C8D2D3;
+  --teal:#63C2B8; --gold:#D6B357; --gold-hi:#E3C463; --oxide:#E28D78; --navy:#8FB6DE; --plum:#B79AD6;
+  --tint-teal:rgba(99,194,184,.11); --tint-gold:rgba(227,196,99,.11);
+  --tint-oxide:rgba(226,141,120,.10); --tint-navy:rgba(143,182,222,.10); --tint-plum:rgba(183,154,214,.10);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+}
+:root[data-theme="light"]{
+  --paper:#F7F6F2; --card:#FFFFFF; --ink:#1D2426; --ink-soft:#3E4749; --muted:#6C7879;
+  --rule:#D8D5CC; --rule-soft:#E9E6DE; --code-bg:#EEECE4; --code-ink:#334042;
+  --teal:#0E6F6E; --gold:#8E7118; --gold-hi:#C9A227; --oxide:#A33B2A; --navy:#2F5D8C; --plum:#6B4A8C;
+  --tint-teal:rgba(14,111,110,.09); --tint-gold:rgba(201,162,39,.13);
+  --tint-oxide:rgba(163,59,42,.09); --tint-navy:rgba(47,93,140,.09); --tint-plum:rgba(107,74,140,.09);
+  --shadow:0 1px 2px rgba(29,36,38,.05), 0 8px 24px -12px rgba(29,36,38,.18);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);
+  font-size:17px;line-height:1.62;-webkit-font-smoothing:antialiased}
+a{color:var(--teal);text-decoration-thickness:1px;text-underline-offset:3px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--gold-hi);outline-offset:3px;border-radius:2px}
+code,kbd{font-family:var(--mono);font-size:.82em;background:var(--code-bg);color:var(--code-ink);
+  padding:.12em .38em;border-radius:3px;word-break:break-word}
+
+/* ---------- shell ---------- */
+.masthead{border-bottom:1px solid var(--rule);background:var(--card)}
+.masthead-in{max-width:1200px;margin:0 auto;padding:52px 30px 40px}
+.eyebrow{font-family:var(--sans);font-size:11.5px;font-weight:640;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 20px}
+.masthead h1{font-size:clamp(40px,7vw,72px);line-height:1.02;letter-spacing:-.02em;margin:0;
+  font-weight:600;text-wrap:balance}
+.masthead h1 em{font-style:normal;color:var(--teal)}
+.lede{font-size:20px;line-height:1.55;color:var(--ink-soft);max-width:62ch;margin:20px 0 0}
+.facts{display:flex;flex-wrap:wrap;gap:0;margin:34px 0 0;border-top:1px solid var(--rule-soft);
+  font-family:var(--sans)}
+.fact{padding:14px 26px 0 0;margin-right:26px;border-right:1px solid var(--rule-soft);flex:0 1 auto}
+.fact:last-child{border-right:0}
+.fact dt{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin:0 0 3px}
+.fact dd{margin:0;font-size:14px;font-weight:560;color:var(--ink)}
+
+.page{max-width:1200px;margin:0 auto;padding:0 30px 140px;
+  display:grid;grid-template-columns:236px minmax(0,1fr);gap:64px;align-items:start}
+.rail{position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:34px 0;font-family:var(--sans)}
+.rail summary{display:none}
+.rail-t{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+.rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.rail a{display:grid;grid-template-columns:26px 1fr;gap:8px;padding:5px 0;font-size:13.5px;
+  line-height:1.34;color:var(--ink-soft);text-decoration:none;border-radius:3px}
+.rail a:hover{color:var(--teal)}
+.rail a b{font-variant-numeric:tabular-nums;font-weight:560;color:var(--muted);font-size:12px}
+.rail a:hover b{color:var(--teal)}
+
+main{padding:34px 0 0;min-width:0}
+
+/* ---------- sections ---------- */
+.sec{padding:0 0 56px;scroll-margin-top:22px}
+.sec+.sec{border-top:1px solid var(--rule);padding-top:52px}
+.sec-h{display:grid;grid-template-columns:52px minmax(0,1fr);gap:0 14px;margin:0 0 26px}
+.sec-h .num{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--gold);
+  padding-top:.72em;font-variant-numeric:tabular-nums}
+.sec-h h2{grid-column:2;margin:0;font-size:clamp(27px,3.6vw,36px);line-height:1.12;
+  letter-spacing:-.015em;font-weight:600;text-wrap:balance}
+.sec-h .dek{grid-column:2;margin:9px 0 0;font-size:17.5px;color:var(--muted);max-width:64ch}
+.sec>p,.sec>ul,.sec>ol{max-width:68ch}
+.sec>p{margin:0 0 18px}
+h3{font-family:var(--sans);font-size:15px;font-weight:640;letter-spacing:.01em;
+  margin:36px 0 14px;color:var(--ink)}
+h3:first-child{margin-top:0}
+h4{font-family:var(--sans);font-size:11.5px;font-weight:640;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);margin:26px 0 10px}
+.sec ul,.sec ol{padding-left:1.15em;margin:0 0 18px}
+.sec li{margin:0 0 7px}
+.sec li>ul{margin:7px 0 0}
+
+/* ---------- ficha ---------- */
+.ficha{background:var(--card);border:1px solid var(--rule);border-radius:5px;
+  padding:22px 24px;margin:0 0 18px;box-shadow:var(--shadow)}
+.ficha>h3{margin-top:0}
+.ficha-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 14px;margin:0 0 14px;
+  padding-bottom:12px;border-bottom:1px solid var(--rule-soft)}
+.ficha-h h3{margin:0;font-size:16.5px}
+.ficha p{margin:0 0 14px;max-width:66ch}
+.ficha p:last-child,.ficha ul:last-child,.ficha>div:last-child{margin-bottom:0}
+.src{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:16px;margin:0 0 18px}
+
+/* ---------- chips ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px;padding:0;list-style:none}
+.chip{font-family:var(--sans);font-size:11.5px;font-weight:560;letter-spacing:.02em;
+  padding:3px 9px;border-radius:20px;border:1px solid var(--rule);color:var(--ink-soft);
+  background:var(--paper);white-space:nowrap}
+.chip.mono{font-family:var(--mono);font-weight:400;letter-spacing:0}
+.chip.t{color:var(--teal);border-color:color-mix(in srgb,var(--teal) 34%,transparent);background:var(--tint-teal)}
+.chip.g{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 38%,transparent);background:var(--tint-gold)}
+.chip.o{color:var(--oxide);border-color:color-mix(in srgb,var(--oxide) 34%,transparent);background:var(--tint-oxide)}
+.chip.n{color:var(--navy);border-color:color-mix(in srgb,var(--navy) 34%,transparent);background:var(--tint-navy)}
+.chip.p{color:var(--plum);border-color:color-mix(in srgb,var(--plum) 34%,transparent);background:var(--tint-plum)}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;
+  vertical-align:baseline;border:1px solid rgba(0,0,0,.14)}
+
+/* ---------- callouts ---------- */
+.call{border-left:3px solid var(--rule);padding:14px 18px;margin:0 0 18px;border-radius:0 4px 4px 0;
+  background:var(--paper);max-width:70ch}
+.call .lab{display:block;font-family:var(--sans);font-size:10.5px;font-weight:680;letter-spacing:.12em;
+  text-transform:uppercase;margin:0 0 6px}
+.call p{margin:0 0 10px;font-size:16px}
+.call p:last-child,.call ul:last-child{margin-bottom:0}
+.call ul{margin:0;font-size:16px}
+.call.regla{border-color:var(--oxide);background:var(--tint-oxide)}
+.call.regla .lab{color:var(--oxide)}
+.call.dec{border-color:var(--navy);background:var(--tint-navy)}
+.call.dec .lab{color:var(--navy)}
+.call.opp{border-color:var(--gold-hi);background:var(--tint-gold)}
+.call.opp .lab{color:var(--gold)}
+.call.nota{border-color:var(--teal);background:var(--tint-teal)}
+.call.nota .lab{color:var(--teal)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:0 0 20px;border:1px solid var(--rule);border-radius:5px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:13.5px;line-height:1.42}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+thead th{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+  font-weight:640;background:var(--paper);border-bottom:1px solid var(--rule);
+  position:sticky;top:0;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td code,th code{font-size:12px;background:none;padding:0;color:var(--code-ink)}
+td.mono,th.mono{font-family:var(--mono);font-size:12px;white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.yes{color:var(--teal);font-weight:640}
+.no{color:var(--muted)}
+.mid{color:var(--gold);font-weight:640}
+caption{caption-side:bottom;text-align:left;padding:9px 13px;font-family:var(--sans);
+  font-size:12px;color:var(--muted);border-top:1px solid var(--rule-soft)}
+
+/* ---------- key/value ---------- */
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0;margin:0 0 18px;font-family:var(--sans);font-size:14px}
+.kv dt{font-family:var(--mono);font-size:12.5px;color:var(--teal);padding:7px 18px 7px 0;
+  border-bottom:1px solid var(--rule-soft);white-space:nowrap}
+.kv dd{margin:0;padding:7px 0;border-bottom:1px solid var(--rule-soft);color:var(--ink-soft)}
+.kv dt:last-of-type,.kv dd:last-of-type{border-bottom:0}
+
+/* ---------- wireframe ---------- */
+.wire{border:1px solid var(--rule);border-radius:5px;background:var(--card);padding:16px;
+  margin:0 0 8px;overflow-x:auto}
+.wire-t{font-family:var(--sans);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 12px}
+.board{display:grid;grid-template-columns:52px repeat(4,minmax(96px,1fr));
+  min-width:520px;font-family:var(--sans);font-size:11px}
+.board .hd{padding:6px 4px;border-bottom:1px solid var(--rule);font-weight:640;font-size:10.5px;
+  color:var(--ink-soft);display:flex;align-items:center;gap:5px}
+.board .hr{color:var(--muted);font-variant-numeric:tabular-nums;padding:4px;
+  border-right:1px solid var(--rule-soft);text-align:right;font-size:10px}
+.board .cell{border-right:1px solid var(--rule-soft);border-bottom:1px dashed var(--rule-soft);
+  min-height:34px;padding:2px;position:relative}
+.board .cell.past{background:color-mix(in srgb,var(--muted) 7%,transparent)}
+.board .ev{border-radius:3px;padding:3px 5px;font-size:10px;line-height:1.28;height:100%;
+  border-left:3px solid;overflow:hidden}
+.ev.a{background:var(--tint-teal);border-color:var(--teal);color:var(--ink)}
+.ev.b{background:var(--tint-navy);border-color:var(--navy);color:var(--ink)}
+.ev.c{background:var(--tint-plum);border-color:var(--plum);color:var(--ink)}
+.ev.canc{background:var(--tint-oxide);border-color:var(--oxide);color:var(--oxide);
+  text-decoration:line-through}
+.ev.blk{background:repeating-linear-gradient(45deg,var(--tint-oxide),var(--tint-oxide) 5px,transparent 5px,transparent 10px);
+  border:1px dashed var(--oxide);border-left-width:1px;color:var(--oxide);font-weight:600;text-align:center}
+.ev.mtg{background:var(--tint-navy);border:1px solid var(--navy);border-left-width:1px;
+  color:var(--navy);font-weight:600;text-align:center}
+.wire-c{font-family:var(--sans);font-size:12.5px;color:var(--muted);margin:0 0 20px}
+
+.drawer{display:grid;grid-template-columns:1fr;gap:8px;font-family:var(--sans);font-size:11.5px}
+.dz{border:1px solid var(--rule);border-radius:4px;padding:9px 11px;background:var(--paper)}
+.dz b{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  font-weight:640;margin:0 0 4px}
+.dcols{display:grid;grid-template-columns:minmax(150px,.9fr) minmax(0,1.6fr);gap:8px}
+@media(max-width:640px){.dcols{grid-template-columns:1fr}}
+
+/* ---------- steps ---------- */
+.steps{list-style:none;padding:0;margin:0 0 20px;counter-reset:st}
+.steps li{counter-increment:st;display:grid;grid-template-columns:28px minmax(0,1fr);gap:14px;
+  padding:0 0 16px}
+.steps li::before{content:counter(st);font-family:var(--mono);font-size:11.5px;font-weight:500;
+  color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);
+  background:var(--tint-gold);border-radius:50%;width:26px;height:26px;
+  display:grid;place-items:center;margin-top:2px}
+.steps li>b,.steps li>p{grid-column:2}
+.steps li b{font-family:var(--sans);font-size:14.5px;display:block;margin-bottom:2px}
+.steps li p{margin:0;max-width:62ch}
+
+pre.mermaid{background:var(--card);border:1px solid var(--rule);border-radius:5px;
+  padding:18px;margin:0 0 20px;overflow-x:auto;text-align:center}
+.msg{font-family:var(--sans);font-style:italic;color:var(--ink-soft)}
+
+.foot{border-top:1px solid var(--rule);margin-top:14px;padding:30px 0 0;
+  font-family:var(--sans);font-size:13.5px;color:var(--muted);max-width:68ch}
+
+@media(max-width:900px){
+  .page{grid-template-columns:1fr;gap:0;padding:0 22px 90px}
+  .rail{position:static;max-height:none;padding:24px 0 0;overflow:visible;
+    border-bottom:1px solid var(--rule);margin-bottom:8px}
+  .rail summary{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    font-weight:640;color:var(--teal);cursor:pointer;padding:8px 0 16px}
+  .rail-t{display:none}
+  .rail ol{padding-bottom:18px}
+  .masthead-in{padding:38px 22px 30px}
+  body{font-size:16.5px}
+  .sec-h{grid-template-columns:38px minmax(0,1fr)}
+  .fact{padding:12px 0 0;margin:0;border-right:0;border-top:1px solid var(--rule-soft);flex:1 1 100%}
+  .facts{border-top:0}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="masthead">
+  <div class="masthead-in">
+    <p class="eyebrow">Maily360 · Handoff para diseño · Documento 1 de 2</p>
+    <h1>Agenda:<br>todo lo que <em>ya hace</em> hoy</h1>
+    <p class="lede">Inventario completo del módulo de agenda tal como está construido: cada pantalla,
+      cada campo, cada estado y cada regla que el sistema impone. Es el punto de partida para
+      rediseñar sin perder funcionalidad por el camino.</p>
+    <dl class="facts">
+      <div class="fact"><dt>Fecha de corte</dt><dd>26 de julio de 2026</dd></div>
+      <div class="fact"><dt>Alcance</dt><dd>Citas · Horarios · Cancelaciones · Reuniones</dd></div>
+      <div class="fact"><dt>Fuente</dt><dd>Código en producción, no especificación</dd></div>
+      <div class="fact"><dt>Documento par</dt><dd><a href="https://claude.ai/code/artifact/adbb44c7-d953-4f3f-b453-c26947d94600">Expediente clínico →</a></dd></div>
+    </dl>
+  </div>
+</header>
+
+<div class="page">
+
+<details class="rail" open>
+  <summary>Índice del documento</summary>
+  <p class="rail-t">Contenido</p>
+  <ol>
+    <li><a href="#s01"><b>01</b><span>Cómo leer este documento</span></a></li>
+    <li><a href="#s02"><b>02</b><span>Mapa de navegación</span></a></li>
+    <li><a href="#s03"><b>03</b><span>Los objetos del dominio</span></a></li>
+    <li><a href="#s04"><b>04</b><span>Pantalla: tablero del día</span></a></li>
+    <li><a href="#s05"><b>05</b><span>Flujo: agendar una cita</span></a></li>
+    <li><a href="#s06"><b>06</b><span>Multi-cita y disponibilidad</span></a></li>
+    <li><a href="#s07"><b>07</b><span>Bloqueos y reuniones</span></a></li>
+    <li><a href="#s08"><b>08</b><span>Pantalla: detalle de la cita</span></a></li>
+    <li><a href="#s09"><b>09</b><span>Máquina de estados</span></a></li>
+    <li><a href="#s10"><b>10</b><span>Cancelar, no-show, reagendar</span></a></li>
+    <li><a href="#s11"><b>11</b><span>Anti-empalme</span></a></li>
+    <li><a href="#s12"><b>12</b><span>Recordatorios de WhatsApp</span></a></li>
+    <li><a href="#s13"><b>13</b><span>Notas del equipo</span></a></li>
+    <li><a href="#s14"><b>14</b><span>Vigilancia en tiempo real</span></a></li>
+    <li><a href="#s15"><b>15</b><span>Configuración</span></a></li>
+    <li><a href="#s16"><b>16</b><span>Multi-sede</span></a></li>
+    <li><a href="#s17"><b>17</b><span>Permisos por rol</span></a></li>
+    <li><a href="#s18"><b>18</b><span>Referencia técnica</span></a></li>
+    <li><a href="#s19"><b>19</b><span>Brechas y oportunidades</span></a></li>
+  </ol>
+</details>
+
+<main>
+
+<!-- ============ 01 ============ -->
+<section class="sec" id="s01">
+  <div class="sec-h">
+    <span class="num">01</span>
+    <h2>Cómo leer este documento</h2>
+    <p class="dek">Qué es, para quién es y cómo distinguir lo que existe de lo que falta.</p>
+  </div>
+
+  <p>Esto no es una especificación de lo que Maily360 debería hacer. Es un inventario de lo que
+    <strong>hace hoy</strong>, levantado leyendo el código de producción: los modelos de datos, las
+    reglas de los servicios, los permisos por rol y cada componente de pantalla. Si algo aparece
+    aquí, existe y funciona. Si no aparece, no está construido.</p>
+
+  <p>Está escrito para quien va a rediseñar la interfaz. Por eso cada funcionalidad describe tres
+    capas: <strong>qué ve el usuario</strong>, <strong>qué regla lo gobierna</strong> y
+    <strong>dónde vive en el código</strong>, para que puedas ir a mirar la pantalla real.</p>
+
+  <h3>Los tres tipos de aviso</h3>
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>No es negociable en el rediseño. Casi siempre viene de la ley mexicana
+      (NOM-004-SSA3-2012, COFEPRIS, LFPDPPP) o de la integridad de los datos. Puedes cambiar
+      cómo se ve; no puedes eliminarla.</p>
+  </div>
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Se hizo así a propósito y hay una razón registrada. Se puede cambiar, pero conviene
+      conocer el motivo antes de proponer lo contrario.</p>
+  </div>
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Un hueco real: algo incompleto, inconsistente o que el dato ya existe pero nunca se le
+      muestra al usuario. Aquí es donde más valor puedes aportar. Todas están juntas
+      en la sección 19.</p>
+  </div>
+
+  <h3>Vocabulario mínimo</h3>
+  <dl class="kv">
+    <dt>tenant</dt><dd>Una clínica. Todo el sistema es multi-clínica: cada dato pertenece a una y solo una, aislado a nivel de base de datos.</dd>
+    <dt>sucursal</dt><dd>Una sede física de la clínica. Una clínica puede tener varias.</dd>
+    <dt>consultorio</dt><dd>Un cuarto dentro de una sucursal. Es lo que forma las columnas del tablero.</dd>
+    <dt>rol</dt><dd>Los 7 papeles del personal: <code>owner</code> (dueña), <code>admin</code>, <code>doctor</code>, <code>nurse</code> (enfermería), <code>reception</code>, <code>finance</code>, <code>readonly</code>.</dd>
+    <dt>módulo</dt><dd>Una capacidad que la clínica contrata. Si no contrató <code>agenda</code>, el módulo entero no existe para ella.</dd>
+  </dl>
+</section>
+
+<!-- ============ 02 ============ -->
+<section class="sec" id="s02">
+  <div class="sec-h">
+    <span class="num">02</span>
+    <h2>Mapa de navegación</h2>
+    <p class="dek">Desde dónde se llega a la agenda, qué modal abre cada acción, y las tres piezas
+      que viven fuera de ella.</p>
+  </div>
+
+  <p>La agenda es una <strong>ruta propia</strong> (<code>/agenda</code>) con un tablero y siete
+    modales que se abren encima. No hay navegación en profundidad: todo pasa en capas sobre el
+    mismo tablero, y al cerrar el modal sigues viendo el mismo día.</p>
+
+  <pre class="mermaid">
+flowchart TD
+  T["Topbar"] --> AG["/agenda — Tablero del día"]
+  AG --> CE["Crear evento (asistente 2 pasos)"]
+  AG --> DC["Detalle de la cita"]
+  AG --> ED["Detalle del evento"]
+  DC --> RG["Reagendar"]
+  DC --> NT1["Hilo de notas"]
+  DC --> PDF["Visor de PDF de la cotización"]
+  DC --> EXP["Expediente del paciente"]
+  ED --> NT2["Hilo de notas"]
+  CO["/contactos — Clientes potenciales"] --> CE
+  CAL["Expediente: Calendarización"] --> AS["Agendar sesión"]
+  MC["/mi-consultorio"] --> HG["Horario y rejilla de la agenda"]
+  PE["/personal"] --> TC["Catálogo de tipos de cita"]
+  PE --> HD["Horarios de atención del médico"]
+  </pre>
+
+  <h3>Tres piezas globales que no viven en la agenda</h3>
+  <p>Están montadas en la raíz de la aplicación y aparecen en <em>cualquier</em> pantalla. Es
+    importante saberlo: al rediseñar la agenda hay que rediseñarlas también, porque son su cara
+    fuera de la agenda.</p>
+
+  <div class="grid2">
+    <div class="ficha">
+      <div class="ficha-h"><h3>Alerta de cita atorada</h3><span class="chip o">Bloqueante</span></div>
+      <p>Modal a pantalla completa que aparece cuando una cita de hoy cruzó su hora y su estado no
+        avanzó. Interrumpe lo que estés haciendo. Detalle en la sección 14.</p>
+      <p class="src">components/agenda/AlertaCitas.tsx</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>Luz de recordatorios</h3><span class="chip g">Flotante</span></div>
+      <p>Botón circular dorado fijo abajo a la derecha, con anillo pulsante y contador rojo,
+        cuando hay recordatorios de hoy vencidos. Al tocarlo lleva a la agenda.</p>
+      <p class="src">components/agenda/LuzRecordatorios.tsx</p>
+    </div>
+  </div>
+  <div class="ficha">
+    <div class="ficha-h"><h3>Mis recordatorios del día</h3><span class="chip">Panel lateral</span></div>
+    <p>Vive dentro del tablero, pero <strong>no son recordatorios de citas</strong>: son las notas y
+      tareas personales del usuario, del módulo Notas. Es una fuente de confusión conceptual heredada
+      que vale la pena resolver en el rediseño.</p>
+    <p class="src">components/agenda/RecordatoriosWidget.tsx</p>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section class="sec" id="s03">
+  <div class="sec-h">
+    <span class="num">03</span>
+    <h2>Los objetos del dominio</h2>
+    <p class="dek">Siete tablas. Todo lo que ves en pantalla sale de aquí, y todo lo que puedas
+      diseñar tiene que caber aquí.</p>
+  </div>
+
+  <pre class="mermaid">
+erDiagram
+  Appointment }o--|| Patient : "paciente"
+  Appointment }o--|| Doctor : "médico"
+  Appointment }o--o| Consultorio : "consultorio opcional"
+  Appointment }o--o| Sucursal : "sede"
+  Appointment }o--o| AppointmentType : "tipo con color"
+  Appointment }o--o| Quote : "cotización aceptada"
+  Appointment ||--o{ AppointmentReminder : "recordatorios"
+  Appointment ||--o{ AgendaItemNote : "hilo de notas"
+  AgendaBlock ||--o{ AgendaItemNote : "hilo de notas"
+  AgendaBlock }o--o| Doctor : "alcance"
+  AgendaBlock }o--o| Consultorio : "alcance"
+  Doctor ||--o{ DoctorSchedule : "horario de atención"
+  Tenant ||--|| TenantAgendaConfig : "una por clínica"
+  </pre>
+
+  <h3>Appointment — la cita</h3>
+  <p>El objeto central. Tabla <code>agenda_appointments</code>.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Campo</th><th>Tipo</th><th>Default</th><th>Qué significa</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">patient</td><td>FK obligatoria</td><td>—</td><td>El paciente. Protegida: no se puede borrar un paciente con citas.</td></tr>
+      <tr><td class="mono">doctor</td><td>FK obligatoria</td><td>—</td><td>El médico.</td></tr>
+      <tr><td class="mono">consultorio</td><td>FK opcional</td><td><code>null</code></td><td>Vacío en telemedicina, teléfono y visitas a domicilio.</td></tr>
+      <tr><td class="mono">sucursal</td><td>FK opcional</td><td>se resuelve</td><td>Nunca la escribe el usuario: se deduce (ver sección 16).</td></tr>
+      <tr><td class="mono">modality</td><td>4 opciones</td><td><code>office</code></td><td>Consultorio u oficina · Telefónica · Video llamada · Fuera de la instalación.</td></tr>
+      <tr><td class="mono">starts_at</td><td>fecha-hora UTC</td><td>—</td><td>Siempre UTC en base de datos; se presenta en la zona de la clínica.</td></tr>
+      <tr><td class="mono">ends_at</td><td>fecha-hora UTC</td><td>calculado</td><td>Debe ser posterior al inicio.</td></tr>
+      <tr><td class="mono">status</td><td>7 estados</td><td><code>scheduled</code></td><td>Solo cambia por el endpoint de estado. Ver sección 9.</td></tr>
+      <tr><td class="mono">reason</td><td>texto, 255</td><td><code>""</code></td><td>«¿A qué viene el paciente?». Es el campo más visible de toda la cita.</td></tr>
+      <tr><td class="mono">appointment_type</td><td>FK opcional</td><td><code>null</code></td><td>Aporta el color de la tarjeta.</td></tr>
+      <tr><td class="mono">specialty</td><td>texto, 100</td><td><code>""</code></td><td>Texto libre. No hay catálogo todavía.</td></tr>
+      <tr><td class="mono">notes</td><td>texto largo</td><td><code>""</code></td><td>Notas internas de la cita.</td></tr>
+      <tr><td class="mono">cancelled_by</td><td>FK usuario</td><td><code>null</code></td><td>Quién canceló. <strong>Nunca se muestra en pantalla.</strong></td></tr>
+      <tr><td class="mono">cancellation_reason</td><td>texto largo</td><td><code>""</code></td><td>Por qué se canceló. <strong>Nunca se muestra ni se pide.</strong></td></tr>
+      <tr><td class="mono">no_show_registered_by</td><td>FK usuario</td><td><code>null</code></td><td>Quién marcó el no-show. No se muestra.</td></tr>
+      <tr><td class="mono">reschedule_count</td><td>entero</td><td><code>0</code></td><td>Cuántas veces se movió. <strong>No se muestra</strong>, solo alimenta el segmento «Clientes potenciales».</td></tr>
+      <tr><td class="mono">quote</td><td>FK opcional</td><td><code>null</code></td><td>Cotización vinculada. Solo si está aceptada y es del mismo paciente.</td></tr>
+      <tr><td class="mono">series_id</td><td>UUID</td><td><code>null</code></td><td>Agrupa las citas creadas juntas como serie.</td></tr>
+    </tbody>
+  </table>
+  <caption>Modelo en <code>backend/apps/agenda/models.py:286-532</code></caption>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Cuatro campos con información valiosa <strong>nunca llegan a la pantalla</strong>:
+      <code>cancellation_reason</code>, <code>cancelled_by</code>, <code>no_show_registered_by</code>
+      y <code>reschedule_count</code>. Hoy el detalle de una cita cancelada no dice quién la canceló
+      ni por qué, y el modal de cancelar tampoco pide el motivo aunque el campo exista.</p>
+  </div>
+
+  <h3>AgendaBlock — el evento sin paciente</h3>
+  <p>Un mismo objeto sirve para dos cosas distintas, diferenciadas por su campo <code>kind</code>:
+    <strong>bloqueo</strong> (un hueco que no se puede usar) y <strong>reunión</strong> (una junta
+    de equipo, que además notifica a los convocados).</p>
+  <dl class="kv">
+    <dt>kind</dt><dd><code>block</code> «Bloqueo» o <code>meeting</code> «Reunión»</dd>
+    <dt>title</dt><dd>Hasta 120 caracteres. Opcional en bloqueos, obligatorio en reuniones (regla de la interfaz).</dd>
+    <dt>doctor / consultorio</dt><dd>Definen el <em>alcance</em>. Ambos vacíos = toda la sucursal.</dd>
+    <dt>starts_at / ends_at</dt><dd>Rango. Con <code>all_day</code> activo cubre toda la ventana visible del día.</dd>
+    <dt>notes</dt><dd>Hasta 4 000 caracteres en la interfaz.</dd>
+  </dl>
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>El alcance de un bloqueo de <strong>médico</strong> es global: aplica a ese médico en
+      <em>todas</em> sus sedes, porque una persona no puede estar en dos lugares a la vez. El
+      alcance de <strong>consultorio</strong> es solo ese cuarto, y el de <strong>sucursal</strong>
+      no afecta a las demás sedes.</p>
+  </div>
+
+  <h3>Los otros cinco</h3>
+  <div class="grid2">
+    <div class="ficha">
+      <div class="ficha-h"><h3>AppointmentType</h3><span class="chip mono">agenda_appointment_types</span></div>
+      <p>Catálogo de tipos de cita de la clínica: solo <code>name</code>, <code>color_hex</code> y
+        <code>is_active</code>. El color es lo que tiñe la tarjeta en el tablero. El nombre es único
+        por clínica y darlo de baja es lógico, nunca destructivo.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>TenantAgendaConfig</h3><span class="chip mono">una por clínica</span></div>
+      <p>Gobierna la rejilla y los avisos: hora de apertura (0–23), hora de cierre (1–24,
+        exclusiva), intervalo de línea (5, 10, 15, 20, 30 o 60 minutos), duración de consulta por
+        defecto, interruptor global de recordatorios y sus desfases en minutos.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>AppointmentReminder</h3><span class="chip t">WhatsApp</span></div>
+      <p>Un registro por aviso programado. Canal, momento de envío, estado y vista previa del
+        mensaje. Ver sección 12.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>AgendaItemNote</h3><span class="chip">Append-only</span></div>
+      <p>Nota del equipo colgada de una cita <em>o</em> de un evento, nunca de ambos. No se edita:
+        solo se agrega y se borra.</p>
+    </div>
+  </div>
+  <div class="ficha">
+    <div class="ficha-h"><h3>DoctorSchedule — el horario de atención del médico</h3>
+      <span class="chip o">Informativo, no bloquea</span></div>
+    <p>Filas de «este médico atiende los lunes de 9 a 14 y de 16 a 19». Cada bloque es una fila,
+      así que «lunes a viernes, dos turnos» son diez filas. Se guardan en <strong>hora local</strong>,
+      no UTC, a diferencia de todo lo demás.</p>
+    <div class="call opp">
+      <span class="lab">Oportunidad</span>
+      <p>Este horario <strong>hoy no impide nada</strong>. Se puede agendar a un médico a las 3 de
+        la madrugada de un domingo sin un solo aviso, porque el anti-empalme solo mira citas y
+        bloqueos, nunca el horario laboral. Tampoco se valida que dos bloques del mismo día no se
+        solapen entre sí.</p>
+    </div>
+    <p class="src">backend/apps/personal/models.py:242-326</p>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section class="sec" id="s04">
+  <div class="sec-h">
+    <span class="num">04</span>
+    <h2>Pantalla: tablero del día</h2>
+    <p class="dek">La pantalla principal de la agenda. Un solo día, columnas por consultorio,
+      posicionamiento al minuto.</p>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p><strong>Solo existe la vista de día.</strong> No hay vista semana ni vista mes de la rejilla.
+      El calendario mensual del panel izquierdo es únicamente un selector de fecha: no muestra
+      ocupación, ni carga, ni nada. Es la brecha más grande y más visible del módulo.</p>
+  </div>
+
+  <div class="wire">
+    <p class="wire-t">Anatomía del tablero — aproximación esquemática</p>
+    <div class="board">
+      <div class="hd"></div>
+      <div class="hd">Consultorio 1</div>
+      <div class="hd">Consultorio 2</div>
+      <div class="hd">Consultorio 3</div>
+      <div class="hd">Telemedicina</div>
+
+      <div class="hr">9:00 am</div>
+      <div class="cell past"><div class="ev a">Ana Ruiz<br>Primera vez</div></div>
+      <div class="cell past"></div>
+      <div class="cell past"><div class="ev canc">L. Mora · CANCELADA</div></div>
+      <div class="cell past"></div>
+
+      <div class="hr">9:30 am</div>
+      <div class="cell past"><div class="ev a">J. Pérez</div></div>
+      <div class="cell past"><div class="ev b">M. Díaz<br>Seguimiento</div></div>
+      <div class="cell past"></div>
+      <div class="cell past"><div class="ev c">R. Solís · video</div></div>
+
+      <div class="hr">10:00 am</div>
+      <div class="cell"></div>
+      <div class="cell"><div class="ev b">S. Luna</div></div>
+      <div class="cell"><div class="ev blk">BLOQUEO</div></div>
+      <div class="cell"></div>
+
+      <div class="hr">10:30 am</div>
+      <div class="cell"><div class="ev mtg">REUNIÓN DE EQUIPO — todas las columnas</div></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+    </div>
+  </div>
+  <p class="wire-c">Las horas pasadas se apagan y la celda se sombrea. Un evento sin consultorio
+    ocupa todas las columnas. El color de cada tarjeta viene del tipo de cita.</p>
+
+  <h3>Cómo se construye la rejilla</h3>
+  <dl class="kv">
+    <dt>Columnas</dt><dd>Los consultorios activos de la sede, <strong>más una columna fija «Telemedicina / Externo»</strong> donde caen las citas sin consultorio y las no presenciales.</dd>
+    <dt>Filas</dt><dd>De la hora de apertura a la de cierre, con una línea cada intervalo configurado. Por defecto 9 am a 6 pm cada 30 minutos: 18 franjas.</dd>
+    <dt>Alto de franja</dt><dd>60 px fijos, así que los píxeles por minuto se derivan del intervalo.</dd>
+    <dt>Posición</dt><dd>Al minuto real, como Google Calendar: una consulta de 14 minutos a las 9:14 se dibuja exactamente ahí. Si se sale de la ventana visible se recorta, con un alto mínimo legible de 20 px.</dd>
+    <dt>Columna de horas</dt><dd>Formato 12 h con am/pm, 76 px de ancho para que «12:30 pm» quepa en una línea.</dd>
+  </dl>
+
+  <h3>Densidad progresiva de la tarjeta</h3>
+  <p>La tarjeta de una cita <strong>revela información según el espacio que tiene</strong>. Es una de
+    las piezas de diseño más cuidadas del módulo y hay que preservar la idea al rediseñar.</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Alto disponible</th><th>Qué aparece</th></tr></thead>
+    <tbody>
+      <tr><td class="num">cualquiera</td><td>Nombre del paciente</td></tr>
+      <tr><td class="num">≥ 34 px</td><td>+ icono de modalidad</td></tr>
+      <tr><td class="num">≥ 40 px</td><td>+ punto de color del consultorio</td></tr>
+      <tr><td class="num">≥ 56 px</td><td>+ subtítulo: tipo de cita o motivo</td></tr>
+      <tr><td class="num">≥ 86 px</td><td>+ chip de estado</td></tr>
+    </tbody>
+  </table>
+  <caption>El tamaño de letra también escala, de 0.72 a 0.875 rem.</caption>
+  </div>
+
+  <h3>Códigos visuales que ya existen</h3>
+  <ul class="chips">
+    <li class="chip t"><span class="sw" style="background:#E7F6EE"></span>Confirmada · En sala · Atendida</li>
+    <li class="chip g"><span class="sw" style="background:#FBF1D9"></span>Agendada · En consulta</li>
+    <li class="chip o"><span class="sw" style="background:#FDE8E8"></span>Cancelada · No se presentó</li>
+  </ul>
+  <ul>
+    <li><strong>Cita cancelada:</strong> rayado diagonal rojo, nombre tachado y la palabra
+      «CANCELADA» en rojo. No desaparece del tablero.</li>
+    <li><strong>Iconos de modalidad:</strong> teléfono, cámara de video, alfiler de mapa
+      (fuera de la instalación) y estetoscopio (consultorio).</li>
+    <li><strong>Bloqueo:</strong> rayado diagonal rojo, borde punteado e icono de prohibición.</li>
+    <li><strong>Reunión:</strong> fondo azul translúcido, borde sólido e icono de personas.</li>
+    <li><strong>Chip de sede</strong> en el encabezado, solo cuando la clínica tiene varias.</li>
+  </ul>
+
+  <h3>Filtros automáticos por rol</h3>
+  <p>El tablero no muestra lo mismo a todos, y no hay control para cambiarlo:</p>
+  <ul>
+    <li>Un usuario que <strong>es médico</strong> solo ve <strong>sus</strong> citas.</li>
+    <li>Un médico con consultorios asignados solo ve <strong>esos</strong> consultorios como columnas.</li>
+    <li>Dueña y administración ven los accesos rápidos; el médico ve «Mis citas de hoy».</li>
+  </ul>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Los cuatro accesos rápidos del panel — <em>Cumpleaños</em>, <em>Hoja diaria</em>,
+      <em>Cuentas por cobrar</em>, <em>Contactos cancelados</em> — son <strong>botones sin ninguna
+      función</strong>. Están maquetados y no hacen nada al pulsarlos. Hay que decidir si se
+      construyen o se quitan.</p>
+  </div>
+
+  <h3>Estados vacíos que ya están redactados</h3>
+  <p class="msg">«No hay consultorios configurados todavía. Créalos en el panel de Personal para
+    poder agendar.»</p>
+  <p class="src">web-soft/src/pages/AgendaPage.tsx</p>
+</section>
+
+<!-- ============ 05 ============ -->
+<section class="sec" id="s05">
+  <div class="sec-h">
+    <span class="num">05</span>
+    <h2>Flujo: agendar una cita</h2>
+    <p class="dek">Un asistente de dos pasos con tres modos. Es el formulario más importante
+      del producto.</p>
+  </div>
+
+  <p>Al tocar una celda libre se abre un modal con <strong>tres pastillas de modo</strong>:
+    <strong>Cita</strong>, <strong>Bloqueo</strong> y <strong>Reunión</strong>. Solo el modo Cita
+    tiene dos pasos; los otros dos son un formulario corto (sección 7).</p>
+
+  <div class="call nota">
+    <span class="lab">Antes de empezar</span>
+    <p>Si la celda que tocaste ya pasó, aparece primero un modal de confirmación con reloj:
+      <em>«Las 9:30 am ya pasaron. ¿Seguro que quieres agendar en este horario?»</em> con botones
+      «Cancelar» y «Sí, agendar». Es una salvaguarda de interfaz únicamente: el servidor
+      <strong>sí permite</strong> agendar en el pasado.</p>
+  </div>
+
+  <h3>Paso 1 — «¿A quién y con quién?»</h3>
+  <ol class="steps">
+    <li><b>Paciente existente o paciente nuevo</b>
+      <p>Dos pastillas. En «existente», un buscador con retardo de 300 ms que muestra
+        <em>nombre completo · número de expediente</em>; cierra al tocar fuera y con la tecla de
+        escape. El paciente elegido se convierte en un chip con una × para cambiarlo.</p></li>
+    <li><b>El atajo de creación desde el buscador</b>
+      <p>Si la búsqueda no encuentra nada, ofrece <em>«Crea "Ana María Ruiz Soto" como paciente
+        nuevo →»</em> y <strong>parte el nombre escrito</strong> en nombre, apellido paterno y
+        materno automáticamente.</p></li>
+    <li><b>Paciente nuevo</b>
+      <p>Aviso: <em>«Se creará un expediente provisional. Completa sus datos después en
+        Pacientes.»</em> Pide nombre, apellido paterno, apellido materno y teléfono. Nada más.</p></li>
+    <li><b>Médico</b>
+      <p>Si quien agenda es médico, el campo queda fijo en sí mismo con la etiqueta «Tú». Si no,
+        es una lista de médicos activos filtrada por la sede.</p></li>
+  </ol>
+
+  <h4>Mensajes de validación del paso 1</h4>
+  <ul class="chips">
+    <li class="chip">Selecciona un paciente.</li>
+    <li class="chip">El nombre del paciente es obligatorio.</li>
+    <li class="chip">El apellido paterno es obligatorio.</li>
+    <li class="chip">Selecciona un doctor.</li>
+  </ul>
+
+  <h3>Paso 2 — «¿Cómo, cuándo y detalles?»</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Campo</th><th>Control</th><th>Comportamiento</th></tr></thead>
+    <tbody>
+      <tr><td>Modalidad</td><td>4 tarjetas</td><td>Consultorio u oficina · Telefónica · Video llamada · Fuera de la instalación. El selector de consultorio <strong>solo aparece con la primera</strong>.</td></tr>
+      <tr><td>Consultorio</td><td>lista</td><td>«Sin consultorio» + los consultorios permitidos para ese médico. Si cambias de médico y el consultorio ya no le corresponde, se limpia solo.</td></tr>
+      <tr><td>Inicia</td><td>solo lectura</td><td>La hora de la celda que tocaste, en formato 12 h.</td></tr>
+      <tr><td>Duración</td><td>lista</td><td>10, 15, 20, 30, 40, 45, 60, 90 y 120 minutos, <strong>más la duración propia del médico</strong> si no está en la lista — marcada « (del médico)» y precargada al elegirlo.</td></tr>
+      <tr><td>Tipo de cita</td><td>pastillas</td><td>Teñidas con su color. Si el catálogo está vacío: <em>«No hay tipos configurados. Créalos en Personal → Tipos de cita.»</em></td></tr>
+      <tr><td>¿A qué viene el paciente?</td><td>texto, 255</td><td>Marcado <strong>(recomendado)</strong>. Es el campo que más se lee después.</td></tr>
+      <tr><td>Cotización</td><td>lista</td><td>Solo con paciente existente y sin repetición. Lista las cotizaciones aceptadas de ese paciente como <em>total · estado</em>. Se deselecciona al cambiar de paciente.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p><strong>Precedencia de la duración</strong>, en este orden exacto: lo que se elija en la cita
+      → la duración propia del médico → la duración por defecto de la clínica → 30 minutos.</p>
+  </div>
+
+  <h3>Las reglas que el servidor impone al guardar</h3>
+  <p>Se validan en este orden, y cada una tiene su mensaje:</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Regla</th><th>Mensaje al usuario</th></tr></thead>
+    <tbody>
+      <tr><td>El médico está inactivo</td><td class="msg">El médico no está activo en esta clínica.</td></tr>
+      <tr><td>El consultorio está inactivo</td><td class="msg">El consultorio no está activo.</td></tr>
+      <tr><td>Un médico solo agenda para sí mismo</td><td class="msg">Como médico, solo puedes agendar citas para ti.</td></tr>
+      <tr><td>El consultorio debe estar asignado al médico, si tiene asignaciones</td><td class="msg">Ese consultorio no está asignado al médico.</td></tr>
+      <tr><td>El consultorio y la sede tienen que coincidir</td><td class="msg">El consultorio pertenece a otra sucursal distinta de la indicada.</td></tr>
+      <tr><td>El médico debe atender en esa sede, si tiene sedes asignadas</td><td class="msg">El médico no atiende en esa sucursal.</td></tr>
+      <tr><td>La cotización debe estar aceptada y ser del mismo paciente</td><td class="msg">Solo se puede vincular una cotización aceptada. El estado actual es «X».</td></tr>
+      <tr><td>El fin debe ser posterior al inicio</td><td class="msg">La hora de fin debe ser posterior a la hora de inicio.</td></tr>
+      <tr><td>Los tres anti-empalmes</td><td class="msg">Ver sección 11.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Crear un paciente nuevo y su cita ocurre en <strong>una sola transacción</strong>: si la cita
+      falla por un empalme, el expediente provisional no queda huérfano en la base de datos. Es
+      invisible para el usuario y es exactamente lo que debe pasar.</p>
+  </div>
+  <p class="src">web-soft/src/components/agenda/CrearEventoModal.tsx · backend/apps/agenda/services.py:305-636</p>
+</section>
+
+<!-- ============ 06 ============ -->
+<section class="sec" id="s06">
+  <div class="sec-h">
+    <span class="num">06</span>
+    <h2>Multi-cita y disponibilidad en vivo</h2>
+    <p class="dek">Agendar toda una serie de una vez, viendo qué horas están ocupadas y moviendo
+      cada cita sin salir del modal.</p>
+  </div>
+
+  <p>Dentro del paso 2 hay un interruptor <strong>«Repetir esta cita (multi-cita)»</strong>. Al
+    activarlo el modal crece y aparece el armador de la serie.</p>
+
+  <ol class="steps">
+    <li><b>Cada cuánto</b>
+      <p>Semanal, Quincenal, Mensual o Personalizado. La mensual respeta los meses cortos: 31 de
+        enero se mueve al 28 de febrero.</p></li>
+    <li><b>¿Hasta cuándo?</b>
+      <p>Dos pastillas: «N veces» (entre 2 y 52) o «Hasta una fecha». No aplica en Personalizado.</p></li>
+    <li><b>La lista de ocurrencias, editable una por una</b>
+      <p>Cada cita de la serie se dibuja como un <strong>mini-calendario propio</strong> en una
+        rejilla que se adapta al ancho. Se mueve de día tocando otro día de ese calendario.</p></li>
+    <li><b>El selector de horarios de cada cita</b>
+      <p>Al pie de cada mini-calendario, las horas del día generadas desde la configuración de la
+        clínica: <span class="chip o">ocupado, tachado y deshabilitado</span>
+        <span class="chip g">seleccionado</span> <span class="chip">libre</span>. El calendario
+        entero cambia de acento: rojo si ese día y hora chocan, dorado en modo personalizado,
+        verde cuando viene de una regla.</p></li>
+    <li><b>Quitar y agregar</b>
+      <p>Cada cita tiene una × (solo si quedan más de dos). En modo personalizado hay un botón
+        punteado «+ Agregar cita» que añade una semana después de la última.</p></li>
+  </ol>
+
+  <h3>El resultado no cierra el modal</h3>
+  <p>Al guardar aparece una pantalla de resultado con una marca verde y <em>«N citas
+    agendadas»</em>. Si alguna no se pudo: <em>«N no se pudieron (horario ocupado o
+    bloqueado):»</em> con la lista de fechas y <em>«Puedes agendar esas a mano en otro
+    horario.»</em> Después, botón «Listo».</p>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño — las seis decisiones cerradas de la serie</span>
+    <ul>
+      <li><strong>Mejor esfuerzo, no todo o nada:</strong> cada cita se intenta por separado; las
+        que choquen se omiten y se reportan, las demás se crean. Única excepción: si el paciente es
+        nuevo y no se creó ninguna, se revierte todo.</li>
+      <li><strong>Tope duro de 52 citas</strong> por serie.</li>
+      <li><strong>La disponibilidad no reserva nada.</strong> Es ayuda visual; la autoridad final es
+        el anti-empalme del servidor. Entre que miras y guardas, el hueco puede ocuparse.</li>
+      <li><strong>El médico es global entre sedes:</strong> si está ocupado en otra sucursal, aquí
+        aparece ocupado.</li>
+      <li>La serie <strong>no vincula cotización</strong>: una cotización aceptada corresponde a una
+        visita.</li>
+      <li><code>series_id</code> agrupa las citas como gancho a futuro.</li>
+    </ul>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>El gancho existe pero <strong>no hay «editar o cancelar toda la serie»</strong>. Si el
+      paciente cancela un tratamiento de doce sesiones, hay que cancelar doce citas a mano, una por
+      una. Es probablemente el hueco más doloroso del día a día.</p>
+  </div>
+
+  <p class="src">docs/design/multi-citas-disponibilidad.md · CrearEventoModal.tsx:719-809 · hooks/agenda.ts</p>
+</section>
+
+<!-- ============ 07 ============ -->
+<section class="sec" id="s07">
+  <div class="sec-h">
+    <span class="num">07</span>
+    <h2>Bloqueos y reuniones</h2>
+    <p class="dek">Los otros dos modos del mismo modal. Mismo objeto, dos intenciones distintas.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="ficha">
+      <div class="ficha-h"><h3>Bloqueo</h3><span class="chip o">No notifica</span></div>
+      <p>Un hueco que no se puede usar: día festivo, vacaciones, mantenimiento. El título es
+        opcional, con marcador de posición «Día festivo, vacaciones…».</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>Reunión</h3><span class="chip n">Notifica</span></div>
+      <p>Una junta de equipo. El título es <strong>obligatorio</strong> —
+        <em class="msg">«La reunión necesita un título.»</em> — con marcador «Junta de equipo».</p>
+    </div>
+  </div>
+
+  <h3>«¿A qué aplica?» — el selector de alcance</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Opción</th><th>Ayuda contextual que se muestra</th></tr></thead>
+    <tbody>
+      <tr><td>Toda la sucursal</td><td class="msg">Aplica solo a la sucursal X. Las demás sedes no se ven afectadas.</td></tr>
+      <tr><td>Uno o varios consultorios</td><td>Selección múltiple con chips de check dorado. <em class="msg">Selecciona al menos un consultorio.</em></td></tr>
+      <tr><td>Uno o varios doctores</td><td class="msg">Un bloqueo de doctor aplica a ese médico en todas sus sedes.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call nota">
+    <span class="lab">Detalle importante</span>
+    <p>Elegir tres médicos <strong>crea tres eventos separados</strong>, no uno con tres
+      destinatarios. Eso significa que después hay que editarlos o borrarlos uno por uno.</p>
+  </div>
+
+  <h3>Horario</h3>
+  <p>Interruptor «Todo el día» (que equivale a 00:00–23:59 local) o campos Desde y Hasta.
+    Mensaje: <em class="msg">«La hora de fin debe ser posterior a la de inicio.»</em>
+    Más un campo de notas de hasta 4 000 caracteres.</p>
+
+  <h3>A quién le llega la notificación de una reunión</h3>
+  <p>Solo las reuniones notifican, nunca los bloqueos:</p>
+  <ul>
+    <li>Con un <strong>médico</strong> en el alcance → a ese médico.</li>
+    <li>Con un <strong>consultorio</strong> → a los médicos activos de ese consultorio.</li>
+    <li>Sin ninguno de los dos → a todo el personal de la clínica, <strong>filtrado por
+      sucursal</strong>.</li>
+  </ul>
+
+  <h3>Editar un evento ya creado</h3>
+  <p>El modal de detalle muestra el tipo y <em>«Aplica a: X»</em>. Se pueden cambiar el título, la
+    fecha, «todo el día», las horas y las notas. Eliminar pide confirmación en el mismo sitio, en
+    dos pasos: <em class="msg">«¿Eliminar este evento? No se puede deshacer.»</em> → «No» / «Sí,
+    eliminar». El borrado es lógico, no destructivo.</p>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Dos huecos aquí: <strong>el alcance no se puede editar</strong> después de crear el evento
+      (si te equivocaste de médico hay que borrarlo y volver a crearlo), y <strong>los bloqueos
+      pueden solaparse entre sí</strong> libremente porque no existe anti-empalme entre eventos.</p>
+  </div>
+
+  <p class="src">CrearEventoModal.tsx:815-875 · EventoDetalleModal.tsx · backend/apps/agenda/blocks.py</p>
+</section>
+
+<!-- ============ 08 ============ -->
+<section class="sec" id="s08">
+  <div class="sec-h">
+    <span class="num">08</span>
+    <h2>Pantalla: detalle de la cita</h2>
+    <p class="dek">El modal donde se opera la cita. Lo que se ve y los botones cambian según el
+      estado y el rol.</p>
+  </div>
+
+  <div class="wire">
+    <p class="wire-t">Estructura del modal</p>
+    <div class="drawer">
+      <div class="dz"><b>Encabezado</b>Avatar con iniciales · Nombre · Fecha y horario en 12 h · Chip de estado · Enlace «Ver expediente»</div>
+      <div class="dz"><b>Stepper de 5 pasos</b>Agendada → Confirmada → Llegó → En consulta → Atendida. Círculos numerados, halo en el actual, línea de progreso dorada</div>
+      <div class="dz"><b>A qué venía</b>El motivo, destacado en dorado. Visible en cualquier estado, incluso cancelada</div>
+      <div class="dz"><b>Detalles</b>Doctor · Sucursal (solo si hay varias) · Modalidad · Consultorio con punto de color · Tipo de cita · Especialidad · Notas</div>
+      <div class="dz"><b>Cotización vinculada</b>Total · estado + botón que abre el PDF en el visor</div>
+      <div class="dz"><b>Recordatorios</b>Lista con icono de WhatsApp, canal, fecha y chip de estado. Vacío: «Sin recordatorios programados.»</div>
+      <div class="dz"><b>Hilo de notas del equipo</b>Embebido, ver sección 13</div>
+      <div class="dz"><b>Acciones</b>Cambian según estado y rol, ver abajo</div>
+    </div>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>El bloque <strong>«A qué venía»</strong> se muestra en <em>todos</em> los estados, también en
+      las canceladas. Es deliberado: el motivo se conserva y es justo lo que necesita quien intenta
+      recuperar a un paciente que canceló.</p>
+  </div>
+
+  <h3>Qué botones aparecen</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Situación</th><th>Lo que ve el usuario</th></tr></thead>
+    <tbody>
+      <tr><td>Sin permiso de agendar</td><td class="msg">Estás viendo esta cita en modo solo lectura.</td></tr>
+      <tr><td>Cita activa</td><td>Izquierda: «Cancelar» (rojo) y «No asistió». Derecha: «Reagendar» + el botón del <strong>siguiente paso</strong>: Confirmar cita / Marcar llegada / Iniciar consulta / Marcar atendida.</td></tr>
+      <tr><td>Cita cancelada</td><td>«Reagendar» + <strong>«Reactivar cita»</strong> en verde.</td></tr>
+      <tr><td>Atendida o no se presentó</td><td>Texto informativo. Sin acciones: son estados terminales.</td></tr>
+    </tbody>
+  </table>
+  <caption>La tabla de transiciones válidas del frontend es un espejo exacto de la del backend, y es
+    la que decide qué botones existen.</caption>
+  </div>
+
+  <p class="src">web-soft/src/components/agenda/DetalleCitaModal.tsx</p>
+</section>
+
+<!-- ============ 09 ============ -->
+<section class="sec" id="s09">
+  <div class="sec-h">
+    <span class="num">09</span>
+    <h2>Máquina de estados</h2>
+    <p class="dek">Siete estados, transiciones cerradas. Ningún camino se puede inventar en la
+      interfaz.</p>
+  </div>
+
+  <pre class="mermaid">
+stateDiagram-v2
+  [*] --> Agendada
+  Agendada --> Confirmada
+  Agendada --> EnSala
+  Confirmada --> EnSala
+  EnSala --> EnConsulta
+  EnConsulta --> Atendida
+  Agendada --> Cancelada
+  Confirmada --> Cancelada
+  EnSala --> Cancelada
+  Agendada --> NoSePresento
+  Confirmada --> NoSePresento
+  EnSala --> NoSePresento
+  Atendida --> [*]
+  Cancelada --> [*]
+  NoSePresento --> [*]
+  </pre>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Estado</th><th>Etiqueta</th><th>¿Ocupa el hueco?</th><th>¿Terminal?</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">scheduled</td><td>Agendada</td><td class="yes">Sí</td><td class="no">No</td></tr>
+      <tr><td class="mono">confirmed</td><td>Confirmada</td><td class="yes">Sí</td><td class="no">No</td></tr>
+      <tr><td class="mono">arrived</td><td>En sala</td><td class="yes">Sí</td><td class="no">No</td></tr>
+      <tr><td class="mono">in_progress</td><td>En consulta</td><td class="yes">Sí</td><td class="no">No</td></tr>
+      <tr><td class="mono">attended</td><td>Atendida</td><td class="no">No, libera</td><td class="mid">Sí</td></tr>
+      <tr><td class="mono">cancelled</td><td>Cancelada</td><td class="no">No, libera</td><td class="mid">Sí</td></tr>
+      <tr><td class="mono">no_show</td><td>No se presentó</td><td class="no">No, libera</td><td class="mid">Sí</td></tr>
+    </tbody>
+  </table>
+  <caption>Que una cita atendida libere el hueco es intencional: permite meter otra consulta en ese
+    espacio si la primera terminó antes.</caption>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>Una transición no permitida se rechaza con <em class="msg">«No se puede pasar de "X" a "Y".
+      Transición no permitida.»</em> No hay forma de saltarse pasos ni de volver atrás. La única
+      excepción prevista es <strong>Agendada → En sala</strong>, permitida a propósito para el
+      paciente que llega sin haber confirmado.</p>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p><strong>«No se presentó» es irreversible.</strong> Si alguien lo marca por error, no hay
+      manera de corregirlo: hay que crear otra cita. El documento de diseño lo dejó registrado como
+      «revisitar», y sigue pendiente.</p>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section class="sec" id="s10">
+  <div class="sec-h">
+    <span class="num">10</span>
+    <h2>Cancelar, no-show, reagendar, reactivar</h2>
+    <p class="dek">Las cuatro salidas de una cita, con sus reglas y sus efectos secundarios.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Cancelar</h3><span class="chip o">Terminal</span></div>
+    <p>La cita <strong>no se borra</strong>: pasa a cancelada y sigue visible en el tablero, rayada
+      y tachada. Registra quién la canceló, cancela los recordatorios pendientes y queda en la
+      bitácora.</p>
+    <div class="call regla">
+      <span class="lab">Regla de negocio</span>
+      <p><strong>Enfermería no puede cancelar citas</strong> — se responde 403 con ese mensaje
+        explícito. Un <code>doctor</code> tampoco puede por la vía del botón de borrar, «porque
+        confirma y atiende, no cancela en nombre de la clínica», aunque sí puede llegar a
+        «cancelada» avanzando el estado.</p>
+    </div>
+    <div class="call opp">
+      <span class="lab">Oportunidad</span>
+      <p>El modal de cancelar <strong>no pide motivo</strong>, aunque el campo existe en la base de
+        datos y se guardaría. Es la mejora de una línea con mayor retorno de todo el módulo: sin
+        motivo no hay forma de saber por qué se cae la agenda.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>No asistió</h3><span class="chip o">Terminal e irreversible</span></div>
+    <p>Botón propio en el detalle. Registra quién lo marcó y cancela los recordatorios pendientes.
+      Alimenta el segmento «Clientes potenciales» de la lista de pacientes.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Reagendar</h3><span class="chip">Mueve la misma cita</span></div>
+    <p>Pide <strong>nuevo día</strong>, <strong>hora</strong> y <strong>duración</strong>, precargados
+      con los valores actuales. Revalida los tres anti-empalmes excluyendo la propia cita,
+      reprograma los recordatorios y <strong>sube el contador de reagendamientos</strong>.</p>
+    <p>Se puede reagendar desde agendada, confirmada <strong>y cancelada</strong>. Si la cita estaba
+      cancelada, aviso verde: <em class="msg">«Al reagendar, la cita cancelada se reactiva en el
+      nuevo horario.»</em></p>
+    <div class="call opp">
+      <span class="lab">Oportunidad</span>
+      <p>Este modal es <strong>inconsistente con el de crear</strong>: sus duraciones son una lista
+        fija de 30, 45, 60 y 90 minutos que ignora la configuración de la clínica y la duración
+        propia del médico, y <strong>no muestra disponibilidad</strong> — el choque se descubre al
+        guardar.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Reactivar</h3><span class="chip t">Solo desde cancelada</span></div>
+    <p>Devuelve la cita al <strong>mismo horario</strong>. Revalida los tres anti-empalmes, porque el
+      hueco pudo haberse ocupado mientras estaba cancelada. A diferencia de reagendar,
+      <strong>no</strong> incrementa el contador de reagendamientos.</p>
+  </div>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>El documento original de diseño decía que reagendar debía <em>crear una cita nueva</em> para
+      mantener el historial limpio. La implementación tomó el camino contrario: <strong>mueve la
+      cita existente</strong> y guarda cuántas veces se movió. Está documentado como decisión de la
+      versión 1. Si el rediseño quiere mostrar un historial de movimientos, hoy solo hay un contador.</p>
+  </div>
+
+  <h3>Qué se puede editar de una cita ya creada</h3>
+  <p>Solo tres campos: <strong>motivo</strong>, <strong>especialidad</strong> y
+    <strong>notas</strong>. Todo lo demás es inmutable por esa vía: paciente, médico, estado,
+    sucursal y la serie solo cambian por sus acciones específicas.</p>
+
+  <p class="src">ReagendarModal.tsx · backend/apps/agenda/services.py:781-1233</p>
+</section>
+
+<!-- ============ 11 ============ -->
+<section class="sec" id="s11">
+  <div class="sec-h">
+    <span class="num">11</span>
+    <h2>Anti-empalme</h2>
+    <p class="dek">Doble barrera: el servicio valida y la base de datos garantiza. Ninguna
+      interfaz puede saltárselo.</p>
+  </div>
+
+  <p>Tres comprobaciones antes de guardar, y por debajo unas restricciones de base de datos que
+    hacen físicamente imposible guardar dos citas encimadas, incluso si dos personas guardan en el
+    mismo instante.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Comprobación</th><th>Alcance</th><th>Mensaje al usuario</th></tr></thead>
+    <tbody>
+      <tr><td>El médico ya está ocupado</td><td><strong>Global entre sedes.</strong> Un médico no puede estar en dos sucursales a la vez.</td><td class="msg">El médico ya tiene una cita en ese horario.</td></tr>
+      <tr><td>El consultorio ya está ocupado</td><td>Solo si la cita tiene consultorio.</td><td class="msg">El consultorio ya está ocupado en ese horario.</td></tr>
+      <tr><td>Hay un bloqueo o reunión aplicable</td><td>Según el alcance del evento.</td><td class="msg">Ese horario está bloqueado por un evento de agenda. Elige otro horario.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call nota">
+    <span class="lab">Detalle que afecta al diseño</span>
+    <p>El rango de una cita es <strong>cerrado al inicio y abierto al final</strong>. Dos citas de
+      10:00–11:00 y 11:00–12:00 <em>no</em> chocan. Es lo que permite agendar consultas consecutivas
+      sin dejar huecos artificiales.</p>
+  </div>
+
+  <p>Solo los cuatro estados activos ocupan el hueco. Cancelada, no se presentó y atendida lo
+    liberan de inmediato.</p>
+</section>
+
+<!-- ============ 12 ============ -->
+<section class="sec" id="s12">
+  <div class="sec-h">
+    <span class="num">12</span>
+    <h2>Recordatorios de WhatsApp</h2>
+    <p class="dek">Se programan solos al crear la cita y se reprograman al moverla. El usuario
+      nunca los crea a mano.</p>
+  </div>
+
+  <pre class="mermaid">
+flowchart LR
+  A["Se crea la cita"] --> B{"¿Recordatorios activados en la clínica?"}
+  B -- No --> Z["No se crea nada"]
+  B -- Sí --> C["Un recordatorio por cada desfase configurado"]
+  C --> D{"¿El momento de envío ya pasó?"}
+  D -- Sí --> Z2["Se omite, no se crea"]
+  D -- No --> E["Pendiente, encolado para su hora"]
+  E --> F{"Al llegar la hora"}
+  F --> G["Cita cancelada, no-show o atendida → Omitido"]
+  F --> H["Teléfono ausente o mal formado → Omitido"]
+  F --> I["Se envía por WhatsApp → Enviado"]
+  F --> J["El proveedor rechaza → Fallido"]
+  </pre>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Aspecto</th><th>Cómo funciona hoy</th></tr></thead>
+    <tbody>
+      <tr><td>Interruptor</td><td>Uno global por clínica. Apagado no crea ningún recordatorio.</td></tr>
+      <tr><td>Cuándo</td><td>Lista de desfases en minutos. Por defecto <code>[1440]</code>, es decir 24 horas antes. Se puede poner <code>[1440, 120]</code> para dos avisos.</td></tr>
+      <tr><td>Canal</td><td><strong>WhatsApp, fijo en el código.</strong> El modelo soporta SMS y correo, pero nada los usa.</td></tr>
+      <tr><td>Estados</td><td>Pendiente · Enviado · Fallido · Omitido · Cancelado</td></tr>
+      <tr><td>Teléfono</td><td>Tiene que estar en formato internacional (<code>+52…</code>). Si no, el recordatorio se marca omitido con el motivo <em>«Teléfono ausente o no E.164.»</em></td></tr>
+      <tr><td>Contenido</td><td>Plantilla <code>recordatorio_cita</code> con nombre del paciente, fecha y hora en la zona de la clínica, y nombre del médico.</td></tr>
+      <tr><td>Inmutable</td><td>El momento, el canal y la cita no cambian después de crearse. Reagendar cancela los pendientes y programa nuevos.</td></tr>
+      <tr><td>Si algo falla</td><td>La cita <strong>se crea igual</strong>. Un fallo al programar recordatorios nunca impide agendar.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>La vista previa del mensaje contiene datos personales del paciente, así que está protegida por
+      aislamiento a nivel de base de datos (LFPDPPP). Cualquier pantalla que la muestre hereda esa
+      sensibilidad.</p>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Hoy el personal <strong>no puede disparar un recordatorio manualmente</strong> («mándale otro
+      ahora»), ni ver el historial de avisos de un paciente, ni elegir el canal. Los estados
+      «Omitido» y «Fallido» aparecen como un chip pero sin explicar el motivo, que sí está guardado.</p>
+  </div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section class="sec" id="s13">
+  <div class="sec-h">
+    <span class="num">13</span>
+    <h2>Notas del equipo</h2>
+    <p class="dek">Un hilo de conversación colgado de la cita o del evento. Se agrega y se borra,
+      nunca se edita.</p>
+  </div>
+
+  <p>Cada nota muestra el avatar del autor (imagen o iniciales sobre dorado),
+    <em>nombre · fecha y hora</em>, y el cuerpo respetando los saltos de línea. El campo de entrada
+    envía con Enter. El botón de borrar aparece <strong>solo al pasar el cursor</strong> y solo si
+    eres el autor, la dueña o administración. Vacío: <em class="msg">«Aún no hay notas. Agrega la
+    primera.»</em></p>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Las notas <strong>no se editan</strong>, a propósito: es un registro de lo que se dijo en el
+      equipo. Y quien intenta borrar una nota ajena recibe un 400 con <em class="msg">«No puedes
+      eliminar esta nota.»</em> en lugar de un 403, decisión tomada para no tratarlo como un
+      incidente de seguridad.</p>
+  </div>
+
+  <h3>A quién le llega el aviso</h3>
+  <ul>
+    <li><strong>Nota en una cita:</strong> al médico de la cita, a la recepción <em>de esa
+      sede</em>, y a todos los que ya habían comentado en el hilo. Nunca al propio autor.</li>
+    <li><strong>Nota en un evento:</strong> al médico del evento y a quienes ya comentaron.</li>
+  </ul>
+  <p>Límite de 1 000 caracteres en el campo, 2 000 en el servidor.</p>
+  <p class="src">components/agenda/NotasHilo.tsx · backend/apps/agenda/notes.py</p>
+</section>
+
+<!-- ============ 14 ============ -->
+<section class="sec" id="s14">
+  <div class="sec-h">
+    <span class="num">14</span>
+    <h2>Vigilancia en tiempo real</h2>
+    <p class="dek">El sistema persigue al usuario cuando una cita se queda atorada. Es la pieza
+      más intrusiva del producto.</p>
+  </div>
+
+  <p>Un modal <strong>bloqueante a pantalla completa</strong> aparece cuando una cita de hoy cruzó
+    su hora y su estado no avanzó. Las citas se refrescan cada 60 segundos y el reloj cada 30.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Cuándo</th><th>Título</th><th>Mensaje</th><th>Botón principal</th></tr></thead>
+    <tbody>
+      <tr><td>Agendada o confirmada y ya pasó la hora de inicio</td><td>¡Recuerda tu cita!</td>
+        <td>Cambia según la modalidad: <em>¿Ya llegó X?</em> · <em>¿Ya contactaste a X por teléfono?</em> · <em>¿Ya iniciaste la videollamada con X?</em> · <em>¿Ya estás con X?</em></td>
+        <td>Sí, ya llegó</td></tr>
+      <tr><td>En sala y ya pasó la hora de inicio</td><td>¿Pasó a consulta?</td><td>¿X ya pasó a consulta?</td><td>Sí, en consulta</td></tr>
+      <tr><td>En consulta y ya pasó la hora de fin</td><td>¿Terminó la consulta?</td><td>¿Ya se atendió a X? Su cita era a las 10:30</td><td>Sí, atendida</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <ul>
+    <li>El botón <strong>«No asistió»</strong> aparece únicamente en la primera etapa.</li>
+    <li><strong>«Aún no»</strong> posterga 5 minutos. Después de avanzar el estado hay un margen de
+      3 minutos antes de volver a molestar.</li>
+    <li>La postergación se guarda en el navegador por usuario, así que <strong>sobrevive a un
+      refresco de la página</strong>.</li>
+  </ul>
+
+  <div class="call dec">
+    <span class="lab">Decisión de diseño</span>
+    <p>Solo se activa para <strong>recepción</strong> (todas las citas) y <strong>médicos</strong>
+      (las suyas). La dueña, administración y enfermería nunca lo ven: no son quienes mueven el
+      estado de la cita.</p>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Es un modal bloqueante a pantalla completa que puede aparecer mientras estás escribiendo una
+      nota clínica en otra pantalla. El problema que resuelve es real —las agendas se quedan
+      atoradas y eso rompe la estadística— pero el mecanismo es el más agresivo posible. Aquí hay
+      espacio claro para una solución menos invasiva.</p>
+  </div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section class="sec" id="s15">
+  <div class="sec-h">
+    <span class="num">15</span>
+    <h2>Configuración</h2>
+    <p class="dek">Tres pantallas fuera de la agenda que deciden cómo se ve y cómo se comporta.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Horario y rejilla de la agenda</h3><span class="chip">Mi Consultorio</span></div>
+    <p>Cuatro selectores, todos con las horas en formato 12 h: <em>«La agenda abre a las»</em>,
+      <em>«y cierra a las»</em> (incluye «12:00 am (medianoche)» para el cierre a las 24),
+      <em>«Una línea cada»</em> (5, 10, 15, 20, 30 o 60 minutos) y la duración de consulta por
+      defecto (5 a 480 minutos, en pasos de 5).</p>
+    <p>Debajo, una <strong>vista previa en palabras</strong>: <em class="msg">«La agenda mostrará de
+      9:00 am a 6:00 pm, con una línea cada 30 min (18 franjas).»</em> Y una nota fija: <em>«Aplica a
+      toda la clínica. La duración de consulta de cada médico se ajusta en su ficha, dentro de
+      Personal.»</em></p>
+    <p>Solo la dueña y administración pueden cambiarlo; el resto ve un aviso de solo lectura.</p>
+    <p class="src">components/consultorio/SeccionHorarioAgenda.tsx</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Catálogo de tipos de cita</h3><span class="chip">Personal</span></div>
+    <p>Tarjetas con borde izquierdo del color y un cuadro de color de 48 px, con distintivo
+      Activo/Inactivo. Al crear o editar se abre un panel lateral con el nombre (marcador «Primera
+      vez, Seguimiento, Urgente…»), <strong>ocho colores predefinidos</strong> y una
+      <strong>vista previa de la tarjeta tal como se verá en la agenda</strong>.</p>
+    <ul class="chips">
+      <li class="chip mono"><span class="sw" style="background:#2E7D5B"></span>#2E7D5B</li>
+      <li class="chip mono"><span class="sw" style="background:#3A6EA5"></span>#3A6EA5</li>
+      <li class="chip mono"><span class="sw" style="background:#C0392B"></span>#C0392B</li>
+      <li class="chip mono"><span class="sw" style="background:#C9A227"></span>#C9A227</li>
+      <li class="chip mono"><span class="sw" style="background:#7E57C2"></span>#7E57C2</li>
+      <li class="chip mono"><span class="sw" style="background:#E8924E"></span>#E8924E</li>
+      <li class="chip mono"><span class="sw" style="background:#0E9594"></span>#0E9594</li>
+      <li class="chip mono"><span class="sw" style="background:#9A958C"></span>#9A958C</li>
+    </ul>
+    <p>Desactivar pide confirmación: <em class="msg">«¿Desactivar el tipo de cita "X"? Dejará de
+      aparecer al agendar.»</em> Los inactivos se muestran atenuados en lugar de desaparecer.</p>
+    <p class="src">components/personal/TiposCitaTab.tsx · NuevoTipoCitaDrawer.tsx</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Horarios de atención del médico</h3><span class="chip o">Hoy no bloquea nada</span></div>
+    <p>En la ficha de cada médico, dentro de Personal. Ver sección 3 y la oportunidad asociada.</p>
+  </div>
+</section>
+
+<!-- ============ 16 ============ -->
+<section class="sec" id="s16">
+  <div class="sec-h">
+    <span class="num">16</span>
+    <h2>Multi-sede</h2>
+    <p class="dek">Una clínica puede tener varias sucursales, y eso cambia qué ve cada persona.</p>
+  </div>
+
+  <h3>Cómo se decide la sede de una cita</h3>
+  <p>El usuario nunca la escribe. Se resuelve por precedencia:</p>
+  <ol>
+    <li>Una sede indicada explícitamente.</li>
+    <li>La sede del consultorio elegido.</li>
+    <li>La sede activa que el usuario tiene seleccionada en la aplicación.</li>
+    <li>La sede marcada como principal de la clínica.</li>
+  </ol>
+  <p>Si el consultorio no pertenece a la sede indicada, se rechaza. Y si un médico tiene sedes
+    asignadas, tiene que atender en esa.</p>
+
+  <h3>Qué sedes ve cada rol</h3>
+  <dl class="kv">
+    <dt>owner</dt><dd>Todas las sedes activas.</dd>
+    <dt>todos los demás</dt><dd>Solo las sedes en las que tiene membresía — <strong>incluido admin</strong>.</dd>
+    <dt>sin ninguna asignada</dt><dd>Solo la sede principal. Es una salvaguarda para que nadie quede encerrado sin acceso.</dd>
+  </dl>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p>Un recurso fuera de tu alcance responde <strong>404, nunca 403</strong>: «si no lo veo en el
+      listado, no puedo tocarlo por su identificador, y el sistema no me confirma que exista». En la
+      interfaz eso significa que el mensaje correcto es «no encontrado», no «no tienes permiso».</p>
+  </div>
+
+  <p>El chip de la sede activa aparece en el encabezado del tablero. Al cambiar de sucursal, todo lo
+    dependiente de sede se vuelve a pedir al servidor, así que nunca se pinta la sede anterior. La
+    configuración de la agenda no depende de la sede: es de toda la clínica.</p>
+</section>
+
+<!-- ============ 17 ============ -->
+<section class="sec" id="s17">
+  <div class="sec-h">
+    <span class="num">17</span>
+    <h2>Permisos por rol</h2>
+    <p class="dek">Siete roles. La interfaz oculta, pero el servidor es la autoridad.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Acción</th><th>owner</th><th>admin</th><th>doctor</th><th>nurse</th><th>reception</th><th>finance</th><th>readonly</th></tr></thead>
+    <tbody>
+      <tr><td>Ver la agenda</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="yes">Sí</td></tr>
+      <tr><td>Crear cita o evento</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Editar motivo, especialidad, notas</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Cancelar</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Cambiar el estado</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="mid">Sí, salvo cancelar</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Ver el hilo de notas</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="yes">Sí</td></tr>
+      <tr><td>Escribir una nota</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Ver tipos de cita y configuración</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="yes">Sí</td></tr>
+      <tr><td>Cambiar tipos de cita y configuración</td><td class="yes">Sí</td><td class="yes">Sí</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+    </tbody>
+  </table>
+  <caption>Borrar una nota lo puede hacer su autor, la dueña o administración, sea cual sea el rol.</caption>
+  </div>
+
+  <div class="call regla">
+    <span class="lab">Regla de negocio</span>
+    <p><strong>El rol <code>finance</code> no ve la agenda en absoluto.</strong> Es una decisión
+      explícita: el motivo de la cita («¿a qué viene el paciente?») es información clínica. Por
+      coherencia, tampoco se le muestra el último motivo en la ficha del paciente.</p>
+  </div>
+
+  <div class="call opp">
+    <span class="lab">Oportunidad</span>
+    <p>Hay una <strong>contradicción real</strong>: el servidor responde 403 a <code>finance</code>
+      cuando pide las citas, pero la matriz de la interfaz le da permiso de «ver» y la barra
+      superior le muestra la pestaña Agenda. Es decir: probablemente ese rol ve una pantalla vacía o
+      un error. Vale confirmarlo con el equipo y decidir si se le oculta la pestaña o se le da una
+      vista sin motivos.</p>
+  </div>
+</section>
+
+<!-- ============ 18 ============ -->
+<section class="sec" id="s18">
+  <div class="sec-h">
+    <span class="num">18</span>
+    <h2>Referencia técnica</h2>
+    <p class="dek">Los endpoints y los archivos, para cotejar cualquier pantalla contra su código.</p>
+  </div>
+
+  <h3>Endpoints — prefijo <code>/api/v1/</code></h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Método</th><th>Ruta</th><th>Qué hace</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">GET</td><td class="mono">/agenda/citas/</td><td>Lista paginada. Filtros: médico, paciente, consultorio, estado, rango de fechas.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/agenda/citas/</td><td>Crea una cita. Acepta un paciente existente o los datos de uno nuevo, nunca ambos.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/agenda/citas/serie/</td><td>Crea una serie. Devuelve las creadas y las omitidas con su motivo.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/agenda/disponibilidad/</td><td>Intervalos ocupados de un médico y consultorio en un rango.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/agenda/citas/&lt;id&gt;/</td><td>Detalle.</td></tr>
+      <tr><td class="mono">PATCH</td><td class="mono">/agenda/citas/&lt;id&gt;/</td><td>Solo motivo, especialidad y notas.</td></tr>
+      <tr><td class="mono">DELETE</td><td class="mono">/agenda/citas/&lt;id&gt;/</td><td><strong>Cancela</strong>, no borra.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/agenda/citas/&lt;id&gt;/estado/</td><td>El único camino para cambiar de estado.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/agenda/citas/&lt;id&gt;/reagendar/</td><td>Mueve la cita.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/agenda/citas/&lt;id&gt;/reactivar/</td><td>Cancelada → agendada, mismo horario.</td></tr>
+      <tr><td class="mono">GET PATCH</td><td class="mono">/agenda/config/</td><td>Horario y rejilla de la clínica.</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">/agenda/tipos-cita/</td><td>Catálogo de tipos.</td></tr>
+      <tr><td class="mono">PATCH DELETE</td><td class="mono">/agenda/tipos-cita/&lt;id&gt;/</td><td>Borrar = desactivar.</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">/agenda/eventos/</td><td>Bloqueos y reuniones.</td></tr>
+      <tr><td class="mono">PATCH DELETE</td><td class="mono">/agenda/eventos/&lt;id&gt;/</td><td>Solo título, fechas, todo el día y notas.</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">/agenda/citas/&lt;id&gt;/notas/</td><td>Hilo de la cita.</td></tr>
+      <tr><td class="mono">GET POST</td><td class="mono">/agenda/eventos/&lt;id&gt;/notas/</td><td>Hilo del evento.</td></tr>
+      <tr><td class="mono">DELETE</td><td class="mono">/agenda/notas/&lt;id&gt;/</td><td>Borrado lógico de una nota.</td></tr>
+    </tbody>
+  </table>
+  <caption>Relacionados: <code>GET POST /personal/doctores/&lt;id&gt;/horarios/</code> ·
+    <code>POST /expediente/calendarizaciones/sesiones/&lt;id&gt;/agendar/</code>. Todas las rutas
+    exigen que la clínica tenga contratado el módulo <code>agenda</code>; si no, responden 404.</caption>
+  </div>
+
+  <h3>Archivos del frontend</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Archivo</th><th>Líneas</th><th>Qué contiene</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">pages/AgendaPage.tsx</td><td class="num">675</td><td>El tablero del día, el mini-calendario y el panel lateral.</td></tr>
+      <tr><td class="mono">agenda/CrearEventoModal.tsx</td><td class="num">920</td><td>El asistente de 2 pasos, los 3 modos, multi-cita y disponibilidad.</td></tr>
+      <tr><td class="mono">agenda/DetalleCitaModal.tsx</td><td class="num">406</td><td>Detalle, stepper, recordatorios, cotización y notas.</td></tr>
+      <tr><td class="mono">agenda/AlertaCitas.tsx</td><td class="num">180</td><td>El vigilante global de citas atoradas.</td></tr>
+      <tr><td class="mono">agenda/EventoDetalleModal.tsx</td><td class="num">169</td><td>Editar y eliminar bloqueos y reuniones.</td></tr>
+      <tr><td class="mono">agenda/LuzRecordatorios.tsx</td><td class="num">125</td><td>La luz flotante global.</td></tr>
+      <tr><td class="mono">agenda/ReagendarModal.tsx</td><td class="num">119</td><td>Nuevo día, hora y duración.</td></tr>
+      <tr><td class="mono">agenda/NotasHilo.tsx</td><td class="num">106</td><td>El hilo del equipo.</td></tr>
+      <tr><td class="mono">agenda/MiniCalendario.tsx</td><td class="num">76</td><td>Calendario mensual reutilizable.</td></tr>
+      <tr><td class="mono">agenda/RecordatoriosWidget.tsx</td><td class="num">64</td><td>«Mis recordatorios» del día.</td></tr>
+      <tr><td class="mono">consultorio/SeccionHorarioAgenda.tsx</td><td class="num">156</td><td>Configuración de horario y rejilla.</td></tr>
+      <tr><td class="mono">personal/TiposCitaTab.tsx + NuevoTipoCitaDrawer.tsx</td><td class="num">71 + 114</td><td>Catálogo de tipos de cita.</td></tr>
+      <tr><td class="mono">expediente/AgendarSesionModal.tsx</td><td class="num">326</td><td>Agendar una sesión de tratamiento como cita real.</td></tr>
+      <tr><td class="mono">expediente/CitasSection.tsx</td><td class="num">77</td><td>Próxima cita e historial dentro del expediente.</td></tr>
+      <tr><td class="mono">lib/fecha.ts</td><td class="num">—</td><td>Formato 12 h, rangos de día, fechas de series, rejilla mensual.</td></tr>
+      <tr><td class="mono">auth/permisos.ts</td><td class="num">219</td><td>La matriz de permisos de la interfaz.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Archivos del backend</h3>
+  <p><code>backend/apps/agenda/</code>, unas 5 200 líneas: <code>models.py</code> (781, los 6
+    modelos y la tabla de transiciones) · <code>services.py</code> (1 308, todo el ciclo de vida de
+    la cita) · <code>views.py</code> (1 168) · <code>selectors.py</code> (386, lecturas y
+    disponibilidad) · <code>blocks.py</code> (217) · <code>notes.py</code> (237) ·
+    <code>series.py</code> (87) · <code>reminders.py</code> (115) · <code>tasks.py</code> (251, el
+    envío por WhatsApp) · más 16 migraciones y unos 250 tests.</p>
+
+  <h3>Documentos de diseño previos</h3>
+  <dl class="kv">
+    <dt>agenda-modelo-datos.md</dt><dd>213 líneas. El diseño base del módulo, con la máquina de estados, la zona horaria, el anti-empalme y las cuatro decisiones de la dueña.</dd>
+    <dt>multi-citas-disponibilidad.md</dt><dd>117 líneas. La serie y la disponibilidad, con sus seis decisiones cerradas. Implementado.</dd>
+  </dl>
+</section>
+
+<!-- ============ 19 ============ -->
+<section class="sec" id="s19">
+  <div class="sec-h">
+    <span class="num">19</span>
+    <h2>Brechas y oportunidades</h2>
+    <p class="dek">Los catorce huecos reales del módulo, de mayor a menor impacto. Aquí es donde el
+      rediseño puede aportar más.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>#</th><th>Hueco</th><th>Por qué importa</th><th>Dónde</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><strong>No existe vista semana ni mes</strong></td><td>Solo hay tablero de día. El calendario mensual es un simple selector de fecha: no muestra ocupación ni carga. Nadie puede ver «cómo viene la semana».</td><td class="mono">AgendaPage.tsx</td></tr>
+      <tr><td class="num">2</td><td><strong>No se puede editar ni cancelar una serie completa</strong></td><td>Un tratamiento de doce sesiones se cancela doce veces a mano. El agrupador de serie ya existe en los datos.</td><td class="mono">series_id</td></tr>
+      <tr><td class="num">3</td><td><strong>Cancelar no pide motivo</strong></td><td>El campo existe y se guardaría. Sin él no hay forma de saber por qué se cae la agenda.</td><td class="mono">DetalleCitaModal.tsx</td></tr>
+      <tr><td class="num">4</td><td><strong>Nunca se muestra quién canceló, por qué, ni cuántas veces se movió la cita</strong></td><td>Cuatro campos con información valiosa que ni siquiera salen del servidor hacia la interfaz.</td><td class="mono">serializers.py:180-200</td></tr>
+      <tr><td class="num">5</td><td><strong>«No se presentó» es irreversible</strong></td><td>Un clic por error no se puede corregir. Marcado como «revisitar» en el documento de diseño original.</td><td class="mono">models.py:542-567</td></tr>
+      <tr><td class="num">6</td><td><strong>El modal de reagendar es inconsistente con el de crear</strong></td><td>Duraciones fijas de 30/45/60/90 que ignoran la configuración, y sin disponibilidad: el choque se descubre al guardar.</td><td class="mono">ReagendarModal.tsx</td></tr>
+      <tr><td class="num">7</td><td><strong>El horario de atención del médico no impide nada</strong></td><td>Se puede agendar a las 3 am de un domingo sin un aviso. Tampoco se valida el solape entre bloques del mismo día.</td><td class="mono">DoctorSchedule</td></tr>
+      <tr><td class="num">8</td><td><strong>La alerta de cita atorada es un modal bloqueante</strong></td><td>Puede interrumpir mientras se escribe una nota clínica. El problema es real; el mecanismo es el más agresivo posible.</td><td class="mono">AlertaCitas.tsx</td></tr>
+      <tr><td class="num">9</td><td><strong>Cuatro accesos rápidos sin función</strong></td><td>Cumpleaños, Hoja diaria, Cuentas por cobrar y Contactos cancelados están maquetados y no hacen nada.</td><td class="mono">AgendaPage.tsx:54-59</td></tr>
+      <tr><td class="num">10</td><td><strong>El rol <code>finance</code> ve la pestaña pero recibe 403</strong></td><td>Contradicción entre la matriz de la interfaz y la del servidor. Probablemente una pantalla rota.</td><td class="mono">permisos.ts</td></tr>
+      <tr><td class="num">11</td><td><strong>El alcance de un bloqueo o reunión no se puede editar</strong></td><td>Si te equivocaste de médico, hay que borrar y volver a crear. Y N objetivos crean N eventos independientes.</td><td class="mono">blocks.py:180</td></tr>
+      <tr><td class="num">12</td><td><strong>Los bloqueos se solapan entre sí</strong></td><td>No hay anti-empalme entre eventos, así que se pueden apilar sin límite y el tablero se vuelve ilegible.</td><td class="mono">services.py:247</td></tr>
+      <tr><td class="num">13</td><td><strong>Solo WhatsApp, y sin envío manual</strong></td><td>El modelo soporta SMS y correo. No se puede reenviar un aviso, ni ver el historial, ni saber por qué se omitió uno.</td><td class="mono">reminders.py</td></tr>
+      <tr><td class="num">14</td><td><strong>Rejillas de horario incoherentes entre pantallas</strong></td><td>Agendar una sesión de tratamiento usa una rejilla fija de 07:00 a 21:00 cada 30 minutos, ignorando la configuración de la clínica.</td><td class="mono">AgendarSesionModal.tsx</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call nota">
+    <span class="lab">Una lectura de conjunto</span>
+    <p>Casi todos estos huecos comparten una forma: <strong>el dato ya existe y la regla ya está
+      implementada; lo que falta es la superficie</strong>. Motivos de cancelación, contador de
+      reagendamientos, agrupador de series, horario del médico, canales de aviso — todo está en la
+      base de datos esperando una pantalla. Eso hace que el rediseño de este módulo sea, en buena
+      medida, un trabajo de exponer lo que ya está ahí.</p>
+  </div>
+</section>
+
+<p class="foot">Documento 1 de 2 del handoff de Maily360. El documento par cubre el
+  <strong><a href="https://claude.ai/code/artifact/adbb44c7-d953-4f3f-b453-c26947d94600">expediente
+  clínico</a></strong>: historia clínica, signos vitales, notas de evolución, recetas
+  y el libro del paciente. Todo lo descrito aquí se levantó leyendo el código de producción con
+  fecha 26 de julio de 2026; si algo cambia en la aplicación, este documento se actualiza y conserva
+  el mismo enlace.</p>
+
+</main>
+</div>
