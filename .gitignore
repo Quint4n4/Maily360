@@ -11,3 +11,6 @@
 
 # Local notes (no compartir)
 NOTES.local.md
+
+# Claude Code: permisos locales de la maquina, no se comparten
+.claude/settings.local.json
