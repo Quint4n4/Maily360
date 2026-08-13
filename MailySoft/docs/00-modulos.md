@@ -24,7 +24,7 @@ Siempre igual, seis pasos:
 
 # M0 · Encender los instrumentos
 
-**Estado:** ⬜ pendiente · **Tiempo:** 30 min · **Riesgo:** ninguno · **Toca código:** casi nada
+**Estado:** 🟡 en curso — M0.1 cerrado, M0.2 aplazado, M0.3 siguiente · **Riesgo:** ninguno
 
 Va primero por una razón concreta: **sin esto no puedes saber si los arreglos siguientes
 funcionaron.** Y además Sentry te va a mostrar si el problema de M1 está ocurriendo en producción
@@ -251,10 +251,11 @@ Y en paralelo, cuando quieras y sin prisa técnica: las **tres decisiones de neg
 
 | Módulo | Estado | Rama | PR | Cerrado |
 |---|---|---|---|---|
-| M0.1 · Sentry (backend) | 🟡 variables puestas, falta la prueba | — | — | |
+| M0.1 · Sentry (backend) | ✅ **cerrado 2026-08-13** — `ZeroDivisionError` recibido | — | sin código | 2026-08-13 |
 | M0.2 · Correo | ⏸️ aplazado — el sistema no manda ningún correo hoy | — | — | |
-| M0.3 · Variables obligatorias | ⬜ | — | — | |
+| M0.3 · Variables obligatorias | 🟡 **siguiente** | — | — | |
 | M1 · La nota que no existe | ⬜ | — | — | |
+| M0.4 · Sentry del frontend (requiere `ARG` en el Dockerfile) | ⬜ | — | — | |
 | M2 | ⬜ | — | — | |
 | M3 | ⬜ | — | — | |
 | M4 | ⬜ | — | — | |
