@@ -87,13 +87,19 @@ DJANGO_ALLOWED_HOSTS=.railway.app
 CSRF_TRUSTED_ORIGINS=https://*.railway.app
 CORS_ALLOWED_ORIGINS=
 
-DATABASE_URL=${{Postgres.DATABASE_URL}}
+DATABASE_URL=<URL del rol de app maily_app — ver nota abajo>
+MIGRATION_DATABASE_URL=${{Postgres.DATABASE_URL}}
 REDIS_URL=${{Redis.REDIS_URL}}
 CELERY_BROKER_URL=${{Redis.REDIS_URL}}
 CELERY_RESULT_BACKEND=${{Redis.REDIS_URL}}
 
 CLOUDINARY_URL=<pega-tu-CLOUDINARY_URL-de-Cloudinary>
 DJANGO_DEFAULT_FILE_STORAGE=cloudinary_storage.storage.MediaCloudinaryStorage
+
+PRESCRIPTION_VERIFY_BASE_URL=https://TU-APP.up.railway.app
+
+SENTRY_DSN=<el DSN de tu proyecto en Sentry>
+SENTRY_ENVIRONMENT=production
 
 DEMO_OWNER_PASSWORD=<una-clave-fuerte-para-el-login-del-personal>
 ```
@@ -106,6 +112,50 @@ python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 > `${{Postgres.DATABASE_URL}}` y `${{Redis.REDIS_URL}}` son *reference variables*
 > de Railway: se autollenan. Si Railway nombró tus plugins distinto (p. ej.
 > `Postgres-XXXX`), usa ese nombre.
+
+### Las cuatro que ya no son opcionales
+
+`DJANGO_DEFAULT_FILE_STORAGE`, `PRESCRIPTION_VERIFY_SECRET`,
+`PRESCRIPTION_VERIFY_BASE_URL` y `REDIS_URL` son **obligatorias**: si falta
+cualquiera, `production.py` aborta el arranque con un `ImproperlyConfigured` que
+lista todas las que falten y para qué sirve cada una. El deploy se marca en rojo;
+no queda a medias.
+
+Antes tenían un default de desarrollo y la app arrancaba sin ellas — con los
+archivos subidos borrándose en cada redespliegue, el QR de las recetas apuntando
+a `localhost` y el límite de intentos de login desactivado en silencio.
+
+> Si el arranque se queja de una variable que juras haber puesto, revisa que el
+> **nombre** no lleve un espacio al final. Un `SENTRY_DSN ` así tuvo Sentry
+> apagado sin una sola señal.
+
+### Los dos roles de base de datos
+
+`DATABASE_URL` y `MIGRATION_DATABASE_URL` **no son la misma cadena**:
+
+| Variable | Rol | Para qué |
+|---|---|---|
+| `DATABASE_URL` | `maily_app` (NOSUPERUSER NOBYPASSRLS) | El tráfico normal. Al no ser superuser, las políticas RLS le aplican de verdad: es la segunda barrera de aislamiento entre clínicas. |
+| `MIGRATION_DATABASE_URL` | `postgres` (`${{Postgres.DATABASE_URL}}`) | Solo `migrate`, que necesita crear tablas y políticas. |
+
+Es la misma cadena de conexión cambiando usuario y contraseña. Cómo se crea el
+rol `maily_app`, cómo se verifica y cómo se deshace: `deploy-rol-app-nosuperuser.md`.
+
+Desde este módulo el arranque **verifica ese rol solo** con `check_db_role`: si
+la app se conectara con un rol superuser, el contenedor no levanta. Para el
+rollback a `postgres` descrito en esa guía, agrega `REQUIRE_DB_ROLE_RLS=false` —
+si no, la app se niega a arrancar justo cuando estás intentando volver atrás.
+
+### Sentry
+
+Sin `SENTRY_DSN` la integración queda **dormida**: no se inicializa y no envía
+nada. El código está bien; la variable es lo que lo enciende. Ponla en los **dos**
+servicios (web y worker), o pierdes los errores de las tareas en segundo plano —
+que son justo las que nadie está mirando cuando fallan.
+
+> El DSN se pega tal cual, sin comillas y sin espacios alrededor. Un DSN mal
+> formado **impide que la aplicación arranque**: Sentry se inicializa durante el
+> arranque de Django, así que un valor inválido tumba el servicio entero.
 
 Guarda → Railway hace el primer **deploy** (compila React + backend, corre
 migraciones). Tarda unos minutos.
@@ -128,6 +178,12 @@ migraciones). Tarda unos minutos.
    ```
    (Truco rápido: en el web, Variables → menú "⋮" → puedes copiarlas; o pégalas
    de nuevo. El worker NO necesita dominio ni `DEMO_OWNER_PASSWORD`.)
+
+   Dos precisiones sobre esa copia:
+   - **Quita `MIGRATION_DATABASE_URL`**: el worker no migra (`RUN_MIGRATIONS=false`),
+     y dejarle a mano el rol privilegiado no compra nada.
+   - **Deja `PRESCRIPTION_VERIFY_BASE_URL` y `SENTRY_DSN`**: el worker es quien
+     genera el PDF con el QR, y sin DSN sus fallas no se ven en ninguna parte.
 
 > El worker no necesita dominio público (nadie lo visita directo). `RUN_MIGRATIONS=false`
 > evita que web y worker migren a la vez.
@@ -190,6 +246,9 @@ en cada deploy (servicio web).
 
 | Síntoma | Causa probable | Arreglo |
 |---|---|---|
+| `ImproperlyConfigured: Faltan variables de entorno obligatorias` | falta una de las cuatro obligatorias | el propio mensaje las lista todas; revisa espacios en el **nombre** de la variable |
+| El log repite un error de arranque y reintenta 30 veces | Django no levanta: variable inválida, settings roto, dependencia | el error real está en el log — léelo. **No** asumas que es la base de datos |
+| `El rol de base de datos EVADE Row Level Security` | `DATABASE_URL` apunta al rol `postgres` en vez de `maily_app` | corrige `DATABASE_URL`; si es un rollback a propósito, `REQUIRE_DB_ROLE_RLS=false` |
 | Deploy falla en build | node_modules/venv en el contexto | ya está el `.dockerignore`; revisa el log de build |
 | 400 Bad Request / DisallowedHost | dominio no está en ALLOWED_HOSTS | deja `DJANGO_ALLOWED_HOSTS=.railway.app` |
 | 500 al subir imágenes | `CLOUDINARY_URL` mal o falta `DJANGO_DEFAULT_FILE_STORAGE` | revisa esas 2 variables en el web |
