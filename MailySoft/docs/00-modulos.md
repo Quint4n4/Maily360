@@ -44,15 +44,37 @@ SENTRY_ENVIRONMENT    = production
 
 Redespliegas.
 
+> ⚠️ **Dos trampas, las dos ya vividas.** Revisa que el **nombre** de la variable no lleve espacios
+> —al pegar es fácil que quede `SENTRY_DSN `, y entonces el código nunca la encuentra— y que el
+> **valor** del DSN esté completo y sin comillas ni saltos de línea. Un DSN mal formado **impide que
+> la aplicación arranque**, porque Sentry se inicializa durante el arranque de Django.
+
 **Prueba a mano.** Entra a la consola de Railway del servicio `Maily360` —la misma donde corriste
-`check_db_role`— y provoca un error de mentira:
+`check_db_role`— y provoca un error de verdad:
 
 ```bash
-python manage.py shell -c "import sentry_sdk; sentry_sdk.capture_message('prueba desde produccion')"
+python manage.py shell -c "
+import sentry_sdk
+try:
+    1/0
+except ZeroDivisionError:
+    sentry_sdk.capture_exception()
+sentry_sdk.flush(timeout=5)
+"
 ```
 
-Abre Sentry en el navegador. **Ese mensaje tiene que aparecer ahí en menos de un minuto.** Si no
-aparece, la variable está mal puesta o no redesplegaste; no sigas hasta verlo.
+El `flush` obliga a que se envíe antes de que el proceso termine; sin él, un comando de una línea
+puede morir antes de alcanzar a mandarlo.
+
+Abre Sentry → **Errors & Outages**, y **limpia los filtros de la barra de búsqueda** (las ✕ de
+`is unresolved` y de `issue.category is error`). Ese `ZeroDivisionError` tiene que aparecer en menos
+de un minuto. Si no aparece, no sigas hasta verlo.
+
+**Pendiente de este módulo: el Sentry del frontend.** No basta con agregar `VITE_SENTRY_DSN` en
+Railway. El `Dockerfile` compila el frontend **dentro de la imagen**, y las variables `VITE_*` tienen
+que existir en el momento de la compilación, no cuando el contenedor ya corre. Hoy el `Dockerfile` no
+tiene ningún `ARG` para recibirla, así que ponerla no haría nada — sin fallar. Requiere tocar el
+`Dockerfile`; va como pieza aparte.
 
 **Lo que probablemente pase después:** en las siguientes horas van a empezar a caer errores reales
 que llevaban meses ocurriendo sin que nadie los viera. **Eso es bueno.** No los arregles todavía:
@@ -82,8 +104,33 @@ candado no va a tumbar tu producción. Si no lo hubiera verificado, este cambio 
 tenlo presente para la próxima: *primero se comprueba que la puerta está cerrada, después se pone la
 alarma.*
 
-Y de paso, que el despliegue verifique solo el rol de la base de datos. Ese comando que corriste hoy
-a mano existe justo para eso y no lo ejecuta nadie.
+Y de paso, dos cosas más que salieron de un incidente real (ver abajo):
+
+- **Que el guión de arranque muestre el error real.** Hoy la comprobación de arranque intenta levantar
+  Django y conectarse a la base, y **si algo falla tira el error a la basura** y siempre imprime el
+  mismo mensaje: *"PostgreSQL no disponible"*. Entonces cualquier fallo de arranque —una variable mal
+  escrita, una dependencia rota, un valor inválido— se disfraza de problema de base de datos. Son dos
+  caracteres: quitar el `2>/dev/null`.
+- **Que el despliegue verifique solo el rol de la base de datos.** Ese comando que corriste a mano
+  existe justo para eso y no lo ejecuta nadie.
+
+> ### Incidente del 2026-08-13, y por qué estos dos puntos existen
+>
+> Al configurar Sentry, el valor del DSN quedó mal formado en el servicio del worker. Sentry se
+> inicializa mientras Django arranca, así que un DSN inválido **impide que la aplicación levante**.
+> El worker entró en bucle de arranque durante 20 minutos.
+>
+> Y en todo ese tiempo el registro decía **"PostgreSQL no disponible"**. La base de datos estaba
+> perfecta, corriendo sin interrupción desde el 19 de julio. El diagnóstico correcto salió de comparar
+> los dos servicios —el web arrancaba, el worker no, mismo código, misma base— no del mensaje de error,
+> que apuntaba al lugar equivocado.
+>
+> **Lo que hay que llevarse:** un mensaje de error genérico no es un detalle de estilo. Cuesta horas
+> de buscar en el sitio equivocado, y las cuesta el día que hay algo caído.
+>
+> En el mismo episodio, en el otro servicio, las variables se habían guardado con un **espacio al final
+> del nombre** (`SENTRY_DSN `), así que el código nunca las encontró y Sentry siguió apagado sin una
+> sola señal. Dos formas distintas del mismo problema: configuración que se ve puesta y no lo está.
 
 **Prueba a mano.** En tu computadora, con el proyecto local:
 
@@ -204,8 +251,8 @@ Y en paralelo, cuando quieras y sin prisa técnica: las **tres decisiones de neg
 
 | Módulo | Estado | Rama | PR | Cerrado |
 |---|---|---|---|---|
-| M0.1 · Sentry | ⬜ | — | — | |
-| M0.2 · Correo | ⬜ | — | — | |
+| M0.1 · Sentry (backend) | 🟡 variables puestas, falta la prueba | — | — | |
+| M0.2 · Correo | ⏸️ aplazado — el sistema no manda ningún correo hoy | — | — | |
 | M0.3 · Variables obligatorias | ⬜ | — | — | |
 | M1 · La nota que no existe | ⬜ | — | — | |
 | M2 | ⬜ | — | — | |
