@@ -106,6 +106,22 @@ verify_db_role() {
         exit 1
     fi
 
+    # Los dos caminos que siguen NO son el mismo hecho y no pueden compartir
+    # mensaje: uno es un entorno de desarrollo, el otro es produccion corriendo
+    # con una sola barrera de aislamiento porque alguien apago el candado a mano.
+    # Decir "no es un arranque de produccion" en el segundo caso es afirmar lo
+    # contrario de lo que paso, y suena tranquilizador justo cuando no debe.
+    if [[ "$es_produccion" == "true" ]]; then
+        log_error "PRODUCCION ARRANCANDO SIN LA SEGUNDA BARRERA DE AISLAMIENTO."
+        log_error "El rol de base de datos evade RLS y REQUIRE_DB_ROLE_RLS=false"
+        log_error "desactivo el candado a proposito, asi que se continua."
+        log_error "El aislamiento entre clinicas depende SOLO del codigo de la"
+        log_error "aplicacion: una consulta sin filtro de tenant filtra datos."
+        log_error "Esto es un estado temporal de rollback. Quita la variable en"
+        log_error "cuanto DATABASE_URL vuelva a apuntar a un rol NOSUPERUSER."
+        return 0
+    fi
+
     log_warn "El rol evade RLS. Se continua: no es un arranque de produccion."
 }
 
