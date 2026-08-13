@@ -285,7 +285,7 @@ Y en paralelo, cuando quieras y sin prisa técnica: las **tres decisiones de neg
 |---|---|---|---|---|
 | M0.1 · Sentry (backend) | ✅ **cerrado 2026-08-13** — `ZeroDivisionError` recibido | — | sin código | 2026-08-13 |
 | M0.2 · Correo | ⏸️ aplazado — el sistema no manda ningún correo hoy | — | — | |
-| M0.3 · Variables obligatorias | ✅ **cerrado 2026-08-13** — candado puesto, error real visible, rol verificado | `fix/arranque-variables-obligatorias` | pendiente | 2026-08-13 |
+| M0.3 · Variables obligatorias | ✅ **cerrado 2026-08-13** — candado puesto, error real visible, rol verificado | `fix/arranque-variables-obligatorias` | [#2](https://github.com/Quint4n4/Maily360/pull/2) | 2026-08-13 |
 | M1 · La nota que no existe | ⬜ | — | — | |
 | M0.4 · Sentry del frontend (requiere `ARG` en el Dockerfile) | ⬜ | — | — | |
 | M2 | ⬜ | — | — | |
