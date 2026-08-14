@@ -22,6 +22,7 @@ import {
   Send, AlertCircle, AlertTriangle, ShieldAlert, CheckCircle2, ChevronDown,
 } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
+import BarraAlergias from './BarraAlergias'
 import type {
   ControlledGroup,
   ItemKind,
@@ -819,6 +820,10 @@ export function NuevaReceta({
     >
       <div className="space-y-4">
         <ErroresAlerta errores={errores} />
+
+        {/* Alergias del paciente: lo primero del formulario, antes de escribir
+            un solo medicamento. El porqué está en BarraAlergias. */}
+        <BarraAlergias patientId={paciente.id} />
 
         {/* Signos vitales EDITABLES (Tarea A): prellenados con la última toma. */}
         <div>

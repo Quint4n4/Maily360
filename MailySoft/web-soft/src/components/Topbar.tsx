@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useSucursalActiva } from '../auth/SucursalContext'
 import { Modulo, accesoModulo, puedeAccederConsultorio, ROLE_LABEL } from '../auth/permisos'
 import CampanaNotificaciones from './CampanaNotificaciones'
+import MarcaMaily from './MarcaMaily'
 import BottomNav from './BottomNav'
 import type { ModuloId } from '../lib/modulos'
 
@@ -64,9 +65,7 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
 
       {/* ── Izquierda: logo + navegación ── */}
       <div className="flex items-center gap-4 md:gap-8">
-        <span className="text-xl font-bold tracking-tight" style={{ color: '#2A241B' }}>
-          maily<span style={{ color: '#C9A227' }}>360</span>
-        </span>
+        <MarcaMaily variante="horizontal" className="h-8" />
 
         <nav className="hidden md:flex items-center gap-1">
           {visibles.map(({ key, label, icon: Icon }) => {
@@ -75,11 +74,9 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
               <button
                 key={key}
                 onClick={() => navigate(`/${key}`)}
-                className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors"
-                style={{
-                  background: isActive ? 'rgba(201,162,39,0.14)' : 'transparent',
-                  color: isActive ? '#C9A227' : '#7A756C',
-                }}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors ${
+                  isActive ? 'bg-accion-tinte text-accion' : 'text-suave hover:text-tinta hover:bg-superficie-sutil'}`}
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-xs font-medium">{label}</span>
@@ -89,11 +86,9 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
           {puedeVerPaquetes && (
             <button
               onClick={() => navigate('/paquetes')}
-              className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors"
-              style={{
-                background: active === 'paquetes' ? 'rgba(201,162,39,0.14)' : 'transparent',
-                color: active === 'paquetes' ? '#C9A227' : '#7A756C',
-              }}
+              aria-current={active === 'paquetes' ? 'page' : undefined}
+              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors ${
+                active === 'paquetes' ? 'bg-accion-tinte text-accion' : 'text-suave hover:text-tinta hover:bg-superficie-sutil'}`}
             >
               <Package className="w-5 h-5" />
               <span className="text-xs font-medium">Paquetes</span>
@@ -112,52 +107,49 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
           className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition-colors hover:bg-black/5"
         >
           <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center"
-            style={{ background: 'rgba(201,162,39,0.18)', border: '1px solid rgba(201,162,39,0.45)' }}>
+            style={{ background: 'var(--accion-tinte)', border: '1px solid var(--accion-borde)' }}>
             {user?.avatar
               ? <img src={user.avatar} alt="" className="w-full h-full object-cover" />
-              : <User className="w-4 h-4" style={{ color: '#C9A227' }} />}
+              : <User className="w-4 h-4 text-accion" />}
           </div>
           <div className="text-left leading-tight hidden sm:block">
-            <p className="text-sm font-medium" style={{ color: '#2A241B' }}>{nombreUsuario}</p>
-            <p className="text-xs" style={{ color: '#9A958C' }}>{ROLE_LABEL[role]}</p>
+            <p className="text-sm font-medium text-tinta">{nombreUsuario}</p>
+            <p className="text-xs text-suave">{ROLE_LABEL[role]}</p>
           </div>
-          <ChevronDown className="w-4 h-4" style={{ color: '#9A958C' }} />
+          <ChevronDown className="w-4 h-4 text-suave" />
         </button>
 
         {menuOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-            <div className="absolute right-0 mt-2 w-64 rounded-xl overflow-hidden z-20 shadow-lg"
-              style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.7)' }}>
+            <div className="absolute right-0 mt-2 w-64 rounded-xl overflow-hidden z-20 bg-superficie border border-borde shadow-card-alto">
 
               {/* Identidad real del usuario */}
-              <div className="px-4 py-3 border-b border-gray-100">
-                <p className="text-sm font-semibold text-gray-800 truncate">{nombreUsuario}</p>
-                <p className="text-xs text-gray-500 truncate">{user?.email ?? ''}</p>
-                <span className="inline-block mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: 'rgba(201,162,39,0.14)', color: '#B8860B' }}>
+              <div className="px-4 py-3 border-b border-borde">
+                <p className="text-sm font-semibold text-tinta truncate">{nombreUsuario}</p>
+                <p className="text-xs text-suave truncate">{user?.email ?? ''}</p>
+                <span className="inline-block mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accion-tinte text-accion">
                   {ROLE_LABEL[role]}
                 </span>
               </div>
 
-              <button className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 transition-colors">
-                <User className="w-4 h-4 text-gray-400" /> Mi perfil
+              <button className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cuerpo hover:bg-accion-tinte transition-colors">
+                <User className="w-4 h-4 text-tenue" /> Mi perfil
               </button>
 
               {puedeAccederConsultorio(role) && (
                 <button
                   onClick={() => { setMenuOpen(false); navigate('/mi-consultorio') }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cuerpo hover:bg-accion-tinte transition-colors"
                 >
-                  <Briefcase className="w-4 h-4 text-gray-400" /> Mi Consultorio
+                  <Briefcase className="w-4 h-4 text-tenue" /> Mi Consultorio
                 </button>
               )}
 
               {isPlatformStaff && (
                 <button
                   onClick={() => { setMenuOpen(false); navigate('/plataforma/dashboard') }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-amber-50 transition-colors border-t border-gray-100"
-                  style={{ color: '#B8860B', fontWeight: 600 }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-accion hover:bg-accion-tinte transition-colors border-t border-borde"
                 >
                   <Building2 className="w-4 h-4" /> Panel de Maily
                 </button>
@@ -166,7 +158,7 @@ export default function Topbar({ active = 'agenda' }: TopbarProps) {
               <button
                 onClick={cerrarSesion}
                 disabled={cerrando}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100 disabled:opacity-60"
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-peligro hover:bg-peligro-tinte transition-colors border-t border-borde disabled:opacity-60"
               >
                 <LogOut className="w-4 h-4" /> {cerrando ? 'Cerrando…' : 'Cerrar sesión'}
               </button>
@@ -218,34 +210,33 @@ function SelectorSucursal() {
         className="flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors hover:bg-black/5"
         title="Cambiar de sucursal"
       >
-        <Building2 className="w-4 h-4" style={{ color: '#C9A227' }} />
-        <span className="text-sm font-medium max-w-[140px] truncate hidden sm:block" style={{ color: '#2A241B' }}>
+        <Building2 className="w-4 h-4 text-borde-fuerte" />
+        <span className="text-sm font-medium max-w-[140px] truncate hidden sm:block text-tinta">
           {etiqueta}
         </span>
-        <ChevronDown className="w-4 h-4" style={{ color: '#9A958C' }} />
+        <ChevronDown className="w-4 h-4 text-suave" />
       </button>
 
       {abierto && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
           <div
-            className="absolute right-0 mt-2 w-60 rounded-xl overflow-hidden z-20 shadow-lg"
-            style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.7)' }}
+            className="absolute right-0 mt-2 w-60 rounded-xl overflow-hidden z-20 bg-superficie border border-borde shadow-card-alto"
           >
-            <div className="px-4 py-2.5 border-b border-gray-100">
-              <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#B8860B' }}>Sucursal activa</p>
+            <div className="px-4 py-2.5 border-b border-borde">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-suave">Sucursal activa</p>
             </div>
 
             {/* Consolidado: solo con más de una sede permitida. */}
             {puedeVerTodas && (
               <button
                 onClick={() => { setActiveSucursal(null); setAbierto(false) }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 transition-colors text-left border-b border-gray-100"
-                style={esTodas ? { color: '#B8860B', fontWeight: 600, background: 'rgba(201,162,39,0.08)' } : undefined}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cuerpo hover:bg-accion-tinte transition-colors text-left border-b border-gray-100"
+                style={esTodas ? { color: 'var(--accion)', fontWeight: 600, background: 'var(--accion-tinte)' } : undefined}
               >
-                <Layers className="w-4 h-4 shrink-0" style={{ color: esTodas ? '#C9A227' : '#9A958C' }} />
+                <Layers className="w-4 h-4 shrink-0" style={{ color: esTodas ? 'var(--accion)' : 'var(--tenue)' }} />
                 <span className="flex-1 min-w-0 truncate">Todas las sucursales</span>
-                {esTodas && <Check className="w-4 h-4 shrink-0" style={{ color: '#C9A227' }} />}
+                {esTodas && <Check className="w-4 h-4 shrink-0 text-accion" />}
               </button>
             )}
 
@@ -255,13 +246,13 @@ function SelectorSucursal() {
                 <button
                   key={s.id}
                   onClick={() => { setActiveSucursal(s.id); setAbierto(false) }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 transition-colors text-left"
-                  style={activa ? { color: '#B8860B', fontWeight: 600, background: 'rgba(201,162,39,0.08)' } : undefined}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cuerpo hover:bg-accion-tinte transition-colors text-left"
+                  style={activa ? { color: 'var(--accion)', fontWeight: 600, background: 'var(--accion-tinte)' } : undefined}
                 >
-                  <Building2 className="w-4 h-4 shrink-0" style={{ color: activa ? '#C9A227' : '#9A958C' }} />
+                  <Building2 className="w-4 h-4 shrink-0" style={{ color: activa ? 'var(--accion)' : 'var(--tenue)' }} />
                   <span className="flex-1 min-w-0 truncate">{s.name}</span>
-                  {s.is_default && !activa && <span className="text-[10px] text-gray-400">Principal</span>}
-                  {activa && <Check className="w-4 h-4 shrink-0" style={{ color: '#C9A227' }} />}
+                  {s.is_default && !activa && <span className="text-[10px] text-suave">Principal</span>}
+                  {activa && <Check className="w-4 h-4 shrink-0 text-accion" />}
                 </button>
               )
             })}

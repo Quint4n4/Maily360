@@ -11,7 +11,6 @@ interface Props {
   role: Role
 }
 
-const GOLD = '#C9A227'
 
 export default function CierreDiarioTab({ role }: Props) {
   const [date, setDate] = useState<string>(toIsoDate(new Date()))
@@ -72,12 +71,15 @@ export default function CierreDiarioTab({ role }: Props) {
             </div>
           </div>
 
-          {/* Resumen del día */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <SummaryCard label="Producción" value={formatMoney(sheet.production)} tint="#7C3AED" />
-            <SummaryCard label="Cobranza" value={formatMoney(sheet.collection)} tint="#0F766E" />
-            <SummaryCard label="Ajustes" value={formatMoney(sheet.adjustments_total)} tint="#B45309" />
-            <SummaryCard label="% Cobranza" value={formatPercent(sheet.collection_pct)} tint={GOLD} />
+          {/* Resumen del día.
+              "Ajustes" se quitó: el modelo Adjustment no existe todavía (el
+              propio backend lo documenta como trabajo futuro y devuelve 0
+              siempre). Una columna que solo puede decir $0.00 ocupa espacio y
+              hace dudar de si el dato está mal. Vuelve cuando haya qué mostrar. */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <SummaryCard label="Producción" value={formatMoney(sheet.production)} tint="var(--borde-fuerte)" />
+            <SummaryCard label="Cobranza" value={formatMoney(sheet.collection)} tint="var(--accion)" />
+            <SummaryCard label="% Cobranza" value={formatPercent(sheet.collection_pct)} tint="var(--accion)" />
           </div>
 
           {/* Desglose por método */}

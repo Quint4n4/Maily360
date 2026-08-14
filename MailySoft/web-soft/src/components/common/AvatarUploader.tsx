@@ -41,7 +41,7 @@ export default function AvatarUploader({ src, initials, size = 112, editable = f
       className="group relative rounded-full overflow-hidden flex items-center justify-center font-bold shrink-0"
       style={{
         width: size, height: size, fontSize,
-        background: 'rgba(201,162,39,0.18)', color: '#B8860B',
+        background: 'var(--accion-tinte)', color: 'var(--accion)',
         border: '4px solid rgba(255,255,255,0.85)', boxShadow: '0 12px 36px rgba(60,42,12,0.25)',
         cursor: editable && !uploading ? 'pointer' : 'default',
       }}

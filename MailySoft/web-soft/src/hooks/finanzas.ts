@@ -58,11 +58,17 @@ export const finanzasKeys = {
 // Dashboard
 // ---------------------------------------------------------------------------
 
-export function useDashboard(range: api.DateRangeParams = {}) {
+/**
+ * Métricas del panel. `enabled` permite pedirlo solo cuando hace falta: en el
+ * Resumen únicamente se usa el embudo de cotizaciones, que vive tras "Ver
+ * detalle", así que no tiene sentido consultarlo al entrar a la pantalla.
+ */
+export function useDashboard(range: api.DateRangeParams = {}, options: { enabled?: boolean } = {}) {
   const { activeSucursalId } = useSucursalActiva()
   return useQuery({
     queryKey: finanzasKeys.dashboard(range, activeSucursalId),
     queryFn: () => api.fetchDashboard(range),
+    enabled: options.enabled ?? true,
   })
 }
 

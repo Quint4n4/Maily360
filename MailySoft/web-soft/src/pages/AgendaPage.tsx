@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, CalendarCheck, Cake, FileText, CircleDollarSign, UserX, Loader2, Users, Ban, Stethoscope, Phone, Video, MapPin, Clock, Building2, type LucideIcon } from 'lucide-react'
 import Topbar from '../components/Topbar'
 import CrearEventoModal from '../components/agenda/CrearEventoModal'
 import DetalleCitaModal, { CitaDetalle, EstadoCita } from '../components/agenda/DetalleCitaModal'
 import EventoDetalleModal from '../components/agenda/EventoDetalleModal'
 import RecordatoriosWidget from '../components/agenda/RecordatoriosWidget'
+import TarjetaPacienteHover from '../components/agenda/TarjetaPacienteHover'
 import ReagendarModal from '../components/agenda/ReagendarModal'
 import { useAppointmentsForDay, useConsultorios, useChangeAppointmentStatus, useAgendaBlocksForDay, useReactivateAppointment, useDoctors } from '../hooks/agenda'
 import {
@@ -30,7 +31,24 @@ import { useAgendaConfig } from '../hooks/agendaConfig'
  * MINUTOS REALES — así una consulta de 14 min a las 9:14 se ve exactamente ahí,
  * sin encajarla a bloques de 30.
  */
-const ROW_H = 60
+/*
+ * Alto de cada CUADRO DE UNA HORA de la rejilla.
+ *
+ * Antes era fijo en 60 px: con un horario de 9:00 a 20:00 en franjas de 30' son
+ * 22 franjas = 1320 px, o sea el doble de lo que cabe en una pantalla de
+ * portátil. La agenda del día NO se veía de un vistazo, había que hacer scroll.
+ *
+ * Ahora el alto se calcula del espacio libre y se recorta a este rango. Se puede
+ * hacer porque la rejilla dibuja las citas por MINUTOS REALES (ver `ubicar`):
+ * al cambiar el alto de franja, todo se recoloca solo y las citas siguen
+ * cayendo exactamente en su hora.
+ *
+ * Por debajo de ROW_H_MIN dejamos de comprimir y sí aparece scroll: con un
+ * horario muy largo o franjas de 5' no hay pantalla que alcance, y una cita de
+ * 12 px de alto no se puede leer. Preferimos scroll a ilegible.
+ */
+const ROW_H_MAX = 96
+const ROW_H_MIN = 40
 
 /** Franjas de la rejilla a partir de la configuración de la clínica. */
 function construirSlots(horaInicio: number, horaFin: number, intervalo: number) {
@@ -92,12 +110,60 @@ export default function AgendaPage() {
   const horaInicio = agendaCfg?.agenda_start_hour ?? 9
   const horaFin = agendaCfg?.agenda_end_hour ?? 18
   const intervalo = agendaCfg?.slot_interval_minutes ?? 30
-  const SLOTS = useMemo(
-    () => construirSlots(horaInicio, horaFin, intervalo),
-    [horaInicio, horaFin, intervalo],
+  /*
+   * La rejilla dibuja UNA línea por hora, no una por franja de reserva.
+   *
+   * Antes ambas cosas eran lo mismo: con franjas de 30' salían 22 rayas y la
+   * reja pesaba más que las citas. Se separan porque no son la misma idea:
+   *   · HORAS     = lo que se VE (un cuadro grande por hora).
+   *   · `SLOTS`   = cada cuánto se puede AGENDAR (sigue siendo `intervalo`).
+   * La precisión no se pierde: dentro de cada cuadro van botones invisibles,
+   * uno por franja, así que pulsar la mitad de abajo de las 11 sigue creando
+   * la cita a las 11:30 aunque ahí ya no haya ninguna línea.
+   *
+   * Y quien "secciona" el cuadro es la propia cita: como se posiciona por
+   * minutos reales (ver `ubicar`), una de 30' ocupa media casilla y una de 15'
+   * un cuarto, sin necesidad de pintar la división de antemano.
+   */
+  const HORAS = useMemo(
+    () => construirSlots(horaInicio, horaFin, 60),
+    [horaInicio, horaFin],
   )
+  /** Subdivisiones de reserva dentro de una hora (minutos desde el inicio de la hora). */
+  const SUB_MINUTOS = useMemo(
+    () => Array.from({ length: Math.max(1, Math.round(60 / intervalo)) }, (_, i) => i * intervalo),
+    [intervalo],
+  )
+  /*
+   * Alto de franja calculado del espacio realmente disponible, para que el día
+   * entre completo sin scroll. `contenedorRef` es la caja que ocupa el hueco
+   * que deja el layout de alto fijo; le restamos el encabezado de columnas.
+   */
+  // Ref de callback (no useRef): la rejilla se monta y se desmonta según el
+  // estado de carga, y así el observador se engancha justo cuando aparece.
+  const [contenedor, setContenedor] = useState<HTMLDivElement | null>(null)
+  const [cabecera, setCabecera] = useState<HTMLDivElement | null>(null)
+  const [altoLibre, setAltoLibre] = useState<number | null>(null)
+
+  useLayoutEffect(() => {
+    if (!contenedor) return
+    const medir = () => setAltoLibre(contenedor.clientHeight - (cabecera?.offsetHeight ?? 0))
+    medir()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(medir)
+    ro.observe(contenedor)
+    if (cabecera) ro.observe(cabecera)
+    return () => ro.disconnect()
+  }, [contenedor, cabecera])
+
+  const ROW_H = useMemo(() => {
+    if (!altoLibre || HORAS.length === 0) return ROW_H_MAX
+    const ideal = Math.floor(altoLibre / HORAS.length)
+    return Math.min(ROW_H_MAX, Math.max(ROW_H_MIN, ideal))
+  }, [altoLibre, HORAS.length])
+
   /** Píxeles por minuto: convierte minutos reales a alto/posición en la rejilla. */
-  const pxPorMin = ROW_H / intervalo
+  const pxPorMin = ROW_H / 60
   const totalMinutos = Math.max(0, (horaFin - horaInicio) * 60)
 
   /**
@@ -118,6 +184,36 @@ export default function AgendaPage() {
       alto: Math.max(20, (visibleHasta - visibleDesde) * pxPorMin),
     }
   }
+
+  /*
+   * Vista previa del paciente al pasar el cursor sobre una cita.
+   *
+   * El retraso es lo que separa "útil" de "molesto": sin él, cruzar la agenda
+   * con el ratón dispara tarjetas por todas partes. Al salir se oculta al
+   * instante — esperar para ocultar sí se siente lento.
+   *
+   * Se guarda el ELEMENTO de la cita: la tarjeta vive en un portal y necesita
+   * poder recalcular su posición si se desplaza o se redimensiona la ventana.
+   */
+  const RETRASO_HOVER_MS = 350
+  const [hover, setHover] = useState<{ cita: Appointment; ancla: HTMLElement } | null>(null)
+  const temporizadorHover = useRef<number | null>(null)
+
+  const programarHover = (cita: Appointment, el: HTMLElement) => {
+    if (temporizadorHover.current) window.clearTimeout(temporizadorHover.current)
+    temporizadorHover.current = window.setTimeout(() => setHover({ cita, ancla: el }), RETRASO_HOVER_MS)
+  }
+  const cancelarHover = () => {
+    if (temporizadorHover.current) {
+      window.clearTimeout(temporizadorHover.current)
+      temporizadorHover.current = null
+    }
+    setHover(null)
+  }
+  // Si el componente se va con un temporizador vivo, no debe intentar pintar nada.
+  useEffect(() => () => {
+    if (temporizadorHover.current) window.clearTimeout(temporizadorHover.current)
+  }, [])
 
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [modalOpen, setModalOpen] = useState(false)
@@ -266,17 +362,21 @@ export default function AgendaPage() {
 
   return (
     <div className="min-h-screen relative">
-      {/* Fondo */}
-      <div className="fixed inset-0 -z-10" style={{ background: 'linear-gradient(135deg, #b89a52 0%, #d8c690 45%, #f1e8cf 100%)' }} />
-      <div className="fixed inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url('/fondo-agenda.jpg')" }} />
-      <div className="fixed inset-0 -z-10" style={{ background: 'rgba(255,255,255,0.20)' }} />
+      {/* Fondo plano: la foto de seda dorada quedaba DEBAJO de los datos
+          (tablas, tarjetas, la reja de la agenda) y les restaba legibilidad. */}
+      <div className="fixed inset-0 -z-10 bg-fondo" />
 
       <Topbar active="agenda" />
 
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-5 p-3 sm:p-5 max-w-[1500px] mx-auto">
+      {/* En escritorio la PÁGINA no scrollea: ocupa exactamente el alto libre bajo
+          la barra superior y cada panel gestiona su propio desbordamiento. Así la
+          rejilla sabe cuánto espacio tiene y puede caber entera. En móvil se deja
+          el scroll normal del documento (ahí sí hay que desplazarse). */}
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-5 p-3 sm:p-5 max-w-[1500px] mx-auto
+                      lg:h-[calc(100dvh-4rem)] lg:overflow-hidden">
 
         {/* ════════ Panel izquierdo (en móvil va DEBAJO del horario) ════════ */}
-        <aside className="w-full lg:w-80 lg:shrink-0 space-y-4 order-2 lg:order-none">
+        <aside className="w-full lg:w-80 lg:shrink-0 space-y-4 order-2 lg:order-none lg:h-full lg:overflow-y-auto lg:pr-1">
 
           {/* Calendario */}
           <div className="glass-card rounded-2xl p-5">
@@ -376,10 +476,10 @@ export default function AgendaPage() {
         </aside>
 
         {/* ════════ Panel derecho — rejilla (en móvil va ARRIBA) ════════ */}
-        <main className="glass-card flex-1 min-w-0 rounded-2xl overflow-hidden order-1 lg:order-none">
+        <main className="glass-card flex-1 min-w-0 rounded-2xl overflow-hidden order-1 lg:order-none flex flex-col lg:h-full lg:min-h-0">
 
           {/* Título del día */}
-          <div className="px-3 sm:px-5 py-3 border-b border-white/50 flex items-center justify-between gap-2">
+          <div className="shrink-0 px-3 sm:px-5 py-2.5 border-b border-borde flex items-center justify-between gap-2">
             <div className="flex items-center gap-1 sm:gap-2 min-w-0">
               {/* Navegación de día (solo móvil; en escritorio se usa el calendario) */}
               <button onClick={() => setSelectedDate(d => addDays(d, -1))}
@@ -426,15 +526,20 @@ export default function AgendaPage() {
           )}
 
           {!loadingCons && !loadingCitas && cols.length > 0 && (
-            <div className="overflow-x-auto">
-              {/* Encabezado de columnas */}
-              <div className="grid border-b" style={{ gridTemplateColumns: gridCols, borderColor: GRID_LINE_STRONG }}>
-                <div className="py-3 text-center text-sm font-bold text-gray-500">Hr.</div>
+            <div ref={setContenedor} className="flex-1 min-h-0 overflow-auto">
+              {/* Encabezado de columnas — pegajoso, por si el horario es tan largo
+                  que ni comprimiendo cabe y toca desplazarse. */}
+              <div ref={setCabecera}
+                className="grid border-b sticky top-0 z-10 bg-superficie"
+                style={{ gridTemplateColumns: gridCols, borderColor: GRID_LINE_STRONG }}>
+                <div className="py-2 text-center text-sm font-bold text-gray-500">Hr.</div>
                 {cols.map(c => (
-                  <div key={c.id} className="py-3 px-1 text-center text-[13px] sm:text-[15px] font-semibold border-l" style={{ color: '#374151', borderColor: GRID_LINE_STRONG }}>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.color }} />
-                      {c.name}
+                  <div key={c.id} title={c.name}
+                    className="py-2 px-2 text-center text-[13px] sm:text-[14px] font-semibold border-l min-w-0"
+                    style={{ color: '#374151', borderColor: GRID_LINE_STRONG }}>
+                    <span className="flex items-center justify-center gap-2 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} />
+                      <span className="truncate">{c.name}</span>
                     </span>
                   </div>
                 ))}
@@ -442,32 +547,52 @@ export default function AgendaPage() {
 
               {/* Cuerpo */}
               <div className="relative grid" style={{ gridTemplateColumns: gridCols, gridAutoRows: `${ROW_H}px` }}>
-                {SLOTS.map((s, r) => {
-                  const pasado = slotEsPasado(s)
-                  return (
-                    <div key={`row-${r}`} className="contents">
-                      <div className="flex items-start justify-center pt-1 text-xs sm:text-sm border-b whitespace-nowrap tabular-nums"
-                        style={{ gridColumn: 1, gridRow: r + 1, borderColor: GRID_LINE, color: pasado ? '#C4BFB6' : '#6B7280' }}>
-                        {s.display}
-                      </div>
-                      {cols.map((c, ci) => {
-                        const onCell = () => {
-                          if (pasado) { setPendientePasado({ hora: s.label, col: c }); return }
-                          abrirCrear(s.label, c)
-                        }
-                        return (
-                          <button
-                            key={`cell-${r}-${ci}`}
-                            onClick={agendar ? onCell : undefined}
-                            title={pasado ? 'Este horario ya pasó' : undefined}
-                            className={`border-b border-l transition-colors ${agendar ? 'hover:bg-white/40 cursor-pointer' : 'cursor-default'}`}
-                            style={{ gridColumn: ci + 2, gridRow: r + 1, borderColor: GRID_LINE, background: pasado ? 'rgba(120,113,108,0.05)' : undefined }}
-                          />
-                        )
-                      })}
+                {HORAS.map((hora, r) => (
+                  <div key={`row-${r}`} className="contents">
+                    <div className="flex items-start justify-center pt-1 text-[11px] sm:text-xs border-b whitespace-nowrap tabular-nums leading-none"
+                      style={{
+                        gridColumn: 1, gridRow: r + 1,
+                        borderColor: GRID_LINE,
+                        color: slotEsPasado(hora) ? '#C4BFB6' : '#6B7280',
+                      }}>
+                      {hora.display}
                     </div>
-                  )
-                })}
+                    {cols.map((c, ci) => (
+                      <div
+                        key={`cell-${r}-${ci}`}
+                        className="relative border-b border-l"
+                        style={{ gridColumn: ci + 2, gridRow: r + 1, borderColor: GRID_LINE }}
+                      >
+                        {/* Un botón invisible por franja de reserva: el cuadro se ve
+                            entero, pero se sigue pudiendo agendar a la media o al
+                            cuarto pulsando la zona correspondiente. */}
+                        {SUB_MINUTOS.map((min, si) => {
+                          const sub = { h: hora.h, m: min }
+                          const pasado = slotEsPasado(sub)
+                          const label = `${String(hora.h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+                          const onCell = () => {
+                            if (pasado) { setPendientePasado({ hora: label, col: c }); return }
+                            abrirCrear(label, c)
+                          }
+                          return (
+                            <button
+                              key={`sub-${si}`}
+                              onClick={agendar ? onCell : undefined}
+                              title={pasado ? 'Este horario ya pasó' : `Agendar a las ${to12h(label)}`}
+                              aria-label={`Agendar a las ${to12h(label)} en ${c.name}`}
+                              className={`absolute left-0 right-0 transition-colors ${agendar ? 'hover:bg-accion-tinte cursor-pointer' : 'cursor-default'}`}
+                              style={{
+                                top: `${(min / 60) * 100}%`,
+                                height: `${(100 / SUB_MINUTOS.length)}%`,
+                                background: pasado ? 'rgba(120,113,108,0.05)' : undefined,
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                ))}
 
                 {/* Bloqueos / Reuniones (bandas) */}
                 {bloques.map(b => {
@@ -493,7 +618,7 @@ export default function AgendaPage() {
                     <div
                       key={b.id}
                       // Capa que ocupa la columna completa; solo el bloque interno recibe clics.
-                      style={{ gridColumn, gridRow: `1 / span ${SLOTS.length}`, position: 'relative', pointerEvents: 'none', zIndex: 3 }}
+                      style={{ gridColumn, gridRow: `1 / span ${HORAS.length}`, position: 'relative', pointerEvents: 'none', zIndex: 3 }}
                     >
                     <div
                       onClick={() => setEventoSel(b)}
@@ -545,11 +670,31 @@ export default function AgendaPage() {
                     <div
                       key={a.id}
                       // Capa que ocupa la columna completa; solo la tarjeta recibe clics.
-                      style={{ gridColumn: ci + 2, gridRow: `1 / span ${SLOTS.length}`, position: 'relative', pointerEvents: 'none', zIndex: 5 }}
+                      style={{ gridColumn: ci + 2, gridRow: `1 / span ${HORAS.length}`, position: 'relative', pointerEvents: 'none', zIndex: 5 }}
                     >
                     <div
-                      onClick={() => setCitaSel(a)}
-                      className="absolute rounded-3xl px-3 py-1 overflow-hidden cursor-pointer transition-transform hover:scale-[1.01] flex flex-col items-center justify-center text-center leading-tight"
+                      /*
+                       * Era un <div> con onClick: no recibía foco, así que quien
+                       * navega con teclado no podía abrir ninguna cita — ni ver
+                       * la vista previa. Con role/tabIndex/onKeyDown queda
+                       * operable, y el foco también dispara la tarjeta.
+                       */
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Cita de ${a.patient.full_name}${a.reason ? ` — ${a.reason}` : ''}`}
+                      onClick={() => { cancelarHover(); setCitaSel(a) }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          cancelarHover()
+                          setCitaSel(a)
+                        }
+                      }}
+                      onMouseEnter={e => programarHover(a, e.currentTarget)}
+                      onMouseLeave={cancelarHover}
+                      onFocus={e => programarHover(a, e.currentTarget)}
+                      onBlur={cancelarHover}
+                      className="absolute rounded-3xl px-3 py-1 overflow-hidden cursor-pointer transition-transform hover:scale-[1.01] flex flex-col items-center justify-center text-center leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accion focus-visible:ring-offset-1"
                       style={{
                         top: pos.top,
                         height: pos.alto,
@@ -604,6 +749,9 @@ export default function AgendaPage() {
           )}
         </main>
       </div>
+
+      {/* Vista previa del paciente (portal: no la recorta el borde de la rejilla) */}
+      {hover && <TarjetaPacienteHover cita={hover.cita} ancla={hover.ancla} />}
 
       <CrearEventoModal
         open={modalOpen}

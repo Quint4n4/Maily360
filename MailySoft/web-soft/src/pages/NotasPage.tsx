@@ -46,9 +46,10 @@ export default function NotasPage() {
 
   return (
     <div className="min-h-screen relative">
-      <div className="fixed inset-0 -z-10" style={{ background: 'linear-gradient(135deg, #b89a52 0%, #d8c690 45%, #f1e8cf 100%)' }} />
-      <div className="fixed inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url('/fondo-agenda.jpg')" }} />
-      <div className="fixed inset-0 -z-10" style={{ background: 'rgba(255,255,255,0.20)' }} />
+      {/* Fondo plano, como el resto de la app. Esta página se me escapó en el
+          barrido original y seguía pidiendo `fondo-agenda.jpg`, un archivo que
+          ya no existe: eran tres capas y un 404 por cada visita. */}
+      <div className="fixed inset-0 -z-10 bg-fondo" />
 
       <Topbar active="notas" />
 

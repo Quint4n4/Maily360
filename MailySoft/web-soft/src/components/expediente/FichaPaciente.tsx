@@ -6,7 +6,7 @@
  *   ① Alergias        — hasta arriba, en rojo (solo roles clínicos).
  *   ② Datos generales — rejilla de 2 columnas, VISIBLE sin desplegar.
  *   ③ Próxima consulta.
- *   ④ Bloques plegables: Historia clínica (abre modal), Indicaciones para
+ *   ④ Bloques plegables: Indicaciones para
  *      enfermería y Observaciones.
  *
  * Antes ② eran tres tarjetas apiladas (Contacto / Identificación / NOM-004) que
@@ -19,12 +19,11 @@
  */
 
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Phone, Mail, Fingerprint, StickyNote, User, CalendarClock,
-  AlertTriangle, Plus, X, Loader2, MapPin, ChevronDown, ChevronRight,
-  Droplet, GraduationCap, Briefcase, Cake, Calendar, Tag, Users, BookOpen, Baby,
-  Pencil, AlertCircle, ClipboardList, FileHeart,
+  AlertTriangle, Plus, X, Loader2, MapPin, ChevronDown,
+  Droplet, GraduationCap, Briefcase, Cake, Calendar, Tag, Users, Cross, Baby,
+  Pencil, AlertCircle, ClipboardList,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
@@ -39,17 +38,21 @@ import { useUpdatePatient } from '../../hooks/pacientes'
 import { edad } from '../../lib/paciente'
 import { errorMsg } from '../../lib/apiErrors'
 import { Card, Cargando, ESTADOS_CITA_INACTIVOS, estadoCitaChip, SEVERITY_OPTIONS } from './ui'
-import HistoriaTab from './HistoriaTab'
 import {
   CamposContacto, CamposDatosPersonales, CamposDomicilio, CamposNom004,
   SECCION_LABEL, erroresDePaciente, hayErroresFormato, usePacienteForm,
 } from '../contactos/pacienteForm'
 
-/** Color de la bandera de alergia según severidad. */
-function severidadColor(sev: AllergySeverity): { bg: string; border: string; color: string } {
-  if (sev === 'severa') return { bg: 'rgba(192,57,43,0.12)', border: 'rgba(192,57,43,0.4)', color: '#C0392B' }
-  if (sev === 'moderada') return { bg: 'rgba(214,124,30,0.12)', border: 'rgba(214,124,30,0.4)', color: '#B8620B' }
-  return { bg: 'rgba(201,162,39,0.12)', border: 'rgba(201,162,39,0.35)', color: '#9A7B1E' }
+/**
+ * Color de la bandera de alergia: SIEMPRE rojo, sea cual sea la severidad.
+ *
+ * Antes las leves salían en ámbar. Se ve mejor sobre el papel, pero en la
+ * pantalla parte la lista en dos y el ojo lee "esto es grave / esto no",
+ * cuando lo que hay que leer es "este paciente es alérgico". La severidad no
+ * desaparece: viaja en el texto de la severidad y en el tooltip.
+ */
+function severidadColor(_sev: AllergySeverity): { bg: string; border: string; color: string } {
+  return { bg: 'var(--peligro-tinte)', border: 'var(--peligro-borde)', color: 'var(--peligro)' }
 }
 
 interface FichaPacienteProps {
@@ -66,7 +69,6 @@ export default function FichaPaciente({
   paciente, verClinico, puedeEditarClinico, puedeEditar = false,
 }: FichaPacienteProps) {
   const [editando, setEditando] = useState(false)
-  const [hcAbierta, setHcAbierta] = useState(false)
 
   // En modo edición la columna se convierte en el formulario completo; los
   // bloques de consulta (alergias, próxima cita, plegables) se ocultan para no
@@ -97,32 +99,20 @@ export default function FichaPaciente({
       {/* ③ Próxima consulta */}
       <ProximaConsulta patientId={paciente.id} />
 
-      {/* ④ Bloques plegables (lo que se consulta de vez en cuando) */}
+      {/* ④ Bloques plegables (lo que se consulta de vez en cuando).
+          La Historia clínica ya no vive aquí: pasó a "Secciones del expediente",
+          que es donde está el resto del expediente. */}
       {verClinico && (
         <>
-          <BloqueEnlace
-            titulo="Historia clínica"
-            icon={FileHeart}
-            descripcion="Antecedentes, padecimiento actual y exploración basal"
-            onClick={() => setHcAbierta(true)}
-          />
           <IndicacionesEnfermeriaBlock patientId={paciente.id} />
           <BloquePlegable titulo="Observaciones" icon={StickyNote}>
-            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+            <p className="text-sm text-cuerpo leading-relaxed whitespace-pre-wrap">
               {paciente.notes || 'Sin observaciones registradas.'}
             </p>
           </BloquePlegable>
         </>
       )}
 
-      {verClinico && (
-        <HistoriaClinicaModal
-          paciente={paciente}
-          abierto={hcAbierta}
-          puedeEditar={puedeEditarClinico}
-          onClose={() => setHcAbierta(false)}
-        />
-      )}
     </div>
   )
 }
@@ -130,10 +120,9 @@ export default function FichaPaciente({
 // ── Bloques plegables de la columna ──────────────────────────────────────────
 
 const BLOQUE_STYLE = {
-  background: 'rgba(255,255,255,0.72)',
-  backdropFilter: 'blur(14px)',
-  border: '1px solid rgba(255,255,255,0.7)',
-  boxShadow: '0 6px 20px rgba(60,42,12,0.10)',
+  background: 'var(--superficie)',
+  border: '1px solid var(--borde)',
+  boxShadow: '0 1px 2px rgba(10,25,49,0.06), 0 4px 12px rgba(10,25,49,0.05)',
 } as const
 
 /**
@@ -141,7 +130,7 @@ const BLOQUE_STYLE = {
  * que se sepa si hay contenido SIN necesidad de desplegarlo.
  */
 function BloquePlegable({
-  titulo, icon: Icon, contador, color = '#9A7B1E', abiertoInicial = false, children,
+  titulo, icon: Icon, contador, color = 'var(--suave)', abiertoInicial = false, children,
 }: {
   titulo: string
   icon: LucideIcon
@@ -157,7 +146,7 @@ function BloquePlegable({
         type="button"
         onClick={() => setAbierto(a => !a)}
         aria-expanded={abierto}
-        className="w-full flex items-center justify-between gap-2 px-5 py-4 text-left hover:bg-white/50 transition-colors"
+        className="w-full flex items-center justify-between gap-2 px-5 py-4 text-left hover:bg-accion-tinte transition-colors"
       >
         <span className="flex items-center gap-2 min-w-0">
           <Icon className="w-4 h-4 shrink-0" style={{ color }} />
@@ -167,107 +156,18 @@ function BloquePlegable({
           {contador !== undefined && contador > 0 && (
             <span
               className="text-[11px] font-bold px-1.5 rounded-full shrink-0"
-              style={{ background: 'rgba(201,162,39,0.16)', color: '#9A7B1E' }}
+              style={{ background: 'var(--accion-tinte)', color: 'var(--accion)' }}
             >
               {contador}
             </span>
           )}
         </span>
         <ChevronDown
-          className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${abierto ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 shrink-0 text-suave transition-transform ${abierto ? 'rotate-180' : ''}`}
         />
       </button>
       {abierto && <div className="px-5 pb-5">{children}</div>}
     </div>
-  )
-}
-
-/** Bloque que en vez de desplegarse abre una pantalla aparte (modal). */
-function BloqueEnlace({
-  titulo, icon: Icon, descripcion, onClick,
-}: {
-  titulo: string
-  icon: LucideIcon
-  descripcion: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full flex items-center justify-between gap-2 rounded-2xl px-5 py-4 text-left hover:bg-white/50 transition-colors"
-      style={BLOQUE_STYLE}
-    >
-      <span className="flex items-center gap-2 min-w-0">
-        <Icon className="w-4 h-4 shrink-0" style={{ color: '#9A7B1E' }} />
-        <span className="min-w-0">
-          <span className="block text-xs font-semibold uppercase tracking-wide" style={{ color: '#9A7B1E' }}>
-            {titulo}
-          </span>
-          <span className="block text-[11px] text-gray-400 truncate">{descripcion}</span>
-        </span>
-      </span>
-      <ChevronRight className="w-4 h-4 shrink-0 text-gray-400" />
-    </button>
-  )
-}
-
-// ── Modal de Historia Clínica (captura + render dinámico) ────────────────────
-
-/**
- * Modal que monta HistoriaTab: núcleo NOM-004 + preguntas extra de la clínica.
- * Se abre desde la columna izquierda del expediente. La edición respeta
- * `puedeEditar` (puedeEditarClinico); el backend es la autoridad y devuelve 403.
- */
-function HistoriaClinicaModal({
-  paciente, abierto, puedeEditar, onClose,
-}: {
-  paciente: PatientOut
-  abierto: boolean
-  puedeEditar: boolean
-  onClose: () => void
-}) {
-  return (
-    <AnimatePresence>
-      {abierto && (
-        <motion.div
-          className="fixed inset-0 z-[60] p-2 sm:p-4 flex items-center justify-center"
-          style={{ background: 'rgba(40,28,8,0.35)', backdropFilter: 'blur(8px)' }}
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          onClick={onClose}
-        >
-          <motion.div
-            className="relative w-full glass-card rounded-3xl flex flex-col overflow-hidden"
-            style={{ maxWidth: '900px', height: '92vh' }}
-            initial={{ opacity: 0, y: 24, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.97 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-amber-900/10">
-              <div className="flex items-center gap-2.5">
-                <FileHeart className="w-5 h-5" style={{ color: '#C9A227' }} />
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-700/70">Historia clínica</p>
-                  <h3 className="text-base font-bold text-gray-900 leading-tight">{paciente.full_name}</h3>
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/70 hover:bg-white transition-colors shadow-sm"
-              >
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6">
-              <HistoriaTab paciente={paciente} puedeEditar={puedeEditar} />
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
   )
 }
 
@@ -278,21 +178,49 @@ function HistoriaClinicaModal({
  * color que identifica al campo (los mismos de la ficha anterior: el color
  * ayuda a encontrar el dato sin leer la etiqueta).
  */
+/**
+ * Una celda etiqueta–valor de "Datos generales".
+ *
+ * NO acepta color: aquí estaban los 13 iconos en 13 colores distintos (pastel
+ * rosa para "Edad", birrete morado para "Escolaridad"…). Ninguno significaba
+ * nada y le robaban fuerza al rojo de las alergias, que sí significa algo.
+ */
 function Dato({
-  icon: Icon, color, label, value, full = false,
+  icon: Icon, label, value, full = false, sinEtiqueta = false,
 }: {
   icon: LucideIcon
-  color: string
   label: string
   value: string | null | undefined
   full?: boolean
+  /**
+   * Oculta la etiqueta y la deja en el tooltip: el icono orienta y el valor
+   * habla por sí mismo. Con esto la ficha entra sin desplazar, que es el
+   * objetivo de toda la reestructuración.
+   *
+   * El precio es que el icono pasa a ser el ÚNICO indicio visible de qué campo
+   * es, así que cada uno tiene que ser inconfundible (por eso religión lleva
+   * una cruz y no un libro). Donde el icono no basta queda el tooltip, y para
+   * lectores de pantalla la etiqueta sigue leyéndose.
+   */
+  sinEtiqueta?: boolean
 }) {
+  // Sin etiqueta y sin valor, la fila sería un icono y un guion: ocupa alto y
+  // no dice nada. Con etiqueta sí valía la pena ("CURP —" informa que falta).
+  if (sinEtiqueta && !value) return null
+
   return (
-    <div className={`flex items-start gap-2 min-w-0 ${full ? 'col-span-2' : ''}`}>
-      <Icon className="w-4 h-4 shrink-0 mt-0.5" style={{ color }} />
+    <div
+      className={`flex gap-2 min-w-0 ${sinEtiqueta ? 'items-center' : 'items-start'} ${full ? 'col-span-2' : ''}`}
+      title={sinEtiqueta ? label : undefined}
+    >
+      <Icon className={`w-4 h-4 shrink-0 text-tenue ${sinEtiqueta ? '' : 'mt-0.5'}`} />
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-        <p className="text-sm text-gray-800 break-words">{value || '—'}</p>
+        {sinEtiqueta
+          /* Sin etiqueta a la vista, un lector de pantalla solo oiría el valor
+             suelto; así sigue leyendo "Edad: 26 años". */
+          ? <span className="sr-only">{label}: </span>
+          : <p className="text-[10px] font-semibold uppercase tracking-wide text-suave">{label}</p>}
+        <p className="text-sm text-cuerpo break-words">{value || '—'}</p>
       </div>
     </div>
   )
@@ -311,13 +239,22 @@ function DatosGenerales({
   onEditar: () => void
 }) {
   const years = edad(paciente.date_of_birth ?? '')
+  /*
+   * Los cuatro datos de consulta quedan siempre a la vista; el resto de la ficha
+   * NOM-004 se pliega aquí. Antes solo se llegaba a ellos por "Editar", y ese es
+   * mal camino para CONSULTAR: quien quiere mirar el CURP no piensa en editar,
+   * piensa que el dato se perdió.
+   */
+  const [verTodo, setVerTodo] = useState(false)
 
   const domicilio = [paciente.address_street, paciente.address_neighborhood, paciente.city, paciente.state]
     .filter(Boolean)
     .join(', ')
 
+  // Solo los números: la etiqueta ("casa", "trabajo") alarga la línea y no
+  // cambia nada de lo que se hace con el teléfono, que es marcarlo.
   const telefono = paciente.phone_secondary
-    ? `${paciente.phone || '—'} · ${paciente.phone_secondary}${paciente.phone_label ? ` (${paciente.phone_label})` : ''}`
+    ? `${paciente.phone || '—'} · ${paciente.phone_secondary}`
     : paciente.phone
 
   return (
@@ -328,41 +265,66 @@ function DatosGenerales({
         <button
           type="button"
           onClick={onEditar}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-accion hover:text-accion-hover"
         >
           <Pencil className="w-3.5 h-3.5" /> Editar
         </button>
       )}
     >
+      {/*
+        Solo los cuatro datos que se consultan de un vistazo en consulta.
+        Antes había 13 campos (CURP, escolaridad, religión, lugar de nacimiento,
+        domicilio…) que empujaban el resto del expediente fuera de la pantalla y
+        que casi nunca se miran en el momento de atender. Siguen todos ahí: el
+        botón "Editar" abre la ficha completa.
+      */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-        <Dato icon={Cake} color="#db2777" label="Edad" value={years !== null ? `${years} años` : null} />
-        <Dato icon={Calendar} color="#7c3aed" label="Nacimiento" value={paciente.date_of_birth} />
-        <Dato icon={User} color="#0284c7" label="Sexo" value={paciente.sex_display} />
-        <Dato icon={Users} color="#e11d48" label="Estado civil" value={paciente.marital_status_display} />
-        <Dato icon={Briefcase} color="#b45309" label="Ocupación" value={paciente.occupation} />
-        <Dato icon={Droplet} color="#dc2626" label="Tipo de sangre" value={paciente.blood_type_display} />
-        <Dato icon={GraduationCap} color="#4f46e5" label="Escolaridad" value={paciente.education_display} />
-        <Dato icon={BookOpen} color="#7c3aed" label="Religión" value={paciente.religion} />
-        <Dato icon={Fingerprint} color="#64748b" label="CURP" value={paciente.curp} full />
-        <Dato icon={Phone} color="#0891b2" label="Teléfono" value={telefono} full />
-        <Dato icon={Mail} color="#2563eb" label="Correo" value={paciente.email} full />
-        <Dato icon={Baby} color="#059669" label="Lugar de nacimiento" value={paciente.birthplace} full />
-        <Dato
-          icon={MapPin} color="#ea580c" label="Domicilio"
-          value={domicilio ? `${domicilio}${paciente.postal_code ? ` · CP ${paciente.postal_code}` : ''}` : null}
-          full
-        />
-        {paciente.category && (
-          <Dato icon={Tag} color="#0d9488" label="Categoría" value={paciente.category} full />
-        )}
+        <Dato sinEtiqueta icon={Cake} label="Edad" value={years !== null ? `${years} años` : null} />
+        <Dato sinEtiqueta icon={User} label="Sexo" value={paciente.sex_display} />
+        <Dato sinEtiqueta icon={Droplet} label="Tipo de sangre" value={paciente.blood_type_display} />
+        <Dato sinEtiqueta icon={Phone} label="Teléfono" value={telefono} />
+        {/* La defunción no es un dato más: cambia por completo cómo se lee el
+            expediente, así que se queda aunque el resto se haya recortado. */}
         {paciente.is_deceased && (
           <Dato
-            icon={AlertTriangle} color="#6b7280" label="Defunción"
+            sinEtiqueta icon={AlertTriangle} label="Defunción"
             value={paciente.deceased_at ? `Finado · ${paciente.deceased_at}` : 'Finado'}
             full
           />
         )}
+
+        {/* Resto de la ficha, plegado */}
+        {verTodo && (
+          <>
+            <Dato sinEtiqueta icon={Calendar} label="Nacimiento" value={paciente.date_of_birth} />
+            <Dato sinEtiqueta icon={Users} label="Estado civil" value={paciente.marital_status_display} />
+            <Dato sinEtiqueta icon={Briefcase} label="Ocupación" value={paciente.occupation} />
+            <Dato sinEtiqueta icon={GraduationCap} label="Escolaridad" value={paciente.education_display} />
+            <Dato sinEtiqueta icon={Cross} label="Religión" value={paciente.religion} />
+            <Dato sinEtiqueta icon={Baby} label="Lugar de nacimiento" value={paciente.birthplace} />
+            <Dato sinEtiqueta icon={Fingerprint} label="CURP" value={paciente.curp} full />
+            <Dato sinEtiqueta icon={Mail} label="Correo" value={paciente.email} full />
+            <Dato
+              sinEtiqueta icon={MapPin} label="Domicilio"
+              value={domicilio ? `${domicilio}${paciente.postal_code ? ` · CP ${paciente.postal_code}` : ''}` : null}
+              full
+            />
+            {paciente.category && (
+              <Dato sinEtiqueta icon={Tag} label="Categoría" value={paciente.category} full />
+            )}
+          </>
+        )}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setVerTodo(v => !v)}
+        aria-expanded={verTodo}
+        className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-accion hover:text-accion-hover"
+      >
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${verTodo ? 'rotate-180' : ''}`} />
+        {verTodo ? 'Ver menos' : 'Ver todos los datos'}
+      </button>
     </Card>
   )
 }
@@ -384,11 +346,11 @@ function ProximaConsulta({ patientId }: { patientId: string }) {
   return (
     <Card title="Próxima consulta" icon={CalendarClock}>
       {isLoading ? (
-        <p className="text-sm text-gray-400 italic">Cargando…</p>
+        <p className="text-sm text-suave italic">Cargando…</p>
       ) : proxima ? (
         <div>
-          <p className="text-base font-bold text-gray-900">{formatFechaHora(proxima.starts_at)}</p>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-base font-bold text-tinta">{formatFechaHora(proxima.starts_at)}</p>
+          <p className="text-sm text-suave mt-0.5">
             {proxima.doctor.full_name}{proxima.consultorio ? ` · ${proxima.consultorio.name}` : ''}
           </p>
           <span
@@ -402,7 +364,7 @@ function ProximaConsulta({ patientId }: { patientId: string }) {
           </span>
         </div>
       ) : (
-        <p className="text-sm text-gray-400 italic">Sin cita próxima.</p>
+        <p className="text-sm text-suave italic">Sin cita próxima.</p>
       )}
     </Card>
   )
@@ -484,8 +446,7 @@ function FichaEditar({
         </button>
         <button
           type="button" onClick={guardar} disabled={actualizar.isPending || formatoInvalido}
-          className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-60"
-          style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
+          className="btn-primary flex-1 disabled:opacity-60"
         >
           {actualizar.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando…</> : 'Guardar cambios'}
         </button>
@@ -503,8 +464,18 @@ function AlergiasBlock({ patientId, puedeEditar }: { patientId: string; puedeEdi
   const [abierto, setAbierto] = useState(false)
   const [form, setForm] = useState<AllergyInput>({ substance: '', reaction: '', severity: '' })
   const [error, setError] = useState('')
+  /*
+   * Con muchas alergias el bloque crecía sin tope y empujaba el resto del
+   * expediente fuera de pantalla. Se muestran las primeras y el resto se pliega
+   * tras un "+N más": el número ya avisa de que hay más, que es lo que importa
+   * para no dar nada por sentado.
+   */
+  const TOPE = 3
+  const [verTodas, setVerTodas] = useState(false)
 
   const vigentes = alergias ?? []
+  const visibles = verTodas ? vigentes : vigentes.slice(0, TOPE)
+  const ocultas = vigentes.length - visibles.length
 
   const guardar = async () => {
     if (!form.substance.trim()) { setError('La sustancia es obligatoria.'); return }
@@ -524,25 +495,23 @@ function AlergiasBlock({ patientId, puedeEditar }: { patientId: string; puedeEdi
 
   return (
     <div
-      className="rounded-2xl p-5"
-      style={{
-        background: vigentes.length > 0 ? 'rgba(192,57,43,0.07)' : 'rgba(255,255,255,0.72)',
-        backdropFilter: 'blur(14px)',
-        border: vigentes.length > 0 ? '1px solid rgba(192,57,43,0.3)' : '1px solid rgba(255,255,255,0.7)',
-        boxShadow: '0 6px 20px rgba(60,42,12,0.10)',
-      }}
+      className={`rounded-2xl p-5 border shadow-card ${
+        vigentes.length > 0
+          ? 'bg-peligro-tinte border-peligro-borde'
+          : 'bg-superficie border-borde'}`}
     >
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4" style={{ color: vigentes.length > 0 ? '#C0392B' : '#C9A227' }} />
-          <h4 className="text-xs font-semibold uppercase tracking-wide" style={{ color: vigentes.length > 0 ? '#C0392B' : '#9A7B1E' }}>
+          <AlertTriangle className={`w-4 h-4 ${vigentes.length > 0 ? 'text-peligro' : 'text-borde-fuerte'}`} />
+          <h4 className={`text-xs font-semibold uppercase tracking-wide ${
+            vigentes.length > 0 ? 'text-peligro' : 'text-suave'}`}>
             Alergias {vigentes.length > 0 && `(${vigentes.length})`}
           </h4>
         </div>
         {puedeEditar && !abierto && (
           <button
             type="button" onClick={() => setAbierto(true)}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-accion hover:text-accion-hover"
           >
             <Plus className="w-3.5 h-3.5" /> Agregar
           </button>
@@ -550,48 +519,69 @@ function AlergiasBlock({ patientId, puedeEditar }: { patientId: string; puedeEdi
       </div>
 
       {isLoading && <Cargando texto="Cargando alergias…" />}
-      {isError && <p className="text-sm text-red-600">No se pudieron cargar las alergias.</p>}
+      {isError && <p className="text-sm text-peligro">No se pudieron cargar las alergias.</p>}
 
       {!isLoading && !isError && vigentes.length === 0 && !abierto && (
-        <p className="text-sm text-gray-500 italic">Sin alergias registradas.</p>
+        <p className="text-sm text-suave italic">Sin alergias registradas.</p>
       )}
 
       {vigentes.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {vigentes.map((a: Allergy) => {
+        <ul className="space-y-0.5">
+          {visibles.map((a: Allergy) => {
             const c = severidadColor(a.severity)
+            // La severidad ya no ocupa una palabra: la lleva el TONO (rojo para
+            // severa/moderada, ámbar para leve) y el texto al pasar el cursor.
+            const detalle = [a.severity_display, a.reaction].filter(Boolean).join(' · ')
             return (
-              <div
-                key={a.id}
-                className="inline-flex items-center gap-2 rounded-full pl-3 pr-2 py-1.5"
-                style={{ background: c.bg, border: `1px solid ${c.border}` }}
-              >
-                <span className="text-sm font-semibold" style={{ color: c.color }}>{a.substance}</span>
-                {a.severity_display && (
-                  <span className="text-[11px] font-medium" style={{ color: c.color }}>· {a.severity_display}</span>
+              <li key={a.id} className="group/al flex items-baseline gap-1.5 min-w-0">
+                <span
+                  className="text-sm font-semibold shrink-0"
+                  style={{ color: c.color }}
+                  title={detalle ? `${a.substance} · ${detalle}` : a.substance}
+                >
+                  {a.substance}
+                </span>
+                {a.reaction && (
+                  <span className="text-xs text-suave truncate">· {a.reaction}</span>
                 )}
-                {a.reaction && <span className="text-[11px] text-gray-500">· {a.reaction}</span>}
                 {puedeEditar && (
                   <button
                     type="button"
                     title="Resolver alergia"
                     onClick={() => resolver.mutate(a.id)}
                     disabled={resolver.isPending}
-                    className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/60 transition-colors disabled:opacity-50"
+                    aria-label={`Resolver alergia a ${a.substance}`}
+                    className="acciones-hover ml-auto shrink-0 w-5 h-5 rounded-full flex items-center justify-center
+                               opacity-0 group-hover/al:opacity-100 focus:opacity-100 transition-opacity
+                               hover:bg-superficie disabled:opacity-50"
                   >
                     <X className="w-3.5 h-3.5" style={{ color: c.color }} />
                   </button>
                 )}
-              </div>
+              </li>
             )
           })}
-        </div>
+
+          {(ocultas > 0 || verTodas) && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setVerTodas(v => !v)}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-peligro hover:underline"
+              >
+                {verTodas
+                  ? <><ChevronDown className="w-3.5 h-3.5 rotate-180" /> Ver menos</>
+                  : <><ChevronDown className="w-3.5 h-3.5" /> +{ocultas} más</>}
+              </button>
+            </li>
+          )}
+        </ul>
       )}
 
       {/* Formulario de alta */}
       {abierto && puedeEditar && (
         <div className="mt-4 rounded-xl p-4 bg-white/70 space-y-3">
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-peligro">{error}</p>}
           <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div>
               <label className="label">Sustancia / alérgeno</label>
@@ -625,8 +615,7 @@ function AlergiasBlock({ patientId, puedeEditar }: { patientId: string; puedeEdi
             </button>
             <button
               type="button" onClick={guardar} disabled={crear.isPending}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white px-3 py-1.5 rounded-lg disabled:opacity-60"
-              style={{ background: '#C9A227' }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-accion hover:bg-accion-hover px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             >
               {crear.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Guardando…</> : 'Guardar alergia'}
             </button>
@@ -652,38 +641,35 @@ function IndicacionesEnfermeriaBlock({ patientId }: { patientId: string }) {
   const { data, isLoading, isError } = useNursingInstructions(patientId)
   const indicaciones = data ?? []
 
-  const TEAL = '#0E7C7B'
-
   return (
     <BloquePlegable
       titulo="Indicaciones para enfermería"
       icon={ClipboardList}
-      color={TEAL}
+      color={'var(--suave)'}
       contador={indicaciones.length}
       abiertoInicial={indicaciones.length > 0}
       key={`enf-${indicaciones.length > 0}`}
     >
       {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-4 text-sm" style={{ color: TEAL }}>
+        <div className="flex items-center justify-center gap-2 py-4 text-sm text-accion">
           <Loader2 className="w-4 h-4 animate-spin" /> Cargando…
         </div>
       ) : isError ? (
-        <p className="text-sm text-red-600">No se pudieron cargar las indicaciones.</p>
+        <p className="text-sm text-peligro">No se pudieron cargar las indicaciones.</p>
       ) : indicaciones.length === 0 ? (
-        <p className="text-sm text-gray-400 italic">Sin indicaciones para enfermería.</p>
+        <p className="text-sm text-suave italic">Sin indicaciones para enfermería.</p>
       ) : (
         <div className="space-y-2.5">
           {indicaciones.map(ind => (
             <div
               key={ind.id}
-              className="rounded-xl px-3 py-2.5"
-              style={{ background: 'rgba(255,255,255,0.7)', borderLeft: `3px solid ${TEAL}` }}
+              className="rounded-xl px-3 py-2.5 bg-superficie-sutil border-l-[3px] border-borde-fuerte" 
             >
               <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[11px] font-semibold" style={{ color: TEAL }}>{ind.doctor}</span>
-                <span className="text-[11px] text-gray-400">{formatFechaHora(ind.fecha)}</span>
+                <span className="text-[11px] font-semibold text-accion">{ind.doctor}</span>
+                <span className="text-[11px] text-suave">{formatFechaHora(ind.fecha)}</span>
               </div>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{ind.indicaciones}</p>
+              <p className="text-sm text-cuerpo whitespace-pre-wrap">{ind.indicaciones}</p>
             </div>
           ))}
         </div>

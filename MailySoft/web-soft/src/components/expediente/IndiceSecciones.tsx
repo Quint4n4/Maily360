@@ -13,7 +13,7 @@
  */
 
 import type { LucideIcon } from 'lucide-react'
-import { BookOpen, Activity, Stethoscope, Pill, CalendarClock, Wallet, ListChecks, ChevronRight } from 'lucide-react'
+import { BookOpen, Activity, Stethoscope, Pill, CalendarClock, Wallet, ListChecks, FileHeart } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
 import { useDiagnoses, useEvolutionNotes, useVitalSigns } from '../../hooks/expediente'
 import { usePrescriptions } from '../../hooks/recetas'
@@ -22,7 +22,7 @@ import { useAuth } from '../../auth/AuthContext'
 
 /** Identificador de cada sección del expediente. */
 export type SeccionId =
-  | 'libro' | 'signos' | 'diagnosticos' | 'recetas' | 'citas' | 'cuenta' | 'calendarizacion'
+  | 'historia' | 'libro' | 'signos' | 'diagnosticos' | 'recetas' | 'citas' | 'cuenta' | 'calendarizacion'
 
 interface IndiceSeccionesProps {
   paciente: PatientOut
@@ -60,114 +60,138 @@ export default function IndiceSecciones({
     titulo: string
     descripcion: string
     icon: LucideIcon
-    color: string
     total: number | null
   }[] = [
+    /*
+     * Orden por USO, no por jerarquía clínica.
+     *
+     * Antes mandaba el orden conceptual (historia → libro → signos → …), que es
+     * como se explica el expediente pero no como se usa: en el día a día se
+     * entra sobre todo a cobrar, recetar y ver mediciones. Esas tres van
+     * arriba; el relato clínico y lo de agenda quedan detrás.
+     */
+    ...(verCuenta ? [{
+      id: 'cuenta' as const,
+      titulo: 'Estado de cuenta',
+      descripcion: 'Cargos, pagos y saldo',
+      icon: Wallet,
+      total: null,
+    }] : []),
+    ...(verRecetas ? [{
+      id: 'recetas' as const,
+      titulo: 'Recetas',
+      descripcion: 'Emitidas, PDF y anulación',
+      icon: Pill,
+      total: recetas.data?.count ?? null,
+    }] : []),
     ...(accesoClinico ? [
-      {
-        id: 'libro' as const,
-        titulo: 'Libro clínico',
-        descripcion: 'Evoluciones y notas por visita',
-        icon: BookOpen,
-        color: '#C9A227',
-        total: evoluciones.data?.count ?? null,
-      },
       {
         id: 'signos' as const,
         titulo: 'Signos y mediciones',
         descripcion: 'Peso, presión, glucosa y tendencias',
         icon: Activity,
-        color: '#0E7C7B',
         total: signos.data?.count ?? null,
+      },
+      {
+        id: 'libro' as const,
+        titulo: 'Libro clínico',
+        descripcion: 'Evoluciones y notas por visita',
+        icon: BookOpen,
+        total: evoluciones.data?.count ?? null,
       },
       {
         id: 'diagnosticos' as const,
         titulo: 'Diagnósticos',
         descripcion: 'Presuntivos y definitivos (CIE-10)',
         icon: Stethoscope,
-        color: '#4f46e5',
         total: diagnosticos.data?.count ?? null,
       },
+      {
+        // Se consulta de vez en cuando (al abrir expediente nuevo o ante una
+        // duda), no en cada visita: por eso deja de ir primera.
+        id: 'historia' as const,
+        titulo: 'Historia clínica',
+        descripcion: 'Antecedentes, padecimiento actual y exploración basal',
+        icon: FileHeart,
+        total: null,
+      },
     ] : []),
-    ...(verRecetas ? [{
-      id: 'recetas' as const,
-      titulo: 'Recetas',
-      descripcion: 'Emitidas, PDF y anulación',
-      icon: Pill,
-      color: '#db2777',
-      total: recetas.data?.count ?? null,
-    }] : []),
     ...(verCitas ? [{
       id: 'citas' as const,
       titulo: 'Citas',
       descripcion: 'Próxima cita e historial',
       icon: CalendarClock,
-      color: '#0284c7',
       total: citas.data?.count ?? null,
-    }] : []),
-    ...(verCuenta ? [{
-      id: 'cuenta' as const,
-      titulo: 'Estado de cuenta',
-      descripcion: 'Cargos, pagos y saldo',
-      icon: Wallet,
-      color: '#b45309',
-      total: null,
     }] : []),
     ...(verCalendarizacion ? [{
       id: 'calendarizacion' as const,
       titulo: 'Calendarización',
       descripcion: 'Sesiones de tratamiento programadas',
       icon: ListChecks,
-      color: '#059669',
       total: null,
     }] : []),
   ]
 
   return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-700/80 mb-3">
+    <div>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-suave mb-3">
         Secciones del expediente
       </h3>
 
-      {items.map(item => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onAbrir(item.id)}
-          className="w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-colors hover:bg-white/70"
-          style={{
-            background: 'rgba(255,255,255,0.55)',
-            border: '1px solid rgba(201,162,39,0.18)',
-          }}
-        >
-          <span
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: `${item.color}1A` }}
+      {/*
+        Rejilla de iconos: el nombre aparece al pasar el cursor.
+        
+        El riesgo conocido de un menú solo-iconos es que "libro clínico",
+        "signos" y "diagnósticos" no tienen icono convencional, así que hay que
+        cazarlos hasta aprendérselos. Tres cosas lo amortiguan:
+          · el CONTADOR se ve siempre — distingue las secciones con contenido de
+            las vacías sin necesidad de leer nada;
+          · el nombre está en `aria-label`, así que teclado y lectores de
+            pantalla nunca dependen del hover;
+          · en táctil el nombre se muestra SIEMPRE (`.solo-hover`), porque ahí
+            no hay cursor que pasar por encima.
+      */}
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+        {items.map(item => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onAbrir(item.id)}
+            aria-label={`${item.titulo}${item.total !== null ? ` (${item.total})` : ''} — ${item.descripcion}`}
+            className="group relative flex flex-col items-center justify-center gap-1 h-24 rounded-2xl
+                       bg-superficie border border-borde
+                       hover:border-accion-borde hover:bg-accion-tinte hover:-translate-y-0.5
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accion focus-visible:ring-offset-1
+                       transition-all duration-150"
           >
-            <item.icon className="w-[18px] h-[18px]" style={{ color: item.color }} />
-          </span>
+            {/* El contador SÍ se ve siempre: es lo que separa una sección con
+                contenido de una vacía de un solo vistazo. */}
+            {item.total !== null && (
+              <span
+                className="absolute top-1.5 right-1.5 min-w-[1.25rem] px-1 text-[11px] font-bold rounded-full leading-tight"
+                style={
+                  item.total > 0
+                    ? { background: 'var(--accion-tinte)', color: 'var(--accion)' }
+                    : { background: 'var(--superficie-sutil)', color: 'var(--tenue)' }
+                }
+              >
+                {item.total}
+              </span>
+            )}
 
-          <span className="flex-1 min-w-0">
-            <span className="block text-sm font-semibold text-gray-800">{item.titulo}</span>
-            <span className="block text-xs text-gray-400 truncate">{item.descripcion}</span>
-          </span>
+            <item.icon className="w-7 h-7 shrink-0 text-borde-fuerte group-hover:text-accion transition-colors" />
 
-          {item.total !== null && (
-            <span
-              className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0"
-              style={
-                item.total > 0
-                  ? { background: `${item.color}1A`, color: item.color }
-                  : { background: 'rgba(0,0,0,0.04)', color: '#9ca3af' }
-              }
-            >
-              {item.total}
+            {/* Alto reservado: la etiqueta aparece y desaparece sin mover nada. */}
+            <span className="h-4 w-full px-1 flex items-end justify-center">
+              <span className="solo-hover opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100
+                               transition-opacity duration-150
+                               text-[11px] font-semibold text-accion leading-none truncate max-w-full">
+                {item.titulo}
+              </span>
             </span>
-          )}
-
-          <ChevronRight className="w-4 h-4 shrink-0 text-gray-300" />
-        </button>
-      ))}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
