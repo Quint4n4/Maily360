@@ -1,0 +1,1066 @@
+<title>Benchmark de mercado — Maily360</title>
+
+<style>
+:root{
+  --paper:#F7F6F2; --card:#FFFFFF; --ink:#1D2426; --ink-soft:#3E4749; --muted:#6C7879;
+  --rule:#D8D5CC; --rule-soft:#E9E6DE; --code-bg:#EEECE4; --code-ink:#334042;
+  --teal:#0E6F6E; --gold:#8E7118; --gold-hi:#C9A227; --oxide:#A33B2A; --navy:#2F5D8C; --plum:#6B4A8C;
+  --tint-teal:rgba(14,111,110,.09); --tint-gold:rgba(201,162,39,.13);
+  --tint-oxide:rgba(163,59,42,.09); --tint-navy:rgba(47,93,140,.09); --tint-plum:rgba(107,74,140,.09);
+  --shadow:0 1px 2px rgba(29,36,38,.05), 0 8px 24px -12px rgba(29,36,38,.18);
+  --serif:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#14191B; --card:#1B2124; --ink:#E8E5DD; --ink-soft:#C6C3BA; --muted:#8D9899;
+    --rule:#2F3739; --rule-soft:#242B2D; --code-bg:#1F272A; --code-ink:#C8D2D3;
+    --teal:#63C2B8; --gold:#D6B357; --gold-hi:#E3C463; --oxide:#E28D78; --navy:#8FB6DE; --plum:#B79AD6;
+    --tint-teal:rgba(99,194,184,.11); --tint-gold:rgba(227,196,99,.11);
+    --tint-oxide:rgba(226,141,120,.10); --tint-navy:rgba(143,182,222,.10); --tint-plum:rgba(183,154,214,.10);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14191B; --card:#1B2124; --ink:#E8E5DD; --ink-soft:#C6C3BA; --muted:#8D9899;
+  --rule:#2F3739; --rule-soft:#242B2D; --code-bg:#1F272A; --code-ink:#C8D2D3;
+  --teal:#63C2B8; --gold:#D6B357; --gold-hi:#E3C463; --oxide:#E28D78; --navy:#8FB6DE; --plum:#B79AD6;
+  --tint-teal:rgba(99,194,184,.11); --tint-gold:rgba(227,196,99,.11);
+  --tint-oxide:rgba(226,141,120,.10); --tint-navy:rgba(143,182,222,.10); --tint-plum:rgba(183,154,214,.10);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+}
+:root[data-theme="light"]{
+  --paper:#F7F6F2; --card:#FFFFFF; --ink:#1D2426; --ink-soft:#3E4749; --muted:#6C7879;
+  --rule:#D8D5CC; --rule-soft:#E9E6DE; --code-bg:#EEECE4; --code-ink:#334042;
+  --teal:#0E6F6E; --gold:#8E7118; --gold-hi:#C9A227; --oxide:#A33B2A; --navy:#2F5D8C; --plum:#6B4A8C;
+  --tint-teal:rgba(14,111,110,.09); --tint-gold:rgba(201,162,39,.13);
+  --tint-oxide:rgba(163,59,42,.09); --tint-navy:rgba(47,93,140,.09); --tint-plum:rgba(107,74,140,.09);
+  --shadow:0 1px 2px rgba(29,36,38,.05), 0 8px 24px -12px rgba(29,36,38,.18);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);
+  font-size:17px;line-height:1.62;-webkit-font-smoothing:antialiased}
+a{color:var(--teal);text-decoration-thickness:1px;text-underline-offset:3px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--gold-hi);outline-offset:3px;border-radius:2px}
+code{font-family:var(--mono);font-size:.82em;background:var(--code-bg);color:var(--code-ink);
+  padding:.12em .38em;border-radius:3px;word-break:break-word}
+
+.masthead{border-bottom:1px solid var(--rule);background:var(--card)}
+.masthead-in{max-width:1200px;margin:0 auto;padding:52px 30px 40px}
+.eyebrow{font-family:var(--sans);font-size:11.5px;font-weight:640;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 20px}
+.masthead h1{font-size:clamp(38px,6.6vw,68px);line-height:1.02;letter-spacing:-.02em;margin:0;
+  font-weight:600;text-wrap:balance}
+.masthead h1 em{font-style:normal;color:var(--teal)}
+.lede{font-size:20px;line-height:1.55;color:var(--ink-soft);max-width:62ch;margin:20px 0 0}
+.facts{display:flex;flex-wrap:wrap;gap:0;margin:34px 0 0;border-top:1px solid var(--rule-soft);
+  font-family:var(--sans)}
+.fact{padding:14px 26px 0 0;margin-right:26px;border-right:1px solid var(--rule-soft);flex:0 1 auto}
+.fact:last-child{border-right:0}
+.fact dt{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin:0 0 3px}
+.fact dd{margin:0;font-size:14px;font-weight:560;color:var(--ink)}
+
+.page{max-width:1200px;margin:0 auto;padding:0 30px 140px;
+  display:grid;grid-template-columns:236px minmax(0,1fr);gap:64px;align-items:start}
+.rail{position:sticky;top:0;max-height:100vh;overflow-y:auto;padding:34px 0;font-family:var(--sans)}
+.rail summary{display:none}
+.rail-t{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+.rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.rail a{display:grid;grid-template-columns:26px 1fr;gap:8px;padding:5px 0;font-size:13.5px;
+  line-height:1.34;color:var(--ink-soft);text-decoration:none;border-radius:3px}
+.rail a:hover{color:var(--teal)}
+.rail a b{font-variant-numeric:tabular-nums;font-weight:560;color:var(--muted);font-size:12px}
+.rail a:hover b{color:var(--teal)}
+
+main{padding:34px 0 0;min-width:0}
+
+.sec{padding:0 0 56px;scroll-margin-top:22px}
+.sec+.sec{border-top:1px solid var(--rule);padding-top:52px}
+.sec-h{display:grid;grid-template-columns:52px minmax(0,1fr);gap:0 14px;margin:0 0 26px}
+.sec-h .num{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--gold);
+  padding-top:.72em;font-variant-numeric:tabular-nums}
+.sec-h h2{grid-column:2;margin:0;font-size:clamp(27px,3.6vw,36px);line-height:1.12;
+  letter-spacing:-.015em;font-weight:600;text-wrap:balance}
+.sec-h .dek{grid-column:2;margin:9px 0 0;font-size:17.5px;color:var(--muted);max-width:64ch}
+.sec>p,.sec>ul,.sec>ol{max-width:68ch}
+.sec>p{margin:0 0 18px}
+h3{font-family:var(--sans);font-size:15px;font-weight:640;letter-spacing:.01em;
+  margin:36px 0 14px;color:var(--ink)}
+h3:first-child{margin-top:0}
+h4{font-family:var(--sans);font-size:11.5px;font-weight:640;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);margin:26px 0 10px}
+.sec ul,.sec ol{padding-left:1.15em;margin:0 0 18px}
+.sec li{margin:0 0 7px}
+
+.ficha{background:var(--card);border:1px solid var(--rule);border-radius:5px;
+  padding:22px 24px;margin:0 0 18px;box-shadow:var(--shadow)}
+.ficha>h3{margin-top:0}
+.ficha-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 14px;margin:0 0 14px;
+  padding-bottom:12px;border-bottom:1px solid var(--rule-soft)}
+.ficha-h h3{margin:0;font-size:16.5px}
+.ficha p{margin:0 0 14px;max-width:66ch}
+.ficha p:last-child,.ficha ul:last-child,.ficha>div:last-child,.ficha .tw:last-child{margin-bottom:0}
+.src{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:16px;margin:0 0 18px}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px;padding:0;list-style:none}
+.chip{font-family:var(--sans);font-size:11.5px;font-weight:560;letter-spacing:.02em;
+  padding:3px 9px;border-radius:20px;border:1px solid var(--rule);color:var(--ink-soft);
+  background:var(--paper);white-space:nowrap}
+.chip.t{color:var(--teal);border-color:color-mix(in srgb,var(--teal) 34%,transparent);background:var(--tint-teal)}
+.chip.g{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 38%,transparent);background:var(--tint-gold)}
+.chip.o{color:var(--oxide);border-color:color-mix(in srgb,var(--oxide) 34%,transparent);background:var(--tint-oxide)}
+.chip.n{color:var(--navy);border-color:color-mix(in srgb,var(--navy) 34%,transparent);background:var(--tint-navy)}
+.chip.p{color:var(--plum);border-color:color-mix(in srgb,var(--plum) 34%,transparent);background:var(--tint-plum)}
+
+.call{border-left:3px solid var(--rule);padding:14px 18px;margin:0 0 18px;border-radius:0 4px 4px 0;
+  background:var(--paper);max-width:70ch}
+.call .lab{display:block;font-family:var(--sans);font-size:10.5px;font-weight:680;letter-spacing:.12em;
+  text-transform:uppercase;margin:0 0 6px}
+.call p{margin:0 0 10px;font-size:16px}
+.call p:last-child,.call ul:last-child{margin-bottom:0}
+.call ul{margin:0;font-size:16px}
+.call.aviso{border-color:var(--oxide);background:var(--tint-oxide)}
+.call.aviso .lab{color:var(--oxide)}
+.call.dato{border-color:var(--navy);background:var(--tint-navy)}
+.call.dato .lab{color:var(--navy)}
+.call.reco{border-color:var(--gold-hi);background:var(--tint-gold)}
+.call.reco .lab{color:var(--gold)}
+.call.nota{border-color:var(--teal);background:var(--tint-teal)}
+.call.nota .lab{color:var(--teal)}
+
+.tw{overflow-x:auto;margin:0 0 20px;border:1px solid var(--rule);border-radius:5px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:13.5px;line-height:1.42}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+thead th{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+  font-weight:640;background:var(--paper);border-bottom:1px solid var(--rule);
+  position:sticky;top:0;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.mine td{background:var(--tint-gold)}
+tbody tr.mine td:first-child{font-weight:640}
+td code,th code{font-size:12px;background:none;padding:0;color:var(--code-ink)}
+td.mono,th.mono{font-family:var(--mono);font-size:12px;white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+th.num{text-align:right}
+td.c,th.c{text-align:center}
+.yes{color:var(--teal);font-weight:700}
+.no{color:var(--muted)}
+.mid{color:var(--gold);font-weight:700}
+caption{caption-side:bottom;text-align:left;padding:9px 13px;font-family:var(--sans);
+  font-size:12px;color:var(--muted);border-top:1px solid var(--rule-soft)}
+
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0;margin:0 0 18px;font-family:var(--sans);font-size:14px}
+.kv dt{font-family:var(--sans);font-weight:620;font-size:13px;color:var(--teal);padding:7px 18px 7px 0;
+  border-bottom:1px solid var(--rule-soft);white-space:nowrap}
+.kv dd{margin:0;padding:7px 0;border-bottom:1px solid var(--rule-soft);color:var(--ink-soft)}
+.kv dt:last-of-type,.kv dd:last-of-type{border-bottom:0}
+
+/* escala de precios */
+.escala{display:flex;flex-direction:column;gap:2px;margin:0 0 22px;font-family:var(--sans)}
+.tramo{display:grid;grid-template-columns:minmax(120px,150px) minmax(0,1fr);gap:0;
+  border-left:4px solid;background:var(--card);border-top:1px solid var(--rule-soft);
+  border-right:1px solid var(--rule-soft);border-bottom:1px solid var(--rule-soft)}
+.tramo .rango{padding:11px 14px;font-variant-numeric:tabular-nums;font-weight:660;font-size:14px;
+  border-right:1px solid var(--rule-soft)}
+.tramo .quien{padding:11px 14px;font-size:13px;color:var(--ink-soft)}
+.tramo .quien b{color:var(--ink);font-weight:600}
+.t1{border-left-color:var(--teal)} .t1 .rango{color:var(--teal)}
+.t2{border-left-color:var(--gold-hi)} .t2 .rango{color:var(--gold)}
+.t3{border-left-color:var(--navy)} .t3 .rango{color:var(--navy)}
+.t4{border-left-color:var(--plum)} .t4 .rango{color:var(--plum)}
+.t5{border-left-color:var(--oxide)} .t5 .rango{color:var(--oxide)}
+
+.precio{font-family:var(--sans);font-variant-numeric:tabular-nums;font-weight:680;
+  font-size:22px;color:var(--ink);letter-spacing:-.01em}
+.precio small{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:0}
+
+.planes{display:grid;grid-template-columns:repeat(auto-fit,minmax(206px,1fr));gap:14px;margin:0 0 20px}
+.plan{border:1px solid var(--rule);border-radius:5px;padding:16px;background:var(--card);
+  font-family:var(--sans)}
+.plan.destacado{border-color:var(--gold-hi);border-width:2px;background:var(--tint-gold)}
+.plan h4{margin:0 0 8px;color:var(--ink);font-size:12px}
+.plan .p{font-variant-numeric:tabular-nums;font-weight:700;font-size:24px;letter-spacing:-.02em;
+  color:var(--teal);line-height:1.1;margin:0 0 3px}
+.plan .u{font-size:11.5px;color:var(--muted);margin:0 0 11px}
+.plan ul{margin:0;padding-left:1.05em;font-size:12.5px;line-height:1.5;color:var(--ink-soft)}
+.plan li{margin:0 0 4px}
+
+.foot{border-top:1px solid var(--rule);margin-top:14px;padding:30px 0 0;
+  font-family:var(--sans);font-size:13.5px;color:var(--muted);max-width:68ch}
+.foot a{color:var(--teal)}
+.fuentes{font-family:var(--sans);font-size:13px;line-height:1.7;columns:2;column-gap:34px;margin:0 0 18px}
+.fuentes a{display:block;break-inside:avoid;margin-bottom:5px;word-break:break-word}
+
+@media(max-width:900px){
+  .page{grid-template-columns:1fr;gap:0;padding:0 22px 90px}
+  .rail{position:static;max-height:none;padding:24px 0 0;overflow:visible;
+    border-bottom:1px solid var(--rule);margin-bottom:8px}
+  .rail summary{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    font-weight:640;color:var(--teal);cursor:pointer;padding:8px 0 16px}
+  .rail-t{display:none}
+  .rail ol{padding-bottom:18px}
+  .masthead-in{padding:38px 22px 30px}
+  body{font-size:16.5px}
+  .sec-h{grid-template-columns:38px minmax(0,1fr)}
+  .fact{padding:12px 0 0;margin:0;border-right:0;border-top:1px solid var(--rule-soft);flex:1 1 100%}
+  .facts{border-top:0}
+  .fuentes{columns:1}
+  .tramo{grid-template-columns:1fr}
+  .tramo .rango{border-right:0;border-bottom:1px solid var(--rule-soft)}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="masthead">
+  <div class="masthead-in">
+    <p class="eyebrow">Maily360 · Inteligencia de mercado</p>
+    <h1>Qué venden,<br>qué incluyen y <em>a cuánto</em></h1>
+    <p class="lede">Dieciséis sistemas de gestión de clínicas comparados: sus módulos, su forma de
+      cobrar y su precio real. Ocho compiten con Maily360 por el mismo cliente en México y LatAm;
+      ocho marcan el estándar internacional de funcionalidad.</p>
+    <dl class="facts">
+      <div class="fact"><dt>Fecha de consulta</dt><dd>26 de julio de 2026</dd></div>
+      <div class="fact"><dt>Sistemas</dt><dd>16 (8 regionales · 8 internacionales)</dd></div>
+      <div class="fact"><dt>Enfoque</dt><dd>Precios y planes · Huecos de funcionalidad</dd></div>
+      <div class="fact"><dt>Fuente</dt><dd>Páginas oficiales de precios</dd></div>
+    </dl>
+  </div>
+</header>
+
+<div class="page">
+
+<details class="rail" open>
+  <summary>Índice del documento</summary>
+  <p class="rail-t">Contenido</p>
+  <ol>
+    <li><a href="#s01"><b>01</b><span>Cómo leer esto</span></a></li>
+    <li><a href="#s02"><b>02</b><span>El mapa de precios en México</span></a></li>
+    <li><a href="#s03"><b>03</b><span>México y LatAm, uno por uno</span></a></li>
+    <li><a href="#s04"><b>04</b><span>Tabla comparativa regional</span></a></li>
+    <li><a href="#s05"><b>05</b><span>Los referentes internacionales</span></a></li>
+    <li><a href="#s06"><b>06</b><span>Tabla comparativa internacional</span></a></li>
+    <li><a href="#s07"><b>07</b><span>Cómo cobran: los 5 modelos</span></a></li>
+    <li><a href="#s08"><b>08</b><span>Matriz de módulos</span></a></li>
+    <li><a href="#s09"><b>09</b><span>Los huecos de Maily360</span></a></li>
+    <li><a href="#s10"><b>10</b><span>Lo que tienes y casi nadie</span></a></li>
+    <li><a href="#s11"><b>11</b><span>Recomendación de precios</span></a></li>
+    <li><a href="#s12"><b>12</b><span>Fuentes</span></a></li>
+  </ol>
+</details>
+
+<main>
+
+<!-- 01 -->
+<section class="sec" id="s01">
+  <div class="sec-h">
+    <span class="num">01</span>
+    <h2>Cómo leer esto</h2>
+    <p class="dek">De dónde salen los números y qué tan confiable es cada uno.</p>
+  </div>
+
+  <p>Todos los precios de este documento se tomaron el <strong>26 de julio de 2026</strong>,
+    preferentemente de la <strong>página oficial de precios</strong> de cada proveedor. Cuando un
+    sistema no publica precios, lo digo explícitamente en lugar de rellenar el hueco con
+    estimaciones de terceros.</p>
+
+  <div class="call aviso">
+    <span class="lab">Advertencia sobre las «comparativas» que vas a encontrar buscando</span>
+    <p>Casi todos los artículos tipo <em>«Los 5 mejores software de expediente clínico en México
+      2026»</em> los publican <strong>los propios competidores</strong> como marketing de contenido.
+      SaludTotal, Mi-Consultorio, Medesk, Astramedik y Pabau publican comparativas donde casualmente
+      ellos salen mejor.</p>
+    <p><strong>Un ejemplo concreto de lo que eso provoca:</strong> el blog de SaludTotal anuncia su
+      plan de consultorio en <strong>$99 MXN/mes</strong>, mientras que su propia página de precios
+      lo cobra a <strong>$259 MXN/mes</strong>. Los dos números son suyos, publicados el mismo día.
+      Cuando compares con un cliente enfrente, usa siempre la página de precios, no el blog.</p>
+  </div>
+
+  <div class="call nota">
+    <span class="lab">Sobre las monedas</span>
+    <p><strong>No convertí los precios internacionales a pesos</strong> a propósito. Dos razones: el
+      tipo de cambio del día distorsionaría la comparación en cuanto se mueva, y sobre todo, esos
+      sistemas incluyen cosas que en México ni siquiera aplican —la facturación a aseguradoras
+      estadounidense es la mitad de su precio— así que comparar cifra contra cifra lleva a la
+      conclusión equivocada. Usa el bloque internacional para leer <strong>funcionalidad y modelo de
+      cobro</strong>, no para fijar tu precio.</p>
+  </div>
+
+  <h3>Cómo marco cada dato</h3>
+  <ul class="chips">
+    <li class="chip t">Precio público en su página oficial</li>
+    <li class="chip g">Precio de terceros — tómalo con reserva</li>
+    <li class="chip o">Solo por cotización — venta consultiva</li>
+  </ul>
+  <p>En las matrices de módulos, <span class="yes">✓</span> significa que la fuente consultada lo
+    confirma y <span class="no">·</span> significa <strong>que no consta</strong> — no que el
+    sistema no lo tenga. Es una distinción importante: no puedo afirmar que un competidor carece de
+    algo solo porque no lo anuncia en su página de precios.</p>
+</section>
+
+<!-- 02 -->
+<section class="sec" id="s02">
+  <div class="sec-h">
+    <span class="num">02</span>
+    <h2>El mapa de precios en México</h2>
+    <p class="dek">El mercado está partido en cinco escalones muy definidos. Saber en cuál caes es
+      la primera decisión.</p>
+  </div>
+
+  <div class="escala">
+    <div class="tramo t1">
+      <div class="rango">$199 – $699</div>
+      <div class="quien"><b>Consultorio individual.</b> Expediente + agenda + receta. Un médico, a
+        veces con recepción. Consultorio.mx, MediSystem, SaludTotal Básico y Estándar, Huli
+        Expediente, AstraMedik Básico.</div>
+    </div>
+    <div class="tramo t2">
+      <div class="rango">$700 – $1,500</div>
+      <div class="quien"><b>Consultorio con inteligencia artificial.</b> Lo mismo más notas clínicas
+        automáticas. Es el escalón que más creció este año. Hoppy, Huli Notas IA, AstraMedik
+        Profesional, SaludTotal Premium.</div>
+    </div>
+    <div class="tramo t3">
+      <div class="rango">$1,700 – $3,000</div>
+      <div class="quien"><b>Captación de pacientes.</b> Doctoralia PRO. No compite por el
+        expediente: compite por traerle pacientes nuevos al médico. Otro problema, otro presupuesto.</div>
+    </div>
+    <div class="tramo t4">
+      <div class="rango">$2,500+</div>
+      <div class="quien"><b>IA avanzada.</b> SaludTotal IA con transcripción y 10 usuarios. Todavía
+        muy poco poblado.</div>
+    </div>
+    <div class="tramo t5">
+      <div class="rango">Cotización</div>
+      <div class="quien"><b>Clínica y multi-sede.</b> Medilink, Dentalink, AgendaPro, Doctoralia
+        para clínicas, y el plan Empresarial de casi todos. <strong>Nadie publica precio.</strong>
+        Terceros ubican el rango en $3,000–$15,000 MXN/mes.</div>
+    </div>
+  </div>
+
+  <div class="call dato">
+    <span class="lab">El dato que más te sirve</span>
+    <p>El escalón <strong>de clínica no tiene precio público en todo el mercado regional</strong>.
+      Ninguno de los cinco sistemas que atienden clínicas publica una cifra: todos obligan a pedir
+      cotización. Eso significa dos cosas para Maily360: primero, que <strong>tienes libertad de
+      precio</strong> en ese segmento porque el cliente no llega con una referencia; y segundo, que
+      si tú <em>sí</em> publicas precios de clínica, eso solo es una ventaja competitiva real.</p>
+  </div>
+
+  <div class="call nota">
+    <span class="lab">Dónde cae Maily360 hoy</span>
+    <p>Por funcionalidad, Maily360 <strong>no es un producto de consultorio individual</strong>. Un
+      sistema con expediente NOM-004 completo, recetas COFEPRIS con controlados, cobranza, CFDI,
+      cotizaciones, calendarización de tratamientos y multi-sucursal está en el escalón de clínica,
+      compitiendo contra Medilink y Dentalink, no contra Hoppy. Venderlo a precio de consultorio
+      sería regalarlo; ese es el hilo que sigue la sección 11.</p>
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="sec" id="s03">
+  <div class="sec-h">
+    <span class="num">03</span>
+    <h2>México y LatAm, uno por uno</h2>
+    <p class="dek">Los ocho que compiten por el mismo cliente. Con lo que cobran y lo que dan por
+      ese dinero.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>SaludTotal</h3><span class="chip t">Precio público</span>
+      <span class="chip">México</span><span class="chip">El competidor más directo</span></div>
+    <p>Diseñado desde cero para la normatividad mexicana, igual que Maily360. Es el que más se le
+      parece en propósito y el que más agresivamente publica precios.</p>
+    <div class="planes">
+      <div class="plan"><h4>Básico</h4><p class="p">$259</p><p class="u">MXN/mes · 1 usuario</p>
+        <ul><li>Expedientes ilimitados</li><li>Agenda</li><li>Recetas electrónicas</li></ul></div>
+      <div class="plan"><h4>Estándar</h4><p class="p">$410</p><p class="u">MXN/mes · 2 usuarios</p>
+        <ul><li>+ Recordatorios WhatsApp</li><li>+ Facturación CFDI</li><li>+ Portal del paciente</li></ul></div>
+      <div class="plan"><h4>Premium</h4><p class="p">$1,499</p><p class="u">MXN/mes · 5 usuarios</p>
+        <ul><li>+ Marca blanca</li><li>+ 100 timbres CFDI/mes</li><li>+ Reportes avanzados</li></ul></div>
+      <div class="plan destacado"><h4>IA</h4><p class="p">$2,499</p><p class="u">MXN/mes · 10 usuarios</p>
+        <ul><li>+ Transcripción automática</li><li>+ Notas clínicas con IA</li><li>+ 5,000 min grabación/mes</li></ul></div>
+    </div>
+    <div class="kv">
+      <dt>Descuento anual</dt><dd>Dos meses gratis (≈17 %). El Básico anual sale en $215/mes.</dd>
+      <dt>Permanencia</dt><dd>Ninguna. Cancelación libre.</dd>
+      <dt>Prueba</dt><dd>7 días sin tarjeta.</dd>
+      <dt>Cumplimiento</dt><dd>NOM-024 y NOM-004.</dd>
+    </div>
+    <div class="call dato">
+      <span class="lab">Lo que hay que mirar de este precio</span>
+      <p>Cobra <strong>por número de usuarios</strong>, no por médico. El salto de $410 a $1,499
+        —más de tres veces— para pasar de 2 a 5 usuarios es su escalón de monetización. Una clínica
+        de 4 médicos con recepción y caja está obligada al Premium. Ahí es donde Maily360 puede
+        competir mejor si no cobra por cabezas administrativas.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Huli</h3><span class="chip t">Precio público</span>
+      <span class="chip">México y Centroamérica</span></div>
+    <p>Uno de los más establecidos de la región. Estructura de precios simple y muy transparente,
+      con la IA vendida como paquete medido.</p>
+    <div class="planes">
+      <div class="plan"><h4>Expediente electrónico</h4><p class="p">$590</p><p class="u">MXN + IVA/mes</p>
+        <ul><li>Agenda</li><li>Expediente e historial</li><li>Recetas</li><li>Archivos ilimitados</li></ul></div>
+      <div class="plan destacado"><h4>Notas clínicas IA</h4><p class="p">$991</p><p class="u">MXN + IVA/mes</p>
+        <ul><li>Todo lo anterior</li><li>200 notas IA/mes</li><li>Generación automática de la nota</li></ul></div>
+      <div class="plan"><h4>Clínica / Hospital</h4><p class="p">A cotizar</p><p class="u">—</p>
+        <ul><li>Facturación digital</li><li>Agendas de varios médicos</li><li>Expediente centralizado</li><li>API y tablero de métricas</li></ul></div>
+    </div>
+    <div class="kv">
+      <dt>Anual</dt><dd>Expediente: $7,080 + IVA al año (equivale a $590/mes; sin descuento aparente).</dd>
+      <dt>Add-on de IA suelto</dt><dd>$400 + IVA por paquete de 200 notas al mes.</dd>
+      <dt>Add-on de WhatsApp</dt><dd>$240 + IVA por 30 conversaciones/mes; $8 por conversación extra.</dd>
+      <dt>Garantía</dt><dd>30 días de devolución.</dd>
+    </div>
+    <div class="call dato">
+      <span class="lab">El modelo de IA que conviene copiar</span>
+      <p>Huli vende la IA <strong>por consumo medido</strong>: 200 notas por $400. Eso convierte un
+        costo variable real (transcripción y modelo de lenguaje) en un ingreso variable, en lugar de
+        comerse el margen con un «ilimitado». Cuando Maily360 sume IA, este es el modelo a imitar,
+        no el de tarifa plana.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>AstraMedik</h3><span class="chip t">Precio público</span>
+      <span class="chip">México</span><span class="chip p">Cobra por consultorio</span></div>
+    <div class="planes">
+      <div class="plan"><h4>Básico</h4><p class="p">$699</p><p class="u">MXN + IVA/mes · por consultorio</p>
+        <ul><li>Expediente clínico</li><li>IA que mejora los textos clínicos</li><li>Agenda automatizada</li><li>Recetas y documentos</li><li>Soporte L-V 9-18</li></ul></div>
+      <div class="plan destacado"><h4>Profesional</h4><p class="p">$1,199</p><p class="u">MXN + IVA/mes · por consultorio</p>
+        <ul><li>+ Dictado por voz con IA</li><li>+ Sugerencias de diagnóstico</li><li>+ CFDI (50 folios/mes)</li><li>+ Cobranza y finanzas</li><li>+ Soporte 24/7</li></ul></div>
+      <div class="plan"><h4>Empresarial</h4><p class="p">A cotizar</p><p class="u">—</p>
+        <ul><li>Múltiples usuarios y sedes</li><li>API personalizada</li><li>Flujos a la medida</li></ul></div>
+    </div>
+    <p>Es el sistema mexicano cuyo <strong>plan Profesional se parece más a lo que Maily360 ya
+      tiene</strong>: expediente, agenda, recetas, CFDI y cobranza en un solo paquete, a $1,199 + IVA
+      por consultorio. Es tu punto de referencia de precio más directo.</p>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Hoppy</h3><span class="chip t">Precio público</span>
+      <span class="chip">México</span><span class="chip t">Un solo plan</span></div>
+    <p class="precio">$999 <small>MXN/mes · plan único · doctores y asistentes ilimitados</small></p>
+    <p>Estrategia opuesta a todos los demás: <strong>un solo plan, sin escalones y sin límite de
+      usuarios</strong>. Incluye agenda con sincronización a Google Calendar, notas SOAP generadas
+      por IA (100 al mes), expediente NOM-004, videoconsulta, gestión de pacientes por estado
+      (nuevos, agendados, atendidos, en seguimiento) y análisis de por dónde llegó cada paciente.</p>
+    <div class="call dato">
+      <span class="lab">Por qué importa aunque sea pequeño</span>
+      <p>Hoppy es la competencia más incómoda de explicar frente a un cliente: <em>«¿por qué el tuyo
+        cuesta más si aquel es ilimitado?»</em>. La respuesta está en la sección 10 —Hoppy no tiene
+        recetas COFEPRIS con controlados, ni cobranza, ni CFDI, ni multi-sede— pero conviene tenerla
+        preparada, porque la pregunta va a llegar.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Doctoralia PRO</h3><span class="chip t">Precio público</span>
+      <span class="chip">Grupo Docplanner</span><span class="chip n">Otro problema</span></div>
+    <p>Es el más caro del mercado mexicano y el que menos compite contigo, porque
+      <strong>no vende gestión: vende pacientes</strong>. Su producto es el perfil posicionado en el
+      directorio médico más visitado de México; el expediente es un complemento.</p>
+    <div class="planes">
+      <div class="plan"><h4>Starter</h4><p class="p">$1,740</p><p class="u">MXN + IVA/mes · anual</p>
+        <ul><li>Perfil de pago</li><li>Calendario y reserva online</li><li>Recordatorios automáticos</li><li>Reserva con Google</li><li>1 consultorio + 1 en línea</li></ul></div>
+      <div class="plan destacado"><h4>Plus</h4><p class="p">$2,340</p><p class="u">MXN + IVA/mes · anual</p>
+        <ul><li>+ Episodios clínicos</li><li>+ WhatsApp y SMS</li><li>+ Pagos en línea</li><li>+ Asistente virtual 24/7</li><li>+ 1,000 campañas/mes</li></ul></div>
+      <div class="plan"><h4>VIP</h4><p class="p">$2,970</p><p class="u">MXN + IVA/mes · anual</p>
+        <ul><li>+ Perfil mejorado</li><li>+ Lista de espera inteligente</li><li>+ Recetas digitales</li><li>+ 5 consultorios</li><li>+ 5,000 campañas/mes</li></ul></div>
+    </div>
+    <div class="kv">
+      <dt>Solo gestión</dt><dd>Plan «Noa Practice» a $660 MXN/mes, sin el perfil del directorio.</dd>
+      <dt>IA de notas</dt><dd>«Noa Notes» $550 MXN/mes para especialistas; $950 + IVA para clínicas.</dd>
+      <dt>Clínicas</dt><dd>Tarifa personalizada. Incluye panel de recepción, videoconsulta, chat con el paciente, campañas y solicitud automática de reseñas.</dd>
+    </div>
+    <div class="call nota">
+      <span class="lab">Cómo posicionarte frente a ellos</span>
+      <p>No pelees por precio con Doctoralia: pelea por categoría. Su $2,340 no compra un mejor
+        expediente, compra visibilidad. El argumento correcto es <em>«nosotros operamos tu clínica,
+        ellos te traen pacientes; muchas clínicas pagan las dos cosas»</em>. Coexistir es más
+        rentable que competir.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Medilink y Dentalink</h3><span class="chip o">Sin precio público</span>
+      <span class="chip">LatAm · Healthatom</span><span class="chip">Tus competidores en clínica</span></div>
+    <p>Dos productos con <strong>exactamente los mismos tres planes</strong> —Esencial, Pro y
+      Titanium— uno para clínicas médicas y otro para dentales. Comparten estructura, precio oculto y
+      estrategia comercial, señal de que son del mismo grupo. Son el competidor real de Maily360 en
+      el segmento clínica.</p>
+    <div class="tw">
+    <table>
+      <thead><tr><th>Plan</th><th>Para quién</th><th>Qué añade</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Esencial</strong></td><td>Consulta individual</td><td>Agenda, reserva en línea, expediente, control de pagos, telemedicina. En Dentalink: odontograma y presupuestos.</td></tr>
+        <tr><td><strong>Pro</strong><br><span class="chip g">Más popular</span></td><td>Centros medianos</td><td>+ Control de gastos, <strong>inventario</strong>, reportes a Excel, <strong>cálculo automático de nómina</strong>, <strong>comisiones</strong>, <strong>multi-sede</strong>, analítica de pacientes.</td></tr>
+        <tr><td><strong>Titanium</strong></td><td>Automatización</td><td>+ Módulo de <strong>laboratorio</strong>, exámenes, tareas automáticas, <strong>email marketing</strong>, fidelización, <strong>chat interno</strong>, encuestas. En Dentalink: estética facial y ortodoncia.</td></tr>
+      </tbody>
+    </table>
+    <caption>Add-ons sueltos: confirmación de citas, firma digital, ficha de estética facial. Sin
+      contratos ni plazos mínimos. Pago mensual, semestral o anual.</caption>
+    </div>
+    <div class="call aviso">
+      <span class="lab">Léelo con cuidado: aquí están tus huecos</span>
+      <p>Su plan Pro incluye <strong>cuatro cosas que Maily360 no tiene</strong>: inventario, nómina
+        automática, comisiones del personal y reportes exportables a Excel. Y el Titanium suma
+        laboratorio, encuestas, email marketing y chat interno. Cuando pierdas una venta contra
+        Medilink, lo más probable es que sea por una de esas ocho, no por el expediente.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>AgendaPro</h3><span class="chip o">Sin precio público</span>
+      <span class="chip">LatAm</span></div>
+    <p>Viene del mundo de belleza y bienestar y bajó al sector salud, así que su fuerte es la agenda
+      y el punto de venta, no el expediente clínico. Sus planes base no tienen precio publicado, pero
+      sí publica los complementos, que dan una idea de su forma de cobrar:</p>
+    <div class="kv">
+      <dt>Recordatorios WhatsApp</dt><dd>Desde $100 MXN + IVA/mes por 50 mensajes.</dd>
+      <dt>Videoconsulta</dt><dd>Desde $240 MXN + IVA/mes por 2,500 minutos.</dd>
+      <dt>Terminal punto de venta</dt><dd>$250 MXN + IVA/mes de renta.</dd>
+      <dt>Cancelación</dt><dd>Con 5 días hábiles de aviso.</dd>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>MediSystem y Consultorio.mx</h3><span class="chip g">Precio de terceros</span>
+      <span class="chip">México</span><span class="chip">Gama de entrada</span></div>
+    <p>Los dos juegan en el piso del mercado. <strong>MediSystem</strong> se ubica desde
+      <strong>$399 MXN/mes</strong> según fuentes de terceros —su propio sitio dice «planes simples y
+      transparentes» pero no muestra ninguna cifra sin registrarse— y ofrece agenda multi-médico,
+      expediente NOM-004, recordatorios por WhatsApp con respaldo SMS, inventario, cobros, tablero de
+      reportes, roles y un asistente de IA, con 14 días de prueba.
+      <strong>Consultorio.mx</strong> aparece desde <strong>$199 MXN/mes</strong>, también de fuente
+      terciaria.</p>
+    <div class="call aviso">
+      <span class="lab">Precio no verificado</span>
+      <p>Ninguno de estos dos números viene de la página oficial del proveedor. No los uses en una
+        conversación de venta sin comprobarlos: pedir un demo es la forma rápida de verificarlo.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="sec" id="s04">
+  <div class="sec-h">
+    <span class="num">04</span>
+    <h2>Tabla comparativa regional</h2>
+    <p class="dek">Todo México y LatAm en una vista. Precios en pesos mexicanos.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Sistema</th><th>Origen</th><th class="num">Entrada</th><th class="num">Gama media</th><th class="num">Alto</th><th>Unidad de cobro</th><th>Fiabilidad</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Consultorio.mx</strong></td><td>México</td><td class="num">$199</td><td class="num">—</td><td class="num">—</td><td>No consta</td><td><span class="mid">Terceros</span></td></tr>
+      <tr><td><strong>SaludTotal</strong></td><td>México</td><td class="num">$259</td><td class="num">$410 – $1,499</td><td class="num">$2,499</td><td>Por número de usuarios</td><td><span class="yes">Oficial</span></td></tr>
+      <tr><td><strong>MediSystem</strong></td><td>México</td><td class="num">$399</td><td class="num">—</td><td class="num">—</td><td>No consta</td><td><span class="mid">Terceros</span></td></tr>
+      <tr><td><strong>Huli</strong></td><td>México / CA</td><td class="num">$590 +IVA</td><td class="num">$991 +IVA</td><td class="num">Cotización</td><td>Por cuenta de médico</td><td><span class="yes">Oficial</span></td></tr>
+      <tr><td><strong>AstraMedik</strong></td><td>México</td><td class="num">$699 +IVA</td><td class="num">$1,199 +IVA</td><td class="num">Cotización</td><td>Por consultorio</td><td><span class="yes">Oficial</span></td></tr>
+      <tr><td><strong>Hoppy</strong></td><td>México</td><td class="num">$999</td><td class="num">plan único</td><td class="num">plan único</td><td>Por clínica, usuarios ilimitados</td><td><span class="yes">Oficial</span></td></tr>
+      <tr><td><strong>Doctoralia PRO</strong></td><td>Docplanner</td><td class="num">$1,740 +IVA</td><td class="num">$2,340 +IVA</td><td class="num">$2,970 +IVA</td><td>Por profesional</td><td><span class="yes">Oficial</span></td></tr>
+      <tr><td><strong>Medilink</strong></td><td>LatAm</td><td class="num">Cotización</td><td class="num">Cotización</td><td class="num">Cotización</td><td>No publicada</td><td><span class="no">Oculto</span></td></tr>
+      <tr><td><strong>Dentalink</strong></td><td>LatAm</td><td class="num">Cotización</td><td class="num">Cotización</td><td class="num">Cotización</td><td>No publicada</td><td><span class="no">Oculto</span></td></tr>
+      <tr><td><strong>AgendaPro</strong></td><td>LatAm</td><td class="num">Cotización</td><td class="num">Cotización</td><td class="num">Cotización</td><td>No publicada</td><td><span class="no">Oculto</span></td></tr>
+      <tr class="mine"><td><strong>Maily360</strong></td><td>México</td><td class="num">por definir</td><td class="num">por definir</td><td class="num">por definir</td><td>Módulos + límites por clínica</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <caption>Precios mensuales en MXN, consultados el 26 de julio de 2026. «+IVA» donde el proveedor lo
+    indica explícitamente. Ordenado por precio de entrada.</caption>
+  </div>
+
+  <h3>Referencia europea, por si sirve de contraste</h3>
+  <p>Dos sistemas españoles que aparecen en las búsquedas mexicanas y a veces se confunden con
+    locales. Su interés no es el precio sino <strong>la forma de cobrar</strong>, que es la más
+    inteligente que encontré:</p>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Sistema</th><th class="num">Planes</th><th>Unidad</th><th>Lo notable</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nubimed</strong> (España)</td><td class="num">27,40 € · 50,10 € +IVA</td><td>Por usuario <strong>con agenda</strong></td><td>Usuarios administrativos y de recepción <strong>ilimitados y gratis</strong>. Usuario extra: +2,4 € o +5,1 €. Incluye soporte, formación, migración y 25 GB.</td></tr>
+      <tr><td><strong>Clinic Cloud</strong> (España)</td><td class="num">29 € · 49 € · 79 € +IVA</td><td>Por número de <strong>agendas</strong></td><td>Mini 1 agenda, Pro 3 (máx. 5), Max 5 (ilimitadas). IA «Noa Notes» +20 €/mes por usuario. Agenda extra hasta 10 €.</td></tr>
+    </tbody>
+  </table>
+  <caption>Clinic Cloud y Doctoralia venden el mismo asistente de IA con el mismo nombre comercial
+    («Noa»), lo que sugiere que pertenecen al mismo grupo.</caption>
+  </div>
+</section>
+
+<!-- 05 -->
+<section class="sec" id="s05">
+  <div class="sec-h">
+    <span class="num">05</span>
+    <h2>Los referentes internacionales</h2>
+    <p class="dek">No compiten contigo, pero definen qué se considera obligatorio en un sistema de
+      clínica en 2026.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="ficha">
+      <div class="ficha-h"><h3>Cliniko</h3><span class="chip t">Australia</span>
+        <span class="chip t">El modelo más limpio</span></div>
+      <p class="precio">$45 – $395 <small>USD/mes según número de profesionales</small></p>
+      <div class="tw">
+      <table>
+        <thead><tr><th>Profesionales</th><th class="num">USD/mes</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td class="num">$45</td></tr>
+          <tr><td>2 – 5</td><td class="num">$95</td></tr>
+          <tr><td>6 – 8</td><td class="num">$145</td></tr>
+          <tr><td>9 – 12</td><td class="num">$195</td></tr>
+          <tr><td>13 – 25</td><td class="num">$295</td></tr>
+          <tr><td>26 – 200</td><td class="num">$395</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p><strong>Todos los planes traen absolutamente todas las funciones.</strong> No hay módulos
+        que desbloquear. Usuarios administrativos y de recepción ilimitados, sedes ilimitadas,
+        pacientes ilimitados, almacenamiento ilimitado. SMS a 10 centavos. Un mes gratis al pagar
+        anual. Y no han subido precios desde 2011.</p>
+    </div>
+
+    <div class="ficha">
+      <div class="ficha-h"><h3>SimplePractice</h3><span class="chip">EE. UU.</span></div>
+      <p class="precio">$49 · $79 · $99 <small>USD/mes por cuenta</small></p>
+      <p>Starter, Essential y Plus. Lo interesante es la <strong>estrategia de complementos</strong>:
+        casi todo lo nuevo se cobra aparte.</p>
+      <div class="kv">
+        <dt>Care Aide (IA)</dt><dd>$29.50/mes + $24.50 por clínico adicional</dd>
+        <dt>Note Taker</dt><dd>$17.50/mes</dd>
+        <dt>Receta electrónica</dt><dd>$24.50/mes + $89 de alta única</dd>
+        <dt>Prueba</dt><dd>30 días sin tarjeta</dd>
+      </div>
+      <p>La receta electrónica <strong>se cobra aparte</strong>, y con costo de instalación. En
+        México sería impensable —la receta es el corazón de la consulta— pero muestra hasta dónde
+        se puede modularizar.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>Jane App</h3><span class="chip">Canadá</span>
+      <span class="chip p">Base + por profesional</span></div>
+    <p>El modelo híbrido más citado: una cuota base por clínica <strong>más</strong> un cargo por
+      cada profesional, con precio distinto según sea de tiempo completo o parcial.</p>
+    <div class="tw">
+    <table>
+      <thead><tr><th>Plan</th><th class="num">Base CAD/mes</th><th>Qué incluye</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Balance</strong></td><td class="num">$54</td><td>1 profesional, <strong>máximo 20 citas al mes</strong>, formularios de admisión, plantillas, mensajería segura, recordatorios por correo, videoconsulta 1 a 1</td></tr>
+        <tr><td><strong>Practice</strong></td><td class="num">$79</td><td>+ Citas ilimitadas, personal ilimitado, <strong>SMS ilimitados</strong>, horarios avanzados, informes</td></tr>
+        <tr><td><strong>Thrive</strong></td><td class="num">$99</td><td>+ Gestión de salas y equipo, auto-registro del paciente, <strong>paquetes y membresías</strong>, calificaciones y reseñas</td></tr>
+      </tbody>
+    </table>
+    <caption>Profesional adicional: $15 CAD/mes tiempo parcial, $25 CAD/mes tiempo completo.
+      Complementos: IA de notas $15, videoconsulta grupal $15, facturación a seguros $20 + $5,
+      nómina $40 + $6 por empleado, sitio web $59.</caption>
+    </div>
+    <div class="call dato">
+      <span class="lab">El detalle que vale oro</span>
+      <p>El plan de entrada limita a <strong>20 citas al mes</strong>. No limita funciones: limita
+        volumen. Es una forma de dejar entrar barato al que empieza y crecer con él sin regalarle el
+        producto completo — una alternativa a recortar módulos que casi nadie usa en México.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>El bloque caro de Estados Unidos</h3><span class="chip o">Otro planeta</span></div>
+    <p>Aquí el precio se dispara porque el producto incluye <strong>facturación a
+      aseguradoras</strong>, que en el sistema de salud estadounidense es la mitad del valor. No son
+      comparables con México, pero fijan el techo de lo que un sistema clínico puede llegar a
+      cobrar.</p>
+    <div class="tw">
+    <table>
+      <thead><tr><th>Sistema</th><th class="num">Precio</th><th>Modelo</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Tebra</strong> (antes Kareo)</td><td class="num">$225 – $799 USD<br>por médico/mes</td><td>Practice Essentials $599 (médico), $399 (no médico), $225 (terapeuta). Practice Automation $799 / $449 / $299. Soluciones sueltas desde $49. IA: $99/mes por 400 notas o $0.99 por nota. <span class="chip t">Oficial</span></td></tr>
+        <tr><td><strong>DrChrono</strong></td><td class="num">$199 – $599 USD<br>por médico/mes</td><td>Tres niveles, todos por cotización. Cobra excedentes por unidad: $0.05 por SMS, $0.07 por página de fax, $0.10 por llamada, $30 por médico por integración de laboratorio. <span class="chip g">Terceros</span></td></tr>
+        <tr><td><strong>Practice Fusion</strong></td><td class="num">$149 USD<br>por médico/mes</td><td>Con compromiso anual; incluye implementación, capacitación y soporte. <span class="chip g">Terceros</span></td></tr>
+        <tr><td><strong>athenahealth</strong></td><td class="num">3 – 7 % <br>de la cobranza</td><td>El modelo más distinto de todos: <strong>no cobra cuota, cobra un porcentaje de lo que le cobra a las aseguradoras</strong>. La referencia de entrada ronda los $140 por médico/mes. <span class="chip g">Terceros</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="call nota">
+      <span class="lab">La idea que sí se puede traer a México</span>
+      <p>El modelo de athenahealth —cobrar un porcentaje de lo cobrado en lugar de una cuota fija—
+        alinea perfectamente el precio con el valor entregado y elimina la objeción de «me cuesta
+        aunque no lo use». Con el módulo de cobranza que Maily360 ya tiene, es técnicamente viable.
+        No lo propongo como plan principal, pero sí como una opción interesante para clínicas
+        grandes que se resisten a una cuota alta.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 06 -->
+<section class="sec" id="s06">
+  <div class="sec-h">
+    <span class="num">06</span>
+    <h2>Tabla comparativa internacional</h2>
+    <p class="dek">Los ocho referentes, con su moneda original.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Sistema</th><th>País</th><th class="num">Entrada</th><th class="num">Tope publicado</th><th>Unidad</th><th>Rasgo distintivo</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Cliniko</strong></td><td>Australia</td><td class="num">$45 USD</td><td class="num">$395 USD</td><td>Tramos por profesional</td><td>Todas las funciones en todos los planes</td></tr>
+      <tr><td><strong>SimplePractice</strong></td><td>EE. UU.</td><td class="num">$49 USD</td><td class="num">$99 USD + extras</td><td>Por cuenta</td><td>Complementos agresivos, hasta la receta</td></tr>
+      <tr><td><strong>Jane App</strong></td><td>Canadá</td><td class="num">$54 CAD</td><td class="num">$99 CAD + $25/prof.</td><td>Base + profesional</td><td>Entrada limitada por volumen de citas</td></tr>
+      <tr><td><strong>Nubimed</strong></td><td>España</td><td class="num">27,40 €</td><td class="num">50,10 €</td><td>Por usuario con agenda</td><td>Recepción ilimitada y gratis</td></tr>
+      <tr><td><strong>Clinic Cloud</strong></td><td>España</td><td class="num">29 €</td><td class="num">79 €</td><td>Por número de agendas</td><td>Odontograma y receta electrónica en el plan alto</td></tr>
+      <tr><td><strong>Practice Fusion</strong></td><td>EE. UU.</td><td class="num">$149 USD</td><td class="num">$149 USD</td><td>Por médico</td><td>Precio único con compromiso anual</td></tr>
+      <tr><td><strong>DrChrono</strong></td><td>EE. UU.</td><td class="num">$199 USD</td><td class="num">$599 USD</td><td>Por médico</td><td>Cobra por SMS, fax y llamada</td></tr>
+      <tr><td><strong>Tebra</strong></td><td>EE. UU.</td><td class="num">$225 USD</td><td class="num">$799 USD</td><td>Por médico</td><td>Precio distinto por tipo de profesional</td></tr>
+      <tr><td><strong>athenahealth</strong></td><td>EE. UU.</td><td class="num">3 – 7 %</td><td class="num">3 – 7 %</td><td>% de la cobranza</td><td>Sin cuota fija</td></tr>
+    </tbody>
+  </table>
+  <caption>Monedas sin convertir, a propósito. Consultado el 26 de julio de 2026.</caption>
+  </div>
+</section>
+
+<!-- 07 -->
+<section class="sec" id="s07">
+  <div class="sec-h">
+    <span class="num">07</span>
+    <h2>Cómo cobran: los cinco modelos</h2>
+    <p class="dek">Esta es la decisión estratégica de fondo. Importa más que la cifra.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Modelo</th><th>Quién lo usa</th><th>A favor</th><th>En contra</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Por usuario</strong><br>cualquier persona con acceso</td><td>SaludTotal</td><td>Ingreso crece con el tamaño del cliente. Fácil de explicar.</td><td><strong>Castiga contratar recepción.</strong> El cliente comparte contraseñas para no pagar de más — y eso te rompe la bitácora, que en un expediente clínico es exigencia legal.</td></tr>
+      <tr><td><strong>Por usuario con agenda</strong><br>solo quien atiende</td><td>Nubimed, Cliniko, Jane</td><td>Se percibe justo: pagas por quien genera ingreso. Recepción y caja gratis. Escala natural con la clínica.</td><td>Hay que definir bien qué cuenta como «agenda» para que no se preste a trucos.</td></tr>
+      <tr><td><strong>Por consultorio o por agenda</strong></td><td>AstraMedik, Clinic Cloud</td><td>Ligado a un activo físico difícil de disimular.</td><td>No refleja el uso real: un consultorio con dos turnos paga igual que uno con medio día.</td></tr>
+      <tr><td><strong>Por clínica, sin límite de gente</strong></td><td>Hoppy</td><td>Argumento de venta imbatible. Cero fricción para crecer.</td><td>Tu ingreso se estanca aunque el cliente crezca. Solo funciona con costos de operación bajos.</td></tr>
+      <tr><td><strong>Por porcentaje de cobranza</strong></td><td>athenahealth</td><td>Alineación perfecta con el valor. Elimina la objeción del costo fijo.</td><td>Ingreso impredecible; exige que el dinero pase de verdad por tu sistema.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call reco">
+    <span class="lab">Recomendación</span>
+    <p>Cobra <strong>por usuario con agenda</strong>: un precio base por clínica más un cargo por
+      cada médico que atiende, con <strong>recepción, caja y administración ilimitadas y
+      gratis</strong>. Tres razones:</p>
+    <ul>
+      <li>Es el modelo de Nubimed, Cliniko y Jane — los tres sistemas mejor valorados del grupo
+        internacional. No es casualidad.</li>
+      <li>Te diferencia frente a SaludTotal, cuyo salto de 2 a 5 usuarios triplica el precio y
+        golpea justo a la clínica con recepción.</li>
+      <li><strong>Es lo único que resuelve el problema de las contraseñas compartidas.</strong> Si
+        cobras por cabeza, el cliente hace que tres personas usen un solo acceso, y eso destruye la
+        trazabilidad que la NOM-024 te exige registrar. Cobrar solo por médico elimina el incentivo.</li>
+    </ul>
+    <p>Nota técnica: el motor de Maily360 hoy limita por <code>max_usuarios</code>, que cuenta a
+      todo el mundo. Para aplicar esto habría que añadir un límite específico de médicos con agenda.
+      Es un cambio pequeño con consecuencias comerciales grandes.</p>
+  </div>
+</section>
+
+<!-- 08 -->
+<section class="sec" id="s08">
+  <div class="sec-h">
+    <span class="num">08</span>
+    <h2>Matriz de módulos</h2>
+    <p class="dek">Qué ofrece cada uno frente a lo que Maily360 tiene construido hoy.</p>
+  </div>
+
+  <p><span class="yes">✓</span> confirmado en la fuente consultada · <span class="no">·</span> no
+    consta (no significa que no exista) · <span class="mid">◐</span> parcial o solo en el plan alto</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr>
+      <th>Módulo</th><th class="c">Maily<br>360</th><th class="c">Salud<br>Total</th><th class="c">Huli</th>
+      <th class="c">Astra<br>Medik</th><th class="c">Hoppy</th><th class="c">Medi<br>link</th>
+      <th class="c">Docto<br>ralia</th><th class="c">Clinic<br>Cloud</th><th class="c">Cliniko</th>
+      <th class="c">Simple<br>Practice</th><th class="c">Jane</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>Agenda y citas</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+      <tr><td>Expediente clínico</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c mid">◐</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+      <tr><td>Recetas</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c mid">◐</td><td class="c mid">◐</td><td class="c no">·</td><td class="c mid">◐</td><td class="c no">·</td></tr>
+      <tr><td><strong>Recetas de controlados</strong></td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td>Recordatorios WhatsApp</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c mid">◐</td><td class="c no">·</td><td class="c mid">◐</td></tr>
+      <tr><td>Cobranza y estado de cuenta</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+      <tr><td>Facturación CFDI</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c mid">◐</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td>Cotizaciones y presupuestos</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td>Multi-sucursal</td><td class="c yes">✓</td><td class="c no">·</td><td class="c mid">◐</td><td class="c mid">◐</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c mid">◐</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td>Plan de tratamiento por sesiones</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c mid">◐</td></tr>
+      <tr style="border-top:2px solid var(--rule)"><td><strong>Notas clínicas con IA</strong></td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+      <tr><td><strong>Portal del paciente / reserva online</strong></td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+      <tr><td><strong>Videoconsulta integrada</strong></td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+      <tr><td><strong>Inventario</strong></td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td><strong>Nómina y comisiones</strong></td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td></tr>
+      <tr><td><strong>Marketing y campañas</strong></td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td><strong>Encuestas y reseñas</strong></td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td></tr>
+      <tr><td><strong>Firma digital</strong></td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td><strong>Lista de espera</strong></td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td><strong>Módulos por especialidad</strong></td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c yes">✓</td><td class="c no">·</td><td class="c no">·</td><td class="c no">·</td></tr>
+      <tr><td><strong>Vista de agenda por semana o mes</strong></td><td class="c no">·</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td><td class="c yes">✓</td></tr>
+    </tbody>
+  </table>
+  <caption>La línea gruesa separa lo que Maily360 ya tiene de lo que le falta. Los datos de Maily360
+    salen de la auditoría de código del 26 de julio de 2026, no de material comercial.</caption>
+  </div>
+</section>
+
+<!-- 09 -->
+<section class="sec" id="s09">
+  <div class="sec-h">
+    <span class="num">09</span>
+    <h2>Los huecos de Maily360</h2>
+    <p class="dek">Once funcionalidades que el mercado ya da por hechas, ordenadas por urgencia
+      comercial.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th class="num">#</th><th>Hueco</th><th class="c">Cuántos<br>lo tienen</th><th>Por qué urge</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><strong>Notas clínicas con IA</strong></td><td class="c"><strong>8 de 11</strong></td><td>Es <em>la</em> función de 2026 y la única que la gente paga aparte con gusto: Huli cobra $400 por 200 notas, Doctoralia $550, SaludTotal la usa para justificar un plan de $2,499. No tenerla te deja fuera de la conversación con cualquier médico que ya vio una demo de la competencia. <strong>Es tu hueco más caro.</strong></td></tr>
+      <tr><td class="num">2</td><td><strong>Vista de agenda por semana o mes</strong></td><td class="c"><strong>10 de 11</strong></td><td>Lo tienen todos menos tú. No es una función avanzada, es una expectativa básica: en la primera demo, cuando el cliente pregunte «¿y cómo veo mi semana?», no hay buena respuesta. Barato de construir, caro de no tener.</td></tr>
+      <tr><td class="num">3</td><td><strong>Portal del paciente y reserva en línea</strong></td><td class="c">7 de 11</td><td>Es lo que convierte al sistema en generador de citas en lugar de solo registrador. Doctoralia construyó un negocio de $2,970/mes encima de esta idea. Tu documento de diseño ya lo contempla como «Maily te cuida», pendiente de autenticación del paciente.</td></tr>
+      <tr><td class="num">4</td><td><strong>Videoconsulta integrada</strong></td><td class="c">6 de 11</td><td>Maily360 ya tiene la modalidad «video» en la cita, pero es solo una etiqueta: no hay videollamada. El cliente lo va a leer como una promesa incumplida. Se puede resolver integrando un proveedor externo sin construirlo.</td></tr>
+      <tr><td class="num">5</td><td><strong>Inventario</strong></td><td class="c">2 de 11</td><td>Pocos lo tienen, pero uno es Medilink Pro — tu competidor directo en clínica. En medicina regenerativa y estética, donde se consumen insumos caros por sesión, esto <em>decide</em> la venta.</td></tr>
+      <tr><td class="num">6</td><td><strong>Comisiones del personal</strong></td><td class="c">2 de 11</td><td>Medilink lo pone en su plan Pro. En clínicas donde el médico cobra por procedimiento —el modelo dominante en estética y regenerativa— es una necesidad diaria, hoy resuelta con hojas de cálculo.</td></tr>
+      <tr><td class="num">7</td><td><strong>Exportar reportes a Excel</strong></td><td class="c">—</td><td>Medilink lo anuncia como característica de plan Pro. Es de las cosas más baratas de construir y de las primeras que pide una administradora. Maily360 tiene exportaciones sueltas, pero no un reporte general.</td></tr>
+      <tr><td class="num">8</td><td><strong>Firma digital</strong></td><td class="c">2 de 11</td><td>Consentimientos informados firmados en tableta en vez de en papel. En una clínica que hace procedimientos, el consentimiento firmado es obligación legal y hoy vive en un archivero.</td></tr>
+      <tr><td class="num">9</td><td><strong>Encuestas y reseñas</strong></td><td class="c">3 de 11</td><td>Pedir la reseña automáticamente tras la consulta. Es marketing barato y medible, y Doctoralia lo vende caro.</td></tr>
+      <tr><td class="num">10</td><td><strong>Lista de espera</strong></td><td class="c">1 de 11</td><td>Cuando alguien cancela, avisar automáticamente a quien esperaba lugar. Tu documento de diseño lo tiene marcado como versión 2. Es la función que <em>convierte una cancelación en ingreso</em>, y encaja perfecto con el hueco de motivos de cancelación de la agenda.</td></tr>
+      <tr><td class="num">11</td><td><strong>Módulos por especialidad</strong></td><td class="c">2 de 11</td><td>Odontograma, ortodoncia, estética facial. Es la puerta a mercados enteros: Dentalink existe solo por el odontograma. Tu plan lo tenía previsto y nunca se construyó.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="call reco">
+    <span class="lab">Si solo puedes hacer dos cosas</span>
+    <p>Haz la <strong>vista de semana</strong> y las <strong>notas con IA</strong>. La primera es
+      barata y te quita una objeción que aparece en cada demo. La segunda es cara pero es la única
+      de la lista que <strong>se paga sola</strong>: es un plan adicional de $400 a $1,000 al mes por
+      cliente, con el modelo por consumo medido de Huli para que el costo de la IA no se te coma el
+      margen. Todo lo demás puede esperar.</p>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="sec" id="s10">
+  <div class="sec-h">
+    <span class="num">10</span>
+    <h2>Lo que tienes y casi nadie</h2>
+    <p class="dek">Los argumentos reales de venta. Son más de los que parece.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="ficha">
+      <div class="ficha-h"><h3>Recetas de controlados completas</h3><span class="chip t">Nadie más lo anuncia</span></div>
+      <p>Grupos I a V, folio del recetario especial obligatorio, vigencia calculada automáticamente
+        (24 horas para el grupo I, 30 días para el resto), bitácora reforzada y verificación pública
+        por código QR sin exponer datos del paciente.</p>
+      <p><strong>Ningún competidor de los once anuncia esto.</strong> Para un psiquiatra, un
+        anestesiólogo, un algólogo o una clínica del dolor, esto no es una función: es la diferencia
+        entre poder usar el sistema o no.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>El libro clínico</h3><span class="chip t">Único en el grupo</span></div>
+      <p>El expediente presentado como un libro encuadernado, con portada, historia clínica viva y un
+        capítulo por consulta, imprimible en tres modos. Ningún competidor presenta el expediente
+        así. Es el tipo de detalle que en una demo se ve, se entiende y se recuerda.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>Calendarización de tratamientos</h3><span class="chip t">Solo Jane algo parecido</span></div>
+      <p>Un esquema de N sesiones que genera cotización y se convierte en citas reales, y que al
+        editarse conserva las citas ya agendadas en vez de destruirlas. Es exactamente el flujo de
+        medicina regenerativa, estética y rehabilitación — los mercados que mejor pagan.</p>
+    </div>
+    <div class="ficha">
+      <div class="ficha-h"><h3>Costos visibles u ocultos por clínica</h3><span class="chip t">No lo vi en nadie</span></div>
+      <p>Un interruptor que decide si los médicos ven los precios. Suena menor y no lo es: en muchas
+        clínicas el dueño <strong>no quiere</strong> que el médico vea los márgenes. Resuelve una
+        objeción de venta que los demás ni contemplan.</p>
+    </div>
+  </div>
+
+  <div class="ficha">
+    <div class="ficha-h"><h3>El motor comercial</h3><span class="chip t">Tu ventaja menos visible y más valiosa</span></div>
+    <p>Los once competidores venden <strong>tres escalones fijos</strong>: Esencial, Pro, Titanium.
+      Si un cliente quiere el Pro sin inventario, paga inventario igual. Si quiere Titanium solo por
+      el laboratorio, paga todo Titanium.</p>
+    <p>Maily360 tiene <strong>doce módulos que se encienden y apagan por clínica</strong>, con
+      dependencias verificadas, más límites configurables de sucursales, consultorios y usuarios, y
+      un panel de super-administrador para operarlo. Eso permite armar un paquete a la medida de cada
+      clínica <strong>sin tocar código y sin inventar un plan nuevo</strong>.</p>
+    <div class="call reco">
+      <span class="lab">Cómo convertirlo en dinero</span>
+      <p>Es la respuesta directa a la objeción más común del mercado: <em>«necesito el plan caro
+        pero solo por una función»</em>. Con Maily360 esa venta se cierra en el momento, con el
+        precio en medio de los dos escalones. Ninguno de los once puede hacer eso. Vale la pena que
+        sea un argumento explícito de venta, no un detalle técnico escondido.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="sec" id="s11">
+  <div class="sec-h">
+    <span class="num">11</span>
+    <h2>Recomendación de precios</h2>
+    <p class="dek">Una propuesta concreta, con la lógica detrás de cada cifra.</p>
+  </div>
+
+  <p>Punto de partida: Maily360 <strong>no es un producto de consultorio individual</strong>. Con
+    expediente NOM-004 completo, recetas COFEPRIS con controlados, cobranza, CFDI, cotizaciones,
+    calendarización y multi-sucursal, tu competencia es Medilink y Dentalink —que no publican
+    precio— no Hoppy a $999.</p>
+
+  <h3>Cuatro planes propuestos</h3>
+  <div class="planes">
+    <div class="plan">
+      <h4>Consultorio</h4>
+      <p class="p">$690</p>
+      <p class="u">MXN + IVA/mes · 1 médico</p>
+      <ul>
+        <li>Agenda y recordatorios</li>
+        <li>Expediente completo</li>
+        <li>Recetas con controlados</li>
+        <li>Notas y tareas</li>
+        <li>Recepción ilimitada</li>
+      </ul>
+    </div>
+    <div class="plan destacado">
+      <h4>Clínica · el ancla</h4>
+      <p class="p">$1,690</p>
+      <p class="u">MXN + IVA/mes · hasta 3 médicos</p>
+      <ul>
+        <li>Todo lo anterior</li>
+        <li>+ Servicios y precios</li>
+        <li>+ Cotizaciones</li>
+        <li>+ Cobranza y estado de cuenta</li>
+        <li>+ Gestión de personal</li>
+        <li>Médico extra: $390</li>
+      </ul>
+    </div>
+    <div class="plan">
+      <h4>Clínica Plus</h4>
+      <p class="p">$3,490</p>
+      <p class="u">MXN + IVA/mes · hasta 8 médicos</p>
+      <ul>
+        <li>Todo lo anterior</li>
+        <li>+ Facturación CFDI</li>
+        <li>+ Hasta 3 sucursales</li>
+        <li>+ Paquetes</li>
+        <li>+ Soporte prioritario</li>
+        <li>Médico extra: $290</li>
+      </ul>
+    </div>
+    <div class="plan">
+      <h4>A la medida</h4>
+      <p class="p">Cotización</p>
+      <p class="u">Sedes y médicos ilimitados</p>
+      <ul>
+        <li>Calendarización de tratamientos</li>
+        <li>Plan Integral de Longevidad</li>
+        <li>Sucursales ilimitadas</li>
+        <li>Módulos a elegir</li>
+        <li>Capacitación en sitio</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>De dónde sale cada número</h3>
+  <div class="kv">
+    <dt>$690 en Consultorio</dt><dd>Justo arriba de AstraMedik Básico ($699 es su precio, y tú das más módulos por menos). Por encima de Huli ($590) porque tu expediente es más completo, y muy por encima del piso de $199–$399, del que conviene alejarse: ese segmento compra por precio y se va por precio.</dd>
+    <dt>$1,690 en Clínica</dt><dd>Es el plan que quieres vender. Se posiciona <strong>entre</strong> AstraMedik Profesional ($1,199, sin cotizaciones ni multi-sede) y SaludTotal Premium ($1,499, con solo 5 usuarios contados uno por uno). Y queda claramente por debajo de Doctoralia, lo que te permite decir «cuesta menos que el directorio y opera toda tu clínica».</dd>
+    <dt>$3,490 en Clínica Plus</dt><dd>Cae en el piso del rango que los terceros ubican para clínica ($3,000–$15,000) y, sobre todo, <strong>le pone precio público a un segmento donde nadie lo publica</strong>. Ese solo hecho acorta el ciclo de venta: el cliente que compara ya tiene un número tuyo y ninguno de Medilink.</dd>
+    <dt>Médico extra a $390 y $290</dt><dd>Precio decreciente por volumen, como Cliniko. Recepción, caja y administración siempre gratis: es tu diferencia visible contra SaludTotal.</dd>
+  </div>
+
+  <h3>Las cuatro reglas del paquete</h3>
+  <ol>
+    <li><strong>Anual con dos meses gratis.</strong> Es el estándar del mercado (SaludTotal, Cliniko)
+      y mejora tu flujo de caja. Un 17 % de descuento que se explica solo.</li>
+    <li><strong>Sin permanencia y sin costo de alta.</strong> Todos los competidores regionales lo
+      pregonan; cobrarlo te sacaría de la comparación de entrada.</li>
+    <li><strong>Prueba de 14 días.</strong> SaludTotal da 7, MediSystem 14, los internacionales 30.
+      Catorce es suficiente para que un médico complete un ciclo de consultas reales.</li>
+    <li><strong>La IA, cuando exista, va aparte y por consumo.</strong> Nunca incluida ni ilimitada:
+      un paquete de 200 notas a $400–$500 MXN, siguiendo a Huli. La IA es el único módulo con costo
+      variable real, y tiene que cobrarse como tal.</li>
+  </ol>
+
+  <div class="call aviso">
+    <span class="lab">Dos cosas que revisar antes de publicar estos precios</span>
+    <p><strong>Tu costo por cliente.</strong> Esta propuesta parte del mercado, no de tu estructura
+      de costos. Hay que cruzarla con lo que cuesta operar cada clínica —servidores, WhatsApp, CFDI,
+      soporte— antes de comprometerla. El costo por conversación de WhatsApp en particular puede
+      comerse el margen del plan de entrada si no se topa: Huli lo cobra a $8 por conversación
+      extra, por algo será.</p>
+    <p><strong>El límite de médicos con agenda no existe todavía.</strong> El sistema hoy cuenta
+      usuarios totales. Toda esta estructura depende de poder distinguir un médico de una
+      recepcionista, y eso es un cambio en el motor de límites que hay que hacer antes.</p>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="sec" id="s12">
+  <div class="sec-h">
+    <span class="num">12</span>
+    <h2>Fuentes</h2>
+    <p class="dek">Todas consultadas el 26 de julio de 2026.</p>
+  </div>
+
+  <h4>Páginas oficiales de precios</h4>
+  <div class="fuentes">
+    <a href="https://saludtotal.mx/es/precios/">saludtotal.mx/es/precios</a>
+    <a href="https://www.hulipractice.com/mx/precios">hulipractice.com/mx/precios</a>
+    <a href="https://www.astramedik.com/precios">astramedik.com/precios</a>
+    <a href="https://hoppy.mx/">hoppy.mx</a>
+    <a href="https://pro.doctoralia.com.mx/precios/medicos-y-especialistas">pro.doctoralia.com.mx/precios/medicos-y-especialistas</a>
+    <a href="https://pro.doctoralia.com.mx/precios/clinicas">pro.doctoralia.com.mx/precios/clinicas</a>
+    <a href="https://www.softwaremedilink.com/planes">softwaremedilink.com/planes</a>
+    <a href="https://www.softwaredentalink.com/es/planes">softwaredentalink.com/es/planes</a>
+    <a href="https://agendapro.com/mx/planes">agendapro.com/mx/planes</a>
+    <a href="https://medisystem.mx/">medisystem.mx</a>
+    <a href="https://www.nubimed.com/planes-precios/">nubimed.com/planes-precios</a>
+    <a href="https://clinic-cloud.com/tarifas">clinic-cloud.com/tarifas</a>
+    <a href="https://www.cliniko.com/pricing/">cliniko.com/pricing</a>
+    <a href="https://www.simplepractice.com/pricing/">simplepractice.com/pricing</a>
+    <a href="https://jane.app/pricing">jane.app/pricing</a>
+    <a href="https://www.tebra.com/pricing/overview">tebra.com/pricing/overview</a>
+  </div>
+
+  <h4>Fuentes de terceros — usadas solo donde no hay precio oficial</h4>
+  <div class="fuentes">
+    <a href="https://saludtotal.mx/es/blog/cuanto-cuesta-expediente-clinico-electronico-mexico/">saludtotal.mx — comparativa de precios (competidor)</a>
+    <a href="https://mi-consultorio.com/blog/mejores-software-expediente-clinico-electronico-mexico-2026">mi-consultorio.com — comparativa 2026 (competidor)</a>
+    <a href="https://pabau.com/blog/drchrono-pricing/">pabau.com — precios de DrChrono (competidor)</a>
+    <a href="https://pabau.com/blog/tebra-pricing/">pabau.com — precios de Tebra (competidor)</a>
+    <a href="https://www.itqlick.com/athenahealth/pricing">itqlick.com — precios de athenahealth</a>
+    <a href="https://www.magokoro.mx/blog/software-clinicas-hospitales-mexico">magokoro.mx — guía de software para clínicas</a>
+  </div>
+
+  <div class="call aviso">
+    <span class="lab">Recuerda</span>
+    <p>Las seis fuentes de terceros son en su mayoría <strong>marketing de contenido de
+      competidores</strong>. Los números que salen de ahí —MediSystem, Consultorio.mx, DrChrono,
+      Tebra, athenahealth, Practice Fusion y los rangos de clínica y hospital— están marcados en el
+      documento y no deben usarse frente a un cliente sin verificarlos.</p>
+  </div>
+</section>
+
+<p class="foot">Tercer documento de la serie de Maily360, después del handoff de
+  <strong>agenda</strong> y <strong>expediente clínico</strong>. Los precios cambian: si vas a usar
+  esto en una negociación dentro de unos meses, conviene revalidar las cifras de los cinco o seis
+  sistemas que de verdad te importen. Este documento se puede actualizar conservando el mismo
+  enlace.</p>
+
+</main>
+</div>
