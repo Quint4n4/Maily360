@@ -8,7 +8,10 @@ Activa HTTPS, HSTS, cookies seguras y headers de seguridad.
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F401, F403
-from .base import AWS_S3_CUSTOM_DOMAIN, env
+
+# Import explícito de lo que este módulo lee o muta: sin él, ruff no puede saber
+# que estos nombres vienen del star import de arriba.
+from .base import AWS_S3_CUSTOM_DOMAIN, CACHES, CHANNEL_LAYERS, STORAGES, env
 
 # ---------------------------------------------------------------------------
 # Seguridad obligatoria en producción
@@ -29,6 +32,76 @@ SECRET_KEY: str = env("DJANGO_SECRET_KEY")
 # claro. En base.py queda el fallback a SECRET_KEY para entornos de desarrollo.
 # El dict base se importó vía `from .base import *`; solo sobreescribimos la clave de firma.
 SIMPLE_JWT["SIGNING_KEY"] = env("JWT_SIGNING_KEY")  # type: ignore[index]  # Sin default — falla ruidoso si falta.
+
+# ---------------------------------------------------------------------------
+# Variables de entorno obligatorias en producción
+# ---------------------------------------------------------------------------
+#
+# base.py le da a cada una un default pensado para desarrollo local. Ese default
+# es correcto en tu máquina y peligroso en Railway: la app arranca "sana" y falla
+# de formas que no dejan rastro. Aquí se les quita el default — si falta una, el
+# proceso NO arranca y te enteras en el despliegue, no tres semanas después.
+#
+# Las cuatro se validan JUNTAS a propósito. Con el patrón de una en una
+# (`env("X")` sin default, como DJANGO_SECRET_KEY arriba) el arranque muere en la
+# primera y hay que redesplegar para descubrir la siguiente: cuatro ciclos de
+# despliegue para enterarte de cuatro variables.
+#
+# Un valor vacío cuenta como ausente. En el panel de Railway `REDIS_URL=` se ve
+# puesta y no lo está.
+
+_OBLIGATORIAS_EN_PRODUCCION: dict[str, str] = {
+    "DJANGO_DEFAULT_FILE_STORAGE": (
+        "backend de almacenamiento de media. Sin él Django cae a FileSystemStorage "
+        "y los archivos subidos (logos, firmas, fotos de pacientes) se borran en "
+        "cada redespliegue del contenedor."
+    ),
+    "PRESCRIPTION_VERIFY_SECRET": (
+        "secreto HMAC del QR de verificación de recetas. Sin él se firma con "
+        "DJANGO_SECRET_KEY, y rotar la SECRET_KEY invalidaría de golpe el QR de "
+        "todas las recetas ya emitidas e impresas."
+    ),
+    "PRESCRIPTION_VERIFY_BASE_URL": (
+        "URL pública del frontend a la que apunta el QR. Sin ella el QR impreso "
+        "en la receta apunta a http://localhost:5173 y la farmacia no puede "
+        "verificar nada."
+    ),
+    "REDIS_URL": (
+        "caché y capa de canales. Sin él la caché apunta a localhost, cache.get() "
+        "devuelve None siempre y el límite de 5 intentos de login por minuto deja "
+        "pasar todas las peticiones sin dejar rastro."
+    ),
+}
+
+_faltantes: list[str] = [
+    f"  - {nombre}: {para_que}"
+    for nombre, para_que in _OBLIGATORIAS_EN_PRODUCCION.items()
+    if not env(nombre, default="").strip()
+]
+
+if _faltantes:
+    raise ImproperlyConfigured(
+        "Faltan variables de entorno obligatorias en producción "
+        f"({len(_faltantes)} de {len(_OBLIGATORIAS_EN_PRODUCCION)}):\n"
+        + "\n".join(_faltantes)
+        + "\n\nSi estás seguro de que las pusiste, revisa que el NOMBRE de la "
+        "variable no lleve espacios: el 2026-08-13 un 'SENTRY_DSN ' con un espacio "
+        "al final dejó Sentry apagado sin una sola señal."
+    )
+
+# Ya validadas: aquí solo se sobreescribe el default de desarrollo de base.py.
+# Los dicts se importaron arriba y se mutan en sitio, igual que SIMPLE_JWT y
+# LOGGING más abajo.
+STORAGES["default"]["BACKEND"] = env("DJANGO_DEFAULT_FILE_STORAGE")
+
+# Sin anotación de tipo: base.py ya las declaró como str y re-anotarlas aquí es
+# una redefinición para mypy.
+PRESCRIPTION_VERIFY_SECRET = env("PRESCRIPTION_VERIFY_SECRET")
+PRESCRIPTION_VERIFY_BASE_URL = env("PRESCRIPTION_VERIFY_BASE_URL")
+
+_redis_url: str = env("REDIS_URL")
+CACHES["default"]["LOCATION"] = _redis_url
+CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] = [_redis_url]
 
 # ---------------------------------------------------------------------------
 # HTTPS y HSTS
@@ -97,8 +170,8 @@ CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS")
 # ---------------------------------------------------------------------------
 # Almacenamiento de media
 # ---------------------------------------------------------------------------
-# El backend se define en base.py vía STORAGES["default"], que lee
-# DJANGO_DEFAULT_FILE_STORAGE del entorno (Cloudinary en este piloto; S3 o
+# El backend se fija arriba, en el bloque de variables obligatorias, leyendo
+# DJANGO_DEFAULT_FILE_STORAGE sin default (Cloudinary en este piloto; S3 o
 # FileSystemStorage según se configure). Django 5.1+ ya NO usa DEFAULT_FILE_STORAGE.
 
 # ---------------------------------------------------------------------------

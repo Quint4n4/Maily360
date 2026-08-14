@@ -24,7 +24,7 @@ Siempre igual, seis pasos:
 
 # M0 · Encender los instrumentos
 
-**Estado:** 🟡 en curso — M0.1 cerrado, M0.2 aplazado, M0.3 siguiente · **Riesgo:** ninguno
+**Estado:** 🟡 en curso — M0.1 y M0.3 cerrados, M0.2 aplazado, M0.4 siguiente · **Riesgo:** ninguno
 
 Va primero por una razón concreta: **sin esto no puedes saber si los arreglos siguientes
 funcionaron.** Y además Sentry te va a mostrar si el problema de M1 está ocurriendo en producción
@@ -141,6 +141,38 @@ Y de paso, dos cosas más que salieron de un incidente real (ver abajo):
 
 Si arranca sin la variable, el candado no quedó.
 
+### Cómo quedó · cerrado el 2026-08-13
+
+Rama `fix/arranque-variables-obligatorias`. Lo que cambió:
+
+- **`config/settings/production.py`** exige las cuatro sin default. Las valida **juntas**: un
+  servicio mal configurado las reporta todas en un solo arranque, en vez de una por ciclo de
+  despliegue. Un valor en blanco cuenta como ausente — en el panel de Railway `REDIS_URL=` se ve
+  puesta y no lo está.
+- **`entrypoint.sh`** ya no manda el error a `/dev/null`. Cada reintento imprime la última línea del
+  error real y el traceback completo sale al agotarse los intentos. Ese bloque levanta Django
+  entero, así que falla por cualquier cosa que impida arrancar; el mensaje fijo "PostgreSQL no
+  disponible" mandaba a buscar al lugar equivocado.
+- **`entrypoint.sh`** corre `check_db_role` al arrancar. Aborta **solo en producción**: el Postgres
+  de `docker-compose` y el de CI corren como superuser a propósito, y bloquear ahí rompería
+  `docker compose up` sin decir nada de producción. `REQUIRE_DB_ROLE_RLS=false` desactiva el candado
+  para no bloquear el rollback de `deploy-rol-app-nosuperuser.md`.
+- **`apps/core/tests/test_production_settings.py`** — 21 tests. Verificados por mutación:
+  revirtiendo `production.py`, 17 fallan.
+- **`docs/DEPLOY-RAILWAY.md`** — bloque de variables al día, con las cuatro, las dos de Sentry y
+  `MIGRATION_DATABASE_URL`.
+
+Prueba a mano hecha el 2026-08-13, cinco casos: falta una variable → no arranca y la nombra; las
+cuatro puestas → arranca; DSN de Sentry inválido → se ve `BadDsn` en vez de "PostgreSQL no
+disponible"; rol superuser en producción → no arranca; el mismo rol en desarrollo → advierte y sigue.
+
+**Dos pendientes que salieron de aquí, no bloquean el cierre:**
+
+1. `deploy-rol-app-nosuperuser.md:3` dice que el rol NOSUPERUSER no está aplicado en Railway.
+   `00-plan-de-ataque.md:22`, verificado contra el panel, dice que sí. Corregir esa línea.
+2. `.env.production.example` no tiene `MIGRATION_DATABASE_URL` y su `DATABASE_URL` apunta al rol
+   superuser. Copiarlo tal cual para un servicio nuevo ahora falla por el candado del rol.
+
 ### Prompt para la sesión
 
 ```
@@ -253,7 +285,7 @@ Y en paralelo, cuando quieras y sin prisa técnica: las **tres decisiones de neg
 |---|---|---|---|---|
 | M0.1 · Sentry (backend) | ✅ **cerrado 2026-08-13** — `ZeroDivisionError` recibido | — | sin código | 2026-08-13 |
 | M0.2 · Correo | ⏸️ aplazado — el sistema no manda ningún correo hoy | — | — | |
-| M0.3 · Variables obligatorias | 🟡 **siguiente** | — | — | |
+| M0.3 · Variables obligatorias | ✅ **cerrado 2026-08-13** — candado puesto, error real visible, rol verificado | `fix/arranque-variables-obligatorias` | [#2](https://github.com/Quint4n4/Maily360/pull/2) | 2026-08-13 |
 | M1 · La nota que no existe | ⬜ | — | — | |
 | M0.4 · Sentry del frontend (requiere `ARG` en el Dockerfile) | ⬜ | — | — | |
 | M2 | ⬜ | — | — | |
