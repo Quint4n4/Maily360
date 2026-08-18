@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "biblioteca-emanuel": {
+      "source": {
+        "source": "github",
+        "repo": "Quint4n4/biblioteca-skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "biblioteca-de-skills@biblioteca-emanuel": true
+  }
+}
