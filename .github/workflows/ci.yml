@@ -59,6 +59,14 @@ jobs:
 
       - name: Librerías de sistema para WeasyPrint (PDFs)
         run: |
+          # El runner de GitHub trae preinstalado el repositorio de Google Chrome, que este
+          # proyecto no usa (WeasyPrint necesita Pango y Cairo, no un navegador). `apt-get
+          # update` es todo-o-nada: si UN repositorio de la lista devuelve un hash malo, el
+          # comando entero sale con código 100 y el job muere ANTES de correr un solo test.
+          # Pasó el 2026-09-09 y tumbó el candado bloqueante sin que cambiara una línea de
+          # código. Se saca de la lista lo que no necesitamos; lo que sí necesitamos sigue
+          # pudiendo fallar de forma visible, que es lo correcto.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
