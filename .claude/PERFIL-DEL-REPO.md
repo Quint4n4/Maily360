@@ -179,7 +179,7 @@ mypy o ruff se apoya en un candado que no bloquea nada: dilo en la revisión.
 | `cumplimiento.monitoreo_errores` | `sentry` | `security-checklist` |
 | `cumplimiento.registros_inmutables` | `EvolutionNote`, `Addendum`, `VitalSignsRecord`, `Prescription`, `PrescriptionItem`, `AuditLog` | `security-checklist` |
 | `cumplimiento.estados_con_razon` | `Prescription → cancelled (cancellation_reason)`, `Appointment → cancelled (cancellation_reason)` | `security-checklist` |
-| `cumplimiento.consulta_legal` | `hecha <FALTA LA FECHA — no la inventes, pregúntasela a Emanuel>` | `security-checklist` |
+| `cumplimiento.consulta_legal` | `pendiente` | `security-checklist` |
 
 **`monitoreo_errores: sentry` cubre el backend únicamente.** El frontend no reporta a Sentry: el
 `Dockerfile` compila el bundle dentro de la imagen y no tiene ningún `ARG` para recibir
@@ -188,10 +188,17 @@ mypy o ruff se apoya en un candado que no bloquea nada: dilo en la revisión.
 **`AuditLog` es append-only en dos capas:** `save()`/`delete()` de instancia y el `QuerySet`
 (`apps/audit/models.py:21`), para que `.filter(...).update()` tampoco pueda tocarlo.
 
-⚠ **`consulta_legal` está incompleta.** Mientras diga `<FALTA LA FECHA>`, trátala como
-`pendiente`: `security-checklist` **no emite puntos legales**. En cuanto exista la fecha, lo que dijo
-el abogado se convierte en **puntos fijos de la skill** — no se le pregunta a un modelo, que inventa
-artículos con total aplomo.
+⚠ **`consulta_legal: pendiente` — confirmado por Emanuel el 2026-09-09.** No ha habido consulta
+con un abogado sobre datos de pacientes ni expediente clínico electrónico.
+
+Consecuencia inmediata: `security-checklist` **no emite ningún punto legal**. Eso es deliberado, no
+un hueco del checklist — un modelo cita artículos inexistentes con total aplomo y aquí nadie tiene
+cómo detectarlo. Lo que sí exige la skill son los mínimos técnicos: cifrado en tránsito, control de
+acceso por rol y bitácora de accesos.
+
+**Queda como riesgo abierto y con dueño: se resuelve antes de vender a la primera clínica**, no
+antes de escribir la siguiente línea de código. El día que exista la consulta, esta clave pasa a
+`hecha AAAA-MM-DD` y lo que dijo el abogado se convierte en **puntos fijos de la skill**.
 
 ---
 
