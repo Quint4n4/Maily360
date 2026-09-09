@@ -149,6 +149,27 @@ npm run test:e2e
 - **Dos cuentas de GitHub en esta máquina.** El repo es de `Quint4n4`; el keychain suele autenticar
   como `EmanuelRealGamboa`. Si un push falla por credenciales:
   `gh auth switch --user Quint4n4`.
+  **Son dos credenciales distintas y hay que entenderlo o se pierde media hora:**
+  - `git push` usa el **llavero de macOS** (`credential.helper = osxkeychain`).
+  - `gh pr create` usa el **keyring propio de `gh`**, con su cuenta activa.
+
+  `gh auth switch` cambia la de `gh` **y reescribe la del llavero** (verificado). El problema es que
+  **la cuenta activa vuelve sola a `EmanuelRealGamboa` entre invocaciones de shell**: un comando
+  puede terminar con `Quint4n4` activa y el siguiente arrancar con la otra.
+
+  Por eso el switch y el comando que lo necesita van en la **misma invocación de shell**. Y si aun
+  así falla, **verifica el usuario en vez de repetir el switch a ciegas** — cuando `gh` ya se cree en
+  la cuenta destino, el switch no reescribe nada:
+
+  ```bash
+  printf 'protocol=https\nhost=github.com\n\n' | git credential fill | grep '^username'
+  ```
+
+  Un fallo aquí se disfraza: `git` dice `Permission denied` y `gh` dice `must be a collaborator`,
+  que suena a permiso faltante del repo y no lo es.
+
+  Arreglo de fondo, pendiente: limpiar del llavero la credencial de `github.com` y correr
+  `gh auth setup-git` con `Quint4n4` activa.
 - **Locks colgados de git.** Si un comando falla con `index.lock` o `HEAD.lock`, revisa que no haya
   otro proceso git corriendo y bórralos (`.git/index.lock`, `.git/HEAD.lock`, ambos de 0 bytes).
 - **Nunca dos sesiones a la vez sobre este repo.** Se pisan los archivos. Paralelismo solo con
