@@ -2,8 +2,13 @@
 
 **Qué es:** SaaS multitenant de gestión de clínicas privadas en México. Muchas clínicas, mismo
 software, datos aislados. Migra de `app.maily.mx` (PHP heredado); es reemplazo, no coexistencia.
-**Cliente:** producto propio de Emanuel, a vender por suscripción · **Etapa:** producción temprana
-**Multitenant:** sí — lee `.claude/skills/multitenancy/` sin excepción.
+**Cliente:** producto propio de Emanuel, a vender por suscripción · **Etapa:** desarrollo
+**Multitenant:** sí — lee la skill `aislamiento-de-datos` del plugin `biblioteca-de-skills`, sin
+excepción. (La skill local `.claude/skills/multitenancy/` se archivó el 2026-08-18; ya no existe.)
+
+> **Los hechos del repo viven en `.claude/PERFIL-DEL-REPO.md`, no aquí.** Si los dos difieren,
+> gana el perfil. Este archivo se queda con la prosa: el porqué, las trampas heredadas y lo que
+> no se toca.
 
 **Fecha de adopción del modelo de trabajo: 2026-08-11.**
 Todo commit posterior a esa fecha se revisa con el agente `reviewer` en **modo gate**. El código
@@ -49,7 +54,7 @@ El proceso completo está en `MI CONTEXTO/FLUJO-DE-TRABAJO.md` del usuario. Resu
 | A1 · Consolidar documentación | `docs/01-analisis.md` + `docs/_legacy/` | ✅ 2026-08-11 |
 | A2 · Contrato inverso | `docs/02-contrato.md` + `docs/00-brechas.md` | ✅ 2026-08-12 — 15 apps, 167 brechas |
 | A3 · Auditoría | `docs/00-deuda.md` | ✅ 2026-08-13 — 27 causas raíz, 276 hallazgos |
-| A4 · Triage | prioridades confirmadas | ⏳ siguiente |
+| A4 · Triage | `docs/00-plan-de-ataque.md` + `docs/00-modulos.md` | ✅ 2026-08-13 — plan M0–M6 |
 
 ## Agentes
 
