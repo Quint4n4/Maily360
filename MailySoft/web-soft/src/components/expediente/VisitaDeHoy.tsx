@@ -2,9 +2,9 @@
  * VisitaDeHoy — tarjeta CENTRAL del expediente ("centrado en la visita").
  *
  * Reúne en un solo lugar, con pocos clics, los 3 pasos de una consulta:
- *   ① Enfermería — signos vitales de la cita (VisitaSignos).
- *   ② Evolución (SOAP) — abre el editor SOAP guiado paso a paso.
- *   ③ Receta — monta el MISMO formulario de NuevaReceta (reusado de RecetasTab).
+ *   · Enfermería — signos vitales de la cita (VisitaSignos).
+ *   · Evolución (SOAP) — abre el editor SOAP guiado paso a paso.
+ *   · Receta — monta el MISMO formulario de NuevaReceta (reusado de RecetasTab).
  *
  * Cada paso es un RENGLÓN: badge + título + acción a la derecha, con un resumen
  * corto debajo (los signos del día siguen visibles sin abrir nada). Solo un paso
@@ -65,35 +65,35 @@ export default function VisitaDeHoy({
     <div
       className="rounded-3xl overflow-hidden"
       style={{
-        background: 'rgba(255,255,255,0.72)',
+        background: 'var(--superficie)',
         backdropFilter: 'blur(14px)',
-        border: '1px solid rgba(255,255,255,0.7)',
+        border: '1px solid var(--borde)',
         boxShadow: '0 8px 28px rgba(60,42,12,0.12)',
       }}
     >
       {/* Encabezado de la visita */}
       <div
         className="px-4 py-3 flex items-center gap-3"
-        style={{ background: 'linear-gradient(135deg, rgba(201,162,39,0.16), rgba(255,255,255,0.4))', borderBottom: '1px solid rgba(201,162,39,0.2)' }}
+        style={{ background: 'var(--accion-tinte)', borderBottom: '1px solid var(--borde)' }}
       >
         <div
           className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}
+          style={{ background: 'var(--accion)' }}
         >
           <CalendarHeart className="w-[18px] h-[18px] text-white" />
         </div>
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700/70">Visita de hoy</p>
-          <h3 className="text-sm font-bold text-gray-900 leading-tight">{hoy}</h3>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-suave">Visita de hoy</p>
+          <h3 className="text-sm font-bold text-tinta leading-tight">{hoy}</h3>
         </div>
       </div>
 
       <div className="p-3 space-y-2">
         {/* ① Enfermería */}
         <PasoVisita
-          numero={1} titulo="Enfermería" icon={Activity} color="#0E7C7B" activo={abierto === 1}
+          titulo="Enfermería" icon={Activity} activo={abierto === 1}
           accion={puedeCapturarSignos && (
-            <AccionPaso color="#0E7C7B" icon={Plus} onClick={() => setAbierto(1)}>
+            <AccionPaso icon={Plus} onClick={() => setAbierto(1)}>
               {hayToma ? 'Nueva toma' : 'Capturar signos'}
             </AccionPaso>
           )}
@@ -103,14 +103,14 @@ export default function VisitaDeHoy({
 
         {/* ② Evolución (SOAP) */}
         <PasoVisita
-          numero={2} titulo="Evolución (SOAP)" icon={Stethoscope} color="#185FA5" activo={abierto === 2}
+          titulo="Evolución (SOAP)" icon={Stethoscope} activo={abierto === 2}
           accion={puedeEditarClinico
             ? (
-              <AccionPaso color="#185FA5" icon={Pencil} onClick={() => setAbierto(2)}>
+              <AccionPaso icon={Pencil} onClick={() => setAbierto(2)}>
                 Escribir evolución
               </AccionPaso>
             )
-            : <span className="text-xs text-gray-400 italic">Solo personal clínico</span>}
+            : <span className="text-xs text-suave italic">Solo personal clínico</span>}
         >
           {abierto === 2 && <EvolucionSoapStepper paciente={paciente} onClose={cerrar} />}
         </PasoVisita>
@@ -118,14 +118,14 @@ export default function VisitaDeHoy({
         {/* ③ Receta — solo si el plan la incluye */}
         {hayRecetas && (
         <PasoVisita
-          numero={3} titulo="Receta" icon={Pill} color="#9A7B1E" activo={abierto === 3}
+          titulo="Receta" icon={Pill} activo={abierto === 3}
           accion={puedeEmitirReceta
             ? (
-              <AccionPaso color="#9A7B1E" icon={Plus} onClick={() => setAbierto(3)}>
+              <AccionPaso icon={Plus} onClick={() => setAbierto(3)}>
                 Receta
               </AccionPaso>
             )
-            : <span className="text-xs text-gray-400 italic">Solo personal clínico</span>}
+            : <span className="text-xs text-suave italic">Solo personal clínico</span>}
         >
           {abierto === 3 && <NuevaReceta paciente={paciente} prefill={null} onClose={cerrar} />}
         </PasoVisita>
@@ -141,28 +141,20 @@ export default function VisitaDeHoy({
  * solo ocupa alto cuando realmente hay algo que mostrar.
  */
 function PasoVisita({
-  numero, titulo, icon: Icon, color, accion, activo, children,
+  titulo, icon: Icon, accion, activo, children,
 }: {
-  numero: number
   titulo: string
   icon: LucideIcon
-  color: string
   accion: React.ReactNode
   /** Paso abierto: su formulario ya está en pantalla y la acción sobra. */
   activo: boolean
   children: React.ReactNode
 }) {
   return (
-    <div className="rounded-2xl px-3.5 py-2.5" style={{ background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(201,162,39,0.15)' }}>
+    <div className="rounded-2xl px-3.5 py-2.5 bg-superficie-sutil border border-borde">
       <div className="flex items-center gap-2.5">
-        <span
-          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
-          style={{ background: color }}
-        >
-          {numero}
-        </span>
-        <Icon className="w-4 h-4 shrink-0" style={{ color }} />
-        <h4 className="text-sm font-semibold text-gray-800 flex-1 min-w-0 truncate">{titulo}</h4>
+        <Icon className="w-4 h-4 shrink-0 text-borde-fuerte" />
+        <h4 className="text-sm font-semibold text-cuerpo flex-1 min-w-0 truncate">{titulo}</h4>
         {!activo && accion}
       </div>
       {children && <div className="mt-2 pl-[34px]">{children}</div>}
@@ -172,9 +164,8 @@ function PasoVisita({
 
 /** Botón de acción de un paso (abre el formulario correspondiente). */
 function AccionPaso({
-  color, icon: Icon, onClick, children,
+  icon: Icon, onClick, children,
 }: {
-  color: string
   icon: LucideIcon
   onClick: () => void
   children: React.ReactNode
@@ -183,8 +174,7 @@ function AccionPaso({
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold transition-colors hover:brightness-110"
-      style={{ color }}
+      className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-accion hover:text-accion-hover transition-colors"
     >
       <Icon className="w-3.5 h-3.5" /> {children}
     </button>

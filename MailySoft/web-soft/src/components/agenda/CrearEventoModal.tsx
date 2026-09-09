@@ -768,7 +768,7 @@ export default function CrearEventoModal({
                                 const ocupado = ocupadoEn(c.date, c.time)
                                 return (
                                   <MiniCalendario key={i} value={c.date} min={dayKey}
-                                    accent={ocupado ? 'red' : frecuencia === 'custom' ? 'gold' : 'green'}
+                                    accent={ocupado ? 'peligro' : frecuencia === 'custom' ? 'accion' : 'exito'}
                                     onPick={date => editarOcc(i, { date })}
                                     onRemove={ocurrencias.length > 2 ? () => quitarOcc(i) : undefined}
                                     footer={

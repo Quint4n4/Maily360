@@ -196,7 +196,6 @@ export default function MiembroDetalleDrawer({ miembro, onClose, puedeEditar = f
             {/* Centro: avatar + nombre + rol + estado */}
             <div className="flex flex-col items-center text-center mb-6">
               <div className="relative mb-3">
-                <div className="absolute -inset-2 rounded-full" style={{ background: 'conic-gradient(from 120deg, #E8C766, #C9A227, #F5E6B8, #C9A227, #E8C766)', filter: 'blur(8px)', opacity: 0.5 }} />
                 <div className="relative">
                   <AvatarUploader
                     src={miembro.user.avatar}

@@ -2,6 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Variables CSS espejo de los tokens de `tailwind.config.js`.
+ *
+ * Existen para las llamadas que todavía usan estilo en línea (`style={{}}`).
+ * La app tenía el oro escrito a mano en 84 archivos; la migración es vista por
+ * vista, y mientras tanto un `style={{ color: 'var(--accion)' }}` ya queda
+ * enganchado al sistema. Al terminar la migración, lo ideal es que casi nadie
+ * las use: lo normal es la clase de Tailwind (`text-accion`, `bg-peligro-tinte`).
+ */
+:root {
+  /* Marca */
+  --marca:            #C9A227;
+  --marca-oscuro:     #A8871F;
+  --marca-tinte:      #FBF3D9;
+  --marca-borde:      #EBD9A0;
+
+  /* Acción */
+  --accion:           #1A3D63;
+  --accion-hover:     #0A1931;
+  --accion-tinte:     #EEF4FA;
+  --accion-borde:     #B3CFE5;
+
+  /* Texto */
+  --tinta:            #0A1931;
+  --cuerpo:           #22303F;
+  --suave:            #4A5567;
+  --tenue:            #5F6B7D;
+
+  /* Superficies */
+  --fondo:            #F6FAFD;
+  --superficie:       #FFFFFF;
+  --superficie-sutil: #F1F6FB;
+  --borde:            #E3EAF2;
+  --borde-fuerte:     #4A7FA7;
+
+  /* Estados */
+  --exito:            #1F6E47;
+  --exito-tinte:      #E7F6EE;
+  --exito-borde:      #B7E0C9;
+
+  --aviso:            #856404;   /* texto */
+  --aviso-icono:      #B8860B;   /* solo iconos */
+  --aviso-tinte:      #FEF6E0;
+  --aviso-borde:      #F0D48A;
+
+  --peligro:          #B3261E;
+  --peligro-hover:    #8C1D18;
+  --peligro-tinte:    #F9DEDC;
+  --peligro-borde:    #F1B9B4;
+}
+
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
@@ -13,160 +64,166 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 min-h-screen;
+    @apply bg-fondo text-cuerpo min-h-screen;
   }
 
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
     -webkit-box-shadow: 0 0 0 1000px #fff inset;
-    -webkit-text-fill-color: #111827;
+    -webkit-text-fill-color: #22303F;
     transition: background-color 5000s ease-in-out 0s;
   }
 }
 
 @layer components {
 
-  /* ─── Superficies glass (blanco esmerilado) ───────────────────────────── */
+  /* ─── Superficies ─────────────────────────────────────────────────────────
+     Antes eran "glass" (blanco translúcido + blur) porque flotaban sobre una
+     foto de seda dorada. Al quitar esa foto, el glass solo servía para restarle
+     contraste a los datos: ahora son superficies sólidas. Se conservan los
+     nombres de clase para no romper los archivos aún sin migrar. */
   .glass-card {
-    background:           rgba(255, 255, 255, 0.55);
-    backdrop-filter:      blur(22px) saturate(150%);
-    -webkit-backdrop-filter: blur(22px) saturate(150%);
-    border:               1px solid rgba(255, 255, 255, 0.65);
-    box-shadow:           0 8px 32px rgba(60, 42, 12, 0.10);
+    @apply bg-superficie border border-borde;
+    box-shadow: 0 1px 2px rgba(10,25,49,0.06), 0 4px 12px rgba(10,25,49,0.05);
   }
   .glass-topbar {
-    background:           rgba(255, 255, 255, 0.60);
-    backdrop-filter:      blur(24px) saturate(150%);
-    -webkit-backdrop-filter: blur(24px) saturate(150%);
-    border-bottom:        1px solid rgba(255, 255, 255, 0.55);
+    @apply bg-superficie border-b border-borde;
   }
 
-  /* ─── Botón login dorado (blanco → dorado al hover) ───────────────────── */
-  .btn-login {
-    background:   rgba(255, 255, 255, 0.92);
-    color:        #B8860B;
-    border:       1px solid rgba(255, 240, 200, 0.6);
-    box-shadow:   0 6px 20px rgba(40, 28, 8, 0.18);
-    transition:   all 0.25s ease;
-  }
-  .btn-login:hover:not(:disabled) {
-    background:   #C9A227;
-    color:        #ffffff;
-    border-color: #C9A227;
-    box-shadow:   0 10px 28px rgba(201, 162, 39, 0.50);
-    transform:    translateY(-1px);
-  }
-  .btn-login:active:not(:disabled) {
-    transform:    scale(0.99);
-  }
-
-  /* ─── Botón primario (teal) ───────────────────────────────────────────── */
+  /* ─── Botón primario ──────────────────────────────────────────────────────
+     Azul acción con texto blanco: 11.1:1. Antes era oro con blanco encima
+     (2.42:1), es decir, el elemento menos legible de toda la app. */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
-           bg-teal-600 hover:bg-teal-700 active:bg-teal-800
+           bg-accion hover:bg-accion-hover active:bg-accion-hover
            text-white font-semibold text-sm
            px-5 py-2.5 rounded-xl
            transition-all duration-150
            focus-visible:outline-none focus-visible:ring-2
-           focus-visible:ring-teal-500 focus-visible:ring-offset-2
+           focus-visible:ring-accion focus-visible:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
-           select-none cursor-pointer;
-    box-shadow: 0 4px 14px rgba(13,148,136,0.25);
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    box-shadow: 0 8px 24px rgba(13,148,136,0.30);
+           select-none cursor-pointer
+           shadow-accion hover:shadow-accion-lg;
   }
 
   /* ─── Botón secundario ────────────────────────────────────────────────── */
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2
-           bg-white hover:bg-gray-50 active:bg-gray-100
-           text-gray-700 font-medium text-sm
+           bg-superficie hover:bg-accion-tinte active:bg-accion-tinte
+           text-cuerpo font-medium text-sm
            px-5 py-2.5 rounded-xl
-           border border-gray-200 hover:border-gray-300
+           border border-borde hover:border-accion-borde
            shadow-sm transition-all duration-150
            focus-visible:outline-none focus-visible:ring-2
-           focus-visible:ring-teal-500 focus-visible:ring-offset-2
+           focus-visible:ring-accion focus-visible:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
            select-none cursor-pointer;
   }
 
-  /* ─── Botón de peligro (acciones destructivas) ────────────────────────── */
+  /* ─── Botón de peligro ────────────────────────────────────────────────────
+     Relleno rojo = punto de no retorno. Se reserva para el "Sí, eliminar" que
+     va DENTRO del diálogo de confirmación. El botón que ABRE ese diálogo va en
+     `.btn-peligro-texto`: si el disparador ya viene gritando, el usuario llega
+     desensibilizado justo donde necesitas que se detenga a leer. */
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2
-           bg-red-600 hover:bg-red-700 active:bg-red-800
+           bg-peligro hover:bg-peligro-hover active:bg-peligro-hover
            text-white font-semibold text-sm
            px-5 py-2.5 rounded-xl
            transition-all duration-150
            focus-visible:outline-none focus-visible:ring-2
-           focus-visible:ring-red-500 focus-visible:ring-offset-2
+           focus-visible:ring-peligro focus-visible:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
            select-none cursor-pointer;
-    box-shadow: 0 4px 14px rgba(220,38,38,0.25);
+    box-shadow: 0 4px 14px rgba(179,38,30,0.22);
   }
   .btn-danger:hover:not(:disabled) {
-    box-shadow: 0 8px 24px rgba(220,38,38,0.30);
+    box-shadow: 0 8px 24px rgba(179,38,30,0.28);
+  }
+
+  /* Disparador de una acción destructiva (abre la confirmación, no la ejecuta). */
+  .btn-peligro-texto {
+    @apply inline-flex items-center justify-center gap-2
+           text-peligro hover:bg-peligro-tinte
+           font-medium text-sm px-3 py-2 rounded-lg
+           transition-all duration-150 cursor-pointer
+           focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-peligro focus-visible:ring-offset-2;
   }
 
   /* ─── Botón ghost ─────────────────────────────────────────────────────── */
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2
-           text-gray-500 hover:text-gray-700 hover:bg-gray-100
+           text-suave hover:text-tinta hover:bg-accion-tinte
            font-medium text-sm px-3 py-2 rounded-lg
            transition-all duration-150 cursor-pointer;
   }
 
-  /* ─── Input ───────────────────────────────────────────────────────────── */
+  /* ─── Input ───────────────────────────────────────────────────────────────
+     El foco pasa de ámbar a azul acción: el ámbar es el color de AVISO, y un
+     campo enfocado no es una advertencia. */
   .input {
-    @apply w-full bg-white border border-gray-200 text-gray-900
-           placeholder-gray-400 text-base sm:text-sm
+    @apply w-full bg-superficie border border-borde text-cuerpo
+           placeholder-tenue text-base sm:text-sm
            px-3.5 py-2.5 rounded-xl
            transition-all duration-150
-           focus:outline-none focus:ring-2 focus:ring-amber-500/30
-           focus:border-amber-500
-           disabled:bg-gray-50 disabled:text-gray-400
+           focus:outline-none focus:ring-2 focus:ring-accion/30
+           focus:border-accion
+           disabled:bg-superficie-sutil disabled:text-tenue
            disabled:cursor-not-allowed;
   }
 
   .input-error {
-    @apply border-red-400 focus:ring-red-400/30 focus:border-red-400;
+    @apply border-peligro focus:ring-peligro/30 focus:border-peligro;
   }
 
   /* ─── Label ───────────────────────────────────────────────────────────── */
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1.5;
+    @apply block text-sm font-medium text-suave mb-1.5;
   }
 
   /* ─── Card ────────────────────────────────────────────────────────────── */
   .card {
-    @apply bg-white rounded-2xl border border-gray-100;
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.06);
+    @apply bg-superficie rounded-2xl border border-borde shadow-card;
   }
 
-  /* ─── Badges ──────────────────────────────────────────────────────────── */
+  /* ─── Badges ──────────────────────────────────────────────────────────────
+     Un estado nunca viaja solo por el color: alrededor de 8% de los hombres no
+     distingue bien rojo de verde. Cada badge debe llevar además ICONO y
+     PALABRA. El color es el tercer canal, no el único. */
   .badge {
     @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
-  .badge-success { @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200; }
-  .badge-warning { @apply bg-amber-50   text-amber-700   ring-1 ring-amber-200;   }
-  .badge-danger  { @apply bg-red-50     text-red-700     ring-1 ring-red-200;     }
-  .badge-info    { @apply bg-blue-50    text-blue-700    ring-1 ring-blue-200;    }
-  .badge-primary { @apply bg-teal-50    text-teal-700    ring-1 ring-teal-200;    }
-  .badge-neutral { @apply bg-gray-100   text-gray-600    ring-1 ring-gray-200;    }
+  .badge-success { @apply bg-exito-tinte   text-exito   ring-1 ring-exito-borde;   }
+  .badge-warning { @apply bg-aviso-tinte   text-aviso   ring-1 ring-aviso-borde;   }
+  .badge-danger  { @apply bg-peligro-tinte text-peligro ring-1 ring-peligro-borde; }
+  .badge-info    { @apply bg-accion-tinte  text-accion  ring-1 ring-accion-borde;  }
+  .badge-primary { @apply bg-accion-tinte  text-accion  ring-1 ring-accion-borde;  }
+  /* Distinción VIP: chip OSCURO, no dorado.
+     El oro dejó de ser el color de marca al llegar el logotipo oficial, y VIP
+     tampoco puede usar un color semántico (verde/ámbar/rojo están reservados
+     para estados). Un chip en tinta se lee como distinción, es inconfundible y
+     no le roba color al logo. */
+  .badge-vip     { @apply bg-tinta text-white ring-1 ring-tinta; }
+  .badge-neutral { @apply bg-superficie-sutil text-suave ring-1 ring-borde;        }
 
   /* ─── Barra de navegación inferior (solo móvil) ───────────────────────── */
   .bottom-nav {
-    background:               rgba(255, 255, 255, 0.85);
-    backdrop-filter:          blur(24px) saturate(150%);
-    -webkit-backdrop-filter:  blur(24px) saturate(150%);
-    border-top:               1px solid rgba(201, 162, 39, 0.18);
-    box-shadow:               0 -4px 24px rgba(60, 42, 12, 0.10);
+    @apply bg-superficie border-t border-borde;
+    box-shadow: 0 -4px 24px rgba(10, 25, 49, 0.08);
   }
 }
 
 @layer utilities {
+  /* Lo que solo aparece al pasar el cursor: acciones rápidas de un paciente,
+     el nombre de las secciones del expediente… En un dispositivo TÁCTIL no
+     existe el hover, así que ahí se muestra siempre o sería inalcanzable. */
+  @media (hover: none) {
+    .acciones-hover,
+    .solo-hover { opacity: 1 !important; }
+  }
+
   /* Oculta la barra de scroll pero mantiene el desplazamiento (carruseles, tablas). */
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

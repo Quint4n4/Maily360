@@ -71,9 +71,9 @@ const CARD_STYLE = {
 } as const
 
 const AVISO_META: Record<AvisoTipo, { titulo: string; Icon: typeof Info; color: string; bg: string }> = {
-  info: { titulo: 'Aviso', Icon: Info, color: '#C9A227', bg: 'rgba(201,162,39,0.12)' },
-  exito: { titulo: 'Listo', Icon: CheckCircle2, color: '#0d9488', bg: 'rgba(13,148,136,0.12)' },
-  error: { titulo: 'Error', Icon: AlertCircle, color: '#dc2626', bg: 'rgba(220,38,38,0.10)' },
+  info: { titulo: 'Aviso', Icon: Info, color: 'var(--accion)', bg: 'var(--accion-tinte)' },
+  exito: { titulo: 'Listo', Icon: CheckCircle2, color: 'var(--exito)', bg: 'var(--exito-tinte)' },
+  error: { titulo: 'Error', Icon: AlertCircle, color: 'var(--peligro)', bg: 'var(--peligro-tinte)' },
 }
 
 export function DialogProvider({ children }: { children: ReactNode }) {
@@ -160,22 +160,22 @@ function ConfirmDialog({
               <div
                 className="shrink-0 grid place-items-center w-11 h-11 rounded-2xl"
                 style={{
-                  color: peligro ? '#dc2626' : '#C9A227',
-                  background: peligro ? 'rgba(220,38,38,0.10)' : 'rgba(201,162,39,0.12)',
+                  color: peligro ? 'var(--peligro)' : 'var(--accion)',
+                  background: peligro ? 'var(--peligro-tinte)' : 'var(--accion-tinte)',
                 }}
               >
                 {peligro ? <AlertTriangle className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-gray-800">{state.titulo ?? 'Confirmar'}</h3>
-                <div className="mt-1 text-sm text-gray-600 whitespace-pre-line">{state.mensaje}</div>
+                <h3 className="text-lg font-semibold text-tinta">{state.titulo ?? 'Confirmar'}</h3>
+                <div className="mt-1 text-sm text-cuerpo whitespace-pre-line">{state.mensaje}</div>
               </div>
               <button
                 onClick={() => onClose(false)}
                 className="p-1.5 -mt-1 -mr-1 rounded-lg hover:bg-black/5 shrink-0"
                 aria-label="Cerrar"
               >
-                <X className="w-5 h-5 text-gray-400" />
+                <X className="w-5 h-5 text-suave" />
               </button>
             </div>
 
@@ -238,15 +238,15 @@ function AvisoDialog({
                 <Icon className="w-6 h-6" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-gray-800">{state.titulo ?? meta.titulo}</h3>
-                <div className="mt-1 text-sm text-gray-600 whitespace-pre-line break-words">{state.mensaje}</div>
+                <h3 className="text-lg font-semibold text-tinta">{state.titulo ?? meta.titulo}</h3>
+                <div className="mt-1 text-sm text-cuerpo whitespace-pre-line break-words">{state.mensaje}</div>
               </div>
               <button
                 onClick={onClose}
                 className="p-1.5 -mt-1 -mr-1 rounded-lg hover:bg-black/5 shrink-0"
                 aria-label="Cerrar"
               >
-                <X className="w-5 h-5 text-gray-400" />
+                <X className="w-5 h-5 text-suave" />
               </button>
             </div>
 

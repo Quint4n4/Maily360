@@ -57,9 +57,9 @@ export default function PaquetesPage() {
 
   return (
     <div className="min-h-screen relative">
-      <div className="fixed inset-0 -z-10" style={{ background: 'linear-gradient(135deg, #b89a52 0%, #d8c690 45%, #f1e8cf 100%)' }} />
-      <div className="fixed inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url('/fondo-agenda.jpg')" }} />
-      <div className="fixed inset-0 -z-10" style={{ background: 'rgba(255,255,255,0.20)' }} />
+      {/* Fondo plano: la foto de seda dorada quedaba DEBAJO de los datos
+          (tablas, tarjetas, la reja de la agenda) y les restaba legibilidad. */}
+      <div className="fixed inset-0 -z-10 bg-fondo" />
       <Topbar active="paquetes" />
 
       <main className="max-w-4xl mx-auto px-4 md:px-6 py-6 space-y-5">

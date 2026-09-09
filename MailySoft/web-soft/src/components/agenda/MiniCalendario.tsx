@@ -14,21 +14,22 @@ interface Props {
   onRemove?: () => void
   /** Día mínimo seleccionable ('yyyy-mm-dd'). Los anteriores se ven apagados. */
   min?: string
-  /** Acento del día elegido: 'gold' (editable) | 'green' (preview) | 'red' (ocupado). */
-  accent?: 'gold' | 'green' | 'red'
+  /** Acento del día elegido: 'accion' (editable) | 'exito' (preview) | 'peligro' (ocupado). */
+  accent?: 'accion' | 'exito' | 'peligro'
   /** Contenido bajo el calendario (p. ej. la hora o un input de hora). */
   footer?: ReactNode
 }
 
 /** Calendario mensual chiquito: navega meses y (opcional) elige un día. */
-export default function MiniCalendario({ value, onPick, onRemove, min, accent = 'gold', footer }: Props) {
+export default function MiniCalendario({ value, onPick, onRemove, min, accent = 'accion', footer }: Props) {
   const [cursor, setCursor] = useState<Date>(() => (value ? fromDayKey(value) : new Date()))
 
   const y = cursor.getFullYear()
   const mIdx = cursor.getMonth()
   const startDow = (new Date(y, mIdx, 1).getDay() + 6) % 7 // Lunes = 0
   const dias = new Date(y, mIdx + 1, 0).getDate()
-  const selBg = accent === 'green' ? '#3B6D11' : accent === 'red' ? '#C0392B' : '#C9A227'
+  // El día elegido lleva texto blanco encima: el oro daba 2.42:1 y era ilegible.
+  const selBg = accent === 'exito' ? 'var(--exito)' : accent === 'peligro' ? 'var(--peligro)' : 'var(--accion)'
 
   const celdas: (number | null)[] = []
   for (let i = 0; i < startDow; i++) celdas.push(null)

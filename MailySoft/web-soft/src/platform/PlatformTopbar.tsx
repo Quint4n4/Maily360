@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import MarcaMaily from '../components/MarcaMaily'
 import { useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Building2, CreditCard, UserCog, Activity, ScrollText, ChevronDown, LogOut, User, Check, Stethoscope } from 'lucide-react'
 import { usePlatformRole } from './PlatformRoleContext'
@@ -48,11 +49,10 @@ export default function PlatformTopbar({ active = 'dashboard' }: Props) {
     <header className="glass-topbar sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 h-16">
       <div className="flex items-center gap-4 md:gap-8">
         <div className="flex items-center gap-2">
-          <span className="text-xl font-bold tracking-tight" style={{ color: '#2A241B' }}>
-            maily<span style={{ color: '#C9A227' }}>360</span>
-          </span>
-          <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full"
-            style={{ background: 'rgba(201,162,39,0.16)', color: '#B8860B' }}>
+          <MarcaMaily variante="horizontal" className="h-8" />
+          {/* Distintivo del panel interno de Maily: en azul acción, no en oro —
+              el oro dejó de ser el color de marca al llegar el logo oficial. */}
+          <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-accion-tinte text-accion">
             Plataforma
           </span>
         </div>

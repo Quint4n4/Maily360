@@ -23,13 +23,13 @@ import type { Notification, NotificationKind } from '../types/notificacion'
 
 /** Icono + colores por tipo de notificación. */
 const META: Record<NotificationKind, { icon: LucideIcon; color: string; bg: string }> = {
-  meeting: { icon: CalendarClock, color: '#3A6EA5', bg: 'rgba(58,110,165,0.12)' },
-  team_note: { icon: MessageSquare, color: '#2E7D5B', bg: 'rgba(46,125,91,0.12)' },
-  role_note: { icon: Send, color: '#B8860B', bg: 'rgba(201,162,39,0.16)' },
-  broadcast: { icon: Megaphone, color: '#B45309', bg: 'rgba(180,83,9,0.12)' },
-  nursing_instruction: { icon: ClipboardList, color: '#0E7C7B', bg: 'rgba(14,124,123,0.12)' },
-  credential_review: { icon: ShieldAlert, color: '#9A7B1E', bg: 'rgba(201,162,39,0.16)' },
-  credential_result: { icon: BadgeCheck, color: '#2E7D5B', bg: 'rgba(46,125,91,0.12)' },
+  meeting: { icon: CalendarClock, color: 'var(--borde-fuerte)', bg: 'var(--superficie-sutil)' },
+  team_note: { icon: MessageSquare, color: 'var(--borde-fuerte)', bg: 'var(--superficie-sutil)' },
+  role_note: { icon: Send, color: 'var(--borde-fuerte)', bg: 'var(--superficie-sutil)' },
+  broadcast: { icon: Megaphone, color: 'var(--borde-fuerte)', bg: 'var(--superficie-sutil)' },
+  nursing_instruction: { icon: ClipboardList, color: 'var(--borde-fuerte)', bg: 'var(--superficie-sutil)' },
+  credential_review: { icon: ShieldAlert, color: 'var(--borde-fuerte)', bg: 'var(--superficie-sutil)' },
+  credential_result: { icon: BadgeCheck, color: 'var(--borde-fuerte)', bg: 'var(--superficie-sutil)' },
 }
 
 /** Tiempo relativo legible ("hace 5 min"). */
@@ -82,11 +82,11 @@ export default function CampanaNotificaciones() {
         aria-label="Notificaciones"
         title="Notificaciones"
       >
-        <Bell className="w-5 h-5" style={{ color: noLeidas > 0 ? '#C9A227' : '#7A756C' }} />
+        <Bell className="w-5 h-5" style={{ color: noLeidas > 0 ? 'var(--accion)' : 'var(--suave)' }} />
         {noLeidas > 0 && (
           <span
             className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-            style={{ background: '#C0392B' }}
+            style={{ background: 'var(--accion)' }}
           >
             {noLeidas > 9 ? '9+' : noLeidas}
           </span>
@@ -139,7 +139,7 @@ export default function CampanaNotificaciones() {
                       className="w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-amber-50/60"
                       style={{
                         borderTop: i > 0 ? '1px solid rgba(0,0,0,0.05)' : 'none',
-                        background: n.is_read ? 'transparent' : 'rgba(201,162,39,0.06)',
+                        background: n.is_read ? 'transparent' : 'var(--accion-tinte)',
                       }}
                     >
                       <span
@@ -165,7 +165,7 @@ export default function CampanaNotificaciones() {
                       {!n.is_read && (
                         <span
                           className="mt-1.5 w-2 h-2 rounded-full shrink-0"
-                          style={{ background: '#C9A227' }}
+                          style={{ background: 'var(--accion)' }}
                         />
                       )}
                     </button>

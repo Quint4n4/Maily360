@@ -1,6 +1,9 @@
 /**
  * Primitivas visuales y constantes compartidas por las pestañas del expediente.
- * Reusa el estilo glass dorado del resto de la app.
+ *
+ * Usa los tokens del sistema (ver `tailwind.config.js`). Regla que aplica aquí:
+ * el icono de una sección identifica una CATEGORÍA ("Datos generales", "Signos"),
+ * así que va en un tono neutro. El color queda reservado para ESTADOS.
  */
 
 import type { ReactNode } from 'react'
@@ -17,7 +20,7 @@ import type { MedicationFormValue } from '../../types/recetas'
 import type { BloodType, Education, MaritalStatus } from '../../types/paciente'
 import type { AppointmentStatus } from '../../types/agenda'
 
-export const SECCION_LABEL = 'text-xs font-semibold uppercase tracking-wide text-amber-700/80 mb-3'
+export const SECCION_LABEL = 'text-xs font-semibold uppercase tracking-wide text-suave mb-3'
 
 /** Card de sección glass reutilizable. */
 export function Card({
@@ -34,19 +37,11 @@ export function Card({
   action?: ReactNode
 }) {
   return (
-    <div
-      className={`rounded-2xl p-5 ${className}`}
-      style={{
-        background: 'rgba(255,255,255,0.72)',
-        backdropFilter: 'blur(14px)',
-        border: '1px solid rgba(255,255,255,0.7)',
-        boxShadow: '0 6px 20px rgba(60,42,12,0.10)',
-      }}
-    >
+    <div className={`rounded-2xl p-5 bg-superficie border border-borde shadow-card ${className}`}>
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4" style={{ color: '#C9A227' }} />
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700/80">{title}</h4>
+          <Icon className="w-4 h-4 text-borde-fuerte" />
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-suave">{title}</h4>
         </div>
         {action}
       </div>
@@ -58,9 +53,9 @@ export function Card({
 /** Una fila etiqueta–valor. */
 export function Linea({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-amber-900/5 last:border-0">
-      <span className="text-xs text-gray-400">{label}</span>
-      <span className="text-sm text-gray-800 font-medium text-right truncate ml-2">{value || '—'}</span>
+    <div className="flex items-center justify-between py-1.5 border-b border-borde last:border-0">
+      <span className="text-xs text-suave">{label}</span>
+      <span className="text-sm text-cuerpo font-medium text-right truncate ml-2">{value || '—'}</span>
     </div>
   )
 }
@@ -68,7 +63,7 @@ export function Linea({ label, value }: { label: string; value: string }) {
 /** Spinner de carga centrado. */
 export function Cargando({ texto = 'Cargando…' }: { texto?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-10 text-amber-700 text-sm">
+    <div className="flex items-center justify-center gap-2 py-10 text-accion text-sm">
       <Loader2 className="w-5 h-5 animate-spin" /> {texto}
     </div>
   )
@@ -76,19 +71,16 @@ export function Cargando({ texto = 'Cargando…' }: { texto?: string }) {
 
 /** Estado vacío de una lista. */
 export function Vacio({ texto }: { texto: string }) {
-  return <p className="text-sm text-gray-400 italic py-8 text-center">{texto}</p>
+  return <p className="text-sm text-suave italic py-8 text-center">{texto}</p>
 }
 
 /** Alerta de errores (lista de mensajes). */
 export function ErroresAlerta({ errores }: { errores: string[] }) {
   if (errores.length === 0) return null
   return (
-    <div
-      className="flex items-start gap-2.5 rounded-xl px-4 py-3"
-      style={{ background: 'rgba(190,40,40,0.10)', border: '1px solid rgba(190,40,40,0.25)' }}
-    >
-      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
-      <ul className="text-xs text-red-700 space-y-0.5 list-disc list-inside">
+    <div className="flex items-start gap-2.5 rounded-xl px-4 py-3 bg-peligro-tinte border border-peligro-borde">
+      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-peligro" />
+      <ul className="text-xs text-peligro space-y-0.5 list-disc list-inside">
         {errores.map((e, i) => (
           <li key={i}>{e}</li>
         ))}
@@ -102,12 +94,23 @@ export function ErroresAlerta({ errores }: { errores: string[] }) {
 /** Estados en los que una cita ya no cuenta como "próxima". */
 export const ESTADOS_CITA_INACTIVOS = new Set<AppointmentStatus>(['attended', 'cancelled', 'no_show'])
 
-/** Estilo del chip de estado de una cita. */
+/**
+ * Estilo del chip de estado de una cita.
+ *
+ * Los cuatro estados usan la escala semántica y NADA más: atendida/confirmada
+ * comparten el verde de éxito, cancelada/no asistió el rojo de peligro, y
+ * pendiente el ámbar de aviso. Antes cada uno traía su propio hex suelto y
+ * "cancelada" salía en #C0392B, que sobre su propio tinte daba 3.8:1.
+ *
+ * El color es el TERCER canal: quien pinte este chip debe acompañarlo del
+ * texto del estado (y a ser posible un icono), porque ~8% de los hombres no
+ * distingue bien rojo de verde.
+ */
 export function estadoCitaChip(s: AppointmentStatus): { bg: string; color: string } {
-  if (s === 'attended') return { bg: '#DCF3E6', color: '#1F6E47' }
-  if (s === 'confirmed' || s === 'arrived' || s === 'in_progress') return { bg: '#E7F6EE', color: '#2E7D5B' }
-  if (s === 'cancelled' || s === 'no_show') return { bg: '#FDE8E8', color: '#C0392B' }
-  return { bg: '#FBF1D9', color: '#9A7B1E' }
+  if (s === 'attended') return { bg: 'var(--exito-tinte)', color: 'var(--exito)' }
+  if (s === 'confirmed' || s === 'arrived' || s === 'in_progress') return { bg: 'var(--exito-tinte)', color: 'var(--exito)' }
+  if (s === 'cancelled' || s === 'no_show') return { bg: 'var(--peligro-tinte)', color: 'var(--peligro)' }
+  return { bg: 'var(--aviso-tinte)', color: 'var(--aviso)' }
 }
 
 // ── Constantes de choices/labels (reflejan los choices del backend) ──────────
@@ -202,10 +205,10 @@ export const EXPLORACION_EVOLUCION_OPTIONS: {
   label: string
   color: string
 }[] = [
-  { value: 'no_evaluado', label: 'No evaluado', color: '#9aa0a6' },
-  { value: 'normal', label: 'Normal', color: '#2E7D5B' },
-  { value: 'observacion', label: 'En observación', color: '#9A7B1E' },
-  { value: 'alterado', label: 'Alterado', color: '#C0392B' },
+  { value: 'no_evaluado', label: 'No evaluado', color: 'var(--tenue)' },
+  { value: 'normal', label: 'Normal', color: 'var(--exito)' },
+  { value: 'observacion', label: 'En observación', color: 'var(--aviso)' },
+  { value: 'alterado', label: 'Alterado', color: 'var(--peligro)' },
 ]
 
 /** Etiquetas legibles de los sistemas/aparatos. */
