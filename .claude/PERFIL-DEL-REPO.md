@@ -1,10 +1,12 @@
 # PERFIL DEL REPO
 
-> Copia este archivo a `.claude/PERFIL-DEL-REPO.md` en la raíz del repo y rellena **todas** las
-> claves. Es el único lugar donde vive lo local: ninguna skill de la biblioteca menciona una ruta,
-> un nombre de librería, un nombre de campo ni un nombre de app — todas las piden aquí.
+> El único lugar donde vive lo local: ninguna skill de la biblioteca menciona una ruta, un nombre de
+> librería, un nombre de campo ni un nombre de app — todas las piden aquí.
 >
-> Repo: `<nombre>` · Última actualización: `<AAAA-MM-DD>`
+> Repo: `Maily360` (proyecto en `MailySoft/`) · Última actualización: `2026-09-09`
+>
+> **Todas las rutas de este archivo son relativas a la raíz del repo (`Maily360/`), no a
+> `MailySoft/`.** Confundir los dos niveles ya costó una sesión de trabajo; ver `CLAUDE.md`.
 
 ---
 
@@ -28,129 +30,168 @@ Y la que evita el problema que este archivo viene a resolver:
 
 ## 1 · Proyecto
 
-| Clave | Valor | Valores permitidos | La consume |
-|---|---|---|---|
-| `proyecto.nombre` | | texto | todas |
-| `proyecto.etapa` | | `desarrollo` · `produccion-temprana` · `produccion` | `db-schema`, `protocolo-de-revision` |
-| `proyecto.fecha_adopcion` | | `AAAA-MM-DD` · `ninguna` | `protocolo-de-revision` (modo auditoría) |
-| `proyecto.raiz_backend` | | ruta relativa · `ninguno` | `django-backend`, `security-checklist` |
-| `proyecto.raiz_frontend` | | lista de rutas · `ninguno` | `react-frontend`, `auditoria-frontend`, `security-checklist` |
-| `proyecto.contrato` | | ruta de `02-contrato.md` · `ninguno` | todas |
+| Clave | Valor | La consume |
+|---|---|---|
+| `proyecto.nombre` | `Maily360 / MailySoft` | todas |
+| `proyecto.etapa` | `desarrollo` | `db-schema`, `protocolo-de-revision` |
+| `proyecto.fecha_adopcion` | `2026-08-11` | `protocolo-de-revision` (modo auditoría) |
+| `proyecto.raiz_backend` | `MailySoft/backend` | `django-backend`, `security-checklist` |
+| `proyecto.raiz_frontend` | `MailySoft/web-soft` | `react-frontend`, `auditoria-frontend`, `security-checklist` |
+| `proyecto.contrato` | `MailySoft/docs/02-contrato.md` | todas |
 
-`proyecto.etapa` no es decorativa: en `produccion` un cambio de esquema arrastra datos reales y
-`db-schema` exige decir qué pasa con lo que ya existe antes de proponerlo. En `desarrollo` no.
+`MailySoft/web-platform/` está vacío (solo `.gitkeep`) y no cuenta como raíz de frontend.
+
+**`etapa: desarrollo` — confirmado por Emanuel el 2026-09-09.** El despliegue de Railway existe pero
+**no tiene datos reales de ninguna clínica**: es semilla y demo. Consecuencias, y no son menores:
+
+- `db-schema` **no** exige plan de migración de datos: la base se puede borrar y recrear.
+- El `CLAUDE.md` decía `producción temprana` y el tablero de módulos habla de «no tumbar tu
+  producción». **Los dos están desactualizados**, no este archivo.
+- Lo único que se rompe al recrear la base son las **demos comerciales**. Si hay una agendada,
+  se avisa antes; no es un dato de paciente, es una venta.
+
+**Esta clave cambia a `produccion-temprana` el día que entre la primera clínica de pago**, y ese
+día M1, M2, M4 y M5 dejan de ser deuda y pasan a ser bloqueantes de lanzamiento.
 
 ---
 
 ## 2 · Aislamiento
 
-| Clave | Valor | Valores permitidos | La consume |
-|---|---|---|---|
-| `aislamiento.ambito` | | `tenant` · `sede` · `ninguno` | `aislamiento-de-datos`, `auditoria-frontend`, `django-backend` |
-| `aislamiento.nombre_de_negocio` | | texto: cómo lo llama el cliente | `aislamiento-de-datos` (escenarios) |
-| `aislamiento.campo` | | nombre del campo en los modelos · `ninguno` | `aislamiento-de-datos`, `db-schema`, `django-backend` |
-| `aislamiento.mecanismo` | | `manager-por-defecto` · `rls` · `manager+rls` · `manual-por-vista` · `ninguno` | `aislamiento-de-datos` |
-| `aislamiento.modelo_base` | | nombre de la clase base · `ninguno` | `aislamiento-de-datos` |
-| `aislamiento.escape` | | nombre del manager sin filtro · `ninguno` | `aislamiento-de-datos` |
-| `aislamiento.origen` | | `subdominio` · `claim-del-token` · `campo-del-usuario` · `tabla-de-membresias` · `ninguno` | `aislamiento-de-datos` |
-| `aislamiento.test_de_fuga` | | ruta del archivo de test · `ninguno` | `aislamiento-de-datos` |
-| `aislamiento.ancla` | | token de búsqueda cuando el mecanismo es manual · `ninguno` | `aislamiento-de-datos` |
+| Clave | Valor | La consume |
+|---|---|---|
+| `aislamiento.ambito` | `tenant` | `aislamiento-de-datos`, `auditoria-frontend`, `django-backend` |
+| `aislamiento.nombre_de_negocio` | `clínica` | `aislamiento-de-datos` (escenarios) |
+| `aislamiento.campo` | `tenant` | `aislamiento-de-datos`, `db-schema`, `django-backend` |
+| `aislamiento.mecanismo` | `manager+rls` | `aislamiento-de-datos` |
+| `aislamiento.modelo_base` | `TenantAwareModel` (`MailySoft/backend/apps/core/models.py:42`) | `aislamiento-de-datos` |
+| `aislamiento.escape` | `all_objects` (`apps/core/models.py:73`) | `aislamiento-de-datos` |
+| `aislamiento.origen` | `tabla-de-membresias` | `aislamiento-de-datos` |
+| `aislamiento.test_de_fuga` | `MailySoft/backend/apps/core/tests/test_zzz_tenant_isolation.py` | `aislamiento-de-datos` |
+| `aislamiento.ancla` | `ninguno` — el mecanismo no es `manual-por-vista` | `aislamiento-de-datos` |
 
-`aislamiento.ambito: ninguno` es la única forma legítima de que `aislamiento-de-datos` se declare
-`N/A`. Un repo multi-sucursal **no** es `ninguno`: es `sede`.
+**Autoridad:** `TenantMembership` (`apps/tenancy/models.py:78`), resuelta por
+`resolve_membership_for_user()` en `apps/core/tenant_context.py:113`. Solo membresías
+`is_active=True` y tenants en estado `active` o `trial`. **El cliente nunca manda el tenant.**
 
-`aislamiento.ancla` existe porque con `mecanismo: manual-por-vista` no hay un mecanismo central que
-auditar — hay que ir vista por vista, y el ancla (`grep -rn "BUSCAR>> …"`) es lo único que hace esa
-revisión repetible.
+**Cobertura de RLS:** `apps/core/tests/test_rls_coverage.py` falla en CI si un `TenantAwareModel`
+no tiene su migración de política.
 
-**`aislamiento.origen` es la AUTORIDAD, no el transporte.** Dice de dónde saca el servidor *qué
-ámbitos puede ver este usuario*, y por eso no admite ninguna cabecera ni parámetro: eso lo escribe
-el cliente. Cuál de sus ámbitos está usando ahora es otra cosa, viaja por
-`frontend.transporte_del_ambito`, y el servidor la cruza contra los autorizados antes de usarla.
+⚠ **Deuda conocida, anotada porque es cara** (de `00-AVISO-AUDITORIA-PREVIA.md`): los workers de
+Celery nunca fijan el tenant y funcionan gracias al fallback `OR current_tenant_id() IS NULL` de las
+políticas. **Cerrar ese fallback antes de arreglar los workers (módulo M4) tumba todos los PDFs
+asíncronos el mismo día.** El orden M4 → M5 no es negociable.
 
 ---
 
 ## 3 · Backend
 
-| Clave | Valor | Valores permitidos | La consume |
-|---|---|---|---|
-| `backend.framework` | | texto con versión | `django-backend` |
-| `backend.forma_de_vistas` | | `viewsets-y-routers` · `apiview-y-path` · `mixto` | `django-backend` |
-| `backend.capa_de_servicios` | | `services-y-selectors` · `parcial: <dónde vive hoy>` · `ninguna` | `django-backend`, `aislamiento-de-datos` |
-| `backend.envoltura_respuesta` | | `drf-plano` · `{success,message,data,errors}` · otra (describir) | `django-backend`, `react-frontend` |
-| `backend.paginacion` | | `drf: count/next/previous` · `{items,pagination}` · `ninguna` | `django-backend`, `react-frontend` |
-| `backend.autenticacion` | | `jwt` · `sesion-cookie` · `mixto` | `security-checklist`, `react-frontend` |
-| `backend.revocacion_de_sesion` | | `si: <mecanismo>` · `ninguna` · `no-aplica` | `security-checklist` |
-| `backend.borrado` | | `logico` · `fisico` · `mixto: <dónde cada uno>` | `db-schema`, `security-checklist` |
-| `backend.bitacora_auditoria` | | nombre de la función o modelo · `ninguna` | `security-checklist` |
-| `backend.tareas_asincronas` | | `celery` · `ninguna — en el hilo de la petición` | `django-backend` |
+| Clave | Valor | La consume |
+|---|---|---|
+| `backend.framework` | `Django 5.2.15 + DRF 3.17.1` | `django-backend` |
+| `backend.forma_de_vistas` | `apiview-y-path` | `django-backend` |
+| `backend.capa_de_servicios` | `services-y-selectors` | `django-backend`, `aislamiento-de-datos` |
+| `backend.envoltura_respuesta` | `drf-plano` — errores como `{"detail": ...}` | `django-backend`, `react-frontend` |
+| `backend.paginacion` | `drf: count/next/previous` — `PageNumberPagination`, `PAGE_SIZE=25` | `django-backend`, `react-frontend` |
+| `backend.autenticacion` | `mixto` — JWT en la API, sesión Django en `/admin` | `security-checklist`, `react-frontend` |
+| `backend.revocacion_de_sesion` | `si: blacklist de SimpleJWT en logout y en cambio de contraseña` | `security-checklist` |
+| `backend.borrado` | `logico` — `deleted_at` en `BaseModel` (`apps/core/models.py:31`) | `db-schema`, `security-checklist` |
+| `backend.bitacora_auditoria` | `audit_record` (`apps/audit/services.py:29`) → modelo `AuditLog` | `security-checklist` |
+| `backend.tareas_asincronas` | `celery` | `django-backend` |
 
-`backend.revocacion_de_sesion` está aquí y no en el código por una razón concreta: es la clave del
-P0 que dio origen a la Regla 1 del protocolo. Un repo puede tener `BLACKLIST_AFTER_ROTATION = True`
-y no tener revocación, porque la aplicación que la implementa no está instalada. **Este campo se
-rellena habiendo provocado el efecto**, no habiendo leído el `settings.py`.
+**`forma_de_vistas`:** verificado por conteo — 0 archivos con `ViewSet`, 15 con `APIView`. La clase
+base propia es `TenantAPIView`, que resuelve el tenant y puebla el contexto HTTP de la bitácora.
+
+**`revocacion_de_sesion` — verificado provocando el efecto el 2026-09-09**, no leyendo `settings.py`.
+Secuencia: login → `/auth/refresh/` con la cookie **200** → `/auth/logout/` **205** → se reenvía el
+**mismo** refresh viejo → **401**. Revoca de verdad.
+
+`ROTATE_REFRESH_TOKENS=False` y `BLACKLIST_AFTER_ROTATION=False` (`config/settings/base.py:266`) son
+deliberados y están documentados en el código: la rotación causaba cierres de sesión intermitentes.
+Quien revise no debe reportarlos como hallazgo sin antes rehacer la prueba de arriba.
 
 ---
 
 ## 4 · Frontend
 
-| Clave | Valor | Valores permitidos | La consume |
-|---|---|---|---|
-| `frontend.apps` | | lista `nombre — para quién — ruta` · `ninguna` | `react-frontend`, `auditoria-frontend` |
-| `frontend.estado_servidor` | | `tanstack-query` · `ninguno — <qué usa en su lugar>` | `react-frontend`, `auditoria-frontend` |
-| `frontend.estilos` | | `tailwind` · `css-plano` · otro | `react-frontend` |
-| `frontend.cliente_http` | | ruta del único módulo que hace peticiones · `ninguno — disperso` | `react-frontend`, `auditoria-frontend`, `security-checklist` |
-| `frontend.libreria_http` | | nombre del identificador con el que se hacen peticiones (`axios`, `ky`, `fetch`…) | `react-frontend`, `auditoria-frontend` |
-| `frontend.almacen_token` | | `memoria` · `memoria+sessionStorage` · `sessionStorage` · `localStorage` · `cookie-httponly` | `security-checklist`, `react-frontend` |
-| `frontend.cache_offline` | | `<librería> en <ruta>` · `ninguna` | `auditoria-frontend` |
-| `frontend.transporte_del_ambito` | | `cabecera:<nombre>` · `implicito-en-el-token` · `parametro` · `ninguno` | `auditoria-frontend` |
-| `frontend.matriz_de_permisos` | | ruta del archivo · `ninguna` | `auditoria-frontend` |
-| `frontend.espejo_de_modulos` | | ruta del archivo · `ninguno` | `auditoria-frontend` |
+| Clave | Valor | La consume |
+|---|---|---|
+| `frontend.apps` | `web-soft — clínica y portal interno de plataforma — MailySoft/web-soft` | `react-frontend`, `auditoria-frontend` |
+| `frontend.estado_servidor` | `tanstack-query` | `react-frontend`, `auditoria-frontend` |
+| `frontend.estilos` | `tailwind` | `react-frontend` |
+| `frontend.cliente_http` | `MailySoft/web-soft/src/lib/http.ts` | `react-frontend`, `auditoria-frontend`, `security-checklist` |
+| `frontend.libreria_http` | `fetch` | `react-frontend`, `auditoria-frontend` |
+| `frontend.almacen_token` | `memoria` | `security-checklist`, `react-frontend` |
+| `frontend.cache_offline` | `ninguna` | `auditoria-frontend` |
+| `frontend.transporte_del_ambito` | `implicito-en-el-token` | `auditoria-frontend` |
+| `frontend.matriz_de_permisos` | `MailySoft/web-soft/src/auth/permisos.ts` | `auditoria-frontend` |
+| `frontend.espejo_de_modulos` | `MailySoft/web-soft/src/lib/modulos.ts` | `auditoria-frontend` |
 
-`frontend.estado_servidor: ninguno` **no** vuelve `N/A` el cruce de caché de `auditoria-frontend`.
-Cambia dónde buscar: sin caché de servidor, el dato del ámbito anterior sobrevive en el estado de
-los componentes y en `frontend.cache_offline`. Es el mismo riesgo en otro sitio.
+**Una sola app de Vite con dos áreas**, no dos apps: `src/pages/` es la clínica y
+`src/pages/plataforma/` + `src/platform/` es el portal interno. Comparten `main.tsx` y bundle.
+`src/platform/permisos.ts` es la matriz del portal interno, hermana de la declarada arriba.
+
+**`almacen_token: memoria` es la mitad del patrón, y la otra mitad importa:** el *access* token vive
+solo en una variable de módulo (`src/lib/tokenStore.ts`), y el *refresh* en la cookie httpOnly
+`maily_refresh`, que JS no puede leer. Nada de sesión se guarda en `localStorage`. La clave admite un
+solo valor y `memoria` es el que describe lo que un XSS podría alcanzar.
+
+`localStorage` sí se usa, pero **nunca para credenciales**: sucursal activa (`maily.sucursal`), rol
+para gating de UX, pausas de recordatorios y borradores de formulario.
 
 ---
 
 ## 5 · Verificadores
 
-Los comandos de esta sección son los que las skills escriben en la columna **Cómo se comprueba**.
-Tienen que ser copiables y correr tal cual desde la raíz del repo.
+Comandos copiables, **desde la raíz del repo (`Maily360/`)**. Todos probados el 2026-09-09.
 
-| Clave | Valor | Valores permitidos | La consume |
-|---|---|---|---|
-| `verificadores.entorno` | | prefijo de ejecución (ej. `docker compose run --rm backend`) · `ninguno` | todas |
-| `verificadores.tests_backend` | | comando completo · `ninguno` | todas |
-| `verificadores.tests_frontend` | | comando completo · `ninguno` | `react-frontend`, `auditoria-frontend` |
-| `verificadores.tipos` | | comando completo · `ninguno` | `django-backend`, `react-frontend` |
-| `verificadores.lint` | | comando completo · `ninguno` | `django-backend` |
-| `verificadores.ci` | | ruta del workflow · `ninguno` | `protocolo-de-revision` |
-| `verificadores.migraciones` | | quién las corre: `agente` · `solo-emanuel` | `db-schema` |
+| Clave | Valor | La consume |
+|---|---|---|
+| `verificadores.entorno` | `docker compose -f MailySoft/docker-compose.yml exec -T backend` | todas |
+| `verificadores.tests_backend` | `docker compose -f MailySoft/docker-compose.yml exec -T backend pytest -q` | todas |
+| `verificadores.tests_frontend` | `ninguno` — ver nota | `react-frontend`, `auditoria-frontend` |
+| `verificadores.tipos` | `docker compose -f MailySoft/docker-compose.yml exec -T backend mypy apps/ --ignore-missing-imports` | `django-backend`, `react-frontend` |
+| `verificadores.lint` | `docker compose -f MailySoft/docker-compose.yml exec -T backend ruff check .` | `django-backend` |
+| `verificadores.ci` | `.github/workflows/ci.yml` | `protocolo-de-revision` |
+| `verificadores.migraciones` | `agente` | `db-schema` |
 
-`verificadores.migraciones: solo-emanuel` significa que ninguna skill ni ningún agente ejecuta
-`makemigrations` ni `migrate`. Un punto que exige provocar un efecto de migración se marca
-`NO VERIFICABLE` y se muda a `docs/05-despliegue.md`, en vez de correrlo.
+**`tests_frontend: ninguno` es una lectura correcta del repo, no un descuido de este archivo.**
+`npm run test:e2e` existe (Playwright, desde `MailySoft/web-soft/`) pero **no corre en CI y no hay
+una sola prueba unitaria de frontend**. Consecuencia obligada del protocolo: todo punto de
+`react-frontend` o `auditoria-frontend` cuyo verificador sea un test sale `NO VERIFICABLE` y se
+acumula en la lista de despliegue. El tipado del frontend sí se comprueba con
+`npm run build` (`tsc -b`), también fuera de CI.
 
-Si `verificadores.tests_backend: ninguno`, **todo punto cuyo verificador sea un test** sale de la
-revisión como `NO VERIFICABLE` y se acumula en la lista de despliegue. Eso es una lectura correcta
-del estado del repo, no un fallo del checklist.
+**Candados de CI:** `pytest` es **bloqueante** — **3.418 tests** colectados el 2026-09-09, cobertura
+≥80%. `ruff`, `black`, `mypy` y `pip-audit` son **informativos** (`continue-on-error`) por deuda
+acumulada de años sin CI; `ruff check .` reporta **587 hallazgos** hoy. Un `PASA` que se apoye en
+mypy o ruff se apoya en un candado que no bloquea nada: dilo en la revisión.
+
+> El encabezado de `.github/workflows/ci.yml:9` dice «~2.379 tests». Está desactualizado: son 3.418.
+> Se corrige cuando se toque el workflow.
 
 ---
 
 ## 6 · Cumplimiento
 
-| Clave | Valor | Valores permitidos | La consume |
-|---|---|---|---|
-| `cumplimiento.datos_sensibles` | | `ninguno` · `si: <qué dato y de quién>` | `security-checklist`, `db-schema` |
-| `cumplimiento.monitoreo_errores` | | `sentry` · otro · `ninguno` | `security-checklist` |
-| `cumplimiento.registros_inmutables` | | lista de modelos que no se editan ni se borran · `ninguno` | `security-checklist` |
-| `cumplimiento.estados_con_razon` | | lista de transiciones que exigen razón cerrada · `ninguna` | `security-checklist` |
-| `cumplimiento.consulta_legal` | | `pendiente` · `hecha AAAA-MM-DD` | `security-checklist` |
+| Clave | Valor | La consume |
+|---|---|---|
+| `cumplimiento.datos_sensibles` | `si: expediente clínico de pacientes — antecedentes, alergias, diagnósticos, signos vitales, notas de evolución y recetas` | `security-checklist`, `db-schema` |
+| `cumplimiento.monitoreo_errores` | `sentry` | `security-checklist` |
+| `cumplimiento.registros_inmutables` | `EvolutionNote`, `Addendum`, `VitalSignsRecord`, `Prescription`, `PrescriptionItem`, `AuditLog` | `security-checklist` |
+| `cumplimiento.estados_con_razon` | `Prescription → cancelled (cancellation_reason)`, `Appointment → cancelled (cancellation_reason)` | `security-checklist` |
+| `cumplimiento.consulta_legal` | `hecha <FALTA LA FECHA — no la inventes, pregúntasela a Emanuel>` | `security-checklist` |
 
-`cumplimiento.consulta_legal: pendiente` significa que `security-checklist` **no tiene puntos
-legales**. No significa que no apliquen. Los requisitos legales no se le preguntan a un modelo: se
-consultan una vez con un abogado y el resultado se convierte en puntos fijos de la skill.
+**`monitoreo_errores: sentry` cubre el backend únicamente.** El frontend no reporta a Sentry: el
+`Dockerfile` compila el bundle dentro de la imagen y no tiene ningún `ARG` para recibir
+`VITE_SENTRY_DSN`, así que ponerla en Railway no haría nada — sin fallar. Es el módulo M0.4.
+
+**`AuditLog` es append-only en dos capas:** `save()`/`delete()` de instancia y el `QuerySet`
+(`apps/audit/models.py:21`), para que `.filter(...).update()` tampoco pueda tocarlo.
+
+⚠ **`consulta_legal` está incompleta.** Mientras diga `<FALTA LA FECHA>`, trátala como
+`pendiente`: `security-checklist` **no emite puntos legales**. En cuanto exista la fecha, lo que dijo
+el abogado se convierte en **puntos fijos de la skill** — no se le pregunta a un modelo, que inventa
+artículos con total aplomo.
 
 ---
 
@@ -160,13 +201,20 @@ Una desviación documentada aquí **pasa**. Una desviación no documentada **blo
 
 | # | Qué regla se desvía | Por qué | Qué la volvería a hacer aplicable |
 |---|---|---|---|
-| E1 | | | |
+| E1 | `verificadores.migraciones: agente` en un repo `produccion-temprana` con datos reales de pacientes | Decisión de Emanuel el 2026-09-09, sobre la recomendación contraria: el agente genera y aplica migraciones en el Docker **local**, donde el daño es reversible, a cambio de velocidad | Si una migración generada por un agente llega a producción sin que Emanuel la haya leído completa, o si entra la segunda clínica de pago |
+| E2 | `aislamiento.ambito` declara `tenant` y deja la **sede** (sucursal) fuera del alcance de `aislamiento-de-datos` | El repo tiene dos ámbitos anidados y la clave admite uno. El grave es el de arriba: que el expediente de una clínica llegue a otra. El filtrado por sucursal viaja en la cabecera `X-Sucursal-Id` y hoy tiene un bug abierto (CR-04), programado para el módulo M6 | Cuando M6 cierre CR-04, revisar si conviene una segunda pasada declarando `sede` |
 
-Ejemplo del formato:
+**Lo que NO está aquí es deliberado.** Cuatro cosas se detectaron al rellenar este archivo y **no**
+se documentan como excepción, para que el `reviewer` las encuentre y las bloquee:
+`src/pages/plataforma/SistemaPage.tsx` hace `fetch` fuera del cliente central; la matriz de permisos
+solo cubre Finanzas; el frontend no tiene tests en CI; y ningún test permanente prueba la revocación
+del refresh (la de §3 se hizo a mano y se borró).
 
-| # | Qué regla se desvía | Por qué | Qué la volvería a hacer aplicable |
-|---|---|---|---|
-| E1 | `react-frontend`: el 401 refresca y reintenta una vez | En la PWA del cliente no hay refresh: limpia sesión y manda a login | Si la PWA adopta refresh, se borra esta excepción |
+---
 
-Sin este bloque, un auditor reporta la misma desviación correcta como bug en cada revisión, y la
-tercera vez que pasa dejan de leerse las revisiones.
+## Cómo se mantiene este archivo
+
+Se actualiza **en el mismo PR** que cambia el hecho que describe. Un perfil desactualizado es peor
+que uno vacío: el vacío marca `NO VERIFICABLE` y detiene; el desactualizado deja pasar un `PASA`
+falso. Cada valor de aquí se rellenó verificándolo contra el código o provocando el efecto — si
+cambias uno, cámbialo igual.

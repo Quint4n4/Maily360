@@ -19,6 +19,7 @@ from typing import Any, Generator
 from unittest.mock import patch
 
 import pytest
+from django.utils import timezone as django_timezone
 from rest_framework.test import APIClient
 
 from apps.agenda.models import Appointment
@@ -74,8 +75,7 @@ def _member_client(tenant: Any, role: str) -> APIClient:
 
 def _utc(days_ago: int = 0) -> datetime.datetime:
     """Datetime UTC en el pasado (days_ago días atrás del momento actual)."""
-    base = datetime.datetime(2026, 6, 25, 12, 0, 0, tzinfo=datetime.timezone.utc)
-    return base - datetime.timedelta(days=days_ago)
+    return django_timezone.now() - datetime.timedelta(days=days_ago)
 
 
 def _make_attended_appointment(
