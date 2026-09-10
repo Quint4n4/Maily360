@@ -120,10 +120,13 @@ mover cosas de sitio y hoy nada avisaría si al moverlas se rompe una llamada a 
 
 ### Parte 1 · Encender los tests que ya existen
 
-**No hay que escribirlos desde cero.** Verificado el 2026-09-10: `MailySoft/web-soft/e2e/` tiene
-**10 pruebas de Playwright** ya escritas y `playwright.config.ts` configurado —
-`login.spec.ts` (3) y `plataforma.spec.ts` (7: dashboard, alta de clínica, auditoría, asignación de
-plan, permisos por rol y el flujo de contraseña temporal del dueño).
+**No hay que escribirlos desde cero.** `MailySoft/web-soft/e2e/` tiene **9 pruebas de Playwright**
+ya escritas y `playwright.config.ts` configurado — `login.spec.ts` (3) y `plataforma.spec.ts` (6:
+dashboard, alta de clínica, auditoría, asignación de plan, permisos por rol y el flujo de contraseña
+temporal del dueño).
+
+> Esta ficha decía **10** en su primera versión. Son **9**: el conteo incluía un `test.beforeAll`,
+> que es un hook y no una prueba. `npx playwright test --list` es la fuente, no contar a ojo.
 
 **Nunca han corrido en CI.** `.github/workflows/ci.yml` no tiene un solo paso de Node.
 
@@ -157,9 +160,55 @@ Los cinco criterios, que son verificables mirando y no son cuestión de gusto:
 **Regla de corte mientras recorres:** ¿una doctora usando esto **se atoraría**, o solo lo
 encontraría **menos bonito**? Atorarse es bug y se arregla. Menos bonito espera.
 
+### Parte 1 · Cómo quedó · cerrada el 2026-09-10
+
+**Línea base: 0 de 9.** Todos fallaban por una sola causa: el rediseño de S0 cambió el login de
+placeholder-como-etiqueta a `<label htmlFor>` real, y los tests buscaban por placeholder. Se
+arregló el test y no la pantalla — la pantalla estaba **mejor**: un placeholder que hace de
+etiqueta desaparece al escribir y un lector de pantalla no lo anuncia igual.
+
+**Resultado: 9 de 9, cuatro corridas seguidas** (10.5s · 56.2s · 10.2s · 58.3s; las largas son el
+reintento esperando el `Retry-After` del límite de intentos).
+
+Arreglar el 0/9 destapó tres fallos de infraestructura que valían más que el arreglo:
+
+1. **Los tests corrían contra otra aplicación.** El 5173 lo tenía el dev server de Maily-Academia.
+   Vite salta de puerto en silencio y Playwright, con `reuseExistingServer`, acepta lo que responda
+   en la URL. Fallaban con «no encuentro el campo de correo», que parece un bug del login. Arreglo:
+   puerto fijo **5179** + `--strictPort` + `reuseExistingServer: false`.
+2. **El puerto no es libre.** El primer intento usó el 5273 y el refresh empezó a dar 403:
+   `development.py:39` define `_VITE_PORTS = range(5173, 5181)` y `CSRF_TRUSTED_ORIGINS` se genera
+   de ahí. Fuera del rango, `POST /auth/refresh/` responde un 403 de CSRF **en HTML**, la sesión no
+   se recupera y los tests rebotan a `/login` como si la pantalla estuviera rota.
+3. **Un reintento que nunca se ejecutaba.** Comprobaba el texto «Demasiados intentos» con
+   `locator.isVisible()`, que **no espera**: devuelve el estado del instante, antes de que llegue la
+   respuesta. Ahora se lee el **429** real y se espera el `Retry-After` que manda DRF.
+
+Y un cuarto, intermitente: el test de permisos buscaba `'Suscripciones'` en modo subcadena y el
+dashboard muestra «Ver suscripciones» cuando hay clínicas vencidas (`DashboardPage.tsx:59`). Como
+cada corrida crea una clínica, el rojo aparecía solo al acumularse. `exact: true` lo cierra.
+
+**El CI** (`.github/workflows/e2e.yml`) quedó como **workflow propio, no como job de `ci.yml`**: el
+filtro `paths` de GitHub Actions es por workflow, así que dentro de `ci.yml` habría frenado también
+pytest, ruff y mypy, que deben correr en todo PR. `continue-on-error` va en el paso, no en el job.
+
+**Lo que no está comprobado y no se vende como tal:** el comportamiento de los tests contra datos
+recién sembrados en CI. La secuencia de seeds sí se verificó desde una base vacía. El candado
+informativo absorbe el riesgo.
+
+**Cuatro cosas anotadas y no tocadas:**
+
+1. **Ningún test fija el valor del throttle de login.** Solo existe uno del `throttle_scope`
+   (`test_password_change.py:392`). Si alguien pone `DRF_THROTTLE_LOGIN=1000/minute` en Railway,
+   nada avisa. Por eso `.env.example` lo deja comentado.
+2. `migrate` avisa de cambios de modelo sin migración en la app `personal`. Deuda previa.
+3. `tsc -b` no cubre `e2e/`, solo `src/`. Un error de tipos ahí no lo ve `npm run build`.
+4. Los e2e dejan una clínica por corrida en la base local. En CI da igual; en local acumula, y es lo
+   que disparó el rojo intermitente.
+
 ### Criterio de cierre
 
-- `npm run test:e2e` pasa entero en local, y se sabe cuántos pasaban al empezar.
+- ~~`npm run test:e2e` pasa entero en local, y se sabe cuántos pasaban al empezar.~~ ✅ 0/9 → 9/9
 - Los e2e corren en CI en cada PR que toque `MailySoft/web-soft/`.
 - Las vistas de la lista cerrada cumplen los cinco criterios, comprobado con la app corriendo.
 - La lista cerrada quedó escrita aquí, con lo que se hizo en cada vista.
