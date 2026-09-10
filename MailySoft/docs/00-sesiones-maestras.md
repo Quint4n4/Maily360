@@ -54,7 +54,8 @@ necesites**; hasta entonces, de una en una.
 
 | # | Sesión maestra | Cierra cuando | Tamaño |
 |---|---|---|---|
-| **S0** | Recuperar el rediseño del frontend | El rediseño está en `main` y lo viste corriendo | 1 sesión corta |
+| **S0** | Recuperar el rediseño del frontend | ✅ **cerrada 2026-09-10** — PR #5 en `main` | 1 sesión |
+| **S0.5** | Frontend: red de seguridad y pulido | Los e2e corren en CI y las vistas de la lista cumplen los cinco criterios | 1–2 sesiones |
 | **S1** | Núcleo clínico de punta a punta | Agendas, atiendes, escribes nota y emites receta sin tocar el código | 2–3 sesiones |
 | **S2** | Finanzas terminado | Cobras, cierras caja y sacas el reporte del día | 2 sesiones |
 | **S3** | Panel de super administrador | Das de alta una clínica completa desde el panel, sin consola | 1–2 sesiones |
@@ -80,6 +81,19 @@ juzgarlo. Lo que esté mal saldrá en S1 y S2, que son las sesiones que sí revi
 
 **No hace:** rediseñar nada nuevo, ni arreglar las 76 brechas de frontend documentadas.
 
+### Cómo quedó · cerrada el 2026-09-10
+
+PR [#5](https://github.com/Quint4n4/Maily360/pull/5), rama `feat/rediseno-frontend`, un commit,
+48 archivos, +2098/−992. CI en verde y merge a `main` (`880d732`).
+
+**Recuperó el rediseño íntegro y sin tocarlo:** comparado archivo por archivo contra
+`wip/frontend-rediseno`, el frontend es idéntico. Los toques de UI que Emanuel quería dar no se
+llegaron a hacer y **pasan a S0.5**, que es donde tienen su lista cerrada.
+
+⚠ El candado bloqueante aprobó este PR corriendo **3.418 tests de backend y cero de frontend**. Las
+48 pantallas entraron a `main` sin que ninguna prueba automática las mirara. Eso es lo que S0.5
+viene a cerrar.
+
 ### Prompt de arranque
 
 ```
@@ -95,6 +109,84 @@ Objetivo: devolver el rediseño de la rama wip/frontend-rediseno a main.
 5. Cuando yo dé el visto bueno, abre el PR a main.
 
 No refactorices nada que yo no haya señalado. No corras el auditor de frontend.
+```
+
+---
+
+## S0.5 · Frontend: red de seguridad y pulido
+
+Dos objetivos independientes en una sesión. **La red va primero**, porque el pulido consiste en
+mover cosas de sitio y hoy nada avisaría si al moverlas se rompe una llamada a la API.
+
+### Parte 1 · Encender los tests que ya existen
+
+**No hay que escribirlos desde cero.** Verificado el 2026-09-10: `MailySoft/web-soft/e2e/` tiene
+**10 pruebas de Playwright** ya escritas y `playwright.config.ts` configurado —
+`login.spec.ts` (3) y `plataforma.spec.ts` (7: dashboard, alta de clínica, auditoría, asignación de
+plan, permisos por rol y el flujo de contraseña temporal del dueño).
+
+**Nunca han corrido en CI.** `.github/workflows/ci.yml` no tiene un solo paso de Node.
+
+Trabajo real de esta parte, en orden:
+
+1. Correrlos en local y ver cuántos pasan hoy. Necesitan el backend en Docker y los usuarios demo
+   (`seed_finanzas`). **Ese número es el punto de partida y hay que anotarlo**, pase lo que pase.
+2. Arreglar los que fallen — con el rediseño recién mergeado es probable que alguno busque un texto
+   o un selector que cambió de sitio.
+3. Meterlos en CI como job propio: navegadores de Playwright, backend levantado y semilla.
+4. Decidir si bloquea o es informativo. **Recomendación: informativo la primera semana**, porque un
+   e2e recién montado da falsos rojos y un candado que falla sin razón se acaba ignorando — y
+   entonces no sirve de nada.
+
+### Parte 2 · El pulido, con lista cerrada
+
+**Antes de tocar una vista, escribe aquí la lista de las que vas a mejorar y ciérrala.** Tres a
+cinco, con qué le cambias a cada una. Lo que descubras fuera de la lista se anota, no se hace. Sin
+esto, «darle más toques» no tiene final: siempre hay una pantalla más.
+
+Los cinco criterios, que son verificables mirando y no son cuestión de gusto:
+
+| # | Criterio | Cómo se comprueba |
+|---|---|---|
+| 1 | **Jerarquía** | Lo que salva a alguien va primero: nombre, alergias, motivo. Si las alergias se ven igual que el teléfono, está mal |
+| 2 | **Consistencia** | La misma acción se ve igual en todas partes. «Guardar» no puede ser un botón sólido aquí y un enlace gris allá |
+| 3 | **Los tres estados** | Cargando, vacío y error. Abre cada vista con la base sin datos: la mayoría no tiene estado vacío |
+| 4 | **Densidad** | Una recepcionista con quince citas no quiere scroll. Si una lista muestra cuatro filas por pantalla, sobra aire |
+| 5 | **Contraste y área clicable** | Gris claro sobre blanco no se lee en una tablet con luz de ventana; un icono de 16px no se atina con prisa |
+
+**Regla de corte mientras recorres:** ¿una doctora usando esto **se atoraría**, o solo lo
+encontraría **menos bonito**? Atorarse es bug y se arregla. Menos bonito espera.
+
+### Criterio de cierre
+
+- `npm run test:e2e` pasa entero en local, y se sabe cuántos pasaban al empezar.
+- Los e2e corren en CI en cada PR que toque `MailySoft/web-soft/`.
+- Las vistas de la lista cerrada cumplen los cinco criterios, comprobado con la app corriendo.
+- La lista cerrada quedó escrita aquí, con lo que se hizo en cada vista.
+
+### Prompt para la sesión
+
+```
+Sesión maestra S0.5. Lee CLAUDE.md, .claude/PERFIL-DEL-REPO.md y
+MailySoft/docs/00-sesiones-maestras.md §S0.5.
+
+PARTE 1 primero, no la saltes.
+
+1. Levanta el backend en Docker, siembra los datos demo y corre los 10 tests e2e
+   de MailySoft/web-soft/e2e/. Dime cuántos pasan HOY antes de tocar nada.
+2. Arregla los que fallen. Si alguno falla porque el rediseño movió un texto o un
+   selector, arregla el test, no la pantalla — salvo que la pantalla esté mal.
+3. Agrégalos al CI como job propio de Node, informativo (continue-on-error), que
+   corra solo cuando el PR toque MailySoft/web-soft/.
+
+PARA aquí y enséñame el resultado antes de seguir.
+
+PARTE 2 — el pulido. Yo te doy la lista cerrada de vistas. Para cada una aplicas
+los cinco criterios de la ficha y me la enseñas corriendo antes de pasar a la
+siguiente. No toques ninguna vista que no esté en mi lista.
+
+Despacha subagentes `frontend` para los arreglos concretos, con encargos que se
+entiendan sin haber leído esta conversación.
 ```
 
 ---
