@@ -1,0 +1,209 @@
+name: E2E de frontend
+
+# ¿Por qué un workflow aparte y no un job dentro de ci.yml?
+#
+# Porque el filtro `paths` de GitHub Actions es POR WORKFLOW, no por job: puesto en ci.yml
+# frenaría también los candados de backend (pytest, ruff, mypy), que deben correr en todo
+# PR. Meterlo en ci.yml exigiría o una acción de terceros (dorny/paths-filter) o un job
+# casero de detección de cambios con `git diff`, que hay que mantener. Un workflow con su
+# propio `paths` es nativo, no añade dependencias y hace exactamente lo pedido.
+#
+# CANDADO INFORMATIVO, a propósito y por ahora: el paso de Playwright lleva
+# `continue-on-error`. Un e2e recién montado da rojos que no son del código (el navegador
+# tarda, la semilla cambia) y un candado que falla sin razón se acaba ignorando — y
+# entonces no protege nada. Se revisa cuando acumule un par de semanas en verde. Es el
+# mismo criterio que ci.yml ya aplica a ruff, black y mypy.
+
+on:
+  pull_request:
+    branches: ["main", "develop"]
+    paths:
+      - "MailySoft/web-soft/**"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: ["main", "develop"]
+    paths:
+      - "MailySoft/web-soft/**"
+      - ".github/workflows/e2e.yml"
+
+jobs:
+  e2e:
+    name: Playwright contra backend real (informativo)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: mailysoft_e2e
+          POSTGRES_USER: mailysoft
+          POSTGRES_PASSWORD: mailysoft
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DJANGO_SECRET_KEY: ci-secret-key-not-real-at-all
+      DATABASE_URL: postgres://mailysoft:mailysoft@localhost:5432/mailysoft_e2e
+      REDIS_URL: redis://localhost:6379/1
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      DJANGO_DEBUG: "True"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      # El límite real de /auth/login/ son 5 intentos por minuto (protección contra fuerza
+      # bruta) y en PRODUCCIÓN se queda así. Aquí se sube porque una corrida de la suite
+      # gasta 4 y el reintento del test tendría que esperar la ventana de 60 s en cada
+      # corrida. Este contenedor vive lo que dura el job, no está expuesto a internet y su
+      # base es semilla: no hay credencial de nadie que proteger. El valor de producción
+      # vive en las variables de Railway, no aquí.
+      DRF_THROTTLE_LOGIN: "1000/minute"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------- backend
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Librerías de sistema para WeasyPrint (PDFs)
+        run: |
+          # Mismo cuidado que en ci.yml: el runner trae el repositorio de Google Chrome,
+          # que este proyecto no usa, y un hash malo suyo mata `apt-get update` entero
+          # (código 100) antes de instalar nada. Se saca por CONTENIDO, porque Ubuntu 24.04
+          # declara repositorios en `.list` y en `.sources` a la vez.
+          sudo grep -rlE 'dl\.google\.com' /etc/apt/sources.list.d/ 2>/dev/null \
+            | sudo xargs -r rm -fv || true
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
+            libgdk-pixbuf-2.0-0 libcairo2 libffi-dev
+
+      - name: Instalar Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: "1.8.3"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache de dependencias de Python
+        uses: actions/cache@v4
+        with:
+          path: MailySoft/backend/.venv
+          key: venv-${{ runner.os }}-3.12-${{ hashFiles('MailySoft/backend/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-3.12-
+
+      - name: Instalar dependencias de Python
+        working-directory: MailySoft/backend
+        run: poetry install --with dev
+
+      - name: Migrar y sembrar
+        working-directory: MailySoft/backend
+        run: |
+          # El orden importa y no es intercambiable:
+          #   seed_planes    → catálogo de planes. Sin él la clínica nace sin módulos y el
+          #                    test de Suscripciones no encuentra Básico / Pro / Premium.
+          #   seed_finanzas  → crea el tenant demo (slug "clinica-demo") y sus datos.
+          #   seed_e2e_user  → los dos usuarios de prueba, y necesita que el tenant exista.
+          poetry run python manage.py migrate --noinput
+          poetry run python manage.py seed_planes
+          poetry run python manage.py seed_finanzas
+          poetry run python manage.py seed_e2e_user --platform
+
+      - name: Arrancar el backend en :8000
+        working-directory: MailySoft/backend
+        run: |
+          # --noreload: con el autoreloader, runserver arranca un proceso hijo que este
+          # paso no controla y que sobrevive al job.
+          poetry run python manage.py runserver 0.0.0.0:8000 --noreload \
+            > "$RUNNER_TEMP/backend.log" 2>&1 &
+          # Espera activa: sin esto Playwright arranca contra un puerto muerto y falla con
+          # un error que no dice nada del backend.
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:8000/admin/login/; then
+              echo "Backend listo tras ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::El backend no respondió en 60 s"
+          cat "$RUNNER_TEMP/backend.log"
+          exit 1
+
+      # --------------------------------------------------------------- frontend
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: MailySoft/web-soft/package-lock.json
+
+      - name: Instalar dependencias de Node
+        working-directory: MailySoft/web-soft
+        run: npm ci
+
+      - name: Cache de navegadores de Playwright
+        id: cache-playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('MailySoft/web-soft/package-lock.json') }}
+
+      - name: Instalar Chromium de Playwright
+        working-directory: MailySoft/web-soft
+        # --with-deps trae también las librerías de sistema del navegador; se necesitan
+        # aunque el binario venga del caché.
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright (informativo)
+        id: playwright
+        continue-on-error: true
+        working-directory: MailySoft/web-soft
+        # Playwright levanta Vite él mismo en el puerto que fija playwright.config.ts y lo
+        # apaga al terminar. El proxy de Vite reenvía /api a localhost:8000.
+        run: npm run test:e2e
+
+      - name: Log del backend si algo falló
+        if: steps.playwright.outcome != 'success'
+        run: tail -100 "$RUNNER_TEMP/backend.log" || true
+
+      - name: Guardar el reporte de Playwright
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-resultados
+          path: |
+            MailySoft/web-soft/test-results/
+            MailySoft/web-soft/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Resumen
+        if: always()
+        run: |
+          if [ "${{ steps.playwright.outcome }}" = "success" ]; then
+            echo "✅ Los 9 tests E2E pasaron." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ Los E2E fallaron. **Este candado es informativo y no bloquea el PR.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "El detalle está en el artefacto \`playwright-resultados\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
