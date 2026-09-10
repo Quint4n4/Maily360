@@ -1,4 +1,5 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { login, logoutDesdePlataforma, TIMEOUT_CON_LOGIN_MS } from './helpers'
 
 /**
  * E2E del PORTAL DE PLATAFORMA (panel interno de Maily, /plataforma/*).
@@ -22,39 +23,6 @@ import { test, expect, Page } from '@playwright/test'
 const STAFF_EMAIL = 'e2e-admin@maily.local'
 const STAFF_PASSWORD = 'Demo1234!'
 
-/**
- * Login genérico reutilizable — misma pantalla /login para staff y dueños de clínica.
- *
- * Con reintento ante el 429 de /auth/login/ (throttle real de 5/minuto — protección
- * contra fuerza bruta, no se debilita en test): si este spec corre en paralelo con
- * login.spec.ts (otro archivo que también hace login real), pueden agotar juntos el
- * límite. En vez de servir peor seguridad, el test espera y reintenta.
- */
-async function login(page: Page, email: string, password: string) {
-  const intentosMax = 4
-  for (let intento = 1; intento <= intentosMax; intento++) {
-    await page.goto('/login')
-    await page.getByPlaceholder('Correo electrónico').fill(email)
-    await page.getByPlaceholder('Contraseña').fill(password)
-    await page.locator('button[type="submit"]').click()
-
-    const bloqueado = page.getByText(/Demasiados intentos/i)
-    const huboLimite = await bloqueado.isVisible({ timeout: 3_000 }).catch(() => false)
-    if (!huboLimite) return
-    if (intento === intentosMax) return // se deja fallar la aserción del caller con el mensaje real
-    await page.waitForTimeout(15_000)
-  }
-}
-
-/** Cierra sesión desde el menú del topbar de plataforma (avatar arriba a la derecha).
- *  El botón muestra full_name ("E2E Admin", del seed_e2e_user --platform) o, si
- *  estuviera vacío, el fallback "Equipo Maily" — se cubren ambos casos. */
-async function logoutDesdePlataforma(page: Page) {
-  await page.getByRole('button', { name: /Equipo Maily|E2E Admin/i }).click()
-  await page.getByRole('button', { name: /Cerrar sesión/i }).click()
-  await expect(page).toHaveURL(/\/login/, { timeout: 15_000 })
-}
-
 test.describe('Portal de plataforma (E2E)', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -65,6 +33,7 @@ test.describe('Portal de plataforma (E2E)', () => {
   let staffCookies: Awaited<ReturnType<import('@playwright/test').BrowserContext['cookies']>> = []
 
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(TIMEOUT_CON_LOGIN_MS)
     // Login del staff UNA sola vez; las cookies de sesión (refresh httpOnly) se
     // reutilizan en el resto de los tests para no chocar con el throttle de
     // /auth/login/ (5/minuto — ver DRF_THROTTLE_LOGIN en backend/config/settings/base.py).
@@ -196,18 +165,26 @@ test.describe('Portal de plataforma (E2E)', () => {
     // decide qué módulos se ven — sirve para verificar la lógica de visibilidad del
     // menú, aunque no reemplaza un 403 real del backend (eso ya lo cubre
     // apps/plataforma/tests/test_security.py en el backend).
+    // `exact: true` NO sobra: el dashboard muestra una alerta condicional con el botón
+    // "Ver suscripciones" cuando hay clínicas con la prueba o el periodo vencido
+    // (DashboardPage.tsx:56). En modo subcadena ese botón también hace match y Playwright
+    // aborta por "strict mode violation" — y solo pasa cuando la base acumula clínicas
+    // vencidas, así que se manifiesta como un rojo intermitente sin cambio de código.
+    const navSuscripciones = page.getByRole('button', { name: 'Suscripciones', exact: true })
+
     await page.goto('/plataforma/dashboard')
-    await expect(page.getByRole('button', { name: 'Suscripciones' })).toBeVisible()
+    await expect(navSuscripciones).toBeVisible()
 
     await page.getByRole('button', { name: /Equipo Maily|E2E Admin/i }).click()
     await page.getByRole('button', { name: 'Ingeniería' }).click()
 
     await expect(page).toHaveURL(/\/plataforma\/sistema/, { timeout: 10_000 })
-    await expect(page.getByRole('button', { name: 'Suscripciones' })).not.toBeVisible()
+    await expect(navSuscripciones).not.toBeVisible()
   })
 
   test('flujo de oro: cambio de contraseña forzado del dueño con la contraseña temporal', async ({ page }) => {
     test.skip(!passwordTemporal, 'Depende de que el test de creación de clínica haya capturado la contraseña.')
+    test.setTimeout(TIMEOUT_CON_LOGIN_MS)
 
     // 1) Logout del staff (la sesión venía precargada por beforeEach).
     await page.goto('/plataforma/dashboard')
