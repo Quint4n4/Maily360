@@ -1,53 +1,48 @@
 import { useMemo, useState } from 'react'
-import {
-  BarChart3,
-  Wallet,
-  FileText,
-  Receipt,
-  Lock,
-  LineChart,
-  CalendarClock,
-  HeartHandshake,
-} from 'lucide-react'
+import { Wallet, Receipt, LineChart, FileText, Lock, type LucideIcon } from 'lucide-react'
 
 import Topbar from '../components/Topbar'
-import DashboardTab from '../components/finanzas/DashboardTab'
-import ReporteTab from '../components/finanzas/ReporteTab'
-import CierreDiarioTab from '../components/finanzas/CierreDiarioTab'
-import CobrosPagosTab from '../components/finanzas/CobrosPagosTab'
+import CajaTab from '../components/finanzas/CajaTab'
+import CobranzaTab from '../components/finanzas/CobranzaTab'
+import ResumenTab from '../components/finanzas/ResumenTab'
 import CfdiTab from '../components/finanzas/CfdiTab'
-import EstadoCuentaTab from '../components/finanzas/EstadoCuentaTab'
-import RetencionTab from '../components/finanzas/RetencionTab'
 import { can, canAccessFinance, type FinanceCapability } from '../auth/permisos'
 import { useRole } from '../auth/RoleContext'
 import { toIsoDate } from '../lib/format'
 
-type TabKey =
-  | 'dashboard'
-  | 'reportes'
-  | 'cierre'
-  | 'cobros'
-  | 'cfdi'
-  | 'estado'
-  | 'retencion'
+/*
+ * Cuatro pantallas, una pregunta cada una, ordenadas por frecuencia de uso:
+ * lo de todos los días primero, lo de cierre de mes al final.
+ *
+ * Antes eran siete y dos de ellas —"Dashboard" y "Reportes"— mostraban los
+ * MISMOS cuatro KPIs calculados con la misma consulta, solo que con nombres
+ * distintos ("Total facturado"/"Producción", "Ingresos"/"Cobranza"…). Se
+ * comprobó contra datos reales: $60,220 y $36,390 en ambas.
+ */
+type TabKey = 'caja' | 'cobranza' | 'resumen' | 'facturacion'
 
 interface TabDef {
   key: TabKey
   label: string
-  icon: typeof BarChart3
+  icon: LucideIcon
   capability: FinanceCapability
+  /** La pregunta que responde esta pantalla; se muestra como subtítulo. */
+  pregunta: string
 }
 
 const TABS: TabDef[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: BarChart3, capability: 'viewDashboard' },
-  { key: 'reportes', label: 'Reportes', icon: LineChart, capability: 'viewDashboard' },
-  // Cierre diario = caja: misma matriz que registerPayment (owner/admin/finance/reception).
-  { key: 'cierre', label: 'Cierre diario', icon: CalendarClock, capability: 'registerPayment' },
-  { key: 'cobros', label: 'Cobros y pagos', icon: Wallet, capability: 'viewModule' },
-  { key: 'cfdi', label: 'CFDI', icon: FileText, capability: 'viewCfdi' },
-  { key: 'estado', label: 'Estado de cuenta', icon: Receipt, capability: 'viewStatement' },
-  // Retención (RFM, Fase 3): misma matriz que el dashboard (owner/admin/finance/readonly).
-  { key: 'retencion', label: 'Retención', icon: HeartHandshake, capability: 'viewDashboard' },
+  // Todos los días: cobrar y cerrar caja. Es la pantalla de recepción.
+  { key: 'caja', label: 'Caja', icon: Wallet, capability: 'viewModule',
+    pregunta: '¿Qué cobro hoy y cómo cerró el día?' },
+  // Cada pocos días: quién debe y desde cuándo.
+  { key: 'cobranza', label: 'Cobranza', icon: Receipt, capability: 'viewStatement',
+    pregunta: '¿Quién me debe y desde cuándo?' },
+  // Semanal o al cierre de mes: la pantalla del dueño.
+  { key: 'resumen', label: 'Resumen', icon: LineChart, capability: 'viewDashboard',
+    pregunta: '¿Cómo va el negocio?' },
+  // Cuando el paciente pide factura. Trabajo aparte, con reglas del SAT.
+  { key: 'facturacion', label: 'Facturación', icon: FileText, capability: 'viewCfdi',
+    pregunta: '¿Qué timbro?' },
 ]
 
 const RANGE_PRESETS = [
@@ -56,11 +51,10 @@ const RANGE_PRESETS = [
   { label: '90 días', days: 90 },
 ]
 
-const GOLD = '#C9A227'
 
 export default function FinanzasPage() {
   const { role } = useRole()
-  const [activeTab, setActiveTab] = useState<TabKey>('dashboard')
+  const [activeTab, setActiveTab] = useState<TabKey>('caja')
   const [rangeDays, setRangeDays] = useState(30)
 
   const range = useMemo(() => {
@@ -75,26 +69,26 @@ export default function FinanzasPage() {
 
   return (
     <div className="min-h-screen relative">
-      <div className="fixed inset-0 -z-10" style={{ background: 'linear-gradient(135deg, #b89a52 0%, #d8c690 45%, #f1e8cf 100%)' }} />
-      <div className="fixed inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: "url('/fondo-agenda.jpg')" }} />
-      <div className="fixed inset-0 -z-10" style={{ background: 'rgba(255,255,255,0.20)' }} />
+      {/* Fondo plano: la foto de seda dorada quedaba DEBAJO de los datos
+          (tablas, tarjetas, la reja de la agenda) y les restaba legibilidad. */}
+      <div className="fixed inset-0 -z-10 bg-fondo" />
       <Topbar active="finanzas" />
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-5">
         {/* Encabezado */}
         <div className="glass-card rounded-2xl px-6 py-5 flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: '#2A241B' }}>Finanzas</h1>
-            <p className="text-sm" style={{ color: '#7A756C' }}>
-              Cobros, cotizaciones, facturación CFDI 4.0 y analítica de tu clínica.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-tinta">Finanzas</h1>
+            {/* El subtítulo dice a qué vienes a esta pantalla, no qué contiene
+                el módulo: la lista de features no ayuda a decidir dónde entrar. */}
+            <p className="text-sm text-suave">{current?.pregunta}</p>
           </div>
         </div>
 
         {!canAccessFinance(role) ? (
           <div className="glass-card rounded-2xl p-10 text-center">
-            <Lock className="w-8 h-8 mx-auto mb-3" style={{ color: '#9A958C' }} />
-            <p className="text-sm" style={{ color: '#7A756C' }}>
+            <Lock className="w-8 h-8 mx-auto mb-3 text-tenue" />
+            <p className="text-sm text-suave">
               Tu rol (<strong>{role}</strong>) no tiene acceso al módulo de finanzas.
             </p>
           </div>
@@ -109,12 +103,11 @@ export default function FinanzasPage() {
                     <button
                       key={key}
                       onClick={() => setActiveTab(key)}
-                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors"
-                      style={{
-                        background: isActive ? 'rgba(201,162,39,0.16)' : 'rgba(255,255,255,0.5)',
-                        color: isActive ? GOLD : '#7A756C',
-                        border: isActive ? `1px solid ${GOLD}55` : '1px solid transparent',
-                      }}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors border ${
+                        isActive
+                          ? 'bg-accion text-white border-accion'
+                          : 'bg-superficie text-suave border-borde hover:border-accion-borde hover:text-tinta'}`}
                     >
                       <Icon className="w-4 h-4" />
                       {label}
@@ -123,17 +116,14 @@ export default function FinanzasPage() {
                 })}
               </div>
 
-              {current?.key === 'dashboard' && (
-                <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: 'rgba(0,0,0,0.04)' }}>
+              {current?.key === 'resumen' && (
+                <div className="flex items-center gap-1 rounded-lg p-0.5 bg-superficie-sutil border border-borde">
                   {RANGE_PRESETS.map((p) => (
                     <button
                       key={p.days}
                       onClick={() => setRangeDays(p.days)}
-                      className="px-2.5 py-1 rounded-md text-xs font-medium transition-colors"
-                      style={{
-                        background: rangeDays === p.days ? GOLD : 'transparent',
-                        color: rangeDays === p.days ? '#fff' : '#7A756C',
-                      }}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                        rangeDays === p.days ? 'bg-accion text-white' : 'text-suave hover:text-tinta'}`}
                     >
                       {p.label}
                     </button>
@@ -143,15 +133,10 @@ export default function FinanzasPage() {
             </div>
 
             {/* Contenido */}
-            {current?.key === 'dashboard' && (
-              <DashboardTab range={range} onNavigate={(t) => setActiveTab(t as TabKey)} />
-            )}
-            {current?.key === 'reportes' && <ReporteTab role={role} />}
-            {current?.key === 'cierre' && <CierreDiarioTab role={role} />}
-            {current?.key === 'cobros' && <CobrosPagosTab role={role} />}
-            {current?.key === 'cfdi' && <CfdiTab role={role} />}
-            {current?.key === 'estado' && <EstadoCuentaTab />}
-            {current?.key === 'retencion' && <RetencionTab role={role} />}
+            {current?.key === 'caja' && <CajaTab role={role} />}
+            {current?.key === 'cobranza' && <CobranzaTab role={role} />}
+            {current?.key === 'resumen' && <ResumenTab role={role} range={range} />}
+            {current?.key === 'facturacion' && <CfdiTab role={role} />}
           </>
         )}
       </main>

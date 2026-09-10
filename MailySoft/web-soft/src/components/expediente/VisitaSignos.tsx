@@ -1,5 +1,5 @@
 /**
- * VisitaSignos — paso ① "Enfermería" de la tarjeta "Visita de hoy".
+ * VisitaSignos — paso "Enfermería" de la tarjeta "Visita de hoy".
  *
  * Captura rápida de los signos vitales de la visita reusando EXACTAMENTE los
  * mismos hooks/payload que SignosTab (useVitalSigns para leer la última toma,
@@ -126,8 +126,8 @@ export default function VisitaSignos({ paciente, abierto, onCerrar }: VisitaSign
   // Cerrado: resumen de una línea con la última toma. Los signos del día son
   // dato de consulta constante, así que siguen a la vista sin abrir el paso.
   if (!abierto) {
-    if (isLoading) return <p className="text-xs text-gray-400 italic">Cargando signos…</p>
-    if (!ultima) return <p className="text-xs text-gray-400 italic">Sin signos capturados aún.</p>
+    if (isLoading) return <p className="text-xs text-suave italic">Cargando signos…</p>
+    if (!ultima) return <p className="text-xs text-suave italic">Sin signos capturados aún.</p>
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <ResumenDato label="PA" value={pa} />

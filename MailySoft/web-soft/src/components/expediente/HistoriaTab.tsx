@@ -459,7 +459,13 @@ export default function HistoriaTab({ paciente, puedeEditar }: HistoriaTabProps)
                 Anota aquí lo relevante del paciente. Se guarda con la historia clínica.
               </p>
               <textarea
-                className="input resize-none w-full min-h-[220px] lg:min-h-[55vh]"
+                /* Estaba en `55vh` y sobresalía por abajo: el recuadro vive
+                   dentro del panel del expediente, que tiene su propio alto, no
+                   el de la ventana. Con `clamp` se adapta a la pantalla pero con
+                   techo y suelo, así que ni se desborda en un portátil chico ni
+                   se queda ridículo en un monitor grande. Si la nota es larga,
+                   el textarea desplaza por dentro. */
+                className="input resize-none w-full min-h-[200px] lg:min-h-0 lg:h-[clamp(200px,34vh,420px)]"
                 maxLength={10000}
                 value={form.antecedentes_importancia}
                 onChange={e => setTexto('antecedentes_importancia')(e.target.value)}

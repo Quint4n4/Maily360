@@ -463,7 +463,7 @@ function SignosHeredados({ toma }: { toma: VitalSignsRecord | null }) {
       </div>
       {!toma ? (
         <p className="text-xs text-gray-400 italic">
-          Sin signos capturados. Captúralos en el paso ① Enfermería de la visita.
+          Sin signos capturados. Captúralos en el paso de Enfermería de la visita.
         </p>
       ) : (
         <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))' }}>

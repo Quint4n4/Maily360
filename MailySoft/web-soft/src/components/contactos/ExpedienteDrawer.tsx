@@ -25,7 +25,7 @@
  * el backend es la autoridad y devuelve 403).
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, CalendarPlus, UserX, Loader2, AlertTriangle, ArrowLeft, Sparkles } from 'lucide-react'
 import type { PatientOut } from '../../types/paciente'
@@ -45,6 +45,7 @@ import { useAviso } from '../common/DialogProvider'
 import FichaPaciente from '../expediente/FichaPaciente'
 import VisitaDeHoy from '../expediente/VisitaDeHoy'
 import IndiceSecciones, { type SeccionId } from '../expediente/IndiceSecciones'
+import HistoriaTab from '../expediente/HistoriaTab'
 import LibroClinico from '../expediente/LibroClinico'
 import SignosTab from '../expediente/SignosTab'
 import DiagnosticosTab from '../expediente/DiagnosticosTab'
@@ -56,6 +57,7 @@ import PlanIntegralModal from '../expediente/PlanIntegralModal'
 
 /** Título de cada sección al abrirla desde el índice. */
 const SECCION_TITULO: Record<SeccionId, string> = {
+  historia: 'Historia clínica',
   libro: 'Libro clínico',
   signos: 'Signos y mediciones',
   diagnosticos: 'Diagnósticos',
@@ -120,6 +122,20 @@ export default function ExpedienteDrawer({
   const statement = useStatement(verEstadoCuenta && paciente ? paciente.id : null)
   const balance = statement.data?.balance ?? null
 
+  /*
+   * Con el expediente abierto, la lista de pacientes de detrás seguía
+   * desplazándose con la rueda: no se ve porque el modal la tapa, pero al
+   * cerrar habías perdido tu sitio en la lista. Se bloquea mientras está
+   * abierto y se restaura el valor previo al cerrar (no se asume que era
+   * "visible": puede haber otro modal encima manteniéndolo bloqueado).
+   */
+  useEffect(() => {
+    if (!paciente) return
+    const previo = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previo }
+  }, [paciente])
+
   const subirAvatar = useUploadPatientAvatar()
   const aviso = useAviso()
   const onAvatarFile = (file: File) => {
@@ -154,18 +170,17 @@ export default function ExpedienteDrawer({
             onClick={e => e.stopPropagation()}
           >
             {/* ════ Header (franja superior, ancho completo) ════ */}
-            <div className="shrink-0 px-4 sm:px-6 md:px-8 pt-6 pb-5 border-b border-amber-900/10">
+            <div className="shrink-0 px-4 sm:px-6 md:px-8 pt-6 pb-5 border-b border-borde">
               <button
                 onClick={onClose}
-                className="absolute top-5 right-5 z-10 w-9 h-9 rounded-full flex items-center justify-center bg-white/70 hover:bg-white transition-colors shadow-sm"
+                aria-label="Cerrar expediente"
+                className="absolute top-5 right-5 z-10 w-9 h-9 rounded-full flex items-center justify-center bg-superficie-sutil hover:bg-accion-tinte border border-borde transition-colors"
               >
-                <X className="w-5 h-5 text-gray-600" />
+                <X className="w-5 h-5 text-cuerpo" />
               </button>
 
               <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-5">
                 <div className="relative shrink-0">
-                  <div className="absolute -inset-2 rounded-full"
-                    style={{ background: 'conic-gradient(from 120deg, #E8C766, #C9A227, #F5E6B8, #C9A227, #E8C766)', filter: 'blur(8px)', opacity: 0.5 }} />
                   <AvatarUploader
                     src={paciente.avatar}
                     initials={initialsOf(paciente)}
@@ -177,14 +192,14 @@ export default function ExpedienteDrawer({
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-amber-700/70">Expediente del paciente</p>
-                  <h2 className="text-2xl font-bold text-gray-900 leading-tight break-words">{paciente.full_name}</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">{paciente.record_number}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-suave">Expediente del paciente</p>
+                  <h2 className="text-2xl font-bold text-tinta leading-tight break-words">{paciente.full_name}</h2>
+                  <p className="text-sm text-suave mt-0.5">{paciente.record_number}</p>
                   <div className="flex items-center flex-wrap gap-2 mt-2">
                     <span className={`badge ${paciente.is_active ? 'badge-success' : 'badge-neutral'}`}>
                       {paciente.is_active ? 'Activo' : 'Inactivo'}
                     </span>
-                    {paciente.is_vip && <span className="badge" style={{ background: '#FBF1D9', color: '#9A7B1E' }}>VIP</span>}
+                    {paciente.is_vip && <span className="badge badge-vip">VIP</span>}
                     {paciente.is_deceased && <span className="badge badge-neutral">Finado</span>}
                     {verEstadoCuenta && balance !== null && <SaldoBadge balance={balance} />}
                   </div>
@@ -194,16 +209,14 @@ export default function ExpedienteDrawer({
                 <div className="flex flex-col gap-2 shrink-0 w-full sm:w-auto mr-0 sm:mr-10">
                   <div className="flex gap-2">
                     <button
-                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
-                      style={{ background: '#C9A227', boxShadow: '0 4px 14px rgba(201,162,39,0.4)' }}>
+                      className="btn-primary w-full sm:w-auto">
                       <CalendarPlus className="w-4 h-4" /> Agendar
                     </button>
                   </div>
                   {puedeVerPlanIntegral && (
                     <button
                       onClick={() => setPlanIntegralAbierto(true)}
-                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:brightness-105"
-                      style={{ background: 'rgba(255,255,255,0.75)', color: '#854F0B', border: '1px solid rgba(201,162,39,0.4)' }}
+                      className="btn-secondary w-full sm:w-auto"
                       title="Generar el Plan Integral de Longevidad y Medicina Regenerativa"
                     >
                       <Sparkles className="w-4 h-4" /> Plan Integral
@@ -211,7 +224,7 @@ export default function ExpedienteDrawer({
                   )}
                   {puedeEditar && paciente.is_active && (
                     <button onClick={onDarDeBaja} disabled={dandoDeBaja}
-                      className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:underline transition-colors disabled:opacity-60">
+                      className="btn-peligro-texto text-xs disabled:opacity-60">
                       {dandoDeBaja
                         ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Dando de baja…</>
                         : <><UserX className="w-3.5 h-3.5" /> Dar de baja</>}
@@ -227,11 +240,11 @@ export default function ExpedienteDrawer({
               <aside className="w-full lg:w-[380px] lg:shrink-0 lg:h-full lg:overflow-y-auto lg:pr-1">
                 {/* Aviso de expediente provisional */}
                 {paciente.is_provisional && (
-                  <div className="flex items-start gap-3 rounded-2xl px-5 py-4 mb-4" style={{ background: '#FBF1D9', border: '1px solid rgba(201,162,39,0.4)' }}>
-                    <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#9A7B1E' }} />
+                  <div className="flex items-start gap-3 rounded-2xl px-5 py-4 mb-4 bg-aviso-tinte border border-aviso-borde">
+                    <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0 text-aviso-icono" />
                     <div>
-                      <p className="text-sm font-semibold" style={{ color: '#9A7B1E' }}>Expediente provisional</p>
-                      <p className="text-xs" style={{ color: '#9A7B1E' }}>
+                      <p className="text-sm font-semibold text-aviso">Expediente provisional</p>
+                      <p className="text-xs text-aviso">
                         Este paciente se creó al agendar con datos mínimos. Falta completar su información personal
                         (fecha de nacimiento, sexo, contacto). {puedeEditar ? 'Usa «Editar» para completarlo.' : ''}
                       </p>
@@ -273,20 +286,18 @@ export default function ExpedienteDrawer({
                       <button
                         type="button"
                         onClick={() => setSeccion(null)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all hover:brightness-105"
-                        style={{
-                          background: 'rgba(255,255,255,0.75)',
-                          color: '#854F0B',
-                          border: '1px solid rgba(201,162,39,0.4)',
-                        }}
+                        className="btn-secondary text-sm px-3 py-2"
                       >
                         <ArrowLeft className="w-4 h-4" /> Volver
                       </button>
-                      <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-700/80">
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-suave">
                         {SECCION_TITULO[seccion]}
                       </h3>
                     </div>
 
+                    {seccion === 'historia' && (
+                      <HistoriaTab paciente={paciente} puedeEditar={editarClinico} />
+                    )}
                     {seccion === 'libro' && (
                       <LibroClinico paciente={paciente} verEstadoCuenta={verEstadoCuenta} />
                     )}
@@ -339,8 +350,8 @@ function SaldoBadge({ balance }: { balance: number }) {
       <span
         className="badge"
         style={{
-          background: fuerte ? '#FDE8E8' : '#FBF1D9',
-          color: fuerte ? '#C0392B' : '#9A7B1E',
+          background: fuerte ? 'var(--peligro-tinte)' : 'var(--aviso-tinte)',
+          color: fuerte ? 'var(--peligro)' : 'var(--aviso)',
         }}
       >
         Saldo: {formatMoney(balance)} por cobrar
